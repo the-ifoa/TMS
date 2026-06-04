@@ -14,6 +14,7 @@ import AddParticipant from './pages/AddParticipant';
 import EditParticipant from './pages/EditParticipant';
 import Certificates from './pages/Certificates';
 import Airlines from './pages/Airlines';
+import Contract from './pages/Contract';
 import Profile from './pages/Profile';
 import ExamResults from './pages/ExamResults';
 import AttendanceSheets from './pages/AttendanceSheets';
@@ -81,6 +82,7 @@ function App() {
 
           {/* Admin-only routes */}
           <Route path="airlines" element={<AdminRoute><Airlines /></AdminRoute>} />
+          <Route path="contracts" element={<AdminRoute><Contract /></AdminRoute>} />
           <Route path="participants/edit/:id" element={<AdminRoute><EditParticipant /></AdminRoute>} />
           <Route path="certificates" element={<AdminRoute><Certificates /></AdminRoute>} />
           <Route path="attendance"   element={<AdminRoute><AttendanceSheets /></AdminRoute>} />

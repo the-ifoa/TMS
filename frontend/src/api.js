@@ -47,6 +47,17 @@ export const login         = (data) => api.post('/auth/login', data);
 export const getMe         = ()     => api.get('/auth/me');
 export const updateProfile = (data) => api.put('/auth/profile', data);
 
+// Admin: edit an airline's name + address
+export const updateAirline = (id, data) => api.patch(`/auth/admin/airline/${id}`, data);
+
+// ── Contracts (admin) ─────────────────────────────────────────────────────────
+export const getContractDefaults = () => api.get('/contracts/defaults');
+export const getContractAirlines = () => api.get('/contracts/airlines');
+export const getContractDefaultsForAirline = (airlineId) => api.get(`/contracts/defaults/${airlineId}`);
+export const getContractPdf      = (contractId) => api.get(`/contracts/pdf/${contractId}`, { responseType: 'blob' });
+export const previewContract     = (data) => api.post('/contracts/preview', data, { responseType: 'blob' });
+export const sendContract        = (data) => api.post('/contracts/send', data);
+
 // ── Notifications ──────────────────────────────────────────────
 export const getNotifications = () => api.get('/notifications');
 

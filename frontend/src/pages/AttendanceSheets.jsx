@@ -13,7 +13,7 @@ import {
   HiOutlineDocumentText,
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
-import { listAttendanceSheets, getAttendanceSheet } from '../api';
+import { listAttendanceSheets, getAttendanceSheet, getContractAirlines } from '../api';
 import AttendanceChecklistModal from '../components/AttendanceChecklistModal';
 import { buildAttendanceMap, generateAttendancePdf } from '../utils/generateAttendancePdf';
 
@@ -33,7 +33,6 @@ function fmtDate(str) {
   if (!str) return '—';
   return new Date(str).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 }
-
 function fmtDateTime(str) {
   if (!str) return '—';
   return new Date(str).toLocaleDateString('en-GB', {
@@ -44,13 +43,13 @@ function fmtDateTime(str) {
 
 function SheetCard({ sheet, onEdit, onPreview, previewing }) {
   const [open, setOpen] = useState(false);
-  const typeInfo   = TYPE_MAP[sheet.training_type] || {};
-  const parts      = sheet.participants || [];
+  const typeInfo = TYPE_MAP[sheet.training_type] || {};
+  const parts    = sheet.participants || [];
 
   return (
     <div className="bg-white rounded-xl border border-primary-150 shadow-sm overflow-hidden hover:shadow-md transition-shadow">
 
-      {/* ── Clickable header ── */}
+      {/* Clickable header */}
       <div
         role="button"
         tabIndex={0}
@@ -59,34 +58,24 @@ function SheetCard({ sheet, onEdit, onPreview, previewing }) {
         className="flex items-center gap-3 px-5 py-4 cursor-pointer select-none"
         style={{ background: open ? '#f0f5ff' : '#fafbff' }}
       >
-        {/* Chevron */}
         <span className="text-primary-400 flex-shrink-0 transition-transform duration-200">
           {open
             ? <HiOutlineChevronDown className="w-4 h-4 text-primary-500" />
             : <HiOutlineChevronRight className="w-4 h-4" />}
         </span>
 
-        {/* Type badge */}
         <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border flex-shrink-0 ${
           typeInfo.color || 'bg-primary-100 text-primary-600 border-primary-200'
         }`}>
           {sheet.training_type} — {typeInfo.label || sheet.training_type}
         </span>
 
-        {/* Airline */}
-        <span className="flex items-center gap-1.5 text-sm font-semibold text-primary-800 flex-shrink-0">
-          <HiOutlineOfficeBuilding className="w-3.5 h-3.5 text-primary-400" />
-          {sheet.company || '—'}
-        </span>
-
-        {/* Dates */}
         <span className="flex items-center gap-1 text-xs text-primary-500 flex-shrink-0">
           <HiOutlineCalendar className="w-3.5 h-3.5" />
           {fmtDate(sheet.start_date)}
           {sheet.end_date && sheet.end_date !== sheet.start_date ? ` – ${fmtDate(sheet.end_date)}` : ''}
         </span>
 
-        {/* Participants */}
         <span className="flex items-center gap-1 text-xs text-primary-400 flex-shrink-0">
           <HiOutlineUsers className="w-3.5 h-3.5" />
           {parts.length} participant{parts.length !== 1 ? 's' : ''}
@@ -94,12 +83,10 @@ function SheetCard({ sheet, onEdit, onPreview, previewing }) {
 
         <span className="flex-1" />
 
-        {/* Submitted */}
         <span className="text-[10px] text-primary-400 hidden lg:block flex-shrink-0">
           {sheet.created_at ? `Submitted ${fmtDateTime(sheet.created_at)}` : ''}
         </span>
 
-        {/* Action buttons — stop propagation so they don't toggle the card */}
         <div className="flex items-center gap-2 flex-shrink-0" onClick={e => e.stopPropagation()}>
           <button
             type="button"
@@ -123,7 +110,7 @@ function SheetCard({ sheet, onEdit, onPreview, previewing }) {
         </div>
       </div>
 
-      {/* ── Expandable body ── */}
+      {/* Expandable body */}
       <AnimatePresence initial={false}>
         {open && (
           <motion.div
@@ -135,7 +122,6 @@ function SheetCard({ sheet, onEdit, onPreview, previewing }) {
             style={{ overflow: 'hidden' }}
           >
             <div className="border-t border-primary-100">
-              {/* Info grid */}
               <div className="px-5 py-4 grid grid-cols-2 sm:grid-cols-4 gap-4 bg-primary-50/40 text-xs border-b border-primary-100">
                 <div>
                   <p className="text-[10px] font-semibold text-primary-400 uppercase tracking-wider mb-1">Airline</p>
@@ -160,7 +146,6 @@ function SheetCard({ sheet, onEdit, onPreview, previewing }) {
                 </div>
               </div>
 
-              {/* Participants */}
               <div>
                 <div className="px-5 py-2 border-b border-primary-100 bg-white">
                   <p className="text-[10px] font-semibold text-primary-400 uppercase tracking-wider">
@@ -193,8 +178,68 @@ function SheetCard({ sheet, onEdit, onPreview, previewing }) {
   );
 }
 
+// ── Airline group section ──────────────────────────────────────────────────────
+function AirlineGroup({ airlineName, logoUrl, sheets, onEdit, onPreview, previewing }) {
+  const [collapsed, setCollapsed] = useState(false);
+
+  return (
+    <div className="space-y-2">
+      {/* Group header */}
+      <button
+        onClick={() => setCollapsed(c => !c)}
+        className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-white border border-primary-150 shadow-sm hover:bg-primary-50/60 transition-colors text-left"
+      >
+        {/* Logo or fallback */}
+        <div className="flex-shrink-0 w-9 h-9 rounded-xl bg-primary-100 border border-primary-200 flex items-center justify-center overflow-hidden">
+          {logoUrl
+            ? <img src={logoUrl} alt={airlineName} className="w-full h-full object-contain p-0.5" />
+            : <HiOutlineOfficeBuilding className="w-5 h-5 text-primary-500" />
+          }
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-bold text-primary-800 truncate">{airlineName}</p>
+          <p className="text-[11px] text-primary-400">
+            {sheets.length} attendance record{sheets.length !== 1 ? 's' : ''}
+          </p>
+        </div>
+
+        <span className={`flex-shrink-0 transition-transform duration-200 ${collapsed ? '' : 'rotate-180'}`}>
+          <HiOutlineChevronDown className="w-4 h-4 text-primary-400" />
+        </span>
+      </button>
+
+      {/* Sheets under this airline */}
+      <AnimatePresence initial={false}>
+        {!collapsed && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.18, ease: 'easeInOut' }}
+            style={{ overflow: 'hidden' }}
+          >
+            <div className="pl-4 space-y-2">
+              {sheets.map(sheet => (
+                <SheetCard
+                  key={sheet._id}
+                  sheet={sheet}
+                  onEdit={onEdit}
+                  onPreview={onPreview}
+                  previewing={previewing}
+                />
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 export default function AttendanceSheets() {
   const [sheets, setSheets]           = useState([]);
+  const [airlineMap, setAirlineMap]   = useState({});  // name → { logoUrl }
   const [loading, setLoading]         = useState(true);
   const [activeSheet, setActiveSheet] = useState(null);
   const [previewing, setPreviewing]   = useState(null);
@@ -214,6 +259,19 @@ export default function AttendanceSheets() {
       setLoading(false);
     }
   };
+
+  // Fetch airlines once to get logos — match by airlineName
+  useEffect(() => {
+    getContractAirlines()
+      .then(res => {
+        const map = {};
+        (res.data || []).forEach(a => {
+          map[a.airlineName] = { logoUrl: a.logoUrl || null };
+        });
+        setAirlineMap(map);
+      })
+      .catch(() => {}); // logo fetch failure is non-critical
+  }, []);
 
   useEffect(() => { fetchSheets(); }, [filterType]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -252,6 +310,15 @@ export default function AttendanceSheets() {
     );
   });
 
+  // Group by airline name, sorted alphabetically
+  const groups = filtered.reduce((acc, sheet) => {
+    const key = sheet.company || 'Unknown';
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(sheet);
+    return acc;
+  }, {});
+  const sortedGroups = Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
+
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
       {activeSheet && (
@@ -278,9 +345,14 @@ export default function AttendanceSheets() {
             View and edit attendance sheets submitted by airlines
           </p>
         </div>
-        <span className="text-sm text-primary-500 bg-primary-100 px-3 py-1.5 rounded-lg font-medium">
-          {filtered.length} record{filtered.length !== 1 ? 's' : ''}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-primary-500 bg-primary-100 px-3 py-1.5 rounded-lg font-medium">
+            {sortedGroups.length} airline{sortedGroups.length !== 1 ? 's' : ''}
+          </span>
+          <span className="text-sm text-primary-500 bg-primary-100 px-3 py-1.5 rounded-lg font-medium">
+            {filtered.length} record{filtered.length !== 1 ? 's' : ''}
+          </span>
+        </div>
       </div>
 
       {/* Search + filter */}
@@ -323,11 +395,13 @@ export default function AttendanceSheets() {
           {sheets.length === 0 ? 'No attendance records submitted yet.' : 'No records match your search.'}
         </div>
       ) : (
-        <div className="space-y-3">
-          {filtered.map(sheet => (
-            <SheetCard
-              key={sheet._id}
-              sheet={sheet}
+        <div className="space-y-5">
+          {sortedGroups.map(([airlineName, airlineSheets]) => (
+            <AirlineGroup
+              key={airlineName}
+              airlineName={airlineName}
+              logoUrl={airlineMap[airlineName]?.logoUrl || null}
+              sheets={airlineSheets}
               onEdit={setActiveSheet}
               onPreview={handlePreview}
               previewing={previewing}

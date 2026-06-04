@@ -547,4 +547,240 @@ async function sendOtpEmail({ toEmail, airlineName, otp }) {
   }
 }
 
-module.exports = { sendSubmissionConfirmation, sendPasswordResetEmail, sendOtpEmail };
+// ─── Send contract email (with PDF attachment) ───────────────────────────────
+async function sendContractEmail({ toEmail, clientName, pdfBuffer, message }) {
+  const transporter = getTransporter();
+  if (!transporter) throw new Error('SMTP not configured — cannot send contract.');
+
+  const safeName   = (clientName || 'Client').replace(/[^a-zA-Z0-9 _-]/g, '').trim() || 'Client';
+  const customNote = (message && message.trim()) ? message.trim().replace(/\n/g, '<br/>') : null;
+  const year       = new Date().getFullYear();
+  const dateStr    = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+  const contactEmail = process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER;
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Services Agreement – ${safeName}</title>
+</head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:'Segoe UI',Helvetica,Arial,sans-serif">
+
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:40px 16px">
+<tr><td align="center">
+<table width="620" cellpadding="0" cellspacing="0" style="max-width:620px;width:100%;background:#ffffff;border-radius:18px;overflow:hidden;box-shadow:0 6px 40px rgba(0,0,0,0.12)">
+
+  <!-- ══════ HEADER ══════ -->
+  <tr>
+    <td bgcolor="#0c1a2e" style="background:#0c1a2e;padding:30px 44px 26px;text-align:center">
+      <table width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+          <td align="center" bgcolor="#ffffff" style="background:#ffffff;border-radius:12px;padding:16px 20px">
+            <img src="cid:ifoa_logo" width="460" alt="International Flight Operations Academy" style="display:block;border:0;width:460px;max-width:100%;height:auto"/>
+          </td>
+        </tr>
+      </table>
+      <div style="height:18px"></div>
+      <div style="width:48px;height:3px;background:#d97706;border-radius:2px;margin:0 auto 14px"></div>
+      <p style="margin:0 0 5px;font-size:10px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:#94a3b8">International Flight Operations Academy GmbH</p>
+      <p style="margin:0;font-size:24px;font-weight:800;color:#ffffff;letter-spacing:0.2px">Services Agreement</p>
+      <p style="margin:6px 0 0;font-size:12px;color:#64748b">${dateStr}</p>
+    </td>
+  </tr>
+
+  <!-- Accent bar -->
+  <tr>
+    <td style="background:linear-gradient(90deg,#d97706,#f59e0b,#d97706);height:4px;font-size:0;line-height:0">&nbsp;</td>
+  </tr>
+
+  <!-- ══════ INTRO ══════ -->
+  <tr>
+    <td style="padding:38px 44px 0">
+      <p style="margin:0 0 10px;font-size:17px;font-weight:700;color:#0f172a">Dear ${safeName},</p>
+      <p style="margin:0 0 16px;font-size:14px;color:#334155;line-height:1.8">
+        We are pleased to share the <strong style="color:#0f172a">Services Agreement</strong> between
+        <strong style="color:#0f172a">${safeName}</strong> and
+        <strong style="color:#0f172a">International Flight Operations Academy GmbH</strong> (IFOA),
+        outlining the terms and conditions for the training services to be provided.
+      </p>
+      <p style="margin:0;font-size:14px;color:#334155;line-height:1.8">
+        Please find the complete agreement attached to this email as a PDF document.
+        We kindly request that you read through the agreement carefully and proceed with the steps below.
+      </p>
+      ${customNote ? `
+      <table width="100%" cellpadding="0" cellspacing="0" style="background:#fefce8;border-left:4px solid #f59e0b;border-radius:0 8px 8px 0;margin-top:20px">
+        <tr><td style="padding:14px 18px">
+          <p style="margin:0 0 4px;font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#92400e">Note from IFOA</p>
+          <p style="margin:0;font-size:13px;color:#78350f;line-height:1.7">${customNote}</p>
+        </td></tr>
+      </table>` : ''}
+    </td>
+  </tr>
+
+  <!-- ══════ ACTION STEPS ══════ -->
+  <tr>
+    <td style="padding:28px 44px 0">
+      <p style="margin:0 0 14px;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#475569">Required Actions</p>
+      <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:12px;overflow:hidden">
+
+        <!-- Step 1 -->
+        <tr style="border-bottom:1px solid #e2e8f0">
+          <td style="padding:16px 20px;width:56px;vertical-align:top">
+            <div style="width:32px;height:32px;background:#0c1a2e;border-radius:50%;text-align:center;line-height:32px">
+              <span style="font-size:13px;font-weight:800;color:#ffffff">1</span>
+            </div>
+          </td>
+          <td style="padding:16px 20px 16px 0;border-top:none">
+            <p style="margin:0 0 3px;font-size:13px;font-weight:700;color:#0f172a">Review the Agreement</p>
+            <p style="margin:0;font-size:13px;color:#64748b;line-height:1.6">Open the attached PDF and read through all terms and conditions carefully before proceeding.</p>
+          </td>
+        </tr>
+
+        <!-- Step 2 -->
+        <tr style="border-bottom:1px solid #e2e8f0;background:#f8fafc">
+          <td style="padding:16px 20px;width:56px;vertical-align:top">
+            <div style="width:32px;height:32px;background:#0c1a2e;border-radius:50%;text-align:center;line-height:32px">
+              <span style="font-size:13px;font-weight:800;color:#ffffff">2</span>
+            </div>
+          </td>
+          <td style="padding:16px 20px 16px 0">
+            <p style="margin:0 0 3px;font-size:13px;font-weight:700;color:#0f172a">Sign the Agreement</p>
+            <p style="margin:0;font-size:13px;color:#64748b;line-height:1.6">Sign the agreement on the designated signature page by the authorised representative of ${safeName}.</p>
+          </td>
+        </tr>
+
+        <!-- Step 3 -->
+        <tr>
+          <td style="padding:16px 20px;width:56px;vertical-align:top">
+            <div style="width:32px;height:32px;background:#d97706;border-radius:50%;text-align:center;line-height:32px">
+              <span style="font-size:13px;font-weight:800;color:#ffffff">3</span>
+            </div>
+          </td>
+          <td style="padding:16px 20px 16px 0">
+            <p style="margin:0 0 3px;font-size:13px;font-weight:700;color:#0f172a">Return a Signed Copy</p>
+            <p style="margin:0;font-size:13px;color:#64748b;line-height:1.6">
+              Please return the signed agreement at your earliest convenience by replying to this email or sending to
+              <a href="mailto:${contactEmail}" style="color:#d97706;text-decoration:none;font-weight:600">${contactEmail}</a>.
+            </p>
+          </td>
+        </tr>
+
+      </table>
+    </td>
+  </tr>
+
+  <!-- ══════ ATTACHMENT CALLOUT ══════ -->
+  <tr>
+    <td style="padding:24px 44px 0">
+      <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px">
+        <tr>
+          <td style="padding:14px 18px">
+            <p style="margin:0;font-size:13px;color:#166534;line-height:1.6;font-weight:600">
+              Attachment: &nbsp;Services_Agreement_${safeName.replace(/\s+/g, '_')}.pdf
+            </p>
+            <p style="margin:4px 0 0;font-size:12px;color:#15803d;line-height:1.5">
+              This document contains all the terms, conditions, fees, and service details agreed upon between the parties.
+              Please retain a copy for your records once signed.
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+
+  <!-- ══════ CONTACT / QUESTIONS ══════ -->
+  <tr>
+    <td style="padding:24px 44px 0">
+      <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px">
+        <tr>
+          <td style="padding:16px 20px">
+            <p style="margin:0 0 4px;font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#475569">Questions or Clarifications?</p>
+            <p style="margin:0;font-size:13px;color:#334155;line-height:1.7">
+              If you have any questions regarding the terms of this agreement or require any amendments,
+              please do not hesitate to contact our team at
+              <a href="mailto:${contactEmail}" style="color:#1d4ed8;text-decoration:none;font-weight:600">${contactEmail}</a>.
+              We are happy to assist you.
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+
+  <!-- ══════ SIGN-OFF ══════ -->
+  <tr>
+    <td style="padding:30px 44px 36px">
+      <p style="margin:0 0 4px;font-size:14px;color:#334155;line-height:1.7">
+        We look forward to a successful partnership and to providing world-class Flight Operations training to your team.
+      </p>
+      <p style="margin:18px 0 0;font-size:14px;color:#334155">
+        Yours sincerely,
+      </p>
+      <p style="margin:6px 0 0;font-size:14px;line-height:1.7">
+        <strong style="color:#0f172a;font-size:15px">IFOA Administration Team</strong><br/>
+        <span style="color:#64748b;font-size:12px">International Flight Operations Academy GmbH</span><br/>
+        <span style="color:#64748b;font-size:12px">Oberdorf 26, 4314 Zeiningen, Switzerland</span><br/>
+        <a href="mailto:${contactEmail}" style="color:#d97706;font-size:12px;text-decoration:none">${contactEmail}</a>
+      </p>
+    </td>
+  </tr>
+
+  <!-- ══════ FOOTER ══════ -->
+  <tr>
+    <td bgcolor="#0c1a2e" style="background:#0c1a2e;padding:18px 44px">
+      <p style="margin:0;font-size:11px;color:#475569;text-align:center;line-height:1.7">
+        This email and its attachments are confidential and intended solely for the use of the named recipient.<br/>
+        &copy; ${year} International Flight Operations Academy GmbH &nbsp;·&nbsp; All rights reserved
+      </p>
+    </td>
+  </tr>
+
+</table>
+</td></tr>
+</table>
+
+</body>
+</html>`;
+
+  const text = [
+    `Dear ${safeName},`,
+    '',
+    `Please find attached the Services Agreement between ${safeName} and International Flight Operations Academy GmbH (IFOA).`,
+    '',
+    'REQUIRED ACTIONS:',
+    '  1. Review — Read through all terms and conditions in the attached PDF carefully.',
+    '  2. Sign   — Sign the agreement on the designated signature page.',
+    `  3. Return — Reply to this email with the signed copy, or send to ${contactEmail}.`,
+    '',
+    customNote ? `Note from IFOA: ${customNote.replace(/<br\/>/g, '\n')}\n` : '',
+    `Attachment: Services_Agreement_${safeName.replace(/\s+/g, '_')}.pdf`,
+    '',
+    'If you have any questions, please contact us at ' + contactEmail,
+    '',
+    'Yours sincerely,',
+    'IFOA Administration Team',
+    'International Flight Operations Academy GmbH',
+    'Oberdorf 26, 4314 Zeiningen, Switzerland',
+  ].filter(s => s !== null).join('\n');
+
+  const info = await transporter.sendMail({
+    from:    `"IFOA – International Flight Operations Academy" <${contactEmail}>`,
+    to:      toEmail,
+    subject: `Services Agreement – ${safeName} | Action Required`,
+    text,
+    html,
+    attachments: [
+      ...logoAttachment(),
+      {
+        filename:    `Services_Agreement_${safeName.replace(/\s+/g, '_')}.pdf`,
+        content:     pdfBuffer,
+        contentType: 'application/pdf',
+      },
+    ],
+  });
+  console.log(`[email] Contract sent to ${toEmail} — messageId: ${info.messageId}`);
+  return info;
+}
+
+module.exports = { sendSubmissionConfirmation, sendPasswordResetEmail, sendOtpEmail, sendContractEmail };

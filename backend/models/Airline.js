@@ -4,6 +4,7 @@ const bcrypt = require('bcryptjs');
 const airlineSchema = new mongoose.Schema({
   name:        { type: String, required: true, trim: true },        // contact person name
   airlineName: { type: String, required: true, trim: true },        // e.g. "Emirates Airlines"
+  address:     { type: String, default: '', trim: true },           // airline mailing address
   email:       { type: String, required: true, unique: true, lowercase: true, trim: true },
   password:    { type: String, required: true, minlength: 6 },
   role:        { type: String, default: 'airline' },

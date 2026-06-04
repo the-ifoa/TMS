@@ -364,9 +364,10 @@ router.put('/profile', authMiddleware, async (req, res) => {
     const user = await Model.findById(req.admin.id);
     if (!user) return res.status(404).json({ error: 'User not found.' });
 
-    const { name, currentPassword, newPassword, newEmail, logo_url, organization, airlineName } = req.body;
+    const { name, currentPassword, newPassword, newEmail, logo_url, organization, airlineName, address } = req.body;
     if (name && name.trim()) user.name = name.trim();
     if (logo_url !== undefined && req.admin.role === 'airline') user.logo_url = logo_url || null;
+    if (address !== undefined && req.admin.role === 'airline') user.address = (address || '').trim();
 
     if (organization !== undefined && req.admin.role !== 'airline') {
       return res.status(403).json({ error: 'Only airline users can edit organization.' });
@@ -490,6 +491,31 @@ router.post('/airline/reset-password', async (req, res) => {
   } catch (err) {
     console.error('Reset password error:', err);
     res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// ─────────────────────────────────────────────
+//  ADMIN: UPDATE AIRLINE (name + address)
+//  PATCH /api/auth/admin/airline/:id
+//  Admin can edit any airline's airlineName and address.
+// ─────────────────────────────────────────────
+router.patch('/admin/airline/:id', authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const airline = await Airline.findById(req.params.id);
+    if (!airline) return res.status(404).json({ error: 'Airline not found.' });
+
+    const { airlineName, address } = req.body;
+    if (airlineName !== undefined) {
+      if (!airlineName.trim()) return res.status(400).json({ error: 'Airline name cannot be empty.' });
+      airline.airlineName = airlineName.trim();
+    }
+    if (address !== undefined) airline.address = (address || '').trim();
+
+    await airline.save();
+    res.json({ message: 'Airline updated.', airline: airline.toJSON() });
+  } catch (err) {
+    console.error('PATCH /admin/airline error:', err.message);
+    res.status(500).json({ error: err.message || 'Server error updating airline.' });
   }
 });
 

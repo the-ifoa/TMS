@@ -54,6 +54,40 @@
   .label {
     @apply block text-xs font-semibold text-primary-500 uppercase tracking-wider mb-1.5;
   }
+
+  /* Shared typography box so the highlight backdrop and textarea align 1:1 */
+  .hl-box {
+    @apply w-full px-3 py-2 text-sm leading-5 font-sans border rounded-lg;
+    box-sizing: border-box;
+    font-family: inherit;
+  }
+  /* Dynamic value — looks like a real input sub-field inside the editor */
+  .hl-mark {
+    display: inline-block;
+    background: #fffbeb;
+    border: 1.5px solid #f59e0b;
+    border-bottom: 2.5px solid #d97706;
+    border-radius: 5px;
+    padding: 1px 7px 1px 7px;
+    font-weight: 600;
+    color: #78350f;
+    min-width: 60px;
+    min-height: 1.4em;
+    line-height: 1.5;
+    vertical-align: middle;
+    cursor: text;
+    outline: none;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .hl-mark:empty::after {
+    content: '\00a0\00a0\00a0\00a0';
+    opacity: 0.4;
+  }
+  .hl-mark:focus-within,
+  [contenteditable]:focus .hl-mark {
+    background: #fef3c7;
+    border-color: #b45309;
+  }
 }
 
 

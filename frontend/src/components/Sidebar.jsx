@@ -10,12 +10,14 @@ import {
   HiOutlineChevronRight,
   HiOutlineClipboardList,
   HiOutlineClipboardCheck,
+  HiOutlineDocumentText,
 } from 'react-icons/hi';
 import { useAuth } from '../context/AuthContext';
 
 const adminNavigation = [
   { name: 'Dashboard',    href: '/admin',                  icon: HiOutlineHome },
   { name: 'Airlines',     href: '/admin/airlines',         icon: HiOutlineOfficeBuilding },
+  { name: 'Contracts',    href: '/admin/contracts',        icon: HiOutlineDocumentText },
   { name: 'Attendance',   href: '/admin/attendance',       icon: HiOutlineClipboardCheck },
   { name: 'Exam Results', href: '/admin/exam-results',     icon: HiOutlineClipboardList },
   { name: 'Profile',      href: '/admin/profile',          icon: HiOutlineUserCircle },

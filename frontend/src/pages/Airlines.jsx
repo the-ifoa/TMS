@@ -26,7 +26,7 @@ import {
   getParticipantsByAirline, deleteParticipant, deleteAirlineData, deleteAirlineById,
   generateCertificateBlob, generateCertificateWithModules,
   updateFullCertId, getCertCounters, resetCertCounter, resetAllCertCounters,
-  updateNdgScore, revokeCertificate, updateValidity,
+  updateNdgScore, revokeCertificate, updateValidity, updateAirline,
 } from '../api';
 import ModuleSelector from '../components/ModuleSelector';
 
@@ -467,6 +467,9 @@ export default function Airlines() {
   const [deletingAirlines, setDeletingAirlines] = useState(false);
   const [deletingSelected, setDeletingSelected] = useState(false);
   const [revoking, setRevoking] = useState(false);
+  // Admin edit-airline modal: { open, id, airlineName, address }
+  const [editAirline, setEditAirline] = useState({ open: false, id: null, airlineName: '', address: '' });
+  const [savingAirline, setSavingAirline] = useState(false);
 
   const ALL_TYPES = ['FDI', 'FDR', 'FDA', 'FTL', 'HF', 'NDG', 'GD', 'TCD'];
 
@@ -730,6 +733,38 @@ export default function Airlines() {
     else toast.error(`${ok} revoked, ${fail} failed`);
   };
 
+  // ── Admin edit airline (name + address) ──────────────────────────────────────
+  const openEditAirline = (airline) => {
+    setEditAirline({
+      open: true,
+      id: airline._id || airline.id,
+      airlineName: airline.airlineName || '',
+      address: airline.address || '',
+    });
+  };
+  const closeEditAirline = () => setEditAirline({ open: false, id: null, airlineName: '', address: '' });
+  const saveEditAirline = async () => {
+    const name = editAirline.airlineName.trim();
+    if (!name) { toast.error('Airline name cannot be empty'); return; }
+    setSavingAirline(true);
+    try {
+      const res = await updateAirline(editAirline.id, { airlineName: name, address: editAirline.address.trim() });
+      const updated = res.data.airline;
+      // Patch in-memory data so the change shows immediately without a full reload
+      setData(prev => prev.map(d =>
+        airlineKey(d.airline) === String(editAirline.id)
+          ? { ...d, airline: { ...d.airline, airlineName: updated.airlineName, address: updated.address } }
+          : d
+      ));
+      toast.success('Airline updated');
+      closeEditAirline();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to update airline');
+    } finally {
+      setSavingAirline(false);
+    }
+  };
+
   const handleDeleteAirlineData = async (airline, count) => {
     const aKey        = airlineKey(airline);
     const airlineId   = airline._id;
@@ -864,17 +899,24 @@ export default function Airlines() {
   };
 
   // ── Derived ──────────────────────────────────────────────────────────────────
-  const filtered = data.map(({ airline, participants }) => ({
+  const filtered = data.map(({ airline, participants }) => {
+    // Search also matches the airline / organization name + address, so admins can
+    // find an airline directly. When the airline name matches, keep all its rows.
+    const q = search.toLowerCase();
+    const airlineMatch = !!search && [airline.airlineName, airline.address, airline.email]
+      .some(s => (s || '').toLowerCase().includes(q));
+    return {
     airline,
     participants: participants.filter(p => {
-      const nm = !search || [p.participant_name, p.first_name, p.last_name, p.department].some(s => (s || '').toLowerCase().includes(search.toLowerCase()));
+      const nm = !search || airlineMatch || [p.participant_name, p.first_name, p.last_name, p.department].some(s => (s || '').toLowerCase().includes(search.toLowerCase()));
       const typeMatch   = !filterType || p.training_type === filterType;
       const statusMatch = !filterCertStatus
         || (filterCertStatus === 'pending'   && !p.cert_released)
         || (filterCertStatus === 'generated' &&  p.cert_released);
       return nm && typeMatch && statusMatch;
     }),
-  })).filter(({ participants }) => participants.length > 0);
+    };
+  }).filter(({ participants }) => participants.length > 0);
 
   const totalParticipants = allParticipants.length;
   const totalAirlines     = data.length;
@@ -887,6 +929,50 @@ export default function Airlines() {
       <ModuleSelector isOpen={moduleModal.open} onClose={() => { setModuleModal({ open: false, record: null }); pendingFdrRecord.current = null; }} onConfirm={handleModuleConfirm} initialModules={moduleModal.record?.modules ? moduleModal.record.modules.split(',').map(m => m.trim()) : []} />
       <VariantModal open={variantModal} variant={templateVariant} setVariant={setTemplateVariant} validity={bulkValidity} setValidity={setBulkValidity} onConfirm={handleVariantConfirm} onClose={() => { setVariantModal(false); pendingGenerate.current = null; }} count={pendingGenerate.current?.toGenerate?.length || checked.size} />
       <CertResultModal results={certResults} onClose={closeResults} />
+
+      {/* ── Admin: Edit Airline Modal ── */}
+      <AnimatePresence>
+        {editAirline.open && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+            onClick={closeEditAirline}>
+            <motion.div initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+              className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
+              onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-5 py-4 border-b border-primary-100">
+                <h2 className="text-base font-bold text-primary-800">Edit Airline</h2>
+                <button onClick={closeEditAirline} className="p-1.5 rounded-lg hover:bg-primary-100 text-primary-400"><HiOutlineX className="w-5 h-5" /></button>
+              </div>
+              <div className="p-5 space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-primary-500 uppercase tracking-wider mb-1.5">Organization / Airline Name</label>
+                  <input type="text" value={editAirline.airlineName}
+                    onChange={e => setEditAirline(prev => ({ ...prev, airlineName: e.target.value }))}
+                    className="w-full border border-primary-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-400"
+                    placeholder="Airline name" autoFocus />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-primary-500 uppercase tracking-wider mb-1.5">Address</label>
+                  <textarea value={editAirline.address} rows={3}
+                    onChange={e => setEditAirline(prev => ({ ...prev, address: e.target.value }))}
+                    className="w-full border border-primary-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-400 resize-y"
+                    placeholder="Airline address" />
+                </div>
+              </div>
+              <div className="px-5 pb-5 flex gap-3">
+                <button onClick={closeEditAirline} className="btn-outline flex-1">Cancel</button>
+                <button onClick={saveEditAirline} disabled={savingAirline}
+                  className="btn-primary flex-1 flex items-center justify-center gap-2 disabled:opacity-60">
+                  {savingAirline && <Spin />}
+                  {savingAirline ? 'Saving…' : 'Save'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       <CounterResetModal open={counterModal} onClose={() => setCounterModal(false)} counters={counters} ALL_TYPES={ALL_TYPES} resetting={resetting} onReset={handleResetCounter} onResetAll={handleResetAll} />
 
       {/* Per-row preview modal */}
@@ -1073,7 +1159,7 @@ export default function Airlines() {
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="flex-1 relative">
             <HiOutlineSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-primary-400" />
-            <input type="text" placeholder="Search by name or department…" value={search} onChange={e => setSearch(e.target.value)} className="input-field pl-10 w-full" />
+            <input type="text" placeholder="Search by name, department or airline…" value={search} onChange={e => setSearch(e.target.value)} className="input-field pl-10 w-full" />
           </div>
           <div className="relative">
             <HiOutlineFilter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-primary-400" />
@@ -1164,6 +1250,10 @@ export default function Airlines() {
 
               {/* Airline action buttons */}
               <div className="flex items-center gap-1.5 flex-shrink-0">
+                <button onClick={() => openEditAirline(airline)}
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-primary-200 text-xs font-medium text-primary-600 hover:bg-primary-100 transition-colors">
+                  <HiOutlinePencil className="w-3.5 h-3.5" /> Edit
+                </button>
                 <button onClick={() => toggle(aKey)} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
                   {expanded[aKey] ? <HiOutlineChevronUp className="w-5 h-5 text-primary-400" /> : <HiOutlineChevronDown className="w-5 h-5 text-primary-400" />}
                 </button>

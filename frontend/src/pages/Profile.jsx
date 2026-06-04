@@ -12,6 +12,7 @@ import {
   HiOutlineOfficeBuilding,
   HiOutlineCheckCircle,
   HiOutlineInformationCircle,
+  HiOutlineLocationMarker,
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
@@ -32,12 +33,15 @@ export default function Profile() {
   const [saving, setSaving] = useState(false);
   const [editingAirlineName, setEditingAirlineName] = useState(false);
   const [airlineName, setAirlineName] = useState(admin?.airlineName || '');
+  const [editingAddress, setEditingAddress] = useState(false);
+  const [address, setAddress] = useState(admin?.address || '');
 
   // Keep local states in sync if the auth context admin object changes
   // Only update when NOT currently editing to avoid overwriting in-progress input
   useEffect(() => {
     if (!editingAirlineName && admin?.airlineName) setAirlineName(admin.airlineName);
     if (!editingName && admin?.name)              setName(admin.name);
+    if (!editingAddress && admin?.address !== undefined) setAddress(admin.address || '');
   }, [admin]);
 
   const [logoFile, setLogoFile]           = useState(null);
@@ -110,6 +114,23 @@ export default function Profile() {
       setEditingAirlineName(false);
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to update airline name');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleAddressSave = async () => {
+    const nextAddress = address.trim();
+    setSaving(true);
+    try {
+      const res = await updateProfile({ address: nextAddress });
+      const savedAddress = res.data.admin?.address ?? nextAddress;
+      setAddress(savedAddress);
+      updateAdmin(res.data.token, { ...admin, ...res.data.admin, address: savedAddress });
+      toast.success('Address updated successfully');
+      setEditingAddress(false);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to update address');
     } finally {
       setSaving(false);
     }
@@ -294,6 +315,55 @@ export default function Profile() {
         </div>
       </div>
 
+      {/* Address — airline only */}
+      {!isAdmin && (
+        <div className="card p-4 sm:p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 bg-primary-100 rounded-lg flex items-center justify-center">
+                <HiOutlineLocationMarker className="w-5 h-5 text-primary-600" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-primary-800">Airline Address</h3>
+                <p className="text-xs text-primary-400 mt-0.5">Mailing address for your airline</p>
+              </div>
+            </div>
+            {!editingAddress && (
+              <button onClick={() => { setEditingAddress(true); setAddress(admin?.address || ''); }}
+                className="px-3 sm:px-4 py-2 bg-accent-600 text-white text-xs font-medium rounded-lg hover:bg-accent-700 whitespace-nowrap">
+                {admin?.address ? 'Edit Address' : 'Add Address'}
+              </button>
+            )}
+          </div>
+          {editingAddress ? (
+            <div className="space-y-3">
+              <textarea
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                rows={3}
+                placeholder="Enter the airline's full address"
+                className="w-full border border-primary-200 rounded-lg px-3 py-2 text-sm text-primary-800 focus:outline-none focus:ring-2 focus:ring-accent-400 resize-y"
+                autoFocus
+              />
+              <div className="flex flex-wrap gap-2 sm:gap-3">
+                <button onClick={handleAddressSave} disabled={saving}
+                  className="px-4 py-2 bg-accent-600 text-white text-xs font-medium rounded-lg hover:bg-accent-700 disabled:opacity-50">
+                  {saving ? 'Saving...' : 'Save Address'}
+                </button>
+                <button onClick={() => { setEditingAddress(false); setAddress(admin?.address || ''); }}
+                  className="px-4 py-2 bg-primary-100 text-primary-600 text-xs font-medium rounded-lg hover:bg-primary-200">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-primary-700 whitespace-pre-line">
+              {admin?.address || <span className="text-primary-400">No address added yet.</span>}
+            </p>
+          )}
+        </div>
+      )}
+
       {/* Company Logo — airline only */}
       {!isAdmin && (
         <div className="card p-4 sm:p-6">
@@ -457,25 +527,6 @@ export default function Profile() {
         )}
       </div>
 
-      {/* ── ADMIN: System Information ── */}
-      {isAdmin && (
-        <div className="card p-4 sm:p-6">
-          <h3 className="text-base font-bold text-primary-800 mb-4">System Information</h3>
-          <div className="space-y-0">
-            {[
-              { label: 'Application Version', value: '1.0.0' },
-              { label: 'Database',            value: 'MongoDB' },
-              { label: 'Certificate Engine',  value: 'PDFKit' },
-              { label: 'Environment',         value: 'Production', highlight: true },
-            ].map(({ label, value, highlight }) => (
-              <div key={label} className="flex items-center justify-between py-2.5 border-b border-primary-100 last:border-0">
-                <span className="text-sm text-primary-500">{label}</span>
-                <span className={`text-sm font-medium ${highlight ? 'text-emerald-600' : 'text-primary-800'}`}>{value}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* ── AIRLINE: Account Information (replaces System Information) ── */}
       {!isAdmin && (

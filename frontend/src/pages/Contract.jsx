@@ -18,6 +18,8 @@ import {
   HiOutlineSearch,
   HiOutlineLightBulb,
   HiOutlinePencilAlt,
+  HiOutlineChevronLeft,
+  HiOutlineChevronRight,
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import {
@@ -170,6 +172,356 @@ function BlockEditor({ block, onTextChange, onFocus }) {
   }
 
   return <RichEditor value={text} onChange={onTextChange} onFocus={onFocus} />;
+}
+
+// ── Dropdown constants ────────────────────────────────────────────────────────
+const TRAINING_TYPES_LIST = [
+  'FDI – Flight Dispatch Initial',
+  'FDR – Flight Dispatch Recurrent',
+  'FDA – Flight Dispatch Advanced',
+  'FTL – Flight Time Limitations',
+  'NDG – Dangerous Goods No-Carry',
+  'HF – Human Factors for OCC',
+  'GD – Ground Operations',
+  'TCD – Training Competencies Development',
+];
+const CURRENCY_OPTIONS = ['EUROS', 'SWISS FRANCS', 'US DOLLARS'];
+const CURRENCY_SHORT   = ['EUR', 'CHF', 'USD'];
+const DELIVERY_OPTIONS = ['Synchronous Virtual Training', 'Classroom Onsite', 'Online', 'Hybrid'];
+
+// Extract all {{...}} values from text in order
+const extractMarks = (text) => [...text.matchAll(/\{\{([^}]*)\}\}/g)].map(m => m[1]);
+
+// ── Date helpers ──────────────────────────────────────────────────────────────
+function dateToInput(str) {
+  if (!str) return '';
+  try {
+    const d = new Date(str.trim().replace(/(\d+)\s+([A-Z]+)\s+(\d+)/i, '$2 $1, $3'));
+    if (!isNaN(d)) return d.toISOString().slice(0, 10);
+    const d2 = new Date(str.trim());
+    if (!isNaN(d2)) return d2.toISOString().slice(0, 10);
+  } catch {}
+  return '';
+}
+function inputToGB(val) {  // "14 OCTOBER 2025"
+  if (!val) return '';
+  const d = new Date(val + 'T12:00:00');
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }).toUpperCase();
+}
+function inputToUS(val) {  // "October 14, 2025"
+  if (!val) return '';
+  const d = new Date(val + 'T12:00:00');
+  return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+}
+
+// ── Reusable date picker row ───────────────────────────────────────────────────
+function DateRow({ label, value, onChange, formatFn }) {
+  const [inputVal, setInputVal] = useState(() => dateToInput(value));
+  const upd = (v) => {
+    setInputVal(v);
+    onChange(formatFn(v) || v);
+  };
+  return (
+    <div className="flex items-center gap-3">
+      <label className="text-[10px] font-semibold text-primary-500 uppercase tracking-wide w-28 flex-shrink-0">{label}</label>
+      <input type="date" value={inputVal} onChange={e => upd(e.target.value)}
+        className="input-field text-sm font-semibold text-amber-800 border-amber-300 flex-1" />
+      {inputVal && <span className="text-xs px-2 py-1 rounded hl-mark flex-shrink-0">{formatFn(inputVal)}</span>}
+    </div>
+  );
+}
+
+// ── DateMarkEditor — wraps a whole block, replaces its single {{date}} mark ───
+function DateMarkEditor({ block, label, onChange, formatFn }) {
+  const initDisplay = extractMarks(block.text)[0] || '';
+  const upd = (display) => {
+    onChange(block.text.replace(/\{\{[^}]*\}\}/, `{{${display}}}`));
+  };
+  return (
+    <div className="p-2.5 rounded-xl border border-amber-200 bg-amber-50/30">
+      <DateRow label={label} value={initDisplay} onChange={upd} formatFn={formatFn} />
+    </div>
+  );
+}
+
+// ── Services bullet structured editor (block id: s3bullet) ───────────────────
+function ServicesBulletEditor({ block, onChange }) {
+  const vals0 = extractMarks(block.text);
+  const [days,     setDays]     = useState(vals0[0] || '2');
+  const [type,     setType]     = useState(vals0[1] || TRAINING_TYPES_LIST[0]);
+  const [dates,    setDates]    = useState(vals0[2] || '');
+  const [datesInput, setDatesInput] = useState(() => dateToInput(vals0[2] || ''));
+  const [delivery, setDelivery] = useState(vals0[3] || DELIVERY_OPTIONS[0]);
+  const [notes,    setNotes]    = useState(vals0[4] || '—');
+
+  const rebuild = (d, t, dt, dv, n) =>
+    onChange(
+      `**Duration:** {{${d}}} day(s) — **Training Type:** {{${t}}}\n` +
+      `**Dates:** {{${dt}}}\n` +
+      `**Delivery:** {{${dv}}}\n` +
+      `**Additional Notes:** {{${n}}}`
+    );
+
+  const upd = (setter, key, val) => {
+    setter(val);
+    const s = { days, type, dates, delivery, notes, [key]: val };
+    rebuild(s.days, s.type, s.dates, s.delivery, s.notes);
+  };
+
+  const updDate = (inputVal) => {
+    setDatesInput(inputVal);
+    const display = inputToGB(inputVal);
+    setDates(display);
+    rebuild(days, type, display, delivery, notes);
+  };
+
+  return (
+    <div className="space-y-2 p-3 rounded-xl border border-amber-200 bg-amber-50/30">
+      <p className="text-[10px] font-bold uppercase tracking-wider text-amber-700 mb-1">Services Provided</p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <div>
+          <label className="text-[10px] font-semibold text-primary-500 uppercase tracking-wide">Duration (days)</label>
+          <input type="text" value={days} onChange={e => upd(setDays, 'days', e.target.value)}
+            className="input-field w-full text-sm mt-0.5" placeholder="e.g. 2" />
+        </div>
+      </div>
+
+      <div>
+        <label className="text-[10px] font-semibold text-primary-500 uppercase tracking-wide">Training Type</label>
+        <select value={TRAINING_TYPES_LIST.includes(type) ? type : TRAINING_TYPES_LIST[0]}
+          onChange={e => upd(setType, 'type', e.target.value)}
+          className="input-field w-full text-sm mt-0.5">
+          {TRAINING_TYPES_LIST.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+      </div>
+
+      <div>
+        <label className="text-[10px] font-semibold text-primary-500 uppercase tracking-wide">Training Date</label>
+        <div className="flex items-center gap-2 mt-0.5">
+          <input type="date" value={datesInput} onChange={e => updDate(e.target.value)}
+            className="input-field text-sm font-semibold text-amber-800 border-amber-300 flex-1" />
+          {datesInput && <span className="text-xs px-2 py-1 rounded hl-mark flex-shrink-0">{inputToGB(datesInput)}</span>}
+        </div>
+      </div>
+
+      <div>
+        <label className="text-[10px] font-semibold text-primary-500 uppercase tracking-wide">Delivery Mode</label>
+        <select value={DELIVERY_OPTIONS.includes(delivery) ? delivery : DELIVERY_OPTIONS[0]}
+          onChange={e => upd(setDelivery, 'delivery', e.target.value)}
+          className="input-field w-full text-sm mt-0.5">
+          {DELIVERY_OPTIONS.map(d => <option key={d} value={d}>{d}</option>)}
+        </select>
+      </div>
+
+      <div>
+        <label className="text-[10px] font-semibold text-primary-500 uppercase tracking-wide">Additional Notes</label>
+        <input type="text" value={notes} onChange={e => upd(setNotes, 'notes', e.target.value)}
+          className="input-field w-full text-sm mt-0.5" />
+      </div>
+    </div>
+  );
+}
+
+// ── Currency paragraph editor (block id: s4a) ─────────────────────────────────
+function CurrencyParaEditor({ block, onChange }) {
+  const init = extractMarks(block.text)[0] || 'EUROS';
+  const [currency, setCurrency] = useState(CURRENCY_OPTIONS.includes(init) ? init : CURRENCY_OPTIONS[0]);
+  const upd = (val) => {
+    setCurrency(val);
+    onChange(`Except as otherwise provided in this Agreement, all monetary amounts referred to in this Agreement are in {{${val}}}.`);
+  };
+  return (
+    <div className="flex flex-wrap items-center gap-2 p-3 rounded-xl border border-amber-200 bg-amber-50/30">
+      <span className="text-sm text-primary-700 flex-shrink-0">
+        …all monetary amounts referred to in this Agreement are in
+      </span>
+      <select value={currency} onChange={e => upd(e.target.value)}
+        className="input-field text-sm font-semibold text-amber-800 border-amber-300 w-44">
+        {CURRENCY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
+      </select>
+      <span className="text-sm text-primary-700">.</span>
+    </div>
+  );
+}
+
+// ── Fee bullet editor (block ids: s4bullet1, s4bullet2) ───────────────────────
+function FeeBulletEditor({ block, onChange, showCurrency = true }) {
+  const marks = extractMarks(block.text);
+  const labelMatch = block.text.match(/^([^{]+):/);
+  const label = labelMatch ? labelMatch[1].trim() : '';
+  const [amount,   setAmount]   = useState(marks[0] || '');
+  const [currency, setCurrency] = useState(CURRENCY_SHORT.includes(marks[1]) ? marks[1] : 'EUR');
+
+  const upd = (a, c) => onChange(showCurrency ? `${label}: {{${a}}} {{${c}}}` : `${label}: {{${a}}}`);
+
+  return (
+    <div className="flex items-center gap-2 p-2.5 rounded-xl border border-amber-200 bg-amber-50/30 flex-wrap">
+      <span className="text-sm text-primary-700 flex-shrink-0 font-medium">{label}:</span>
+      <input type="text" value={amount} onChange={e => { setAmount(e.target.value); upd(e.target.value, currency); }}
+        placeholder={showCurrency ? 'e.g. 2 x 1,100 = 2,200' : 'e.g. 2'} className="input-field text-sm flex-1 min-w-[100px]" />
+      {showCurrency && (
+        <select value={currency} onChange={e => { setCurrency(e.target.value); upd(amount, e.target.value); }}
+          className="input-field text-sm font-semibold text-amber-800 border-amber-300 w-24">
+          {CURRENCY_SHORT.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+      )}
+    </div>
+  );
+}
+
+// ── Yes/No bullet editor (block ids: s4bullet3, s4bullet4, s4bullet5) ─────────
+function YesNoBulletEditor({ block, onChange }) {
+  const marks = extractMarks(block.text);
+  const label = block.text.replace(/\{\{[^}]*\}\}/g, '').replace(/:\s*$/, '').trim();
+  const [val, setVal] = useState(marks[0] === 'Yes' ? 'Yes' : 'No');
+  const upd = (v) => { setVal(v); onChange(`${label}: {{${v}}}`); };
+  return (
+    <div className="flex items-center gap-3 p-2.5 rounded-xl border border-amber-200 bg-amber-50/30">
+      <span className="text-sm text-primary-700 flex-1">{label}</span>
+      <div className="flex gap-2">
+        {['Yes', 'No'].map(opt => (
+          <button key={opt} type="button" onClick={() => upd(opt)}
+            className={`px-4 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+              val === opt ? 'bg-primary-800 text-white border-primary-800' : 'border-primary-200 text-primary-600 hover:bg-primary-100'
+            }`}>{opt}</button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Signature row editor (block id: sig_name) — date picker on right ──────────
+function SigDateEditor({ block, onChange }) {
+  const pipe = block.text.indexOf('|');
+  const [left, setLeft] = useState(pipe >= 0 ? block.text.slice(0, pipe) : block.text);
+  const rightRaw = pipe >= 0 ? block.text.slice(pipe + 1) : '';
+  const prefix  = rightRaw.replace(/\{\{[^}]*\}\}.*/, '').trim(); // "Date:"
+  const initDate = extractMarks(rightRaw)[0] || '';
+  const [inputVal, setInputVal] = useState(() => dateToInput(initDate));
+
+  const rebuild = (l, v) => onChange(`${l}|${prefix} {{${inputToUS(v) || v}}}`);
+
+  return (
+    <div className="grid grid-cols-2 gap-4">
+      <input type="text" value={left} onChange={e => { setLeft(e.target.value); rebuild(e.target.value, inputVal); }}
+        className="input-field w-full" />
+      <div className="flex items-center gap-2">
+        <span className="text-sm text-primary-600 flex-shrink-0">{prefix}</span>
+        <input type="date" value={inputVal}
+          onChange={e => { setInputVal(e.target.value); rebuild(left, e.target.value); }}
+          className="input-field flex-1 text-sm font-semibold text-amber-800 border-amber-300" />
+      </div>
+    </div>
+  );
+}
+
+// ── Custom month/year picker ──────────────────────────────────────────────────
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const MONTH_FULL = ['JANUARY','FEBRUARY','MARCH','APRIL','MAY','JUNE','JULY','AUGUST','SEPTEMBER','OCTOBER','NOVEMBER','DECEMBER'];
+
+function MonthPicker({ value, onChange }) {
+  // value: "OCTOBER 2024", onChange: (str) => void
+  const parse = (v) => {
+    const idx = MONTH_FULL.findIndex(m => v?.toUpperCase().includes(m));
+    const yearMatch = v?.match(/(\d{4})/);
+    return { month: idx >= 0 ? idx : new Date().getMonth(), year: yearMatch ? Number(yearMatch[1]) : new Date().getFullYear() };
+  };
+
+  const [open, setOpen]   = useState(false);
+  const [year, setYear]   = useState(() => parse(value).year);
+  const [month, setMonth] = useState(() => parse(value).month);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const { month: m, year: y } = parse(value);
+    setMonth(m); setYear(y);
+  }, [value]);
+
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const select = (m) => {
+    setMonth(m);
+    setOpen(false);
+    onChange(`${MONTH_FULL[m]} ${year}`);
+  };
+
+  const changeYear = (delta) => setYear(y => y + delta);
+
+  return (
+    <div className="relative" ref={ref}>
+      {/* Trigger */}
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="input-field pl-10 w-full text-left flex items-center gap-2 cursor-pointer"
+      >
+        <HiOutlineCalendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-primary-400" />
+        <span className={value ? 'text-primary-800 font-medium' : 'text-primary-400'}>
+          {value || 'Select month…'}
+        </span>
+      </button>
+
+      {/* Popup */}
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: -6, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -6, scale: 0.97 }}
+            transition={{ duration: 0.15 }}
+            className="absolute z-50 mt-1 w-64 bg-white rounded-2xl shadow-xl border border-primary-200 p-4"
+          >
+            {/* Year nav */}
+            <div className="flex items-center justify-between mb-3">
+              <button type="button" onClick={() => changeYear(-1)}
+                className="p-1.5 rounded-lg hover:bg-primary-100 text-primary-500 transition-colors">
+                <HiOutlineChevronLeft className="w-4 h-4" />
+              </button>
+              <span className="text-sm font-bold text-primary-800">{year}</span>
+              <button type="button" onClick={() => changeYear(1)}
+                className="p-1.5 rounded-lg hover:bg-primary-100 text-primary-500 transition-colors">
+                <HiOutlineChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Month grid */}
+            <div className="grid grid-cols-4 gap-1.5">
+              {MONTHS.map((m, i) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => select(i)}
+                  className={`py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                    i === month && year === parse(value).year
+                      ? 'bg-primary-800 text-white'
+                      : 'text-primary-600 hover:bg-primary-100'
+                  }`}
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
+
+            {/* This month shortcut */}
+            <div className="mt-3 pt-3 border-t border-primary-100 flex justify-between">
+              <button type="button" onClick={() => { select(new Date().getMonth()); setYear(new Date().getFullYear()); }}
+                className="text-xs font-semibold text-accent-600 hover:text-accent-700">
+                This month
+              </button>
+              <button type="button" onClick={() => setOpen(false)}
+                className="text-xs font-semibold text-primary-400 hover:text-primary-600">
+                Close
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
 }
 
 const FILTERS = [
@@ -516,11 +868,7 @@ function ContractEditor({ airline, onBack, onSent }) {
           </div>
           <div>
             <label className="label">Header Date <span className="text-amber-500 normal-case font-medium">· top-right of every page</span></label>
-            <div className="relative">
-              <HiOutlineCalendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-primary-400" />
-              <input type="text" value={headerDate} onChange={e => setHeaderDate(e.target.value)}
-                placeholder="OCTOBER 2024" className="input-field pl-10 w-full" />
-            </div>
+            <MonthPicker value={headerDate} onChange={setHeaderDate} />
           </div>
           <div className="sm:col-span-2">
             <label className="label">Email Message (optional)</label>
@@ -559,6 +907,24 @@ function ContractEditor({ airline, onBack, onSent }) {
                 </div>
               );
             }
+            // Special structured editors for specific blocks
+            if (b.id === 'eff')
+              return <div key={b.id}><DateMarkEditor block={b} label="Effective Date" onChange={val => updateBlock(b.id, val)} formatFn={inputToGB} /></div>;
+            if (b.id === 's1a')
+              return <div key={b.id}><DateMarkEditor block={b} label="Agreement End" onChange={val => updateBlock(b.id, val)} formatFn={inputToGB} /></div>;
+            if (b.id === 's3bullet')
+              return <div key={b.id}><ServicesBulletEditor block={b} onChange={val => updateBlock(b.id, val)} /></div>;
+            if (b.id === 's4a')
+              return <div key={b.id}><CurrencyParaEditor block={b} onChange={val => updateBlock(b.id, val)} /></div>;
+            if (b.id === 's4bullet1')
+              return <div key={b.id}><FeeBulletEditor block={b} onChange={val => updateBlock(b.id, val)} showCurrency /></div>;
+            if (b.id === 's4bullet2')
+              return <div key={b.id}><FeeBulletEditor block={b} onChange={val => updateBlock(b.id, val)} showCurrency={false} /></div>;
+            if (['s4bullet3', 's4bullet4', 's4bullet5'].includes(b.id))
+              return <div key={b.id}><YesNoBulletEditor block={b} onChange={val => updateBlock(b.id, val)} /></div>;
+            if (b.id === 'sig_name')
+              return <div key={b.id}><SigDateEditor block={b} onChange={val => updateBlock(b.id, val)} /></div>;
+
             return (
               <div key={b.id}>
                 <BlockEditor

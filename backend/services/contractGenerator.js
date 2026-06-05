@@ -28,16 +28,31 @@ const PARTY_INDENT = 108;  // BETWEEN/AND label→party text gap (matches refere
 
 // ─── Default dynamic field values (used to build the default blocks) ──────────
 const DEFAULT_FIELDS = {
-  effectiveDate: '14 OCTOBER 2025',
-  clientName:    'AeroTransCargo',
-  clientAddress: 'BD. Dacia 60/5, of 115, MD-2026, Chisinau, Moldova and Sharjah office located at Q4/174 Saif Zone, PO BOX 122487, Sharjah, United Arab Emirates.',
-  termEndDate:   '31 DECEMBER 2025',
-  currency:      'EURO',
-  servicesList:  '2 days of Flight Dispatch recurrent/refresher training\n20-21 October 2025\nSynchronous Virtual Training',
-  feesLine:      'Recurrent Training fees: 2 x 1,100 EUR = 2,200 EUR',
-  paymentTerms:  'due within 30 days of receipt',
-  latePenalty:   '2.00% per month',
-  signatureDate: 'October 14, 2025',
+  effectiveDate:      '14 OCTOBER 2025',
+  clientName:         'AeroTransCargo',
+  clientAddress:      'BD. Dacia 60/5, of 115, MD-2026, Chisinau, Moldova and Sharjah office located at Q4/174 Saif Zone, PO BOX 122487, Sharjah, United Arab Emirates.',
+  termEndDate:        '31 DECEMBER 2025',
+  // Payment currency (options: EUROS / SWISS FRANCS / US DOLLARS)
+  currency:           'EUROS',
+  // Services section
+  numberOfDays:       '2',
+  trainingType:       'Flight Dispatch Recurrent/Refresher Training',
+  trainingDates:      '20-21 October 2025',
+  deliveryMode:       'Synchronous Virtual Training',
+  servicesNotes:      'Additional comments here',
+  // Fees section
+  trainingFeesText:   '2 x 1,100 EUR = 2,200',
+  feesCurrency:       'EUR',
+  travelDayText:      '—',
+  travelCurrency:     'EUR',
+  hotelIncluded:      'No',
+  airTransport:       'No',
+  groundTransport:    'No',
+  feesNotes:          '—',
+  paymentTerms:       'due within 30 days of receipt',
+  latePenalty:        '2.00% per month',
+  // Auto-fills with today's date; admin can edit in the editor
+  signatureDate:      new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
 };
 
 // ─── Build the full default contract as an ordered list of editable blocks ────
@@ -65,14 +80,24 @@ function buildDefaultBlocks(f = DEFAULT_FIELDS) {
     { id: 's2b',      type: 'para',    text: 'The Client will monitor the performance of the Service Provider on a regular basis to ensure the Service Provider fulfills the operational requirements of the Client on a continuing basis.' },
     { id: 's2c',      type: 'para',    text: 'A meeting will be held between the Service Provider and the Client at least before the training process is started to review training materials. At all times, both parties shall always observe and ensure compliance with the training service standard and shall not compromise any safety regulations and/or procedures.' },
 
-    { id: 'h3',       type: 'heading', text: '3.  SERVICES PROVIDED' },
-    { id: 's3a',      type: 'para',    text: 'Beginning upon Agreement with this contract, the International Flight Operational Academy GmbH will provide the Client with the service (collectively, the "Services") described in Annex 1:' },
-    { id: 's3bullet', type: 'bullet',  text: `{{${f.servicesList}}}` },
+    { id: 'h3',        type: 'heading', text: '3.  SERVICES PROVIDED' },
+    { id: 's3a',       type: 'para',   text: 'Beginning upon Agreement with this contract, the International Flight Operational Academy GmbH will provide the Client with the service (collectively, the "Services") described in Annex 1:' },
+    { id: 's3bullet',  type: 'bullet', text:
+        `**Duration:** {{${f.numberOfDays}}} day(s) — **Training Type:** {{${f.trainingType}}}\n` +
+        `**Dates:** {{${f.trainingDates}}}\n` +
+        `**Delivery:** {{${f.deliveryMode}}}\n` +
+        `**Additional Notes:** {{${f.servicesNotes}}}`
+    },
 
-    { id: 'h4',       type: 'heading', text: '4.  PAYMENT' },
-    { id: 's4a',      type: 'para',    text: `Except as otherwise provided in this Agreement, all monetary amounts referred to in this Agreement are in {{${f.currency}}}.` },
-    { id: 's4b',      type: 'para',    text: 'In consideration for the Services to be performed by the Service Provider, the Client agrees to pay the services fees as:' },
-    { id: 's4bullet', type: 'bullet',  text: `{{${f.feesLine}}}` },
+    { id: 'h4',        type: 'heading', text: '4.  PAYMENT' },
+    { id: 's4a',       type: 'para',   text: `Except as otherwise provided in this Agreement, all monetary amounts referred to in this Agreement are in {{${f.currency}}}.` },
+    { id: 's4b',       type: 'para',   text: 'In consideration for the Services to be performed by the Service Provider, the Client agrees to pay the services fees as:' },
+    { id: 's4bullet1', type: 'bullet', text: `Training Fees: {{${f.trainingFeesText}}} {{${f.feesCurrency}}}` },
+    { id: 's4bullet2', type: 'bullet', text: `Instructor Travel Day: {{${f.travelDayText}}} {{${f.travelCurrency}}}` },
+    { id: 's4bullet3', type: 'bullet', text: `Hotel including Breakfast & Wifi: {{${f.hotelIncluded}}}` },
+    { id: 's4bullet4', type: 'bullet', text: `Air Transportation: {{${f.airTransport}}}` },
+    { id: 's4bullet5', type: 'bullet', text: `Ground Transportation: {{${f.groundTransport}}}` },
+    { id: 's4bullet6', type: 'bullet', text: `Additional Comments: {{${f.feesNotes}}}` },
     { id: 's4c',      type: 'para',    text: "Completion shall be defined as the fulfillment of Services as described in Section 3 following industry standards and not unreasonably withheld to the Client's approval." },
     { id: 's4d',      type: 'para',    text: `The Client will be invoiced when the Services are complete. Invoices submitted by the Service Provider to the Client are {{${f.paymentTerms}}}.` },
     { id: 's4e',      type: 'para',    text: 'In the event that the Client terminates this Agreement prior to completion of the Services, but where the Services have been partially performed, the Service Provider will be entitled to pro-rata payment of the service fees to the date of termination, provided that there has been no breach of contract on the part of the Service Provider.' },

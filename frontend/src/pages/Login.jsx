@@ -87,7 +87,7 @@ export default function Login() {
                   </p>
                   <button
                     onClick={() => { setShowForgot(false); setForgotSent(false); setForgotEmail(''); }}
-                    className="text-sm text-accent-600 font-semibold hover:text-accent-700"
+                    className="text-sm text-[#0000ff] font-semibold hover:text-blue-700"
                   >
                     ← Back to sign in
                   </button>
@@ -108,7 +108,7 @@ export default function Login() {
                   </div>
                   <button
                     type="submit" disabled={forgotSending}
-                    className="w-full py-3 bg-accent-600 text-white rounded-xl text-sm font-semibold hover:bg-accent-700 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                    className="w-full py-3 bg-[#0000ff] text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                   >
                     {forgotSending
                       ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -150,7 +150,7 @@ export default function Login() {
                     <label className="block text-sm font-medium text-primary-700">Password</label>
                     <button
                       type="button" onClick={() => setShowForgot(true)}
-                      className="text-xs text-accent-600 font-medium hover:text-accent-700 transition-colors"
+                      className="text-xs text-[#0000ff] font-medium hover:text-blue-700 transition-colors"
                     >
                       Forgot password?
                     </button>
@@ -171,7 +171,7 @@ export default function Login() {
                 </div>
 
                 <button type="submit" disabled={loading}
-                  className="w-full py-3 bg-accent-600 text-white rounded-xl text-sm font-semibold shadow-lg shadow-accent-600/25 hover:bg-accent-700 hover:shadow-xl transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full py-3 bg-[#0000ff] text-white rounded-xl text-sm font-semibold shadow-lg shadow-blue-500/25 hover:bg-blue-700 hover:shadow-xl transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {loading
                     ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -182,7 +182,7 @@ export default function Login() {
               <div className="mt-6 space-y-3">
                 <p className="text-center text-sm text-primary-400">
                   New airline?{' '}
-                  <Link to="/signup" className="text-accent-600 font-semibold hover:text-accent-700 transition-colors">
+                  <Link to="/signup" className="text-[#0000ff] font-semibold hover:text-blue-700 transition-colors">
                     Register your airline
                   </Link>
                 </p>

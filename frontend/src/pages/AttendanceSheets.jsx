@@ -180,7 +180,7 @@ function SheetCard({ sheet, onEdit, onPreview, previewing }) {
 
 // ── Airline group section ──────────────────────────────────────────────────────
 function AirlineGroup({ airlineName, logoUrl, sheets, onEdit, onPreview, previewing }) {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
 
   return (
     <div className="space-y-2">

@@ -19,6 +19,7 @@ import {
   generateCertificateBlob,
   generateCertificateWithModules,
   revokeCertificateById,
+  API_BASE,
 } from '../api';
 import { useAuth } from '../context/AuthContext';
 import ModuleSelector from '../components/ModuleSelector';
@@ -377,7 +378,7 @@ export default function Certificates() {
       <AnimatePresence>
         {rowPreview && (() => {
           const token = localStorage.getItem('token') || '';
-          const src   = `/api/certificates/preview/${rowPreview.id}?token=${encodeURIComponent(token)}`;
+          const src   = `${API_BASE}/certificates/preview/${rowPreview.id}?token=${encodeURIComponent(token)}`;
           return (
             <motion.div
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}

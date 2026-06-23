@@ -20,7 +20,7 @@ import {
   HiOutlineClipboardList,
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
-import { getParticipants, deleteParticipant, generateCertificateBlob, downloadIssuedCertificate, listAttendanceSheets, getAttendanceSheet } from '../api';
+import { getParticipants, deleteParticipant, generateCertificateBlob, downloadIssuedCertificate, listAttendanceSheets, getAttendanceSheet, API_BASE } from '../api';
 import AttendanceChecklistModal from '../components/AttendanceChecklistModal';
 import { buildAttendanceMap, generateAttendancePdf } from '../utils/generateAttendancePdf';
 
@@ -55,9 +55,8 @@ function initials(name = '') {
 }
 
 // ─── Collapsible group used in airline view ───────────────────────────────────
-const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
-function SubmissionGroup({ groupKey, records, defaultOpen = true, attendanceSheets = [], onViewSheet }) {
+function SubmissionGroup({ groupKey, records, defaultOpen = false, attendanceSheets = [], onViewSheet }) {
   const [open, setOpen]             = useState(defaultOpen);
   const [downloading, setDownloading] = useState(null);
   const [preview, setPreview]       = useState(null);
@@ -549,7 +548,7 @@ export default function Participants() {
                   key={key}
                   groupKey={key}
                   records={recs}
-                  defaultOpen={true}
+                  defaultOpen={false}
                   attendanceSheets={groupSheets}
                   onViewSheet={sheet => setActiveSheet({ ...sheet, readOnly: true })}
                 />

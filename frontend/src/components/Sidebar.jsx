@@ -11,6 +11,7 @@ import {
   HiOutlineClipboardList,
   HiOutlineClipboardCheck,
   HiOutlineDocumentText,
+  HiOutlineShieldExclamation,
 } from 'react-icons/hi';
 import { useAuth } from '../context/AuthContext';
 
@@ -20,6 +21,7 @@ const adminNavigation = [
   { name: 'Contracts',    href: '/admin/contracts',        icon: HiOutlineDocumentText },
   { name: 'Attendance',   href: '/admin/attendance',       icon: HiOutlineClipboardCheck },
   { name: 'Exam Results', href: '/admin/exam-results',     icon: HiOutlineClipboardList },
+  { name: 'DGR CBTA',     href: '/admin/dgr',              icon: HiOutlineShieldExclamation },
   { name: 'Profile',      href: '/admin/profile',          icon: HiOutlineUserCircle },
 ];
 
@@ -27,6 +29,7 @@ const airlineNavigation = [
   { name: 'Dashboard',      href: '/airline',               icon: HiOutlineHome,       exact: true  },
   { name: 'My Submissions', href: '/airline/submissions',   icon: HiOutlineUsers,      exact: true  },
   { name: 'New Enrollment', href: '/airline/enrollment/new', icon: HiOutlinePlusCircle, exact: true  },
+  { name: 'DGR CBTA',       href: '/airline/dgr',           icon: HiOutlineShieldExclamation, exact: true },
   { name: 'Profile',        href: '/airline/profile',       icon: HiOutlineUserCircle, exact: false },
 ];
 
@@ -48,7 +51,7 @@ export default function Sidebar({ open, setOpen }) {
       {/* ── Header: logo + collapse toggle ── */}
       <div className="flex items-center justify-between h-16 px-3 border-b border-gray-200 flex-shrink-0">
         <button onClick={() => navigate('/')} className="flex items-center gap-2 min-w-0 flex-1">
-          <img src={logoImg} alt="IFOA" className="h-8 w-auto object-contain flex-shrink-0" />
+          <img src={logoImg} alt="IFOA" className="h-8 w-auto max-w-[80px] object-contain flex-shrink-0" />
           {open && (
             <span className="text-[11px] font-medium text-primary-400 truncate">
               {isAdmin ? 'Training Management' : 'Airline Portal'}

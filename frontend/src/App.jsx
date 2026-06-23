@@ -18,6 +18,7 @@ import Contract from './pages/Contract';
 import Profile from './pages/Profile';
 import ExamResults from './pages/ExamResults';
 import AttendanceSheets from './pages/AttendanceSheets';
+import DgrForms from './pages/DgrForms';
 
 // Requires any authenticated user (admin or airline)
 function ProtectedRoute({ children }) {
@@ -87,6 +88,7 @@ function App() {
           <Route path="certificates" element={<AdminRoute><Certificates /></AdminRoute>} />
           <Route path="attendance"   element={<AdminRoute><AttendanceSheets /></AdminRoute>} />
           <Route path="exam-results" element={<AdminRoute><ExamResults /></AdminRoute>} />
+          <Route path="dgr"          element={<AdminRoute><DgrForms /></AdminRoute>} />
         </Route>
 
         {/* Airline-friendly URL aliases — same pages, nicer URLs for airline users */}
@@ -94,6 +96,7 @@ function App() {
           <Route index element={<Dashboard />} />
           <Route path="submissions" element={<Participants />} />
           <Route path="enrollment/new" element={<AddParticipant />} />
+          <Route path="dgr" element={<DgrForms />} />
           <Route path="profile" element={<Profile />} />
         </Route>
       </Routes>

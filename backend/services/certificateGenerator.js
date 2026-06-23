@@ -194,6 +194,11 @@ async function generateCertificate(participant) {
     whiteOut(700, 22, 137, 53);  // x=700..837, top=22..75 — logo gone, both green borders intact
   }
 
+  // ── 0b. GD: hide baked-in unique number at bottom-left (cert ID stays top-right) ──
+  if (rawType === 'GD') {
+    whiteOut(21, 575, 90, 14);   // x=21..111, top=575..589
+  }
+
   // ── 1. CERT ID ───────────────────────────────────────────────────────────────
   // Template cert ID: x=[764..838], top=26.7..36.7
   // Whiteout x=700..836, draw right-aligned to x=829 (clear of green line at 838)
@@ -216,7 +221,7 @@ async function generateCertificate(participant) {
   const SUBTITLE_MAP = {
     FDR: 'FLIGHT DISPATCHER EASA STANDARDS',
     FDI: 'FLIGHT DISPATCHER EASA STANDARDS',
-    GD:  'FLIGHT DISPATCHER EASA STANDARDS',
+    GD:  'SLOT COORDINATOR',
     FDA: 'NAT HLA OPERATIONS & EDTO',
     FTL: 'CREW CONTROL EASA STANDARDS',
     HF:  'HUMAN FACTORS',
@@ -243,8 +248,10 @@ async function generateCertificate(participant) {
     // Right-align to x=607 (12pt left of template's 619) so it never overlaps
     // the 'E' of CERTIFICATE, and position at top=88 (3pt above the 91 baseline)
     // to create clear breathing room between subtitle and CERTIFICATE heading.
+    // GD ('SLOT COORDINATOR') sits a touch further right so its end aligns above the 'E'.
+    const subRightAnchor = rawType === 'GD' ? 613 : 607;
     page.drawText(subtitleText, {
-      x:    607 - subW,
+      x:    subRightAnchor - subW,
       y:    flipY(88),
       size: 11,
       font: helveticaBold,
@@ -254,7 +261,7 @@ async function generateCertificate(participant) {
     // ── GREEN: replace big line only when it differs from template "OF TRAINING"
     const BIG_LINE_MAP = {
       FDR: null, FTL: null, 'Recurrent': null,    // template already says OF TRAINING
-      FDI: 'OF GRADUATION',  GD:  'OF GRADUATION',
+      FDI: 'OF GRADUATION',  GD:  'OF ATTENDANCE',
       FDA: 'OF COMPLETION',  NDG: 'OF COMPLETION',
       TCD: 'OF COMPLETION',  HF:  'OF ATTENDANCE',
       'Dispatch Graduate': 'OF GRADUATION',
@@ -375,6 +382,14 @@ async function generateCertificate(participant) {
       drawCentered(dateText, 404, helveticaBold, 18);
       if (locationText) drawCentered(`Delivered in: ${locationText}`, 428, helvetica, 10);
     }
+
+  } else if (rawType === 'GD') {
+    drawCentered('Has attended the OPERATIONS COORDINATION AND SUPERVISION Training.', 330, helvetica, 11);
+    drawCentered('This training covered the following topics:', 354, helvetica, 11);
+    drawCentered('Flight Plan / Aeronautical Information / ATFM & Airport Slots theory / Basic A-CDM / Permits / Freedoms of Air', 368, helvetica, 11);
+    drawCentered(validityLine, 390, helvetica, 8);
+    drawCentered(dateText, 410, helveticaBold, 18);
+    if (locationText) drawCentered(`Delivered in: ${locationText}`, 434, helvetica, 10);
 
   } else if (trainingType === 'Dispatch Graduate') {
     drawCentered('Has successfully completed ground school instruction required by the Initial Flight Dispatcher Course', 330, helvetica, 11);

@@ -44,89 +44,90 @@ router.get('/', async (req, res) => {
       if (p.cert_sequence) {
         const certId = `${type}-${String(p.cert_sequence).padStart(5, '0')}`;
         notifications.push({
-          id:      `cert-${p._id}`,
-          type:    'certificate',
-          // Admin: knows who + which airline; Airline: personal, action-oriented
-          title:   isAdmin ? '📄 Certificate Issued' : '🎉 Your Certificate is Ready',
-          message: isAdmin
+          id:       `cert-${p._id}`,
+          type:     'certificate',
+          title:    isAdmin ? 'Certificate Issued' : 'Your Certificate is Ready',
+          message:  isAdmin
             ? `${certId} issued for ${name} · ${airline} · ${type} training`
             : `${name}, your ${type} certificate (${certId}) has been issued. You can now download it.`,
-          time:    updated,
+          time:     updated,
           priority: 'high',
+          link:     isAdmin ? '/admin/certificates' : '/airline/submissions',
         });
       }
 
       // ── 2. New enrollment (last 7 days) ──────────────────────────────────
       if (now - created < sevenDays) {
         notifications.push({
-          id:      `new-${p._id}`,
-          type:    'participant',
-          // Admin: who submitted + where from; Airline: confirmation of their action
-          title:   isAdmin ? '✈ New Enrollment Received' : '✅ Enrollment Submitted',
-          message: isAdmin
+          id:       `new-${p._id}`,
+          type:     'participant',
+          title:    isAdmin ? 'New Enrollment Received' : 'Enrollment Submitted',
+          message:  isAdmin
             ? `${name} enrolled by ${airline} for ${type} training (${p.department || 'N/A'})`
             : `Your enrollment for ${name} (${type}) has been received and is pending review by IFOA.`,
-          time:    created,
+          time:     created,
           priority: 'normal',
+          link:     isAdmin ? '/admin/participants' : '/airline/submissions',
         });
       }
 
       // ── 3. NDG score set — admin only ────────────────────────────────────
       if (isAdmin && p.ndg_score != null && type === 'NDG') {
         notifications.push({
-          id:      `ndg-${p._id}`,
-          type:    'score',
-          title:   '📊 NDG Score Recorded',
-          message: `${name} (${airline}) achieved ${p.ndg_score}% on ${type} — ${p.ndg_subtype === 'R' ? 'Recurrent' : 'Initial'}`,
-          time:    updated,
+          id:       `ndg-${p._id}`,
+          type:     'score',
+          title:    'NDG Score Recorded',
+          message:  `${name} (${airline}) achieved ${p.ndg_score}% on ${type} — ${p.ndg_subtype === 'R' ? 'Recurrent' : 'Initial'}`,
+          time:     updated,
           priority: 'normal',
+          link:     '/admin/participants',
         });
       }
     });
 
-    // ── 4. Certificate generated — airline view (also notify cert is downloadable)
-    // Already covered in section 1 above with airline-specific text
-
-    // ── 5. New airlines registered (last 30 days) — admin only ───────────
+    // ── 4. New airlines registered (last 30 days) — admin only ───────────
     if (isAdmin) {
       const airlines = await Airline.find({}).sort({ createdAt: -1 }).limit(20).lean();
       airlines.forEach(a => {
         const created = new Date(a.createdAt).getTime();
         if (now - created < thirtyDays) {
           notifications.push({
-            id:      `airline-${a._id}`,
-            type:    'airline',
-            title:   '🏢 New Airline Registered',
-            message: `${a.airlineName} has created an account and can now submit enrollments`,
-            time:    created,
+            id:       `airline-${a._id}`,
+            type:     'airline',
+            title:    'New Airline Registered',
+            message:  `${a.airlineName} has created an account and can now submit enrollments`,
+            time:     created,
             priority: 'normal',
+            link:     '/admin/airlines',
           });
         }
       });
 
-      // ── 6. Participants pending certificate (no cert_sequence yet) — admin ──
+      // ── 5. Participants pending certificate (no cert_sequence yet) — admin ──
       const pending = participants.filter(p => !p.cert_sequence);
       if (pending.length > 0) {
         notifications.push({
-          id:      `pending-certs-admin`,
-          type:    'participant',
-          title:   '⏳ Certificates Pending',
-          message: `${pending.length} participant${pending.length > 1 ? 's are' : ' is'} awaiting certificate generation`,
-          time:    now - 1000, // just below "now" so it sorts near top
+          id:       `pending-certs-admin`,
+          type:     'pending',
+          title:    'Certificates Pending',
+          message:  `${pending.length} participant${pending.length > 1 ? 's are' : ' is'} awaiting certificate generation`,
+          time:     now - 1000,
           priority: 'normal',
+          link:     '/admin/certificates',
         });
       }
     } else {
-      // ── 7. Airline: notify if any of their participants still pending ────
+      // ── 6. Airline: notify if any of their participants still pending ────
       const myPending = participants.filter(p => !p.cert_sequence);
       if (myPending.length > 0) {
         notifications.push({
-          id:      `pending-mine`,
-          type:    'participant',
-          title:   '⏳ Awaiting Certificate',
-          message: `${myPending.length} of your submission${myPending.length > 1 ? 's are' : ' is'} still being processed by IFOA`,
-          time:    now - 1000,
+          id:       `pending-mine`,
+          type:     'pending',
+          title:    'Awaiting Certificate',
+          message:  `${myPending.length} of your submission${myPending.length > 1 ? 's are' : ' is'} still being processed by IFOA`,
+          time:     now - 1000,
           priority: 'normal',
+          link:     '/airline/submissions',
         });
       }
     }

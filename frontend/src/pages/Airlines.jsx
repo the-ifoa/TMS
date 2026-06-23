@@ -27,10 +27,9 @@ import {
   generateCertificateBlob, generateCertificateWithModules,
   updateFullCertId, getCertCounters, resetCertCounter, resetAllCertCounters,
   updateNdgScore, revokeCertificate, updateValidity, updateAirline,
+  API_BASE,
 } from '../api';
 import ModuleSelector from '../components/ModuleSelector';
-
-const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 const TRAINING_LABELS = {
   FDI: 'Flight Dispatch Initial',

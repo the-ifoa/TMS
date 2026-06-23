@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // In local development always go through Vite proxy (/api -> localhost:5000).
 // This avoids accidentally pointing dev to a remote/stale backend via .env.
-const API_BASE = import.meta.env.DEV
+export const API_BASE = import.meta.env.DEV
   ? '/api'
   : ((import.meta.env.VITE_API_URL && import.meta.env.VITE_API_URL.trim())
       ? import.meta.env.VITE_API_URL.trim()
@@ -117,6 +117,14 @@ export const listAttendanceSheets  = (params = {}) => api.get('/attendance', { p
 export const getAttendanceSheet    = (id)           => api.get(`/attendance/${id}`);
 export const saveAttendanceSheet   = (data)         => api.post('/attendance', data);
 export const updateAttendanceSheet = (id, data)     => api.put(`/attendance/${id}`, data);
+
+// ── DGR CBTA Forms ────────────────────────────────────────────────────────────
+export const getDgrAirlines = ()           => api.get('/dgr/airlines');          // admin: airlines + students
+export const getDgrForms    = (params = {}) => api.get('/dgr', { params });
+export const getDgrForm     = (id)          => api.get(`/dgr/${id}`);
+export const createDgrForm  = (data)        => api.post('/dgr', data);
+export const updateDgrForm  = (id, data)    => api.put(`/dgr/${id}`, data);
+export const deleteDgrForm  = (id)          => api.delete(`/dgr/${id}`);
 
 // ── Password Reset ────────────────────────────────────────────────────────────
 export const forgotPassword = (email)                     => api.post('/auth/airline/forgot-password', { email });

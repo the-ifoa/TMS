@@ -40,6 +40,10 @@ const dgrFormSchema = new mongoose.Schema(
     // ── Job function: F.C.-7.7 / F.D.-7.8 / C.C.-7.9 ───────────────────────
     job_function: { type: String, enum: ['FC', 'FD', 'CC'], default: 'FC' },
 
+    // Show optional IATA items (n/a for certain job functions)
+    show_item5: { type: Boolean, default: false },
+    show_item7: { type: Boolean, default: false },
+
     // ── Score table ─────────────────────────────────────────────────────────
     knowledge_score: { type: Number, default: null },
     skills: {

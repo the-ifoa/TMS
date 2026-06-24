@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   HiOutlineDocumentDownload,
@@ -63,13 +64,19 @@ function CertResultModal({ results, onClose }) {
   return (
     <AnimatePresence>
       <motion.div
+        key="backdrop"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+        className="fixed -inset-20 z-50 bg-black/40 backdrop-blur-sm pointer-events-none"
+      />
+      <div
+        key="layout"
+        className="fixed inset-0 z-50 flex items-center justify-center p-4"
         onClick={onClose}
       >
         <motion.div
+          key="card"
           initial={{ opacity: 0, scale: 0.95, y: 10 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 10 }}
@@ -134,13 +141,17 @@ function CertResultModal({ results, onClose }) {
             </button>
           </div>
         </motion.div>
-      </motion.div>
+      </div>
     </AnimatePresence>
   );
 }
 
 export default function Certificates() {
   const { isAdmin } = useAuth();
+  const [searchParams] = useSearchParams();
+  const focusId = searchParams.get('focus') || null;
+  const rowRefs = useRef({});
+
   const [records, setRecords]         = useState([]);
   const [search, setSearch]           = useState('');
   const [filterType, setFilterType]   = useState('');
@@ -193,6 +204,18 @@ export default function Certificates() {
   };
 
   useEffect(() => { fetchRecords(); setSelected(new Set()); }, [filterType, search, sortBy, sortDir]);
+
+  useEffect(() => {
+    if (!focusId || loading || records.length === 0) return;
+    setTimeout(() => {
+      const el = rowRefs.current[focusId];
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.add('notif-highlight');
+        el.addEventListener('animationend', () => el.classList.remove('notif-highlight'), { once: true });
+      }
+    }, 300);
+  }, [focusId, loading, records.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggleSelect = (id) => {
     setSelected(prev => {
@@ -380,17 +403,28 @@ export default function Certificates() {
           const token = localStorage.getItem('token') || '';
           const src   = `${API_BASE}/certificates/preview/${rowPreview.id}?token=${encodeURIComponent(token)}`;
           return (
-            <motion.div
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
-              onClick={() => setRowPreview(null)}
-            >
+            <>
               <motion.div
-                initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-                transition={{ duration: 0.15 }}
-                className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden"
-                onClick={e => e.stopPropagation()}
+                key="backdrop"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed -inset-20 z-50 bg-black/50 backdrop-blur-sm pointer-events-none"
+              />
+              <div
+                key="layout"
+                className="fixed inset-0 z-50 flex items-center justify-center p-4"
+                onClick={() => setRowPreview(null)}
               >
+                <motion.div
+                  key="card"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.15 }}
+                  className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden"
+                  onClick={e => e.stopPropagation()}
+                >
                 <div className="flex items-center justify-between px-6 py-4 border-b border-primary-200">
                   <div>
                     <p className="text-base font-bold text-primary-800">Certificate — {rowPreview.participant_name}</p>
@@ -418,8 +452,9 @@ export default function Certificates() {
                     If blank, click Download PDF
                   </div>
                 </div>
-              </motion.div>
-            </motion.div>
+                </motion.div>
+              </div>
+            </>
           );
         })()}
       </AnimatePresence>
@@ -560,6 +595,7 @@ export default function Certificates() {
                 records.map((record) => (
                   <tr
                     key={record.id}
+                    ref={el => { rowRefs.current[record.id] = el; }}
                     className={`border-b border-primary-100 last:border-0 transition-colors ${
                       selected.has(record.id) ? 'bg-primary-50' : 'hover:bg-primary-50/50'
                     }`}

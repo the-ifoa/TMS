@@ -222,10 +222,10 @@ function DateRow({ label, value, onChange, formatFn }) {
     onChange(formatFn(v) || v);
   };
   return (
-    <div className="flex items-center gap-3">
-      <label className="text-[10px] font-semibold text-primary-500 uppercase tracking-wide w-28 flex-shrink-0">{label}</label>
+    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+      <label className="text-[10px] font-semibold text-primary-500 uppercase tracking-wide w-full sm:w-28 flex-shrink-0">{label}</label>
       <input type="date" value={inputVal} onChange={e => upd(e.target.value)}
-        className="input-field text-sm font-semibold text-amber-800 border-amber-300 flex-1" />
+        className="input-field text-sm font-semibold text-amber-800 border-amber-300 flex-1 min-w-0" />
       {inputVal && <span className="text-xs px-2 py-1 rounded hl-mark flex-shrink-0">{formatFn(inputVal)}</span>}
     </div>
   );
@@ -402,7 +402,7 @@ function SigDateEditor({ block, onChange }) {
   const rebuild = (l, v) => onChange(`${l}|${prefix} {{${inputToUS(v) || v}}}`);
 
   return (
-    <div className="grid grid-cols-2 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
       <input type="text" value={left} onChange={e => { setLeft(e.target.value); rebuild(e.target.value, inputVal); }}
         className="input-field w-full" />
       <div className="flex items-center gap-2">
@@ -990,22 +990,22 @@ function ContractEditor({ airline, onBack, onSent }) {
 
       {/* Sticky action bar */}
       <div className="sticky bottom-3 z-20">
-        <div className="flex flex-wrap items-center justify-end gap-3 px-4 sm:px-5 py-3 rounded-2xl bg-white/90 backdrop-blur border border-primary-200 shadow-lg">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-2 sm:gap-3 px-4 sm:px-5 py-3 rounded-2xl bg-white/90 backdrop-blur border border-primary-200 shadow-lg">
           <button onClick={applyBold}
             title="Select text in any block, then click Bold"
-            className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-amber-300 bg-amber-50 text-sm font-bold text-amber-800 hover:bg-amber-100 transition-colors">
+            className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl border border-amber-300 bg-amber-50 text-sm font-bold text-amber-800 hover:bg-amber-100 transition-colors">
             B Bold
           </button>
-          <div className="w-px h-6 bg-primary-200" />
+          <div className="hidden sm:block w-px h-6 bg-primary-200" />
           <button onClick={handlePreview} disabled={loadingPreview}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-primary-300 text-sm font-semibold text-primary-700 hover:bg-primary-100 disabled:opacity-60">
+            className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl border border-primary-300 text-sm font-semibold text-primary-700 hover:bg-primary-100 disabled:opacity-60">
             {loadingPreview
               ? <div className="w-4 h-4 border-2 border-primary-300 border-t-primary-600 rounded-full animate-spin" />
               : <HiOutlineEye className="w-5 h-5" />}
             {loadingPreview ? 'Generating…' : 'Preview PDF'}
           </button>
           <button onClick={handleSend} disabled={sending}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary-800 text-white text-sm font-semibold hover:bg-primary-900 disabled:opacity-60 shadow-sm">
+            className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-primary-800 text-white text-sm font-semibold hover:bg-primary-900 disabled:opacity-60 shadow-sm">
             {sending
               ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               : <HiOutlinePaperAirplane className="w-5 h-5" />}
@@ -1017,12 +1017,27 @@ function ContractEditor({ airline, onBack, onSent }) {
       {/* Preview modal */}
       <AnimatePresence>
         {previewUrl && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/50 backdrop-blur-sm"
-            onClick={closePreview}>
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden"
-              onClick={e => e.stopPropagation()}>
+          <>
+            <motion.div
+              key="backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed -inset-20 z-50 bg-black/50 backdrop-blur-sm pointer-events-none"
+            />
+            <div
+              key="layout"
+              className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4"
+              onClick={closePreview}
+            >
+              <motion.div
+                key="card"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden"
+                onClick={e => e.stopPropagation()}
+              >
               <div className="flex items-center justify-between px-4 sm:px-6 py-3 border-b border-primary-200">
                 <p className="text-sm sm:text-base font-bold text-primary-800">Contract Preview</p>
                 <div className="flex items-center gap-2">
@@ -1034,8 +1049,9 @@ function ContractEditor({ airline, onBack, onSent }) {
               <div className="bg-primary-50" style={{ height: '72vh' }}>
                 <iframe src={previewUrl} title="Contract Preview" className="w-full h-full border-0" />
               </div>
-            </motion.div>
-          </motion.div>
+              </motion.div>
+            </div>
+          </>
         )}
       </AnimatePresence>
     </div>
@@ -1134,12 +1150,27 @@ export default function Contract() {
       {/* View sent contract PDF modal */}
       <AnimatePresence>
         {(viewPdfUrl || loadingPdf) && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/50 backdrop-blur-sm"
-            onClick={closePdfModal}>
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden"
-              onClick={e => e.stopPropagation()}>
+          <>
+            <motion.div
+              key="backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed -inset-20 z-50 bg-black/50 backdrop-blur-sm pointer-events-none"
+            />
+            <div
+              key="layout"
+              className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4"
+              onClick={closePdfModal}
+            >
+              <motion.div
+                key="card"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden"
+                onClick={e => e.stopPropagation()}
+              >
               <div className="flex items-center justify-between px-4 sm:px-6 py-3 border-b border-primary-200">
                 <p className="text-sm sm:text-base font-bold text-primary-800">Sent Contract</p>
                 <div className="flex items-center gap-2">
@@ -1156,8 +1187,9 @@ export default function Contract() {
                   : <iframe src={viewPdfUrl} title="Sent Contract" className="w-full h-full border-0" />
                 }
               </div>
-            </motion.div>
-          </motion.div>
+              </motion.div>
+            </div>
+          </>
         )}
       </AnimatePresence>
     </motion.div>

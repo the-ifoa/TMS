@@ -45,129 +45,115 @@ function SheetCard({ sheet, onEdit, onPreview, previewing }) {
   const [open, setOpen] = useState(false);
   const typeInfo = TYPE_MAP[sheet.training_type] || {};
   const parts    = sheet.participants || [];
+  const isLoading = previewing === sheet._id;
 
   return (
-    <div className="bg-white rounded-xl border border-primary-150 shadow-sm overflow-hidden hover:shadow-md transition-shadow">
+    <div className={`bg-white rounded-xl border border-primary-150 shadow-sm hover:shadow-md transition-shadow${open ? ' overflow-x-hidden overflow-y-auto max-h-[480px]' : ' overflow-hidden'}`}>
 
-      {/* Clickable header */}
+      {/* ── Header ── */}
       <div
         role="button"
         tabIndex={0}
         onClick={() => setOpen(o => !o)}
         onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && setOpen(o => !o)}
-        className="flex items-center gap-3 px-5 py-4 cursor-pointer select-none"
-        style={{ background: open ? '#f0f5ff' : '#fafbff' }}
+        className={`flex items-center gap-3 px-4 sm:px-5 py-3.5 cursor-pointer select-none${open ? ' sticky top-0 z-10' : ''}`}
+        style={{ background: open ? '#f9fafb' : '#ffffff' }}
       >
-        <span className="text-primary-400 flex-shrink-0 transition-transform duration-200">
-          {open
-            ? <HiOutlineChevronDown className="w-4 h-4 text-primary-500" />
-            : <HiOutlineChevronRight className="w-4 h-4" />}
+        {/* Chevron */}
+        <span className="flex-shrink-0 text-primary-400">
+          {open ? <HiOutlineChevronDown className="w-4 h-4" /> : <HiOutlineChevronRight className="w-4 h-4" />}
         </span>
 
-        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border flex-shrink-0 ${
-          typeInfo.color || 'bg-primary-100 text-primary-600 border-primary-200'
-        }`}>
-          {sheet.training_type} — {typeInfo.label || sheet.training_type}
-        </span>
+        {/* Badge + meta stacked */}
+        <div className="flex-1 min-w-0">
+          <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${typeInfo.color || 'bg-primary-100 text-primary-600 border-primary-200'}`}>
+            {sheet.training_type} — {typeInfo.label || sheet.training_type}
+          </span>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1">
+            <span className="flex items-center gap-1 text-[11px] text-primary-500">
+              <HiOutlineCalendar className="w-3 h-3 flex-shrink-0" />
+              {fmtDate(sheet.start_date)}{sheet.end_date && sheet.end_date !== sheet.start_date ? ` – ${fmtDate(sheet.end_date)}` : ''}
+            </span>
+            <span className="flex items-center gap-1 text-[11px] text-primary-400">
+              <HiOutlineUsers className="w-3 h-3 flex-shrink-0" />
+              {parts.length} participant{parts.length !== 1 ? 's' : ''}
+            </span>
+            {sheet.created_at && (
+              <span className="hidden lg:block text-[10px] text-primary-300">
+                Submitted {fmtDateTime(sheet.created_at)}
+              </span>
+            )}
+          </div>
+        </div>
 
-        <span className="flex items-center gap-1 text-xs text-primary-500 flex-shrink-0">
-          <HiOutlineCalendar className="w-3.5 h-3.5" />
-          {fmtDate(sheet.start_date)}
-          {sheet.end_date && sheet.end_date !== sheet.start_date ? ` – ${fmtDate(sheet.end_date)}` : ''}
-        </span>
-
-        <span className="flex items-center gap-1 text-xs text-primary-400 flex-shrink-0">
-          <HiOutlineUsers className="w-3.5 h-3.5" />
-          {parts.length} participant{parts.length !== 1 ? 's' : ''}
-        </span>
-
-        <span className="flex-1" />
-
-        <span className="text-[10px] text-primary-400 hidden lg:block flex-shrink-0">
-          {sheet.created_at ? `Submitted ${fmtDateTime(sheet.created_at)}` : ''}
-        </span>
-
-        <div className="flex items-center gap-2 flex-shrink-0" onClick={e => e.stopPropagation()}>
-          <button
-            type="button"
-            onClick={() => onPreview(sheet)}
-            disabled={previewing === sheet._id}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary-50 border border-primary-200 text-primary-600 hover:bg-primary-100 transition-colors disabled:opacity-50"
-          >
-            {previewing === sheet._id
-              ? <div className="w-3 h-3 border-2 border-primary-300 border-t-primary-600 rounded-full animate-spin" />
-              : <HiOutlineDocumentText className="w-3.5 h-3.5" />}
+        {/* Action buttons */}
+        <div className="flex items-center gap-1.5 flex-shrink-0" onClick={e => e.stopPropagation()}>
+          {/* Mobile: icon only */}
+          <button type="button" onClick={() => onPreview(sheet)} disabled={isLoading} title="Preview PDF"
+            className="sm:hidden p-2 rounded-lg bg-primary-50 border border-primary-200 text-primary-600 hover:bg-primary-100 transition-colors disabled:opacity-50">
+            {isLoading ? <div className="w-4 h-4 border-2 border-primary-300 border-t-primary-600 rounded-full animate-spin" /> : <HiOutlineDocumentText className="w-4 h-4" />}
+          </button>
+          <button type="button" onClick={() => onEdit(sheet)} title="Edit"
+            className="sm:hidden p-2 rounded-lg bg-accent-50 border border-accent-200 text-accent-700 hover:bg-accent-100 transition-colors">
+            <HiOutlinePencilAlt className="w-4 h-4" />
+          </button>
+          {/* Desktop: labeled */}
+          <button type="button" onClick={() => onPreview(sheet)} disabled={isLoading}
+            className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary-50 border border-primary-200 text-primary-600 hover:bg-primary-100 transition-colors disabled:opacity-50">
+            {isLoading ? <div className="w-3 h-3 border-2 border-primary-300 border-t-primary-600 rounded-full animate-spin" /> : <HiOutlineDocumentText className="w-3.5 h-3.5" />}
             Preview PDF
           </button>
-          <button
-            type="button"
-            onClick={() => onEdit(sheet)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-accent-50 border border-accent-200 text-accent-700 hover:bg-accent-100 hover:border-accent-400 transition-colors"
-          >
-            <HiOutlinePencilAlt className="w-3.5 h-3.5" />
-            Edit
+          <button type="button" onClick={() => onEdit(sheet)}
+            className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-accent-50 border border-accent-200 text-accent-700 hover:bg-accent-100 transition-colors">
+            <HiOutlinePencilAlt className="w-3.5 h-3.5" /> Edit
           </button>
         </div>
       </div>
 
-      {/* Expandable body */}
+      {/* ── Expandable body ── */}
       <AnimatePresence initial={false}>
         {open && (
-          <motion.div
-            key="body"
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.18, ease: 'easeInOut' }}
-            style={{ overflow: 'hidden' }}
-          >
+          <motion.div key="body"
+            initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.18, ease: 'easeInOut' }}>
             <div className="border-t border-primary-100">
-              <div className="px-5 py-4 grid grid-cols-2 sm:grid-cols-4 gap-4 bg-primary-50/40 text-xs border-b border-primary-100">
-                <div>
-                  <p className="text-[10px] font-semibold text-primary-400 uppercase tracking-wider mb-1">Airline</p>
-                  <p className="text-sm font-semibold text-primary-800">{sheet.company || '—'}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] font-semibold text-primary-400 uppercase tracking-wider mb-1">Training Type</p>
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${
-                    typeInfo.color || 'bg-primary-100 text-primary-600 border-primary-200'
-                  }`}>{sheet.training_type}</span>
-                </div>
-                <div>
-                  <p className="text-[10px] font-semibold text-primary-400 uppercase tracking-wider mb-1">Training Period</p>
-                  <p className="text-sm text-primary-700">
-                    {fmtDate(sheet.start_date)}
-                    {sheet.end_date && sheet.end_date !== sheet.start_date ? ` – ${fmtDate(sheet.end_date)}` : ''}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[10px] font-semibold text-primary-400 uppercase tracking-wider mb-1">Date Submitted</p>
-                  <p className="text-sm text-primary-700">{fmtDateTime(sheet.created_at)}</p>
-                </div>
+              {/* Meta grid */}
+              <div className="px-4 sm:px-5 py-4 grid grid-cols-2 sm:grid-cols-4 gap-4 bg-gray-50 border-b border-gray-100">
+                {[
+                  ['Airline', sheet.company || '—'],
+                  ['Training Type', null],
+                  ['Training Period', `${fmtDate(sheet.start_date)}${sheet.end_date && sheet.end_date !== sheet.start_date ? ` – ${fmtDate(sheet.end_date)}` : ''}`],
+                  ['Date Submitted', fmtDateTime(sheet.created_at)],
+                ].map(([label, val], i) => (
+                  <div key={label}>
+                    <p className="text-[10px] font-semibold text-primary-400 uppercase tracking-wider mb-1">{label}</p>
+                    {i === 1
+                      ? <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${typeInfo.color || 'bg-primary-100 text-primary-600 border-primary-200'}`}>{sheet.training_type}</span>
+                      : <p className="text-sm font-medium text-primary-700">{val}</p>}
+                  </div>
+                ))}
               </div>
-
+              {/* Participants */}
               <div>
-                <div className="px-5 py-2 border-b border-primary-100 bg-white">
-                  <p className="text-[10px] font-semibold text-primary-400 uppercase tracking-wider">
-                    Participants ({parts.length})
-                  </p>
+                <div className="px-4 sm:px-5 py-2 border-b border-primary-100 bg-white">
+                  <p className="text-[10px] font-semibold text-primary-400 uppercase tracking-wider">Participants ({parts.length})</p>
                 </div>
                 {parts.length > 0 ? (
-                  <div className="divide-y divide-primary-50 max-h-56 overflow-y-auto">
+                  <div className="divide-y divide-primary-50 max-h-52 overflow-y-auto">
                     {parts.map((p, i) => (
-                      <div key={i} className="flex items-center gap-3 px-5 py-2.5 hover:bg-primary-50/40 transition-colors">
+                      <div key={i} className="flex items-center gap-3 px-4 sm:px-5 py-2.5 hover:bg-primary-50/40 transition-colors">
                         <span className="w-5 text-[11px] font-semibold text-primary-300 flex-shrink-0 text-right">{i + 1}</span>
                         <div className="w-7 h-7 rounded-full bg-primary-100 border border-primary-200 flex items-center justify-center flex-shrink-0">
                           <span className="text-[10px] font-bold text-primary-600">
                             {((p.first_name?.[0] || '') + (p.last_name?.[0] || '')).toUpperCase()}
                           </span>
                         </div>
-                        <span className="text-sm text-primary-800 font-medium">{p.first_name} {p.last_name}</span>
+                        <span className="text-sm text-primary-800 font-medium truncate">{p.first_name} {p.last_name}</span>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <p className="px-5 py-4 text-sm text-primary-400 italic">No participant data stored.</p>
+                  <p className="px-4 sm:px-5 py-4 text-sm text-primary-400 italic">No participant data stored.</p>
                 )}
               </div>
             </div>
@@ -183,18 +169,17 @@ function AirlineGroup({ airlineName, logoUrl, sheets, onEdit, onPreview, preview
   const [collapsed, setCollapsed] = useState(true);
 
   return (
-    <div className="space-y-2">
+    <div className="rounded-xl border border-primary-150 shadow-sm overflow-hidden bg-white">
       {/* Group header */}
       <button
         onClick={() => setCollapsed(c => !c)}
-        className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-white border border-primary-150 shadow-sm hover:bg-primary-50/60 transition-colors text-left"
+        className="w-full flex items-center gap-3 px-4 sm:px-5 py-3.5 hover:bg-primary-50/60 transition-colors text-left"
+        style={{ background: collapsed ? '#fff' : '#f9fafb' }}
       >
-        {/* Logo or fallback */}
-        <div className="flex-shrink-0 w-9 h-9 rounded-xl bg-primary-100 border border-primary-200 flex items-center justify-center overflow-hidden">
+        <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-primary-800 border border-primary-200 flex items-center justify-center overflow-hidden">
           {logoUrl
-            ? <img src={logoUrl} alt={airlineName} className="w-full h-full object-contain p-0.5" />
-            : <HiOutlineOfficeBuilding className="w-5 h-5 text-primary-500" />
-          }
+            ? <img src={logoUrl} alt={airlineName} className="w-full h-full object-contain p-0.5 bg-white" />
+            : <HiOutlineOfficeBuilding className="w-4 h-4 text-white" />}
         </div>
 
         <div className="flex-1 min-w-0">
@@ -219,7 +204,7 @@ function AirlineGroup({ airlineName, logoUrl, sheets, onEdit, onPreview, preview
             transition={{ duration: 0.18, ease: 'easeInOut' }}
             style={{ overflow: 'hidden' }}
           >
-            <div className="pl-4 space-y-2">
+            <div className="border-t border-primary-100 p-3 space-y-2 bg-gray-50">
               {sheets.map(sheet => (
                 <SheetCard
                   key={sheet._id}

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Participant = require('../models/Participant');
 const Airline = require('../models/Airline');
+const DgrForm = require('../models/DgrForm');
 const { authMiddleware } = require('./auth');
 
 router.use(authMiddleware);
@@ -52,7 +53,7 @@ router.get('/', async (req, res) => {
             : `${name}, your ${type} certificate (${certId}) has been issued. You can now download it.`,
           time:     updated,
           priority: 'high',
-          link:     isAdmin ? '/admin/certificates' : '/airline/submissions',
+          link:     isAdmin ? `/admin/airlines?focus=${p._id}` : `/airline/submissions?focus=${p._id}`,
         });
       }
 
@@ -67,7 +68,7 @@ router.get('/', async (req, res) => {
             : `Your enrollment for ${name} (${type}) has been received and is pending review by IFOA.`,
           time:     created,
           priority: 'normal',
-          link:     isAdmin ? '/admin/participants' : '/airline/submissions',
+          link:     isAdmin ? `/admin/airlines?focus=${p._id}` : `/airline/submissions?focus=${p._id}`,
         });
       }
 
@@ -80,7 +81,7 @@ router.get('/', async (req, res) => {
           message:  `${name} (${airline}) achieved ${p.ndg_score}% on ${type} — ${p.ndg_subtype === 'R' ? 'Recurrent' : 'Initial'}`,
           time:     updated,
           priority: 'normal',
-          link:     '/admin/participants',
+          link:     `/admin/airlines?focus=${p._id}`,
         });
       }
     });
@@ -98,7 +99,7 @@ router.get('/', async (req, res) => {
             message:  `${a.airlineName} has created an account and can now submit enrollments`,
             time:     created,
             priority: 'normal',
-            link:     '/admin/airlines',
+            link:     `/admin/airlines?focus=${a._id}`,
           });
         }
       });
@@ -130,6 +131,28 @@ router.get('/', async (req, res) => {
           link:     '/airline/submissions',
         });
       }
+
+      // ── 7. Airline: DGR CBTA forms assigned to their participants ────────
+      const dgrForms = await DgrForm.find({
+        airline_id: req.admin.id,
+        'assignments.0': { $exists: true },
+      }).sort({ created_at: -1 }).limit(20).lean();
+
+      dgrForms.forEach(f => {
+        const created = new Date(f.created_at).getTime();
+        const count   = f.assignments.length;
+        const names   = f.assignments.map(a => a.participant_name).join(', ');
+        const preview = names.length > 60 ? names.slice(0, 60) + '…' : names;
+        notifications.push({
+          id:       `dgr-${f._id}`,
+          type:     'dgr',
+          title:    'DGR CBTA Form Assigned',
+          message:  `DGR ${f.dg_training_type || 'Training'} form (${f.training_date || 'no date'}) assigned to ${count} participant${count !== 1 ? 's' : ''}: ${preview}`,
+          time:     created,
+          priority: 'normal',
+          link:     `/airline/dgr?focus=${f._id}`,
+        });
+      });
     }
 
     // ── Sort, deduplicate, cap at 30 ──────────────────────────────────────

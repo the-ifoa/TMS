@@ -49,15 +49,20 @@ export default function Sidebar({ open, setOpen }) {
       ].join(' ')}
     >
       {/* ── Header: logo + collapse toggle ── */}
-      <div className="flex items-center justify-between h-16 px-3 border-b border-gray-200 flex-shrink-0">
-        <button onClick={() => navigate('/')} className="flex items-center gap-2 min-w-0 flex-1">
-          <img src={logoImg} alt="IFOA" className="h-8 w-auto max-w-[80px] object-contain flex-shrink-0" />
-          {open && (
+      <div
+        className={[
+          'flex items-center h-16 px-3 border-b border-gray-200 flex-shrink-0',
+          open ? 'justify-between' : 'justify-center',
+        ].join(' ')}
+      >
+        {open && (
+          <button onClick={() => navigate('/')} className="flex items-center gap-2 min-w-0 flex-1">
+            <img src={logoImg} alt="IFOA" className="h-8 w-auto max-w-[80px] object-contain flex-shrink-0" />
             <span className="text-[11px] font-medium text-primary-400 truncate">
               {isAdmin ? 'Training Management' : 'Airline Portal'}
             </span>
-          )}
-        </button>
+          </button>
+        )}
 
         {/* Collapse / expand arrow — desktop only */}
         <button
@@ -72,12 +77,14 @@ export default function Sidebar({ open, setOpen }) {
         </button>
 
         {/* Mobile close arrow */}
-        <button
-          onClick={() => setOpen(false)}
-          className="lg:hidden p-1.5 rounded-lg hover:bg-gray-100 text-primary-400 transition-colors flex-shrink-0"
-        >
-          <HiOutlineChevronLeft className="w-5 h-5" />
-        </button>
+        {open && (
+          <button
+            onClick={() => setOpen(false)}
+            className="lg:hidden p-1.5 rounded-lg hover:bg-gray-100 text-primary-400 transition-colors flex-shrink-0"
+          >
+            <HiOutlineChevronLeft className="w-5 h-5" />
+          </button>
+        )}
       </div>
 
       {/* ── Navigation ── */}
@@ -101,7 +108,7 @@ export default function Sidebar({ open, setOpen }) {
                 'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-150',
                 !open ? 'justify-center' : '',
                 isActive
-                  ? 'bg-blue-50 font-semibold border-l-4 border-[#0000ff]'
+                  ? 'bg-blue-50 font-semibold'
                   : 'text-primary-500 hover:bg-gray-100 hover:text-primary-800',
               ].join(' ')
             }

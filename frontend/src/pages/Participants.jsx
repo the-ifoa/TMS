@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -18,6 +18,7 @@ import {
   HiOutlineDocumentText,
   HiOutlineX,
   HiOutlineClipboardList,
+  HiOutlineClock,
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import { getParticipants, deleteParticipant, generateCertificateBlob, downloadIssuedCertificate, listAttendanceSheets, getAttendanceSheet, API_BASE } from '../api';
@@ -56,13 +57,27 @@ function initials(name = '') {
 
 // ─── Collapsible group used in airline view ───────────────────────────────────
 
-function SubmissionGroup({ groupKey, records, defaultOpen = false, attendanceSheets = [], onViewSheet }) {
+function SubmissionGroup({ groupKey, records, defaultOpen = false, focusId, attendanceSheets = [], onViewSheet }) {
   const [open, setOpen]             = useState(defaultOpen);
   const [downloading, setDownloading] = useState(null);
   const [preview, setPreview]       = useState(null);
   const [detailRecord, setDetailRecord] = useState(null);
   const [previewingSheet, setPreviewingSheet] = useState(null);
+  const rowRefs = useRef({});
   const first    = records[0];
+
+  useEffect(() => {
+    if (!open || !focusId) return;
+    const timer = setTimeout(() => {
+      const el = rowRefs.current[focusId];
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.add('notif-highlight');
+        el.addEventListener('animationend', () => el.classList.remove('notif-highlight'), { once: true });
+      }
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [open, focusId]);
   const typeInfo = TYPE_MAP[first.training_type] || {};
 
   const handlePreviewPdf = async (sheet) => {
@@ -116,44 +131,57 @@ function SubmissionGroup({ groupKey, records, defaultOpen = false, attendanceShe
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center gap-4 px-5 py-4 transition-colors text-left" style={{ background: '#eff6ff' }} onMouseEnter={e => e.currentTarget.style.background='#dbeafe'} onMouseLeave={e => e.currentTarget.style.background='#eff6ff'}
+        className="w-full flex flex-col sm:flex-row sm:items-center gap-3 px-4 sm:px-5 py-4 transition-colors text-left"
+        style={{ background: open ? '#f9fafb' : '#ffffff' }}
+        onMouseEnter={e => e.currentTarget.style.background='#f3f4f6'}
+        onMouseLeave={e => e.currentTarget.style.background=open ? '#f9fafb' : '#ffffff'}
       >
-        {/* Chevron */}
-        <span className="text-primary-400 flex-shrink-0">
-          {open
-            ? <HiOutlineChevronDown className="w-4 h-4" />
-            : <HiOutlineChevronRight className="w-4 h-4" />}
-        </span>
+        <div className="flex items-center justify-between sm:justify-start gap-2 w-full sm:w-auto min-w-0">
+          <div className="flex items-center gap-2 min-w-0">
+            {/* Chevron */}
+            <span className="text-primary-400 flex-shrink-0">
+              {open
+                ? <HiOutlineChevronDown className="w-4 h-4" />
+                : <HiOutlineChevronRight className="w-4 h-4" />}
+            </span>
 
-        {/* Training type badge */}
-        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border flex-shrink-0 ${
-          typeInfo.color || 'bg-primary-100 text-primary-600 border-primary-200'
-        }`}>
-          <HiOutlineAcademicCap className="w-3.5 h-3.5" />
-          {first.training_type} — {typeInfo.label || first.training_type}
-        </span>
+            {/* Training type badge */}
+            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border truncate ${
+              typeInfo.color || 'bg-primary-100 text-primary-600 border-primary-200'
+            }`}>
+              <HiOutlineAcademicCap className="w-3.5 h-3.5" />
+              {first.training_type} — {typeInfo.label || first.training_type}
+            </span>
+          </div>
 
-        {/* Date range */}
-        <span className="text-xs text-primary-500 flex-shrink-0">
-          {fmtDate(first.training_date)}
-          {first.end_date && first.end_date !== first.training_date ? ` – ${fmtDate(first.end_date)}` : ''}
-        </span>
-
-        {/* Spacer */}
-        <span className="flex-1" />
-
-        {/* Submitted timestamp */}
-        {first.created_at && (
-          <span className="text-[10px] text-primary-400 hidden sm:block flex-shrink-0">
-            Submitted {new Date(first.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+          {/* Mobile count pill */}
+          <span className="inline-flex sm:hidden items-center gap-1 px-2 py-0.5 rounded-full bg-primary-200 text-primary-600 text-[10px] font-semibold flex-shrink-0">
+            <HiOutlineUsers className="w-3 h-3" />
+            {records.length}
           </span>
-        )}
+        </div>
 
-        {/* Count pill */}
-        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary-200 text-primary-600 text-[11px] font-semibold flex-shrink-0">
-          <HiOutlineUsers className="w-3 h-3" />
-          {records.length} participant{records.length !== 1 ? 's' : ''}
-        </span>
+        {/* Metadata info */}
+        <div className="flex flex-wrap items-center justify-between sm:justify-end gap-3 flex-1 min-w-0 pl-6 sm:pl-0">
+          {/* Date range */}
+          <span className="text-xs text-primary-500 flex-shrink-0">
+            {fmtDate(first.training_date)}
+            {first.end_date && first.end_date !== first.training_date ? ` – ${fmtDate(first.end_date)}` : ''}
+          </span>
+
+          {/* Submitted timestamp */}
+          {first.created_at && (
+            <span className="text-[10px] text-primary-400 hidden sm:block flex-shrink-0">
+              Submitted {new Date(first.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+            </span>
+          )}
+
+          {/* Desktop count pill */}
+          <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary-200 text-primary-600 text-[11px] font-semibold flex-shrink-0">
+            <HiOutlineUsers className="w-3 h-3" />
+            {records.length} participant{records.length !== 1 ? 's' : ''}
+          </span>
+        </div>
       </button>
 
       {/* Collapsible participant list */}
@@ -218,6 +246,7 @@ function SubmissionGroup({ groupKey, records, defaultOpen = false, attendanceShe
             <div className="divide-y divide-primary-100">
               {records.map((rec, i) => (
                 <div key={rec.id || rec._id}
+                  ref={el => { rowRefs.current[String(rec.id || rec._id)] = el; }}
                   onClick={() => setDetailRecord(rec)}
                   className="flex items-center gap-4 px-5 py-3 hover:bg-primary-50/60 transition-colors justify-between flex-wrap sm:flex-nowrap cursor-pointer">
                   <div className="flex items-center gap-4 flex-1 min-w-0">
@@ -266,7 +295,7 @@ function SubmissionGroup({ groupKey, records, defaultOpen = false, attendanceShe
                         </button>
                       </>
                     ) : (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-50 text-amber-600 border border-amber-200">⏳ Pending</span>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-50 text-amber-600 border border-amber-200"><HiOutlineClock className="w-3 h-3" /> Pending</span>
                     )}
 
                     {/* Locked badge */}
@@ -291,17 +320,28 @@ function SubmissionGroup({ groupKey, records, defaultOpen = false, attendanceShe
           const pid   = preview.id || preview._id;
           const src   = `${API_BASE}/certificates/preview/${pid}?token=${encodeURIComponent(token)}`;
           return (
-            <motion.div
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/50 backdrop-blur-sm"
-              onClick={() => setPreview(null)}
-            >
+            <>
               <motion.div
-                initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-                transition={{ duration: 0.15 }}
-                className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden"
-                onClick={e => e.stopPropagation()}
+                key="backdrop"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed -inset-20 z-50 bg-black/50 backdrop-blur-sm pointer-events-none"
+              />
+              <div
+                key="layout"
+                className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4"
+                onClick={() => setPreview(null)}
               >
+                <motion.div
+                  key="card"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.15 }}
+                  className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden"
+                  onClick={e => e.stopPropagation()}
+                >
                 <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-primary-200">
                   <div className="min-w-0">
                     <p className="text-sm sm:text-base font-bold text-primary-800 truncate">Certificate — {preview.participant_name}</p>
@@ -329,8 +369,9 @@ function SubmissionGroup({ groupKey, records, defaultOpen = false, attendanceShe
                     If blank, click Download PDF
                   </div>
                 </div>
-              </motion.div>
-            </motion.div>
+                </motion.div>
+              </div>
+            </>
           );
         })()}
       </AnimatePresence>
@@ -361,13 +402,27 @@ function ParticipantModal({ record, onClose }) {
 
   return (
     <AnimatePresence>
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
-        onClick={onClose}>
-        <motion.div initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 0.15 }}
+      <motion.div
+        key="backdrop"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed -inset-20 z-50 bg-black/50 backdrop-blur-sm pointer-events-none"
+      />
+      <div
+        key="layout"
+        className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        onClick={onClose}
+      >
+        <motion.div
+          key="card"
+          initial={{ opacity: 0, scale: 0.95, y: 10 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95 }}
+          transition={{ duration: 0.15 }}
           className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
-          onClick={e => e.stopPropagation()}>
+          onClick={e => e.stopPropagation()}
+        >
           {/* Header */}
           <div className="flex items-center gap-4 px-5 py-4 border-b border-primary-100">
             <div className="w-11 h-11 rounded-full bg-primary-200 flex items-center justify-center flex-shrink-0">
@@ -395,7 +450,7 @@ function ParticipantModal({ record, onClose }) {
             <button onClick={onClose} className="btn-primary text-sm">Close</button>
           </div>
         </motion.div>
-      </motion.div>
+      </div>
     </AnimatePresence>
   );
 }
@@ -406,6 +461,7 @@ export default function Participants() {
   const [attendanceSheets, setAttendanceSheets] = useState([]);
   const [activeSheet, setActiveSheet]       = useState(null);
   const [searchParams] = useSearchParams();
+  const focusId = searchParams.get('focus') || null;
   const [search, setSearch]       = useState(searchParams.get('search') || '');
   const [filterType, setFilterType] = useState('');
   const [loading, setLoading]       = useState(true);
@@ -548,7 +604,8 @@ export default function Participants() {
                   key={key}
                   groupKey={key}
                   records={recs}
-                  defaultOpen={false}
+                  defaultOpen={focusId ? recs.some(r => String(r.id || r._id) === focusId) : false}
+                  focusId={focusId}
                   attendanceSheets={groupSheets}
                   onViewSheet={sheet => setActiveSheet({ ...sheet, readOnly: true })}
                 />
@@ -632,20 +689,21 @@ export default function Participants() {
           </div>
           <div className="divide-y divide-primary-50">
             {attendanceSheets.map(sheet => (
-              <div key={sheet._id} className="flex items-center gap-4 px-5 py-3 hover:bg-emerald-50/30 transition-colors">
+              <div key={sheet._id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 py-3 hover:bg-emerald-50/30 transition-colors">
                 <div className="flex-1 min-w-0">
-                  <span className="text-sm font-medium text-primary-800">{sheet.company}</span>
-                  <span className="mx-2 text-primary-300">·</span>
-                  {typeBadge(sheet.training_type)}
-                  <span className="ml-2 text-xs text-primary-400">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="text-sm font-medium text-primary-800">{sheet.company}</span>
+                    {typeBadge(sheet.training_type)}
+                  </div>
+                  <p className="text-xs text-primary-400 mt-1">
                     {sheet.start_date}{sheet.end_date && sheet.end_date !== sheet.start_date ? ` – ${sheet.end_date}` : ''}
                     {' · '}{sheet.participants?.length ?? 0} participant{(sheet.participants?.length ?? 0) !== 1 ? 's' : ''}
-                  </span>
+                  </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setActiveSheet(sheet)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 transition-colors"
+                  className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 transition-colors w-full sm:w-auto"
                 >
                   <HiOutlineClipboardList className="w-3.5 h-3.5" />
                   View / Edit

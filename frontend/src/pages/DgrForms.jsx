@@ -1,4 +1,5 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 import {
@@ -11,11 +12,16 @@ import {
   HiOutlinePencil,
   HiOutlineTrash,
   HiOutlineX,
+  HiOutlineSearch,
+  HiOutlineOfficeBuilding,
 } from 'react-icons/hi';
 import {
   getDgrAirlines, getDgrForms, createDgrForm, updateDgrForm, deleteDgrForm,
 } from '../api';
 import { generateDgrPdf, computeDgrScores } from '../utils/generateDgrPdf';
+
+const mkInitials = (name = '') =>
+  name.split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase() || '').join('');
 
 const JOB_FUNCTIONS = [
   { value: 'FC', label: 'F.C. - 7.7' },
@@ -24,21 +30,21 @@ const JOB_FUNCTIONS = [
 ];
 
 const emptyForm = () => ({
-  page_ref: 'Appendix A-13',
-  doc_date: '01-11-2024',
-  iss_rev:  '5 / 8',
-  ato_name_number: '',
+  airline_name: '',
+  ato_name_number: 'INTERNATIONAL FLIGHT OPERATIONAL ACADEMY',
   dg_training_type: 'Initial',
   training_date: '',
+  show_item5: false,
+  show_item7: false,
   initials: {
-    item0: '', item0_1: '', item0_2: '', item0_3: '', item0_4: '', item0_5: '', item0_6: '',
-    item5: '', item6: '', item7: '',
+    item0: 'V.I', item0_1: 'V.I', item0_2: 'V.I', item0_3: 'V.I', item0_4: 'V.I', item0_5: 'V.I', item0_6: 'V.I',
+    item5: 'V.I', item6: 'V.I', item7: 'V.I',
   },
   job_function: 'FC',
   knowledge_score: '',
   skills: { input_response: '', response_time: '', number_of_errors: '', repeated_attempts: '' },
   attitude: { shows_interest: '', participation: '', input: '', co_operation: '', asks_relevant_questions: '' },
-  instructor_name: '',
+  instructor_name: 'Vincent Incammicia',
   instructor_signature: '',
 });
 
@@ -83,12 +89,20 @@ function DgrFormModal({ open, initial, onClose, onSave, saving }) {
       className="w-20 px-2 py-1 text-sm border border-primary-200 rounded-lg outline-none focus:border-[#0000ff]" />
   );
 
+  // 1–5 scale rating for Skills and Attitude sub-scores
+  const ratingInput = (val, onChange) => (
+    <input type="number" min="1" max="5" value={val ?? ''} onChange={e => onChange(e.target.value)}
+      className="w-14 px-2 py-1 text-sm border border-primary-200 rounded-lg outline-none focus:border-[#0000ff]" />
+  );
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/60" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+    <>
+      <div className="fixed -inset-20 z-50 bg-black/60 backdrop-blur-sm pointer-events-none" />
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4" onClick={onClose}>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex-shrink-0 flex items-center justify-between px-5 py-4 border-b border-primary-200">
           <div>
-            <p className="text-base font-bold text-primary-800">{initial?._id ? 'Edit' : 'New'} DGR Training Form</p>
+            <p className="text-base font-bold text-primary-800">{initial?._id ? 'Edit' : 'New'} Dangerous Goods Training Form</p>
             {f._applicantName && <p className="text-xs text-primary-400 mt-0.5">Student: {f._applicantName}</p>}
           </div>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-primary-100 text-primary-400"><HiOutlineX className="w-5 h-5" /></button>
@@ -97,30 +111,15 @@ function DgrFormModal({ open, initial, onClose, onSave, saving }) {
         {/* ── Form body: mirrors PDF layout top-to-bottom ── */}
         <div className="flex-1 overflow-y-auto p-5 space-y-5 text-sm text-primary-800">
 
-          {/* 0. PDF header top-right (Page / Date / Iss.Rev) */}
-          <div>
-            <p className="text-xs font-semibold text-primary-400 uppercase tracking-wider mb-2">PDF Header (top-right)</p>
-            <div className="rounded-lg border border-primary-200 overflow-hidden text-xs">
-              {/* Page */}
-              <div className="grid grid-cols-[90px_1fr] border-b border-primary-100">
-                <div className="px-3 py-2 border-r border-primary-100 font-medium text-primary-600 flex items-center">Page:</div>
-                <input value={f.page_ref ?? ''} onChange={e => set('page_ref', e.target.value)}
-                  placeholder="Appendix A-13" className="px-3 py-2 outline-none text-primary-800 focus:bg-blue-50" />
-              </div>
-              {/* Date — calendar picker, stored as DD-MM-YYYY */}
-              <div className="grid grid-cols-[90px_1fr] border-b border-primary-100">
-                <div className="px-3 py-2 border-r border-primary-100 font-medium text-primary-600 flex items-center">Date:</div>
-                <input type="date" value={toInputDate(f.doc_date)}
-                  onChange={e => set('doc_date', fromInputDate(e.target.value, '-'))}
-                  className="px-3 py-2 outline-none text-primary-800 focus:bg-blue-50" />
-              </div>
-              {/* Iss./Rev */}
-              <div className="grid grid-cols-[90px_1fr]">
-                <div className="px-3 py-2 border-r border-primary-100 font-medium text-primary-600 flex items-center">Iss. / Rev:</div>
-                <input value={f.iss_rev ?? ''} onChange={e => set('iss_rev', e.target.value)}
-                  placeholder="5 / 8" className="px-3 py-2 outline-none text-primary-800 focus:bg-blue-50" />
-              </div>
-            </div>
+          {/* 0. Airline / Organisation name — shown in PDF header and reference list */}
+          <div className="flex items-baseline gap-2">
+            <span className="font-semibold whitespace-nowrap text-sm">Airline / Organisation:</span>
+            <input
+              value={f.airline_name || ''}
+              onChange={e => set('airline_name', e.target.value)}
+              placeholder="e.g. Comlux Aviation"
+              className="flex-1 border-0 border-b-2 border-primary-300 bg-transparent outline-none px-1 py-0.5 text-sm font-bold text-[#0000ff] placeholder:font-normal placeholder:text-primary-300 focus:border-[#0000ff]"
+            />
           </div>
 
           {/* 1. Applicant's Name — editable by admin */}
@@ -134,9 +133,21 @@ function DgrFormModal({ open, initial, onClose, onSave, saving }) {
             />
           </div>
 
-          {/* 2. IATA items table — all rows with initials inputs */}
+          {/* 2. IATA items table */}
           <div>
-            <p className="text-xs font-semibold text-primary-400 uppercase tracking-wider mb-2">Appendix A.1.6 — IATA Items &amp; Instructor Initials</p>
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+              <p className="text-xs font-semibold text-primary-400 uppercase tracking-wider">IATA Items &amp; Instructor Initials</p>
+              <div className="flex flex-wrap gap-3">
+                <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                  <input type="checkbox" checked={!!f.show_item5} onChange={e => set('show_item5', e.target.checked)} className="rounded" />
+                  <span className="text-xs text-primary-500">Include: Accepting passenger and crew baggage (n/a for F/D and FOO)</span>
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                  <input type="checkbox" checked={!!f.show_item7} onChange={e => set('show_item7', e.target.checked)} className="rounded" />
+                  <span className="text-xs text-primary-500">Include: Collecting safety data (n/a for F/D and FOO)</span>
+                </label>
+              </div>
+            </div>
             <div className="rounded-lg border border-primary-200 overflow-hidden text-xs">
               <div className="grid grid-cols-[52px_1fr_100px] bg-primary-50 border-b border-primary-200 font-semibold text-primary-700">
                 <div className="px-2 py-2 text-center border-r border-primary-200">IATA Item</div>
@@ -151,14 +162,18 @@ function DgrFormModal({ open, initial, onClose, onSave, saving }) {
                 { item: '0.4', desc: 'Understanding the importance of classification and packaging',    key: 'item0_4' },
                 { item: '0.5', desc: 'Understanding hazard communication',                             key: 'item0_5' },
                 { item: '0.6', desc: 'Familiarising with basic emergency response',                    key: 'item0_6' },
-                { item: '5',   desc: 'Accepting passenger and crew baggage – (n/a for F/D and FOO)',   key: 'item5'   },
-                { item: '6',   desc: 'Transporting cargo/baggage',                                     key: 'item6'   },
-                { item: '7',   desc: 'Collecting safety data – (n/a for F/D and FOO)',                 key: 'item7'   },
+                ...(f.show_item5 ? [
+                  { item: '5', desc: 'Accepting passenger and crew baggage – (n/a for F/D and FOO)', key: 'item5' },
+                ] : []),
+                { item: f.show_item5 ? '6' : '5', desc: 'Transporting cargo/baggage', key: 'item6' },
+                ...(f.show_item7 ? [
+                  { item: f.show_item5 ? '7' : '6', desc: 'Collecting safety data – (n/a for F/D and FOO)', key: 'item7' },
+                ] : []),
               ].map(({ item, desc, key }) => (
-                <div key={item} className={`grid grid-cols-[52px_1fr_100px] border-b border-primary-100 last:border-0 ${item.includes('.') ? 'bg-primary-50/30' : ''}`}>
-                  <div className="px-2 py-1.5 text-center border-r border-primary-100 text-primary-500 font-medium">{item}</div>
-                  <div className={`px-3 py-1.5 border-r border-primary-100 text-primary-700 ${item.includes('.') ? 'pl-6 text-primary-500' : 'font-medium'}`}>{desc}</div>
-                  <div className="px-2 py-1 flex items-center justify-center">
+                <div key={key} className={`grid grid-cols-[52px_1fr_100px] border-b border-primary-100 last:border-0 ${item.includes('.') ? 'bg-primary-50/30' : ''}`}>
+                  <div className="px-2 py-2 text-center border-r border-primary-100 text-primary-500 font-medium">{item}</div>
+                  <div className={`px-3 py-2 border-r border-primary-100 text-primary-700 ${item.includes('.') ? 'pl-6 text-primary-500' : 'font-medium'}`}>{desc}</div>
+                  <div className="px-2 py-1.5 flex items-center justify-center">
                     <input
                       value={f.initials[key] ?? ''}
                       onChange={e => setSub('initials', key, e.target.value)}
@@ -205,7 +220,7 @@ function DgrFormModal({ open, initial, onClose, onSave, saving }) {
                   <option value="Initial">Initial</option>
                   <option value="Recurrent">Recurrent</option>
                 </select>
-                <span className="font-medium">DG Training on</span>
+                <span className="font-medium">Dangerous Goods Training on</span>
                 <input
                   type="date"
                   value={toInputDate(f.training_date)}
@@ -224,7 +239,7 @@ function DgrFormModal({ open, initial, onClose, onSave, saving }) {
               <p className="font-semibold text-primary-600">ICAO reference list:</p>
               <p>ICAO Doc 9284-AN/905 "Technical Instructions for safe transportation of dangerous goods by air"</p>
               <p>ICAO Doc 10147 "Guidance on a Competency-based Approach to DG Training and Assessment"</p>
-              <p className="font-semibold text-primary-600 pt-1">Comlux OM (Operations Manual) reference list:</p>
+              <p className="font-semibold text-primary-600 pt-1">{f.airline_name || 'Organisation'} OM (Operations Manual) reference list:</p>
               <p>OM D Chapter 2 "Operations personnel including crew"</p>
               <p>OM A 9 "Dangerous Goods and Weapons"</p>
             </div>
@@ -268,23 +283,46 @@ function DgrFormModal({ open, initial, onClose, onSave, saving }) {
                 <div className="px-3 py-2 border-r border-primary-100 flex items-center justify-center">
                   <span className="text-[10px] text-primary-300 italic">see above</span>
                 </div>
-                {/* Skills sub-scores */}
+                {/* Skills sub-scores — rated 1–5 */}
                 <div className="px-3 py-2 border-r border-primary-100 space-y-1.5">
-                  {[['input_response', 'Input response'], ['response_time', 'Response time'], ['number_of_errors', 'No. of errors'], ['repeated_attempts', 'Repeated attempts']].map(([k, lbl]) => (
+                  {[
+                    ['input_response',    'Input response',    '5: Accurate, complete, no correction\n4: Minor omissions only\n3: Noticeable errors or gaps\n2: Limited understanding\n1: Incorrect or cannot complete'],
+                    ['response_time',     'Response time',     '5: Well within expected time\n4: Within expected time\n3: Slightly slower than expected\n2: Frequently exceeds expected time\n1: Unable to complete in time'],
+                    ['number_of_errors',  'No. of errors',     '5: No errors\n4: 1–2 minor errors\n3: Several minor or 1 significant error\n2: Multiple significant errors\n1: Excessive errors'],
+                    ['repeated_attempts', 'Repeated attempts', '5: Completes on first attempt\n4: Requires 1 extra attempt\n3: Requires 2 extra attempts\n2: Requires several attempts + guidance\n1: Unable to complete'],
+                  ].map(([k, lbl, tip]) => (
                     <div key={k} className="flex items-center justify-between gap-1">
-                      <span className="text-[10px] text-primary-500">{lbl}</span>
-                      {numInput(f.skills[k], v => setSub('skills', k, v))}
+                      <span className="text-[10px] text-primary-500 cursor-help" title={tip}>{lbl}</span>
+                      {ratingInput(f.skills[k], v => setSub('skills', k, v))}
                     </div>
                   ))}
+                  {scores.skillsAvg != null && (
+                    <div className="pt-2 border-t border-primary-100 text-center">
+                      <span className="text-[10px] text-primary-400">avg {scores.skillsAvg.toFixed(2)}/5 = </span>
+                      <span className="text-base font-bold text-[#0000ff]">{Math.round(scores.skills)}%</span>
+                    </div>
+                  )}
                 </div>
-                {/* Attitude sub-scores */}
+                {/* Attitude sub-scores — rated 1–5 */}
                 <div className="px-3 py-2 space-y-1.5">
-                  {[['shows_interest', 'Shows interest'], ['participation', 'Participation'], ['input', 'Input'], ['co_operation', 'Co-operation'], ['asks_relevant_questions', 'Asks rel. questions']].map(([k, lbl]) => (
+                  {[
+                    ['shows_interest',         'Shows interest',         '5: Consistently enthusiastic and committed\n4: Frequently shows interest and engagement\n3: Adequate interest when prompted\n2: Limited interest\n1: Disengaged throughout'],
+                    ['participation',           'Participation',           '5: Actively participates in all activities\n4: Participates regularly with minimal prompting\n3: Participates occasionally when requested\n2: Rarely participates voluntarily\n1: Does not participate'],
+                    ['input',                   'Input',                   '5: Consistently valuable and constructive contributions\n4: Regularly contributes useful ideas\n3: Occasional relevant contributions\n2: Infrequent or limited-value contributions\n1: No meaningful contributions'],
+                    ['co_operation',            'Co-operation',            '5: Consistently works effectively with others\n4: Cooperates well with peers and instructors\n3: Generally cooperative with occasional issues\n2: Difficulty working with others\n1: Frequently uncooperative or disruptive'],
+                    ['asks_relevant_questions', 'Asks rel. questions',     '5: Frequently asks insightful questions\n4: Regularly asks relevant and constructive questions\n3: Occasionally asks relevant questions\n2: Rarely or irrelevant questions\n1: Does not ask questions or shows disengagement'],
+                  ].map(([k, lbl, tip]) => (
                     <div key={k} className="flex items-center justify-between gap-1">
-                      <span className="text-[10px] text-primary-500">{lbl}</span>
-                      {numInput(f.attitude[k], v => setSub('attitude', k, v))}
+                      <span className="text-[10px] text-primary-500 cursor-help" title={tip}>{lbl}</span>
+                      {ratingInput(f.attitude[k], v => setSub('attitude', k, v))}
                     </div>
                   ))}
+                  {scores.attitudeAvg != null && (
+                    <div className="pt-2 border-t border-primary-100 text-center">
+                      <span className="text-[10px] text-primary-400">avg {scores.attitudeAvg.toFixed(2)}/5 = </span>
+                      <span className="text-base font-bold text-[#0000ff]">{Math.round(scores.attitude)}%</span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -329,8 +367,9 @@ function DgrFormModal({ open, initial, onClose, onSave, saving }) {
             {initial?._id ? 'Save changes' : 'Create form'}
           </button>
         </div>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -339,20 +378,31 @@ function DgrFormModal({ open, initial, onClose, onSave, saving }) {
 // ─────────────────────────────────────────────────────────────────────────────
 function AirlineGroup({ airline, participants, forms, onNew, onEdit, onDelete }) {
   const [open, setOpen] = useState(false);
+  const [studentSearch, setStudentSearch] = useState('');
 
   const formForStudent = (studentId) =>
     forms.find(f => f.assignments?.some(a => String(a.participant_id) === String(studentId)));
 
+  const visibleStudents = participants.filter(s =>
+    s.participant_name?.toLowerCase().includes(studentSearch.toLowerCase())
+  );
+
   return (
-    <div className="card overflow-hidden">
+    <div className={`card overflow-hidden${open ? ' flex flex-col max-h-[480px]' : ''}`}>
       <button
         onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center gap-3 px-5 py-4 text-left"
-        style={{ background: '#eff6ff' }}
+        className="w-full flex items-center gap-3 px-5 py-4 text-left flex-shrink-0"
+        style={{ background: open ? '#f9fafb' : '#ffffff' }}
       >
         {open
           ? <HiOutlineChevronDown  className="w-5 h-5 text-primary-400 flex-shrink-0" />
           : <HiOutlineChevronRight className="w-5 h-5 text-primary-400 flex-shrink-0" />}
+        {/* Airline logo */}
+        <div className="w-8 h-8 rounded-lg overflow-hidden flex-shrink-0 bg-primary-800 flex items-center justify-center">
+          {airline.logo_url
+            ? <img src={airline.logo_url} alt={airline.airlineName} className="w-full h-full object-contain p-0.5 bg-white" />
+            : <span className="text-white text-[10px] font-bold">{mkInitials(airline.airlineName)}</span>}
+        </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-bold text-primary-800 truncate">{airline.airlineName}</p>
           <p className="text-[11px] text-primary-400">
@@ -362,47 +412,62 @@ function AirlineGroup({ airline, participants, forms, onNew, onEdit, onDelete })
       </button>
 
       {open && (
-        <div className="divide-y divide-primary-100">
+        <>
+          {/* Search bar — sticky inside expanded card */}
+          <div className="flex-shrink-0 px-4 py-2 border-b border-primary-100 bg-white">
+            <div className="relative">
+              <HiOutlineSearch className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-primary-400" />
+              <input
+                value={studentSearch}
+                onChange={e => setStudentSearch(e.target.value)}
+                placeholder="Search students…"
+                className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-primary-200 outline-none focus:border-blue-400 bg-primary-50"
+              />
+            </div>
+          </div>
+        <div className="divide-y divide-primary-100 overflow-y-auto flex-1">
           {participants.length === 0 ? (
             <p className="text-sm text-primary-400 text-center py-6 px-4">No students in this airline.</p>
+          ) : visibleStudents.length === 0 ? (
+            <p className="text-sm text-primary-400 text-center py-6 px-4">No students match your search.</p>
           ) : (
-            participants.map(student => {
+            visibleStudents.map(student => {
               const form = formForStudent(student._id);
               return (
-                <div key={String(student._id)} className="flex items-center justify-between px-4 py-3 gap-3">
+                <div key={String(student._id)} className="flex flex-col sm:flex-row sm:items-center justify-between px-4 py-3 gap-3">
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-primary-800 truncate">{student.participant_name}</p>
-                    <p className="text-[11px] text-primary-400">{student.training_type}</p>
+                    <p className="text-[11px] text-primary-400 mt-0.5">{student.training_type}</p>
                   </div>
 
-                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <div className="flex flex-wrap items-center gap-1.5 flex-shrink-0 w-full sm:w-auto justify-end">
                     {form ? (
                       <>
                         <button
                           onClick={() => onEdit(form, student)}
                           title="Edit form"
-                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-primary-200 text-xs text-primary-600 hover:bg-primary-50"
+                          className="flex-1 sm:flex-initial flex items-center justify-center gap-1 px-2 sm:px-2.5 py-1.5 rounded-lg border border-primary-200 text-xs text-primary-600 hover:bg-primary-50 transition-colors"
                         >
-                          <HiOutlinePencil className="w-3.5 h-3.5" /> Edit
+                          <HiOutlinePencil className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Edit</span>
                         </button>
                         <button
                           onClick={() => generateDgrPdf({ form, applicantName: student.participant_name, mode: 'preview' })}
                           title="View PDF"
-                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-blue-200 bg-blue-50 text-[#0000ff] text-xs hover:bg-blue-100"
+                          className="flex-1 sm:flex-initial flex items-center justify-center gap-1 px-2 sm:px-2.5 py-1.5 rounded-lg border border-blue-200 bg-blue-50 text-[#0000ff] text-xs hover:bg-blue-100 transition-colors"
                         >
-                          <HiOutlineEye className="w-3.5 h-3.5" /> View PDF
+                          <HiOutlineEye className="w-3.5 h-3.5" /> <span className="hidden sm:inline">View PDF</span>
                         </button>
                         <button
                           onClick={() => generateDgrPdf({ form, applicantName: student.participant_name, mode: 'download' })}
                           title="Download PDF"
-                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs hover:bg-emerald-100"
+                          className="flex-1 sm:flex-initial flex items-center justify-center gap-1 px-2 sm:px-2.5 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs hover:bg-emerald-100 transition-colors"
                         >
-                          <HiOutlineDocumentDownload className="w-3.5 h-3.5" /> Download
+                          <HiOutlineDocumentDownload className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Download</span>
                         </button>
                         <button
                           onClick={() => onDelete(form)}
                           title="Delete form"
-                          className="p-1.5 rounded-lg hover:bg-red-50 text-red-400"
+                          className="p-1.5 rounded-lg hover:bg-red-50 text-red-400 transition-colors"
                         >
                           <HiOutlineTrash className="w-4 h-4" />
                         </button>
@@ -410,9 +475,9 @@ function AirlineGroup({ airline, participants, forms, onNew, onEdit, onDelete })
                     ) : (
                       <button
                         onClick={() => onNew(airline, student)}
-                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#0000ff] text-white text-xs font-semibold hover:bg-blue-700"
+                        className="w-full sm:w-auto flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-[#0000ff] text-white text-xs font-semibold hover:bg-blue-700 transition-colors"
                       >
-                        <HiOutlinePlusCircle className="w-4 h-4" /> New DGR Form
+                        <HiOutlinePlusCircle className="w-4 h-4" /> <span className="hidden sm:inline">New DGR Form</span>
                       </button>
                     )}
                   </div>
@@ -421,6 +486,7 @@ function AirlineGroup({ airline, participants, forms, onNew, onEdit, onDelete })
             })
           )}
         </div>
+        </>
       )}
     </div>
   );
@@ -432,34 +498,50 @@ function AirlineGroup({ airline, participants, forms, onNew, onEdit, onDelete })
 function AirlineFormCard({ form }) {
   const assignments = form.assignments || [];
   const s = computeDgrScores(form);
+  const scoreLabel = s.final != null ? `${Math.round(s.final)}%` : '—';
+
   return (
-    <div className="rounded-xl border border-primary-100 p-4 bg-white space-y-3">
-      <div>
-        <p className="text-sm font-semibold text-primary-800">
-          DG Training — {form.dg_training_type}{form.training_date ? ` · ${form.training_date}` : ''}
-        </p>
-        <p className="text-[11px] text-primary-400 mt-0.5">
-          {s.final != null ? `Final score ${Math.round(s.final)}%` : 'Scores not set'}
-          {form.instructor_name ? ` · Instructor: ${form.instructor_name}` : ''}
-        </p>
+    <div className="bg-white rounded-xl border border-primary-200 shadow-sm overflow-hidden">
+      {/* Card header */}
+      <div className="flex items-center gap-3 px-4 py-2.5 bg-gray-50 border-b border-primary-100">
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-primary-100 text-primary-700 border border-primary-200 flex-shrink-0">
+          DGR {form.dg_training_type || 'Training'}
+        </span>
+        {form.training_date && (
+          <span className="text-[11px] text-primary-500 font-medium">{form.training_date}</span>
+        )}
+        <div className="flex-1" />
+        <span className="text-[11px] text-primary-400">
+          Score: <span className={`font-semibold ${s.final != null ? 'text-primary-700' : 'text-primary-300'}`}>{scoreLabel}</span>
+        </span>
+        {form.instructor_name && (
+          <span className="hidden sm:block text-[11px] text-primary-400 truncate max-w-[160px]">{form.instructor_name}</span>
+        )}
       </div>
-      {assignments.length > 0 && (
-        <div className="space-y-1">
+
+      {/* Assignment rows */}
+      {assignments.length === 0 ? (
+        <p className="text-sm text-primary-400 text-center py-4">No participants assigned.</p>
+      ) : (
+        <div className="divide-y divide-primary-100">
           {assignments.map(a => (
-            <div key={String(a.participant_id)} className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-primary-50">
-              <span className="text-sm text-primary-700 truncate">{a.participant_name}</span>
+            <div key={String(a.participant_id)} className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition-colors">
+              <div className="w-7 h-7 rounded-full bg-primary-100 flex items-center justify-center flex-shrink-0">
+                <span className="text-[10px] font-bold text-primary-600">{mkInitials(a.participant_name)}</span>
+              </div>
+              <span className="flex-1 text-sm font-medium text-primary-800 truncate min-w-0">{a.participant_name}</span>
               <div className="flex items-center gap-1.5 flex-shrink-0">
                 <button
                   onClick={() => generateDgrPdf({ form, applicantName: a.participant_name, mode: 'preview' })}
-                  className="flex items-center gap-1 px-2 py-1 rounded-lg border border-blue-200 bg-blue-50 text-[#0000ff] text-xs hover:bg-blue-100"
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-blue-200 bg-blue-50 text-[#0000ff] text-xs font-medium hover:bg-blue-100 transition-colors"
                 >
-                  <HiOutlineEye className="w-3.5 h-3.5" /> Preview
+                  <HiOutlineEye className="w-3.5 h-3.5" /><span className="hidden sm:inline">Preview</span>
                 </button>
                 <button
                   onClick={() => generateDgrPdf({ form, applicantName: a.participant_name, mode: 'download' })}
-                  className="flex items-center gap-1 px-2 py-1 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs hover:bg-emerald-100"
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-medium hover:bg-emerald-100 transition-colors"
                 >
-                  <HiOutlineDocumentDownload className="w-3.5 h-3.5" /> PDF
+                  <HiOutlineDocumentDownload className="w-3.5 h-3.5" /><span className="hidden sm:inline">PDF</span>
                 </button>
               </div>
             </div>
@@ -475,10 +557,15 @@ function AirlineFormCard({ form }) {
 // ─────────────────────────────────────────────────────────────────────────────
 export default function DgrForms() {
   const { isAdmin } = useAuth();
+  const [searchParams] = useSearchParams();
+  const focusId     = searchParams.get('focus') || null;
+  const formCardRefs = useRef({});
   const [loading, setLoading]   = useState(true);
   const [airlines, setAirlines] = useState([]);
   const [forms, setForms]       = useState([]);
   const [saving, setSaving]     = useState(false);
+  const [search, setSearch]     = useState('');
+  const [filterType, setFilterType] = useState('');
 
   // editModal shape: { airline_id?, _id?, _student?, ...formFields }
   const [editModal, setEditModal] = useState(null);
@@ -501,6 +588,18 @@ export default function DgrForms() {
     }
   };
   useEffect(() => { fetchAll(); }, [isAdmin]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!focusId || loading || forms.length === 0) return;
+    setTimeout(() => {
+      const el = formCardRefs.current[focusId];
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.add('notif-highlight');
+        el.addEventListener('animationend', () => el.classList.remove('notif-highlight'), { once: true });
+      }
+    }, 300);
+  }, [focusId, loading, forms.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const formsByAirline = useMemo(() => {
     const m = {};
@@ -568,49 +667,156 @@ export default function DgrForms() {
     }
   };
 
+  /* ── Airline view ─────────────────────────────────────────────────────── */
+  if (!isAdmin) {
+    const filtered = forms.filter(f =>
+      (!filterType || f.dg_training_type === filterType) &&
+      (!search ||
+        f.dg_training_type?.toLowerCase().includes(search.toLowerCase()) ||
+        f.assignments?.some(a => a.participant_name?.toLowerCase().includes(search.toLowerCase())))
+    );
+
+    return (
+      <div className="flex flex-col -m-4 sm:-m-6 h-full overflow-hidden">
+        {/* ── Fixed top section: title + search ── */}
+        <div className="flex-shrink-0 bg-white border-b border-primary-200 shadow-sm px-4 sm:px-6 pt-4 sm:pt-6 pb-3">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-10 h-10 rounded-xl bg-primary-800 flex items-center justify-center flex-shrink-0">
+              <HiOutlineShieldExclamation className="w-6 h-6 text-white" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h1 className="text-xl sm:text-2xl font-bold text-primary-800">DGR CBTA</h1>
+              <p className="text-xs sm:text-sm text-primary-400">Dangerous Goods training forms assigned to your students.</p>
+            </div>
+            {!loading && (
+              <span className="flex-shrink-0 text-xs font-semibold text-primary-500 bg-primary-100 px-3 py-1.5 rounded-lg">
+                {forms.length} form{forms.length !== 1 ? 's' : ''}
+              </span>
+            )}
+          </div>
+
+          {!loading && (
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <HiOutlineSearch className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-primary-400" />
+                <input
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder="Search forms or student names…"
+                  className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-primary-200 outline-none focus:border-blue-400 bg-white"
+                />
+              </div>
+              <select
+                value={filterType}
+                onChange={e => setFilterType(e.target.value)}
+                className="px-3 py-2 text-sm rounded-lg border border-primary-200 outline-none focus:border-blue-400 bg-white text-primary-700 min-w-[120px]"
+              >
+                <option value="">All types</option>
+                <option value="Initial">Initial</option>
+                <option value="Recurrent">Recurrent</option>
+              </select>
+            </div>
+          )}
+        </div>
+
+        {/* ── Scrollable cards ── */}
+        <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-3 bg-gray-50">
+          {loading ? (
+            <div className="flex items-center justify-center py-20 gap-2 text-primary-400">
+              <Spin /><span className="text-sm">Loading…</span>
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="card p-12 text-center text-sm text-primary-400">
+              {forms.length === 0 ? 'No DGR forms assigned to you yet.' : 'No forms match your search.'}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {filtered.map(f => (
+                <div key={f._id} ref={el => { formCardRefs.current[f._id] = el; }}>
+                  <AirlineFormCard form={f} />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  /* ── Admin view ────────────────────────────────────────────────────────── */
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3">
+    <div className="flex flex-col">
+      <div className="flex items-center gap-3 mb-4 sm:mb-6">
         <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center">
           <HiOutlineShieldExclamation className="w-6 h-6 text-[#0000ff]" />
         </div>
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-primary-800">DGR CBTA</h1>
-          <p className="text-xs sm:text-sm text-primary-400">
-            {isAdmin
-              ? 'Create Dangerous Goods training forms for individual students.'
-              : 'Dangerous Goods training forms assigned to your students.'}
-          </p>
+          <p className="text-xs sm:text-sm text-primary-400">Create Dangerous Goods training forms for individual students.</p>
         </div>
       </div>
 
-      {loading ? (
-        <div className="flex items-center justify-center py-20 gap-2 text-primary-400">
-          <Spin /><span className="text-sm">Loading…</span>
-        </div>
-      ) : isAdmin ? (
-        airlines.length === 0
-          ? <div className="card p-12 text-center text-sm text-primary-400">No airlines with students yet.</div>
-          : (
-            <div className="space-y-3">
-              {airlines.map(({ airline, participants }) => (
-                <AirlineGroup
-                  key={airline._id}
-                  airline={airline}
-                  participants={participants}
-                  forms={formsByAirline[String(airline._id)] || []}
-                  onNew={(a, student) => setEditModal({ airline_id: a._id, _student: student })}
-                  onEdit={(f, student) => setEditModal({ ...f, _student: student })}
-                  onDelete={handleDelete}
+      <div>
+        {!loading && (
+          <div className="sticky top-0 z-10 -mx-4 sm:-mx-6 px-4 sm:px-6 py-2.5 bg-white border-b border-primary-200 shadow-sm">
+            <div className="flex flex-col sm:flex-row gap-2">
+              <div className="relative flex-1">
+                <HiOutlineSearch className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-primary-400" />
+                <input
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder="Search airlines or student names…"
+                  className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-primary-200 outline-none focus:border-blue-400 bg-white"
                 />
-              ))}
+              </div>
+              <select
+                value={filterType}
+                onChange={e => setFilterType(e.target.value)}
+                className="px-3 py-2 text-sm rounded-lg border border-primary-200 outline-none focus:border-blue-400 bg-white text-primary-700 min-w-[140px]"
+              >
+                <option value="">All types</option>
+                <option value="Initial">Initial</option>
+                <option value="Recurrent">Recurrent</option>
+              </select>
             </div>
-          )
-      ) : (
-        forms.length === 0
-          ? <div className="card p-12 text-center text-sm text-primary-400">No DGR forms assigned to you yet.</div>
-          : <div className="space-y-3">{forms.map(f => <AirlineFormCard key={f._id} form={f} />)}</div>
-      )}
+          </div>
+        )}
+
+        {loading ? (
+          <div className="flex items-center justify-center py-20 gap-2 text-primary-400 mt-4">
+            <Spin /><span className="text-sm">Loading…</span>
+          </div>
+        ) : (() => {
+          const q = search.toLowerCase();
+          const filtered = airlines.filter(({ airline, participants }) => {
+            const matchSearch = !search ||
+              airline.airlineName?.toLowerCase().includes(q) ||
+              participants.some(p => p.participant_name?.toLowerCase().includes(q));
+            const airlineForms = formsByAirline[String(airline._id)] || [];
+            const matchType = !filterType ||
+              airlineForms.some(f => f.dg_training_type === filterType) ||
+              participants.some(p => p.training_type === filterType);
+            return matchSearch && matchType;
+          });
+          return filtered.length === 0
+            ? <div className="card p-12 text-center text-sm text-primary-400 mt-4">{airlines.length === 0 ? 'No airlines with students yet.' : 'No results match your search.'}</div>
+            : (
+              <div className="space-y-3 mt-4">
+                {filtered.map(({ airline, participants }) => (
+                  <AirlineGroup
+                    key={airline._id}
+                    airline={airline}
+                    participants={participants}
+                    forms={formsByAirline[String(airline._id)] || []}
+                    onNew={(a, student) => setEditModal({ airline_id: a._id, airline_name: a.airlineName, _student: student })}
+                    onEdit={(f, student) => setEditModal({ ...f, _student: student })}
+                    onDelete={handleDelete}
+                  />
+                ))}
+              </div>
+            );
+        })()}
+      </div>
 
       <DgrFormModal
         open={!!editModal}

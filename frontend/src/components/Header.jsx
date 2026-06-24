@@ -49,13 +49,26 @@ function ParticipantDetailModal({ record, onClose }) {
 
   return (
     <AnimatePresence>
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
-        onClick={onClose}>
-        <motion.div initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 0.15 }}
+      <motion.div
+        key="backdrop"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed -inset-20 z-[100] bg-black/50 backdrop-blur-sm pointer-events-none"
+      />
+      <div
+        key="layout"
+        className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+        onClick={onClose}
+      >
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95, y: 10 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95 }}
+          transition={{ duration: 0.15 }}
           className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
-          onClick={e => e.stopPropagation()}>
+          onClick={e => e.stopPropagation()}
+        >
           {/* Header */}
           <div className="flex items-center gap-4 px-5 py-4 border-b border-primary-100">
             <div className="w-12 h-12 rounded-full bg-primary-200 flex items-center justify-center flex-shrink-0">
@@ -82,7 +95,7 @@ function ParticipantDetailModal({ record, onClose }) {
             <button onClick={onClose} className="btn-primary text-sm">Close</button>
           </div>
         </motion.div>
-      </motion.div>
+      </div>
     </AnimatePresence>
   );
 }

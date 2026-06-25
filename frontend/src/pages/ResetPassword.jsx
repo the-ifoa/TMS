@@ -68,7 +68,7 @@ export default function ResetPassword() {
               <p className="text-sm text-primary-400">Your password has been reset successfully.</p>
               <Link
                 to="/login"
-                className="inline-block w-full py-3 bg-accent-600 text-white rounded-xl text-sm font-semibold text-center hover:bg-accent-700 transition-all"
+                className="inline-block w-full py-3 bg-[#0000ff] text-white rounded-xl text-sm font-semibold text-center hover:bg-blue-700 transition-all"
               >
                 Sign In Now
               </Link>
@@ -116,7 +116,7 @@ export default function ResetPassword() {
                 </div>
 
                 <button type="submit" disabled={loading}
-                  className="w-full py-3 bg-accent-600 text-white rounded-xl text-sm font-semibold shadow-lg hover:bg-accent-700 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="w-full py-3 bg-[#0000ff] text-white rounded-xl text-sm font-semibold shadow-lg hover:bg-blue-700 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   {loading
                     ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -124,7 +124,7 @@ export default function ResetPassword() {
                 </button>
 
                 <p className="text-center text-sm text-primary-400">
-                  <Link to="/login" className="text-accent-600 font-medium hover:text-accent-700">
+                  <Link to="/login" className="text-[#0000ff] font-medium hover:text-blue-700">
                     ← Back to sign in
                   </Link>
                 </p>

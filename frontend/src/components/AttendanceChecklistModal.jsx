@@ -137,11 +137,13 @@ export default function AttendanceChecklistModal({
     generateAttendancePdf({ participants: valid, startDate, endDate, company, trainingType, attendance, mode });
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[92vh] flex flex-col">
+    <>
+      <div className="fixed -inset-20 z-50 bg-black/50 backdrop-blur-sm pointer-events-none" />
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      >
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[92vh] flex flex-col">
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-primary-200">
@@ -278,25 +280,26 @@ export default function AttendanceChecklistModal({
         )}
 
         {/* Footer */}
-        <div className="px-5 py-4 border-t border-primary-200 flex items-center justify-between gap-3">
-          <span className="text-xs text-primary-400">
+        <div className="px-5 py-4 border-t border-primary-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white">
+          <span className="text-xs text-primary-400 text-center sm:text-left">
             {totalMarked} mark{totalMarked !== 1 ? 's' : ''} recorded
             {attendanceId && <span className="ml-1.5 text-emerald-600 font-medium">· Saved</span>}
           </span>
-          <div className="flex gap-2">
-            <button type="button" onClick={generatePDF} className="btn-outline text-sm py-1.5 px-3">Export PDF</button>
+          <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2 w-full sm:w-auto">
+            <button type="button" onClick={generatePDF} className="flex-1 sm:flex-initial btn-outline text-sm py-1.5 px-3">Export PDF</button>
             {!readOnly && (
               <button type="button" onClick={handleSave} disabled={saving}
-                className="btn-primary text-sm py-1.5 px-3 flex items-center gap-1.5">
+                className="flex-1 sm:flex-initial btn-primary text-sm py-1.5 px-3 flex items-center justify-center gap-1.5">
                 {saving
                   ? <><div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />Saving…</>
                   : <><HiOutlineCheckCircle className="w-3.5 h-3.5" />Save</>}
               </button>
             )}
-            <button type="button" onClick={onClose} className="btn-outline text-sm py-1.5 px-3">Close</button>
+            <button type="button" onClick={onClose} className="flex-1 sm:flex-initial btn-outline text-sm py-1.5 px-3">Close</button>
           </div>
         </div>
       </div>
     </div>
+  </>
   );
 }

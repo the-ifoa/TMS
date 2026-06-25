@@ -340,7 +340,7 @@ export default function Signup() {
                 </div>
 
                 <button type="submit" disabled={loading || uploading}
-                  className="w-full py-3 bg-accent-600 text-white rounded-xl text-sm font-semibold shadow-lg shadow-accent-600/25 hover:bg-accent-700 hover:shadow-xl transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                  className="w-full py-3 bg-[#0000ff] text-white rounded-xl text-sm font-semibold shadow-lg shadow-blue-500/25 hover:bg-blue-700 hover:shadow-xl transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
                   {loading ? (
                     <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   ) : (
@@ -351,7 +351,7 @@ export default function Signup() {
 
               <p className="mt-6 text-center text-sm text-primary-400">
                 Already have an account?{' '}
-                <Link to="/login" className="text-accent-600 font-semibold hover:text-accent-700 transition-colors">Sign in</Link>
+                <Link to="/login" className="text-[#0000ff] font-semibold hover:text-blue-700 transition-colors">Sign in</Link>
               </p>
             </div>
           </motion.div>
@@ -373,7 +373,7 @@ export default function Signup() {
               {/* Header */}
               <div className="flex flex-col items-center mb-6 text-center">
                 <div className="w-14 h-14 bg-accent-100 rounded-2xl flex items-center justify-center mb-4">
-                  <HiOutlineShieldCheck className="w-7 h-7 text-accent-600" />
+                  <HiOutlineShieldCheck className="w-7 h-7 text-[#0000ff]" />
                 </div>
                 <h1 className="text-2xl font-bold text-primary-800">Verify Your Email</h1>
                 <p className="text-sm text-primary-400 mt-1.5 max-w-xs">
@@ -393,7 +393,7 @@ export default function Signup() {
                 <OtpInput value={otp} onChange={setOtp} disabled={verifying || expired} />
 
                 <button type="submit" disabled={verifying || expired || otp.replace(/\D/g,'').length < 6}
-                  className="w-full py-3 bg-accent-600 text-white rounded-xl text-sm font-semibold shadow-lg shadow-accent-600/25 hover:bg-accent-700 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                  className="w-full py-3 bg-[#0000ff] text-white rounded-xl text-sm font-semibold shadow-lg shadow-blue-500/25 hover:bg-blue-700 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
                   {verifying ? (
                     <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   ) : (
@@ -406,7 +406,7 @@ export default function Signup() {
               <div className="mt-5 text-center">
                 <p className="text-sm text-primary-400 mb-2">Didn't receive the code?</p>
                 <button onClick={handleResend} disabled={resending || (!expired && remaining > 540)}
-                  className="flex items-center gap-1.5 mx-auto text-sm font-semibold text-accent-600 hover:text-accent-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                  className="flex items-center gap-1.5 mx-auto text-sm font-semibold text-[#0000ff] hover:text-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
                   {resending
                     ? <div className="w-4 h-4 border-2 border-accent-300 border-t-accent-600 rounded-full animate-spin" />
                     : <HiOutlineRefresh className="w-4 h-4" />}

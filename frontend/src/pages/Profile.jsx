@@ -198,7 +198,7 @@ export default function Profile() {
                   autoFocus />
                 <div className="flex gap-2">
                   <button onClick={handleNameSave} disabled={saving}
-                    className="px-3 py-1.5 bg-accent-600 text-white text-xs font-medium rounded-lg hover:bg-accent-700 disabled:opacity-50">
+                    className="px-3 py-1.5 bg-[#0000ff] text-white text-xs font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50">
                     {saving ? 'Saving...' : 'Save'}
                   </button>
                   <button onClick={() => { setEditingName(false); setName(admin?.name || ''); }}
@@ -217,10 +217,6 @@ export default function Profile() {
               </div>
             )}
             <p className="text-sm text-primary-400 mt-0.5">{admin?.role || 'Administrator'}</p>
-            <div className="flex items-center gap-1 mt-1">
-              <span className="w-2 h-2 bg-emerald-500 rounded-full"></span>
-              <span className="text-xs text-emerald-600 font-medium">Active</span>
-            </div>
           </div>
         </div>
       </div>
@@ -269,7 +265,7 @@ export default function Profile() {
                   />
                   <div className="flex gap-2">
                     <button onClick={handleAirlineNameSave} disabled={saving}
-                      className="px-3 py-1.5 bg-accent-600 text-white text-xs font-medium rounded-lg hover:bg-accent-700 disabled:opacity-50">
+                      className="px-3 py-1.5 bg-[#0000ff] text-white text-xs font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50">
                       {saving ? 'Saving...' : 'Save'}
                     </button>
                     <button onClick={() => { setEditingAirlineName(false); setAirlineName(admin?.airlineName || ''); }}
@@ -330,7 +326,7 @@ export default function Profile() {
             </div>
             {!editingAddress && (
               <button onClick={() => { setEditingAddress(true); setAddress(admin?.address || ''); }}
-                className="px-3 sm:px-4 py-2 bg-accent-600 text-white text-xs font-medium rounded-lg hover:bg-accent-700 whitespace-nowrap">
+                className="px-3 sm:px-4 py-2 bg-[#0000ff] text-white text-xs font-medium rounded-lg hover:bg-blue-700 whitespace-nowrap">
                 {admin?.address ? 'Edit Address' : 'Add Address'}
               </button>
             )}
@@ -347,7 +343,7 @@ export default function Profile() {
               />
               <div className="flex flex-wrap gap-2 sm:gap-3">
                 <button onClick={handleAddressSave} disabled={saving}
-                  className="px-4 py-2 bg-accent-600 text-white text-xs font-medium rounded-lg hover:bg-accent-700 disabled:opacity-50">
+                  className="px-4 py-2 bg-[#0000ff] text-white text-xs font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50">
                   {saving ? 'Saving...' : 'Save Address'}
                 </button>
                 <button onClick={() => { setEditingAddress(false); setAddress(admin?.address || ''); }}
@@ -376,7 +372,7 @@ export default function Profile() {
             </div>
             {!logoFile && (
               <button onClick={() => logoInputRef.current?.click()}
-                className="px-3 sm:px-4 py-2 bg-accent-600 text-white text-xs font-medium rounded-lg hover:bg-accent-700 whitespace-nowrap">
+                className="px-3 sm:px-4 py-2 bg-[#0000ff] text-white text-xs font-medium rounded-lg hover:bg-blue-700 whitespace-nowrap">
                 {admin?.logo_url ? 'Change Logo' : 'Upload Logo'}
               </button>
             )}
@@ -407,7 +403,7 @@ export default function Profile() {
               </div>
               <div className="flex gap-2 sm:gap-3">
                 <button onClick={handleLogoUpload} disabled={uploadingLogo}
-                  className="px-3 sm:px-4 py-2 bg-accent-600 text-white text-xs font-medium rounded-lg hover:bg-accent-700 disabled:opacity-50 flex items-center gap-2">
+                  className="px-3 sm:px-4 py-2 bg-[#0000ff] text-white text-xs font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2">
                   {uploadingLogo && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                   {uploadingLogo ? 'Uploading…' : 'Save Logo'}
                 </button>
@@ -444,7 +440,7 @@ export default function Profile() {
           </div>
           {!changingEmail && (
             <button onClick={() => setChangingEmail(true)}
-              className="px-3 sm:px-4 py-2 bg-accent-600 text-white text-xs font-medium rounded-lg hover:bg-accent-700 whitespace-nowrap">
+              className="px-3 sm:px-4 py-2 bg-[#0000ff] text-white text-xs font-medium rounded-lg hover:bg-blue-700 whitespace-nowrap">
               Change Email
             </button>
           )}
@@ -465,7 +461,7 @@ export default function Profile() {
             </div>
             <div className="flex flex-wrap gap-2 sm:gap-3 pt-2">
               <button onClick={handleEmailSave} disabled={saving}
-                className="px-4 py-2 bg-accent-600 text-white text-xs font-medium rounded-lg hover:bg-accent-700 disabled:opacity-50">
+                className="px-4 py-2 bg-[#0000ff] text-white text-xs font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50">
                 {saving ? 'Saving...' : 'Update Email'}
               </button>
               <button onClick={() => { setChangingEmail(false); setEmailPassword(''); setNewEmail(''); }}
@@ -488,7 +484,7 @@ export default function Profile() {
           </div>
           {!changingPassword && (
             <button onClick={() => setChangingPassword(true)}
-              className="px-3 sm:px-4 py-2 bg-accent-600 text-white text-xs font-medium rounded-lg hover:bg-accent-700 whitespace-nowrap">
+              className="px-3 sm:px-4 py-2 bg-[#0000ff] text-white text-xs font-medium rounded-lg hover:bg-blue-700 whitespace-nowrap">
               Change Password
             </button>
           )}
@@ -515,7 +511,7 @@ export default function Profile() {
             </div>
             <div className="flex flex-wrap gap-2 sm:gap-3 pt-2">
               <button onClick={handlePasswordSave} disabled={saving}
-                className="px-4 py-2 bg-accent-600 text-white text-xs font-medium rounded-lg hover:bg-accent-700 disabled:opacity-50">
+                className="px-4 py-2 bg-[#0000ff] text-white text-xs font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50">
                 {saving ? 'Saving...' : 'Update Password'}
               </button>
               <button onClick={() => { setChangingPassword(false); setCurrentPassword(''); setNewPassword(''); setConfirmPassword(''); }}

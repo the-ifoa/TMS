@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Clock, CheckCircle2 } from 'lucide-react';
 import {
@@ -27,10 +27,9 @@ import {
   generateCertificateBlob, generateCertificateWithModules,
   updateFullCertId, getCertCounters, resetCertCounter, resetAllCertCounters,
   updateNdgScore, revokeCertificate, updateValidity, updateAirline,
+  API_BASE,
 } from '../api';
 import ModuleSelector from '../components/ModuleSelector';
-
-const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 const TRAINING_LABELS = {
   FDI: 'Flight Dispatch Initial',
@@ -73,14 +72,27 @@ function VariantModal({ open, variant, setVariant, validity, setValidity, onConf
   if (!open) return null;
   return (
     <AnimatePresence>
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
-        onClick={onClose}>
-        <motion.div initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }}
+      <motion.div
+        key="backdrop"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed -inset-20 z-50 bg-black/40 backdrop-blur-sm pointer-events-none"
+      />
+      <div
+        key="layout"
+        className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        onClick={onClose}
+      >
+        <motion.div
+          key="card"
+          initial={{ opacity: 0, scale: 0.95, y: 10 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 10 }}
           transition={{ type: 'spring', stiffness: 300, damping: 25 }}
           className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden"
-          onClick={e => e.stopPropagation()}>
+          onClick={e => e.stopPropagation()}
+        >
           <div className="flex items-center justify-between px-5 py-4 border-b border-primary-100">
             <div>
               <h2 className="text-base font-bold text-primary-800">Certificate Settings</h2>
@@ -134,7 +146,7 @@ function VariantModal({ open, variant, setVariant, validity, setValidity, onConf
             <button onClick={onConfirm} className="btn-primary flex-1">Generate</button>
           </div>
         </motion.div>
-      </motion.div>
+      </div>
     </AnimatePresence>
   );
 }
@@ -145,14 +157,27 @@ function CertResultModal({ results, onClose }) {
   const dl = item => { const a = document.createElement('a'); a.href = item.blobUrl; a.download = item.filename; document.body.appendChild(a); a.click(); document.body.removeChild(a); };
   return (
     <AnimatePresence>
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
-        onClick={onClose}>
-        <motion.div initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }}
+      <motion.div
+        key="backdrop"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed -inset-20 z-50 bg-black/40 backdrop-blur-sm pointer-events-none"
+      />
+      <div
+        key="layout"
+        className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        onClick={onClose}
+      >
+        <motion.div
+          key="card"
+          initial={{ opacity: 0, scale: 0.95, y: 10 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 10 }}
           transition={{ type: 'spring', stiffness: 300, damping: 25 }}
           className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden"
-          onClick={e => e.stopPropagation()}>
+          onClick={e => e.stopPropagation()}
+        >
           <div className="flex items-center justify-between px-5 py-4 border-b border-primary-100">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-xl bg-emerald-100 flex items-center justify-center">
@@ -192,7 +217,7 @@ function CertResultModal({ results, onClose }) {
             <button onClick={onClose} className="btn-primary text-sm">Done</button>
           </div>
         </motion.div>
-      </motion.div>
+      </div>
     </AnimatePresence>
   );
 }
@@ -209,15 +234,29 @@ function CounterResetModal({ open, onClose, counters, ALL_TYPES, resetting, onRe
   if (!open) return null;
   return (
     <AnimatePresence>
-      {/* Backdrop — inset-0 with overflow-y-auto so the whole overlay scrolls on tiny screens */}
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-black/40 backdrop-blur-sm overflow-y-auto py-4 px-4"
-        onClick={onClose}>
-        <motion.div initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }}
+      {/* Backdrop overlay */}
+      <motion.div
+        key="backdrop"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed -inset-20 z-50 bg-black/40 backdrop-blur-sm pointer-events-none"
+      />
+      {/* Layout wrapper */}
+      <div
+        key="layout"
+        className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto py-8 px-8"
+        onClick={onClose}
+      >
+        <motion.div
+          key="card"
+          initial={{ opacity: 0, scale: 0.95, y: 10 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 10 }}
           transition={{ type: 'spring', stiffness: 300, damping: 25 }}
           className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col my-auto"
-          onClick={e => e.stopPropagation()}>
+          onClick={e => e.stopPropagation()}
+        >
 
           {/* ── Sticky header ── */}
           <div className="flex items-center justify-between px-4 sm:px-5 py-4 border-b border-primary-100 flex-shrink-0">
@@ -285,7 +324,7 @@ function CounterResetModal({ open, onClose, counters, ALL_TYPES, resetting, onRe
             </button>
           </div>
         </motion.div>
-      </motion.div>
+      </div>
     </AnimatePresence>
   );
 }
@@ -334,9 +373,9 @@ function ParticipantCard({ p, checked, onCheck, onPreview, onDownload, onEdit, o
             <span className={`inline-block text-[9px] font-bold px-1.5 py-0.5 rounded border ${
               p.templateVariant === 'india' ? 'text-orange-600 bg-orange-50 border-orange-200' : 'text-emerald-600 bg-emerald-50 border-emerald-200'
             }`}>{p.templateVariant === 'india' ? 'IFOA INDIA' : 'IFOA'}</span>
-            <span className={`inline-block text-[9px] font-bold px-1.5 py-0.5 rounded border ${
+            <span className={`inline-flex items-center gap-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded border ${
               p.cert_released ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-amber-600 bg-amber-50 border-amber-200'
-            }`}>{p.cert_released ? '✓ Released' : '⏳ Not Released'}</span>
+            }`}>{p.cert_released ? <><HiOutlineCheckCircle className="w-2.5 h-2.5" />Released</> : <><HiOutlineClock className="w-2.5 h-2.5" />Not Released</>}</span>
             {edit?.editing ? (
               <div className="flex items-center gap-1 flex-wrap">
                 <span className="text-[10px] text-primary-400">{p.training_type}-</span>
@@ -363,7 +402,7 @@ function ParticipantCard({ p, checked, onCheck, onPreview, onDownload, onEdit, o
             )}
           </div>
         ) : (
-          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-50 text-amber-600 border border-amber-200">⏳ Pending generation</span>
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-50 text-amber-600 border border-amber-200"><HiOutlineClock className="w-3 h-3" /> Pending generation</span>
         )}
       </div>
 
@@ -437,6 +476,11 @@ function ParticipantCard({ p, checked, onCheck, onPreview, onDownload, onEdit, o
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function Airlines() {
+  const [searchParams] = useSearchParams();
+  const focusId = searchParams.get('focus') || null;
+  const airlineCardRefs    = useRef({});
+  const participantRowRefs = useRef({});
+
   const [data, setData]             = useState([]);
   const [loading, setLoading]       = useState(true);
   const [search, setSearch]         = useState('');
@@ -470,6 +514,7 @@ export default function Airlines() {
   // Admin edit-airline modal: { open, id, airlineName, address }
   const [editAirline, setEditAirline] = useState({ open: false, id: null, airlineName: '', address: '' });
   const [savingAirline, setSavingAirline] = useState(false);
+  const [controlBarOpen, setControlBarOpen] = useState(false);
 
   const ALL_TYPES = ['FDI', 'FDR', 'FDA', 'FTL', 'HF', 'NDG', 'GD', 'TCD'];
 
@@ -516,6 +561,39 @@ export default function Airlines() {
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  useEffect(() => {
+    if (!focusId || loading || data.length === 0) return;
+    // Check if focusId is an airline _id
+    let match = data.find(({ airline }) => String(airline._id || airline.id) === focusId);
+    let isParticipantFocus = false;
+    if (!match) {
+      // Check if focusId is a participant _id — find the airline group containing it
+      match = data.find(({ participants }) => participants.some(p => String(p.id || p._id) === focusId));
+      isParticipantFocus = !!match;
+    }
+    if (!match) return;
+    const aKey = airlineKey(match.airline);
+    if (!aKey) return;
+    setExpanded(prev => ({ ...prev, [aKey]: true }));
+    setTimeout(() => {
+      if (isParticipantFocus) {
+        const el = participantRowRefs.current[focusId];
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.classList.add('notif-highlight');
+          el.addEventListener('animationend', () => el.classList.remove('notif-highlight'), { once: true });
+        }
+      } else {
+        const el = airlineCardRefs.current[aKey];
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          el.classList.add('notif-highlight');
+          el.addEventListener('animationend', () => el.classList.remove('notif-highlight'), { once: true });
+        }
+      }
+    }, 350);
+  }, [focusId, loading, data]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Counter reset ────────────────────────────────────────────────────────────
   const openCounterModal = async () => {
@@ -933,14 +1011,28 @@ export default function Airlines() {
       {/* ── Admin: Edit Airline Modal ── */}
       <AnimatePresence>
         {editAirline.open && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
-            onClick={closeEditAirline}>
-            <motion.div initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-              className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
-              onClick={e => e.stopPropagation()}>
+          <>
+            <motion.div
+              key="backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed -inset-20 z-50 bg-black/40 backdrop-blur-sm pointer-events-none"
+            />
+            <div
+              key="layout"
+              className="fixed inset-0 z-50 flex items-center justify-center p-4"
+              onClick={closeEditAirline}
+            >
+              <motion.div
+                key="card"
+                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+                className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
+                onClick={e => e.stopPropagation()}
+              >
               <div className="flex items-center justify-between px-5 py-4 border-b border-primary-100">
                 <h2 className="text-base font-bold text-primary-800">Edit Airline</h2>
                 <button onClick={closeEditAirline} className="p-1.5 rounded-lg hover:bg-primary-100 text-primary-400"><HiOutlineX className="w-5 h-5" /></button>
@@ -969,8 +1061,9 @@ export default function Airlines() {
                   {savingAirline ? 'Saving…' : 'Save'}
                 </button>
               </div>
-            </motion.div>
-          </motion.div>
+              </motion.div>
+            </div>
+          </>
         )}
       </AnimatePresence>
       <CounterResetModal open={counterModal} onClose={() => setCounterModal(false)} counters={counters} ALL_TYPES={ALL_TYPES} resetting={resetting} onReset={handleResetCounter} onResetAll={handleResetAll} />
@@ -982,12 +1075,27 @@ export default function Airlines() {
           const pid   = rowPreview.id || rowPreview._id;
           const src   = `${API_BASE}/certificates/preview/${pid}?token=${encodeURIComponent(token)}`;
           return (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/50 backdrop-blur-sm"
-              onClick={() => setRowPreview(null)}>
-              <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-                className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden"
-                onClick={e => e.stopPropagation()}>
+            <>
+              <motion.div
+                key="backdrop"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed -inset-20 z-50 bg-black/50 backdrop-blur-sm pointer-events-none"
+              />
+              <div
+                key="layout"
+                className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4"
+                onClick={() => setRowPreview(null)}
+              >
+                <motion.div
+                  key="card"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden"
+                  onClick={e => e.stopPropagation()}
+                >
                 <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-primary-200">
                   <div className="min-w-0 mr-3">
                     <p className="text-sm sm:text-base font-bold text-primary-800 truncate">Certificate — {rowPreview.participant_name}</p>
@@ -1006,8 +1114,9 @@ export default function Airlines() {
                   <iframe src={src} title="Certificate Preview" className="w-full h-full border-0" />
                   <div className="absolute bottom-3 right-3 bg-white/80 backdrop-blur-sm rounded-lg px-3 py-1.5 text-[10px] text-primary-400">If blank, click Download PDF</div>
                 </div>
-              </motion.div>
-            </motion.div>
+                </motion.div>
+              </div>
+            </>
           );
         })()}
       </AnimatePresence>
@@ -1038,121 +1147,136 @@ export default function Airlines() {
       </div>
 
       {/* ── Sticky Control Bar ── */}
-      <div className="sticky top-0 z-20 px-4 sm:px-6 py-3 bg-white border-b border-primary-200 shadow-sm space-y-3">
+      {(() => {
+        const hasSelection = checked.size > 0 || checkedAirlines.size > 0;
+        const hasNdg = Object.values(ndgScores).some(e => e?.value);
+        const showActions = controlBarOpen || hasSelection || hasNdg;
+        return (
+          <div className="sticky top-0 z-20 bg-white border-b border-primary-200 shadow-sm">
+            {/* ── Row 1: always visible ── */}
+            <div className="px-4 sm:px-5 py-2 flex items-center justify-between gap-2 w-full">
+              {/* Left: checkboxes */}
+              <div className="flex items-center gap-3 min-w-0">
+                <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                  <div onClick={toggleSelectAll}
+                    className={`w-4 h-4 rounded border-2 flex items-center justify-center cursor-pointer transition-colors flex-shrink-0 ${allChecked ? 'bg-primary-800 border-primary-800' : 'border-primary-300 hover:border-primary-500'}`}>
+                    {allChecked && <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                    {!allChecked && checked.size > 0 && <div className="w-2 h-0.5 bg-primary-500 rounded" />}
+                  </div>
+                  <span className="text-xs font-medium text-primary-600 whitespace-nowrap">
+                    <span className="hidden sm:inline">{allChecked ? 'Deselect All' : 'Select All'} </span>Candidates
+                  </span>
+                  {checked.size > 0 && <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-primary-100 text-primary-700 text-[10px] font-bold">{checked.size}</span>}
+                </label>
 
-        {/* Row 1: Participant select-all + count + Airline select-all + delete airlines */}
-        <div className="flex flex-wrap items-center gap-3">
-          {/* Select all participants */}
-          <label className="flex items-center gap-2 cursor-pointer select-none">
-            <div onClick={toggleSelectAll}
-              className={`w-5 h-5 rounded border-2 flex items-center justify-center cursor-pointer transition-colors ${allChecked ? 'bg-primary-800 border-primary-800' : 'border-primary-300 hover:border-primary-500'}`}>
-              {allChecked && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
-              {!allChecked && checked.size > 0 && <div className="w-2 h-0.5 bg-primary-500 rounded" />}
+                <div className="w-px h-3.5 bg-primary-200 flex-shrink-0" />
+
+                <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                  <div onClick={toggleAllAirlines}
+                    className={`w-4 h-4 rounded border-2 flex items-center justify-center cursor-pointer transition-colors flex-shrink-0 ${allAirlinesChecked ? 'bg-red-600 border-red-600' : 'border-primary-300 hover:border-red-400'}`}>
+                    {allAirlinesChecked && <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                    {!allAirlinesChecked && checkedAirlines.size > 0 && <div className="w-2 h-0.5 bg-red-400 rounded" />}
+                  </div>
+                  <span className="text-xs font-medium text-primary-600 whitespace-nowrap">
+                    <span className="hidden sm:inline">{allAirlinesChecked ? 'Deselect All' : 'Select All'} </span>Airlines
+                  </span>
+                  {checkedAirlines.size > 0 && <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 text-[10px] font-bold">{checkedAirlines.size}</span>}
+                </label>
+              </div>
+
+              {/* Right: SHOW filter + collapse toggle */}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {/* SHOW filter */}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-semibold text-primary-400 uppercase tracking-wider hidden sm:inline">Show</span>
+                  <div className="flex items-center gap-0.5 bg-primary-50 rounded-lg p-0.5">
+                    {[
+                      { val: '', label: 'All', active: 'bg-[#0000ff] text-white' },
+                      { val: 'pending', label: 'Pending', active: 'bg-amber-500 text-white', icon: <Clock className="w-3 h-3" /> },
+                      { val: 'generated', label: 'Done', active: 'bg-emerald-600 text-white', icon: <CheckCircle2 className="w-3 h-3" /> },
+                    ].map(({ val, label, active, icon }) => (
+                      <button key={val} onClick={() => setFilterCertStatus(val)}
+                        className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all ${filterCertStatus === val ? active : 'text-gray-500 hover:text-gray-700'}`}>
+                        {icon}{label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Collapse toggle */}
+                <button
+                  onClick={() => setControlBarOpen(o => !o)}
+                  className={`flex items-center gap-1 px-2 py-1 rounded-lg border text-[11px] font-semibold transition-colors ${controlBarOpen ? 'border-primary-300 bg-primary-100 text-primary-700' : 'border-primary-200 text-primary-500 hover:bg-primary-50'}`}
+                >
+                  <span className="hidden sm:inline">Actions</span>
+                  {(checked.size + checkedAirlines.size) > 0 && (
+                    <span className="bg-primary-800 text-white text-[9px] px-1 rounded-full font-bold">{checked.size + checkedAirlines.size}</span>
+                  )}
+                  <HiOutlineChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${controlBarOpen ? 'rotate-180' : ''}`} />
+                </button>
+              </div>
             </div>
-            <span className="text-xs font-medium text-primary-700">{allChecked ? 'Deselect All Candidates' : 'Select All Candidates'}</span>
-          </label>
 
-          {checked.size > 0 && (
-            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-primary-100 text-primary-700 text-xs font-semibold">
-              <HiOutlineCheckCircle className="w-3.5 h-3.5" />{checked.size} selected
-            </span>
-          )}
+            {/* ── Row 2: action buttons — auto-shows when selected, toggle to reveal ── */}
+            {showActions && (
+              <div className="px-4 sm:px-5 pb-2 pt-1.5 flex flex-wrap items-center gap-1.5 border-t border-primary-100">
+                {/* Generate */}
+                <button onClick={handleGenerateSelected} disabled={checked.size === 0 || generating}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${checked.size > 0 && !generating ? 'bg-primary-800 text-white hover:bg-primary-900 shadow-sm' : 'bg-primary-100 text-primary-400 cursor-not-allowed'}`}>
+                  {generating ? <Spin /> : <HiOutlineDocumentDownload className="w-3.5 h-3.5" />}
+                  {generating ? 'Generating…' : checked.size > 0 ? `Generate ${checked.size} Cert${checked.size > 1 ? 's' : ''}` : 'Generate Selected'}
+                </button>
 
-          <div className="w-px h-4 bg-primary-200 mx-1" />
+                {/* Revoke */}
+                <button onClick={handleRevokeSelected} disabled={checked.size === 0 || revoking}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${checked.size > 0 && !revoking ? 'border-blue-200 text-blue-700 hover:bg-blue-50' : 'border-primary-200 bg-primary-50 text-primary-300 cursor-not-allowed'}`}
+                  style={checked.size > 0 && !revoking ? { background: '#eff6ff' } : {}}>
+                  {revoking ? <Spin cls="w-3.5 h-3.5 border-2 border-blue-300 border-t-blue-600" />
+                    : <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>}
+                  {revoking ? 'Revoking…' : 'Revoke Cert'}
+                </button>
 
-          {/* Select all airlines */}
-          <label className="flex items-center gap-2 cursor-pointer select-none">
-            <div onClick={toggleAllAirlines}
-              className={`w-5 h-5 rounded border-2 flex items-center justify-center cursor-pointer transition-colors ${allAirlinesChecked ? 'bg-red-600 border-red-600' : 'border-primary-300 hover:border-red-400'}`}>
-              {allAirlinesChecked && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
-              {!allAirlinesChecked && checkedAirlines.size > 0 && <div className="w-2 h-0.5 bg-red-400 rounded" />}
-            </div>
-            <span className="text-xs font-medium text-primary-700">{allAirlinesChecked ? 'Deselect All Airlines' : 'Select All Airlines'}</span>
-          </label>
+                {/* Delete candidates */}
+                <button onClick={handleDeleteSelected} disabled={checked.size === 0 || deletingSelected}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${checked.size > 0 && !deletingSelected ? 'border-red-200 bg-red-50 text-red-600 hover:bg-red-100' : 'border-primary-200 bg-primary-50 text-primary-300 cursor-not-allowed'}`}>
+                  {deletingSelected ? <Spin cls="w-3.5 h-3.5 border-2 border-red-300 border-t-red-600" /> : <HiOutlineTrash className="w-3.5 h-3.5" />}
+                  {deletingSelected ? 'Deleting…' : checked.size > 0 ? `Delete ${checked.size}` : 'Delete Candidates'}
+                </button>
 
-          {checkedAirlines.size > 0 && (
-            <>
-              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-red-50 text-red-700 border border-red-200 text-xs font-semibold">
-                <HiOutlineOfficeBuilding className="w-3.5 h-3.5" />{checkedAirlines.size} airline{checkedAirlines.size > 1 ? 's' : ''}
-              </span>
-              <button onClick={handleDeleteSelectedAirlines} disabled={deletingAirlines}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-red-300 bg-red-600 text-white text-xs font-semibold hover:bg-red-700 disabled:opacity-60">
-                {deletingAirlines ? <Spin /> : <HiOutlineTrash className="w-3.5 h-3.5" />}
-                {deletingAirlines ? 'Deleting…' : `Delete ${checkedAirlines.size} Airline${checkedAirlines.size > 1 ? 's' : ''}`}
-              </button>
-            </>
-          )}
-        </div>
+                {/* Delete airlines (only when airline selected) */}
+                {checkedAirlines.size > 0 && (
+                  <button onClick={handleDeleteSelectedAirlines} disabled={deletingAirlines}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-300 bg-red-600 text-white text-xs font-semibold hover:bg-red-700 disabled:opacity-60">
+                    {deletingAirlines ? <Spin /> : <HiOutlineTrash className="w-3.5 h-3.5" />}
+                    {deletingAirlines ? 'Deleting…' : `Delete ${checkedAirlines.size} Airline${checkedAirlines.size > 1 ? 's' : ''}`}
+                  </button>
+                )}
 
-        {/* Row 2: Action buttons */}
-        <div className="flex flex-wrap gap-2">
-          {/* Generate */}
-          <button onClick={handleGenerateSelected} disabled={checked.size === 0 || generating}
-            className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl text-xs font-semibold transition-all ${checked.size > 0 && !generating ? 'bg-primary-800 text-white hover:bg-primary-900 shadow-md' : 'bg-primary-100 text-primary-400 cursor-not-allowed'}`}>
-            {generating ? <Spin /> : <HiOutlineDocumentDownload className="w-3.5 h-3.5" />}
-            {generating ? 'Generating…' : checked.size > 0 ? `Generate ${checked.size} Cert${checked.size > 1 ? 's' : ''}` : 'Generate Selected'}
-          </button>
-          {/* Revoke — blue like Preview button */}
-          <button onClick={handleRevokeSelected} disabled={checked.size === 0 || revoking}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all ${
-              checked.size > 0 && !revoking
-                ? 'border-blue-200 text-blue-700 hover:bg-blue-100'
-                : 'border-primary-200 bg-primary-50 text-primary-300 cursor-not-allowed'
-            }`}
-            style={checked.size > 0 && !revoking ? { background: '#eff6ff', borderColor: '#bfdbfe', color: '#1d4ed8' } : {}}>
-            {revoking ? <Spin cls="w-3.5 h-3.5 border-2 border-blue-300 border-t-blue-600" />
-              : <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-                </svg>}
-            {revoking ? 'Revoking…' : 'Revoke Cert'}
-          </button>
-          {/* Delete selected participants */}
-          <button onClick={handleDeleteSelected} disabled={checked.size === 0 || deletingSelected}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all ${checked.size > 0 && !deletingSelected ? 'border-red-200 bg-red-50 text-red-600 hover:bg-red-100' : 'border-primary-200 bg-primary-50 text-primary-300 cursor-not-allowed'}`}>
-            {deletingSelected ? <Spin cls="w-3.5 h-3.5 border-2 border-red-300 border-t-red-600" /> : <HiOutlineTrash className="w-3.5 h-3.5" />}
-            {deletingSelected ? 'Deleting…' : checked.size > 0 ? `Delete ${checked.size} Candidate${checked.size > 1 ? 's' : ''}` : 'Delete Candidates'}
-          </button>
+                {/* Save All NDG Scores (only when scores entered) */}
+                {hasNdg && (
+                  <button onClick={handleSaveAllNdgScores} disabled={savingAllNdgScores}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${!savingAllNdgScores ? 'bg-[#0000ff] text-white hover:bg-blue-700 shadow-sm' : 'bg-blue-200 text-blue-700'}`}>
+                    {savingAllNdgScores ? <Spin cls="w-3.5 h-3.5 border-2 border-white/40 border-t-white" /> : <HiOutlineCheckCircle className="w-3.5 h-3.5" />}
+                    {savingAllNdgScores ? 'Saving…' : 'Save All NDG Scores'}
+                  </button>
+                )}
 
-          {/* Save All NDG Scores */}
-          {Object.values(ndgScores).some(entry => entry && entry.value) && (
-            <button onClick={handleSaveAllNdgScores} disabled={savingAllNdgScores}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${!savingAllNdgScores ? 'bg-[#0000ff] text-white hover:bg-blue-700 shadow-md' : 'bg-blue-200 text-blue-700'}`}>
-              {savingAllNdgScores ? <Spin cls="w-3.5 h-3.5 border-2 border-white/40 border-t-white" /> : <HiOutlineCheckCircle className="w-3.5 h-3.5" />}
-              {savingAllNdgScores ? 'Saving…' : 'Save All NDG Scores'}
-            </button>
-          )}
+                <div className="flex-1" />
 
-          <div className="flex-1" />
-
-          {/* Cert status filter with label */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-primary-500 uppercase tracking-wider whitespace-nowrap">Show:</span>
-            <div className="flex items-center gap-1 bg-primary-50 rounded-xl p-1">
-              <button onClick={() => setFilterCertStatus('')}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${filterCertStatus === '' ? 'bg-[#0000ff] text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-                All
-              </button>
-              <button onClick={() => setFilterCertStatus('pending')}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${filterCertStatus === 'pending' ? 'bg-amber-500 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-                <Clock className="w-3.5 h-3.5" /> Pending
-              </button>
-              <button onClick={() => setFilterCertStatus('generated')}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${filterCertStatus === 'generated' ? 'bg-emerald-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-                <CheckCircle2 className="w-3.5 h-3.5" /> Generated
-              </button>
-            </div>
+                {/* Reset Counters */}
+                <button onClick={openCounterModal}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-200 text-xs font-semibold text-red-600 hover:bg-red-50 transition-colors">
+                  <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  <span className="hidden sm:inline">Reset Counters</span>
+                  <span className="sm:hidden">Reset</span>
+                </button>
+              </div>
+            )}
           </div>
-
-          {/* Reset Counters */}
-          <button onClick={openCounterModal}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-red-200 text-xs font-semibold text-red-600 hover:bg-red-50 transition-colors">
-            <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            Reset Counters
-          </button>
-        </div>
-      </div>
+        );
+      })()}
 
       {/* ── Search + Filter ── */}
       <div className="card p-3 sm:p-4">
@@ -1189,10 +1313,10 @@ export default function Airlines() {
         const groupSome  = groupIds.some(id => checked.has(id));
 
         return (
-          <div key={aKey} className="card">
+          <div key={aKey} ref={el => { airlineCardRefs.current[aKey] = el; }} className={`card${expanded[aKey] ? ' overflow-x-hidden overflow-y-auto max-h-[520px]' : ''}`}>
 
             {/* ── Airline header ── */}
-            <div className="flex items-center gap-2 px-3 sm:px-5 py-3 sm:py-4 flex-wrap overflow-visible">
+            <div className={`flex items-center gap-2 px-3 sm:px-5 py-3 sm:py-4 flex-wrap overflow-visible bg-white${expanded[aKey] ? ' sticky top-0 z-10' : ''}`}>
               {/* Airline checkbox */}
               <div onClick={e => { e.stopPropagation(); toggleAirline(aKey); }}
                 className={`w-5 h-5 rounded border-2 flex items-center justify-center cursor-pointer flex-shrink-0 transition-colors ${checkedAirlines.has(aKey) ? 'bg-red-600 border-red-600' : 'border-primary-300 hover:border-red-400'}`}>
@@ -1271,13 +1395,15 @@ export default function Airlines() {
                     {/* Mobile: cards */}
                     <div className="sm:hidden p-3 space-y-2">
                       {participants.map(p => (
-                        <ParticipantCard key={p.id || p._id} p={p} checked={checked} onCheck={toggleOne}
-                          onPreview={setRowPreview} onDownload={handleDownloadIssued} onEdit={() => {}}
-                          onDelete={handleDelete} downloadingId={downloadingId}
-                          certEdits={certEdits} onStartEdit={startCertEdit}
-                          onCancelEdit={cancelCertEdit} onSaveEdit={saveCertEdit}
-                          setCertEdits={setCertEdits}
-                          ndgScores={ndgScores} setNdgScores={setNdgScores} onNdgScoreSave={handleNdgScoreSave} />
+                        <div key={p.id || p._id} ref={el => { participantRowRefs.current[String(p.id || p._id)] = el; }}>
+                          <ParticipantCard p={p} checked={checked} onCheck={toggleOne}
+                            onPreview={setRowPreview} onDownload={handleDownloadIssued} onEdit={() => {}}
+                            onDelete={handleDelete} downloadingId={downloadingId}
+                            certEdits={certEdits} onStartEdit={startCertEdit}
+                            onCancelEdit={cancelCertEdit} onSaveEdit={saveCertEdit}
+                            setCertEdits={setCertEdits}
+                            ndgScores={ndgScores} setNdgScores={setNdgScores} onNdgScoreSave={handleNdgScoreSave} />
+                        </div>
                       ))}
                     </div>
 
@@ -1304,7 +1430,7 @@ export default function Airlines() {
                             const displayYear = p.cert_year_override || (() => { const d = p.end_date || p.training_date || ''; return d ? new Date(d.slice(0, 10)).getFullYear() : ''; })();
 
                             return (
-                              <tr key={pid} className={`border-t border-primary-100 transition-colors ${isCk ? 'bg-blue-50/40' : 'hover:bg-primary-50/40'}`}>
+                              <tr key={pid} ref={el => { participantRowRefs.current[String(pid)] = el; }} className={`border-t border-primary-100 transition-colors ${isCk ? 'bg-blue-50/40' : 'hover:bg-primary-50/40'}`}>
                                 <td className="px-3 py-3 w-10">
                                   <div onClick={() => toggleOne(pid)}
                                     className={`w-5 h-5 rounded border-2 flex items-center justify-center cursor-pointer transition-colors ${isCk ? 'bg-primary-800 border-primary-800' : 'border-primary-300 hover:border-primary-600'}`}>
@@ -1329,7 +1455,7 @@ export default function Airlines() {
                                               ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
                                               : 'text-amber-600 bg-amber-50 border-amber-200'
                                           }`}>
-                                            {p.cert_released ? '✓ Released' : '⏳ Not Released'}
+                                            {p.cert_released ? <><HiOutlineCheckCircle className="inline w-2.5 h-2.5 mr-0.5" />Released</> : <><HiOutlineClock className="inline w-2.5 h-2.5 mr-0.5" />Not Released</>}
                                           </span>
                                           {/* Per-row validity dropdown */}
                                           <select
@@ -1423,7 +1549,7 @@ export default function Airlines() {
                                   <div className="flex items-center justify-end gap-1.5 flex-wrap">
                                     {!p.cert_sequence ? (
                                       /* Never generated — admin hasn't run generate yet */
-                                      <span className="inline-flex items-center px-2 py-1 rounded-full text-[11px] font-medium bg-amber-50 text-amber-600 border border-amber-200">⏳ Pending</span>
+                                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-medium bg-amber-50 text-amber-600 border border-amber-200"><HiOutlineClock className="w-3 h-3" /> Pending</span>
                                     ) : !p.cert_released ? (
                                       /* Generated by admin but not yet released to airline */
                                       <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-medium bg-blue-50 text-blue-600 border border-blue-200">

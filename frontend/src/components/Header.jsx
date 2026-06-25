@@ -18,6 +18,7 @@ import {
   HiOutlineOfficeBuilding,
   HiOutlineCalendar,
   HiOutlineLocationMarker,
+  HiOutlineClock,
 } from 'react-icons/hi';
 import { getParticipants, getNotifications } from '../api';
 import { useAuth } from '../context/AuthContext';
@@ -48,13 +49,26 @@ function ParticipantDetailModal({ record, onClose }) {
 
   return (
     <AnimatePresence>
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
-        onClick={onClose}>
-        <motion.div initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 0.15 }}
+      <motion.div
+        key="backdrop"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed -inset-20 z-[100] bg-black/50 backdrop-blur-sm pointer-events-none"
+      />
+      <div
+        key="layout"
+        className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+        onClick={onClose}
+      >
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95, y: 10 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95 }}
+          transition={{ duration: 0.15 }}
           className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
-          onClick={e => e.stopPropagation()}>
+          onClick={e => e.stopPropagation()}
+        >
           {/* Header */}
           <div className="flex items-center gap-4 px-5 py-4 border-b border-primary-100">
             <div className="w-12 h-12 rounded-full bg-primary-200 flex items-center justify-center flex-shrink-0">
@@ -81,7 +95,7 @@ function ParticipantDetailModal({ record, onClose }) {
             <button onClick={onClose} className="btn-primary text-sm">Close</button>
           </div>
         </motion.div>
-      </motion.div>
+      </div>
     </AnimatePresence>
   );
 }
@@ -93,6 +107,7 @@ const NOTIF_CONFIG = {
   participant:  { icon: HiOutlineUserAdd,        color: 'text-blue-500',    bg: 'bg-blue-50'    },
   score:        { icon: HiOutlineCheckCircle,    color: 'text-amber-500',   bg: 'bg-amber-50'   },
   airline:      { icon: HiOutlineOfficeBuilding, color: 'text-violet-500',  bg: 'bg-violet-50'  },
+  pending:      { icon: HiOutlineClock,          color: 'text-orange-500',  bg: 'bg-orange-50'  },
 };
 
 function timeAgo(ts) {
@@ -428,11 +443,20 @@ export default function Header({ sidebarOpen, setSidebarOpen }) {
                     const cfg = NOTIF_CONFIG[notif.type] || NOTIF_CONFIG.participant;
                     const Icon = cfg.icon;
                     const isRead = readIds.has(notif.id);
+                    const handleNotifClick = () => {
+                      dismissNotif(notif.id);
+                      setNotifOpen(false);
+                      if (notif.link) navigate(notif.link);
+                    };
                     return (
                       <div key={notif.id}
+                        onClick={notif.link ? handleNotifClick : undefined}
+                        role={notif.link ? 'button' : undefined}
+                        tabIndex={notif.link ? 0 : undefined}
+                        onKeyDown={notif.link ? (e) => e.key === 'Enter' && handleNotifClick() : undefined}
                         className={`flex items-start gap-3 px-4 py-3 transition-colors ${
                           isRead ? 'bg-white' : 'bg-blue-50/30'
-                        }`}>
+                        } ${notif.link ? 'cursor-pointer hover:bg-primary-50' : ''}`}>
                         {/* Icon badge */}
                         <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 ${cfg.bg}`}>
                           <Icon className={`w-4 h-4 ${cfg.color}`} />
@@ -441,13 +465,12 @@ export default function Header({ sidebarOpen, setSidebarOpen }) {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-2">
                             <p className="text-xs font-semibold text-primary-700 leading-tight">{notif.title}</p>
-                            {!isRead && <div className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0 mt-0.5" />}
                           </div>
                           <p className="text-xs text-primary-600 mt-0.5 leading-snug">{notif.message}</p>
                           <p className="text-[10px] text-primary-400 mt-1">{timeAgo(notif.time)}</p>
                         </div>
                         {/* Dismiss */}
-                        <button onClick={() => dismissNotif(notif.id)}
+                        <button onClick={(e) => { e.stopPropagation(); dismissNotif(notif.id); }}
                           className="p-0.5 rounded hover:bg-primary-100 transition-colors flex-shrink-0 mt-0.5"
                           title="Dismiss">
                           <HiOutlineX className="w-3.5 h-3.5 text-primary-300 hover:text-primary-500" />

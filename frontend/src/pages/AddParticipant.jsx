@@ -353,71 +353,77 @@ function BulkRow({ row, idx, onChange, onRemove, result, isNDG, ndgMode, departm
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, height: 0, marginBottom: 0 }}
-      className={`flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 rounded-xl border transition-colors ${
+      className={`flex flex-col sm:flex-row sm:items-center gap-2.5 sm:gap-3 px-3 sm:px-4 py-3 rounded-xl border transition-colors ${
         hasError   ? 'border-red-300 bg-red-50/40' :
         hasSuccess ? 'border-emerald-300 bg-emerald-50/40' :
         'border-primary-200 bg-white'
       }`}
     >
-      {/* Row number */}
-      <span className="w-6 text-center text-xs font-semibold text-primary-400 flex-shrink-0">{idx + 1}</span>
+      <div className="flex items-center gap-2 w-full sm:flex-1">
+        {/* Row number */}
+        <span className="w-6 text-center text-xs font-semibold text-primary-400 flex-shrink-0">{idx + 1}</span>
 
-      {/* First name */}
-      <input
-        value={row.first_name}
-        onChange={e => onChange(row.id, 'first_name', e.target.value)}
-        className="input-field text-sm flex-1"
-        placeholder="First name"
-        disabled={hasSuccess}
-      />
-
-      {/* Last name */}
-      <input
-        value={row.last_name}
-        onChange={e => onChange(row.id, 'last_name', e.target.value)}
-        className="input-field text-sm flex-1"
-        placeholder="Last name"
-        disabled={hasSuccess}
-      />
-
-      {/* Department per row — only in manual mode */}
-      {departmentMode === 'manual' && (
-        <select
-          value={row.department || ''}
-          onChange={e => onChange(row.id, 'department', e.target.value)}
-          className="input-field text-sm w-40 sm:w-44 appearance-none cursor-pointer"
+        {/* First name */}
+        <input
+          value={row.first_name}
+          onChange={e => onChange(row.id, 'first_name', e.target.value)}
+          className="input-field text-sm flex-1"
+          placeholder="First name"
           disabled={hasSuccess}
-        >
-          <option value="">Department</option>
-          {DEPARTMENT_OPTIONS.map(dep => (
-            <option key={dep} value={dep}>{dep}</option>
-          ))}
-        </select>
-      )}
+        />
 
-      {/* NDG Training Type Toggle — only show for NDG training */}
-      {isNDG && (
-        <div className="w-[84px] flex items-center justify-center gap-1.5 flex-shrink-0 px-2 py-1 rounded-lg border border-primary-200 bg-primary-50/50">
-          {[{ val: 'I', label: 'I' }, { val: 'R', label: 'R' }].map(opt => (
-            <button
-              key={opt.val}
-              type="button"
-              disabled={!canEditNdgSubtype}
-              onClick={() => onChange(row.id, 'ndg_subtype', opt.val)}
-              className={`px-2.5 py-1 text-xs font-semibold rounded transition-all ${
-                row.ndg_subtype === opt.val
-                  ? 'bg-accent-500 text-white border border-accent-500'
-                  : 'bg-white text-primary-600 border border-primary-300 hover:border-primary-400'
-              } ${!canEditNdgSubtype ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+        {/* Last name */}
+        <input
+          value={row.last_name}
+          onChange={e => onChange(row.id, 'last_name', e.target.value)}
+          className="input-field text-sm flex-1"
+          placeholder="Last name"
+          disabled={hasSuccess}
+        />
+      </div>
+
+      {(departmentMode === 'manual' || isNDG) && (
+        <div className="flex items-center gap-2 w-full sm:w-auto pl-8 sm:pl-0">
+          {/* Department per row — only in manual mode */}
+          {departmentMode === 'manual' && (
+            <select
+              value={row.department || ''}
+              onChange={e => onChange(row.id, 'department', e.target.value)}
+              className="input-field text-sm flex-1 sm:w-44 appearance-none cursor-pointer"
+              disabled={hasSuccess}
             >
-              {opt.label}
-            </button>
-          ))}
+              <option value="">Department</option>
+              {DEPARTMENT_OPTIONS.map(dep => (
+                <option key={dep} value={dep}>{dep}</option>
+              ))}
+            </select>
+          )}
+
+          {/* NDG Training Type Toggle — only show for NDG training */}
+          {isNDG && (
+            <div className="w-[84px] flex items-center justify-center gap-1.5 flex-shrink-0 px-2 py-1 rounded-lg border border-primary-200 bg-primary-50/50">
+              {[{ val: 'I', label: 'I' }, { val: 'R', label: 'R' }].map(opt => (
+                <button
+                  key={opt.val}
+                  type="button"
+                  disabled={!canEditNdgSubtype}
+                  onClick={() => onChange(row.id, 'ndg_subtype', opt.val)}
+                  className={`px-2.5 py-1 text-xs font-semibold rounded transition-all ${
+                    row.ndg_subtype === opt.val
+                      ? 'bg-accent-500 text-white border border-accent-500'
+                      : 'bg-white text-primary-600 border border-primary-300 hover:border-primary-400'
+                  } ${!canEditNdgSubtype ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
       {/* Status / remove */}
-      <div className="flex items-center gap-2 flex-shrink-0">
+      <div className="flex items-center justify-end gap-2 w-full sm:w-auto flex-shrink-0 pl-8 sm:pl-0 border-t border-primary-100 sm:border-0 pt-2 sm:pt-0">
         {hasSuccess && (
           <span className="inline-flex items-center gap-1 text-xs text-emerald-600 font-medium">
             <HiOutlineCheckCircle className="w-3.5 h-3.5" /> Saved

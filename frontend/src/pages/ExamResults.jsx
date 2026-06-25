@@ -247,9 +247,11 @@ function ImportExcelModal({ onClose, onImported }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[92vh] flex flex-col">
+    <>
+      <div className="fixed -inset-20 z-50 bg-black/40 backdrop-blur-sm pointer-events-none" />
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+          className="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[92vh] flex flex-col">
         <div className="flex items-center justify-between p-6 border-b border-gray-100 flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-emerald-100 flex items-center justify-center">
@@ -491,8 +493,9 @@ function ImportExcelModal({ onClose, onImported }) {
             )}
           </div>
         </div>
-      </motion.div>
-    </div>
+        </motion.div>
+      </div>
+    </>
   );
 }
 
@@ -611,9 +614,11 @@ function ResultFormModal({ initial, onSave, onClose, batches = [] }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+    <>
+      <div className="fixed -inset-20 z-50 bg-black/40 backdrop-blur-sm pointer-events-none" />
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+          className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
         <div className="sticky top-0 bg-white z-10 flex items-center justify-between p-6 border-b border-gray-100">
           <h2 className="text-lg font-semibold text-gray-900">{initial ? 'Edit Exam Result' : 'Add Exam Result'}</h2>
           <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400"><HiOutlineX className="w-5 h-5" /></button>
@@ -800,8 +805,9 @@ function ResultFormModal({ initial, onSave, onClose, batches = [] }) {
             {initial ? 'Save Changes' : 'Add Result'}
           </button>
         </div>
-      </motion.div>
-    </div>
+        </motion.div>
+      </div>
+    </>
   );
 }
 
@@ -857,9 +863,11 @@ function StudentDetailModal({ student, onClose, onIssueSheet, onRevokeSheet, onR
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+    <>
+      <div className="fixed -inset-20 z-50 bg-black/40 backdrop-blur-sm pointer-events-none" />
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+          className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="sticky top-0 bg-white z-10 flex items-center justify-between p-6 border-b border-gray-100">
           <div>
             <h2 className="text-lg font-semibold text-gray-900">{name}</h2>
@@ -984,8 +992,9 @@ function StudentDetailModal({ student, onClose, onIssueSheet, onRevokeSheet, onR
             </div>
           </div>
         </div>
-      </motion.div>
-    </div>
+        </motion.div>
+      </div>
+    </>
   );
 }
 
@@ -1207,17 +1216,19 @@ export default function ExamResults() {
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
         {[
-          { label: 'Total Students', value: results.length,  Icon: HiOutlineUsers,       color: 'text-blue-600',    bg: 'bg-blue-50'    },
-          { label: 'Batch Average',  value: `${avgMark}%`,   Icon: HiOutlineChartBar,     color: 'text-emerald-600', bg: 'bg-emerald-50' },
-          { label: 'Pass Rate',      value: `${passRate}%`,  Icon: HiOutlineCheckCircle,  color: 'text-violet-600',  bg: 'bg-violet-50'  },
-          { label: 'Sheets Issued',  value: sheetCount,      Icon: HiOutlineDocumentText, color: 'text-amber-600',   bg: 'bg-amber-50'   },
-        ].map(({ label, value, Icon, color, bg }) => (
-          <div key={label} className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
-            <div className={`w-8 h-8 rounded-lg ${bg} flex items-center justify-center mb-3`}>
-              <Icon className={`w-4 h-4 ${color}`} />
+          { label: 'Total Students', value: results.length,  Icon: HiOutlineUsers,       color: 'text-blue-600',    bg: 'bg-blue-50',    border: 'border-blue-100'    },
+          { label: 'Batch Average',  value: `${avgMark}%`,   Icon: HiOutlineChartBar,     color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-100' },
+          { label: 'Pass Rate',      value: `${passRate}%`,  Icon: HiOutlineCheckCircle,  color: 'text-violet-600',  bg: 'bg-violet-50',  border: 'border-violet-100'  },
+          { label: 'Sheets Issued',  value: sheetCount,      Icon: HiOutlineDocumentText, color: 'text-amber-600',   bg: 'bg-amber-50',   border: 'border-amber-100'   },
+        ].map(({ label, value, Icon, color, bg, border }) => (
+          <div key={label} className="bg-white rounded-2xl border border-primary-100 p-5 shadow-sm flex items-center gap-4">
+            <div className={`w-11 h-11 rounded-xl ${bg} border ${border} flex items-center justify-center flex-shrink-0`}>
+              <Icon className={`w-5 h-5 ${color}`} />
             </div>
-            <p className="text-2xl font-bold text-gray-900">{value}</p>
-            <p className="text-xs text-gray-500 mt-0.5">{label}</p>
+            <div className="min-w-0">
+              <p className="text-2xl font-bold text-primary-800 leading-tight">{value}</p>
+              <p className="text-xs text-primary-400 mt-0.5 font-medium">{label}</p>
+            </div>
           </div>
         ))}
       </div>

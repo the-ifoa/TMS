@@ -31,7 +31,7 @@ const JOB_FUNCTIONS = [
 
 const emptyForm = () => ({
   airline_name: '',
-  ato_name_number: 'INTERNATIONAL FLIGHT OPERATIONAL ACADEMY',
+  ato_name_number: 'INTERNATIONAL FLIGHT OPERATIONS ACADEMY',
   dg_training_type: 'Initial',
   training_date: '',
   show_item5: false,

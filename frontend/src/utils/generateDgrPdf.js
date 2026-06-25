@@ -169,7 +169,7 @@ export async function generateDgrPdf({ form = {}, applicantName = '', mode = 'do
   };
 
   label('We,', margin, y);
-  fill(form.ato_name_number || 'INTERNATIONAL FLIGHT OPERATIONAL ACADEMY', margin + 8, y, 80);
+  fill(form.ato_name_number || 'INTERNATIONAL FLIGHT OPERATIONS ACADEMY', margin + 8, y, 80);
   label('(name and number of ATO/CCTO)', margin + 92, y);
   y += 8;
 

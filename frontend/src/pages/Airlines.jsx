@@ -20,6 +20,7 @@ import {
   HiOutlineX,
   HiOutlineDocumentText,
   HiOutlinePlusCircle,
+  HiOutlineSelector,
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import {
@@ -507,6 +508,7 @@ export default function Airlines() {
   const [counters, setCounters]     = useState([]);
   const [resetting, setResetting]   = useState(null);
   const [filterCertStatus, setFilterCertStatus] = useState(''); // '' | 'pending' | 'generated'
+  const [sortKey, setSortKey] = useState('name_asc');
   const [checkedAirlines, setCheckedAirlines] = useState(new Set());
   const [deletingAirlines, setDeletingAirlines] = useState(false);
   const [deletingSelected, setDeletingSelected] = useState(false);
@@ -994,7 +996,15 @@ export default function Airlines() {
       return nm && typeMatch && statusMatch;
     }),
     };
-  }).filter(({ participants }) => participants.length > 0);
+  }).filter(({ participants }) => participants.length > 0).sort((a, b) => {
+    switch (sortKey) {
+      case 'name_asc':   return (a.airline.airlineName || '').localeCompare(b.airline.airlineName || '');
+      case 'name_desc':  return (b.airline.airlineName || '').localeCompare(a.airline.airlineName || '');
+      case 'count_desc': return b.participants.length - a.participants.length;
+      case 'count_asc':  return a.participants.length - b.participants.length;
+      default:           return 0;
+    }
+  });
 
   const totalParticipants = allParticipants.length;
   const totalAirlines     = data.length;
@@ -1278,7 +1288,7 @@ export default function Airlines() {
         );
       })()}
 
-      {/* ── Search + Filter ── */}
+      {/* ── Search + Filter + Sort ── */}
       <div className="card p-3 sm:p-4">
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="flex-1 relative">
@@ -1290,6 +1300,19 @@ export default function Airlines() {
             <select value={filterType} onChange={e => setFilterType(e.target.value)} className="input-field pl-10 pr-8 appearance-none cursor-pointer w-full sm:w-auto sm:min-w-[200px]">
               <option value="">All Training Types</option>
               {TRAINING_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+            </select>
+          </div>
+          <div className="relative">
+            <HiOutlineSelector className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-primary-400" />
+            <select value={sortKey} onChange={e => setSortKey(e.target.value)} className="input-field pl-10 pr-8 appearance-none cursor-pointer w-full sm:w-auto sm:min-w-[200px]">
+              <optgroup label="Airline Name">
+                <option value="name_asc">Airline: A → Z</option>
+                <option value="name_desc">Airline: Z → A</option>
+              </optgroup>
+              <optgroup label="Participants">
+                <option value="count_desc">Most Participants First</option>
+                <option value="count_asc">Fewest Participants First</option>
+              </optgroup>
             </select>
           </div>
         </div>

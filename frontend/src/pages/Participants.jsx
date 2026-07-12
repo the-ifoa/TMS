@@ -19,6 +19,7 @@ import {
   HiOutlineX,
   HiOutlineClipboardList,
   HiOutlineClock,
+  HiOutlineSelector,
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import { getParticipants, deleteParticipant, generateCertificateBlob, downloadIssuedCertificate, listAttendanceSheets, getAttendanceSheet, API_BASE } from '../api';
@@ -464,6 +465,7 @@ export default function Participants() {
   const focusId = searchParams.get('focus') || null;
   const [search, setSearch]       = useState(searchParams.get('search') || '');
   const [filterType, setFilterType] = useState('');
+  const [sortKey, setSortKey]       = useState('submitted_desc');
   const [loading, setLoading]       = useState(true);
 
   const fetchRecords = async () => {
@@ -514,13 +516,24 @@ export default function Participants() {
       if (!map[key]) map[key] = [];
       map[key].push(r);
     });
-    // Sort groups newest submission first (by most recent created_at in each group)
-    return Object.entries(map).sort(([, a], [, b]) => {
-      const da = Math.max(...a.map(r => new Date(r.created_at || 0).getTime()));
-      const db = Math.max(...b.map(r => new Date(r.created_at || 0).getTime()));
-      return db - da;
+    const entries = Object.entries(map);
+    const ts = str => str ? new Date(str).getTime() : 0;
+    return entries.sort(([, a], [, b]) => {
+      switch (sortKey) {
+        case 'submitted_desc': return Math.max(...b.map(r => ts(r.created_at))) - Math.max(...a.map(r => ts(r.created_at)));
+        case 'submitted_asc':  return Math.max(...a.map(r => ts(r.created_at))) - Math.max(...b.map(r => ts(r.created_at)));
+        case 'start_desc':     return ts(b[0].training_date) - ts(a[0].training_date);
+        case 'start_asc':      return ts(a[0].training_date) - ts(b[0].training_date);
+        case 'end_desc':       return ts(b[0].end_date || b[0].training_date) - ts(a[0].end_date || a[0].training_date);
+        case 'end_asc':        return ts(a[0].end_date || a[0].training_date) - ts(b[0].end_date || b[0].training_date);
+        case 'type_asc':       return (a[0].training_type || '').localeCompare(b[0].training_type || '');
+        case 'type_desc':      return (b[0].training_type || '').localeCompare(a[0].training_type || '');
+        case 'count_desc':     return b.length - a.length;
+        case 'count_asc':      return a.length - b.length;
+        default:               return 0;
+      }
     });
-  }, [records, isAdmin]);
+  }, [records, isAdmin, sortKey]);
 
   const [detailRecord, setDetailRecord] = useState(null);
 
@@ -554,7 +567,7 @@ export default function Participants() {
           </Link>
         </div>
 
-        {/* Search + filter */}
+        {/* Search + filter + sort */}
         <div className="card p-4">
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="flex-1 relative">
@@ -578,6 +591,35 @@ export default function Participants() {
                 {TRAINING_TYPES.map(t => (
                   <option key={t.value} value={t.value}>{t.value} – {t.label}</option>
                 ))}
+              </select>
+            </div>
+            <div className="relative">
+              <HiOutlineSelector className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-primary-400" />
+              <select
+                value={sortKey}
+                onChange={e => setSortKey(e.target.value)}
+                className="input-field pl-10 pr-8 appearance-none cursor-pointer min-w-[210px]"
+              >
+                <optgroup label="Submission Date">
+                  <option value="submitted_desc">Submitted: Newest First</option>
+                  <option value="submitted_asc">Submitted: Oldest First</option>
+                </optgroup>
+                <optgroup label="Training Start Date">
+                  <option value="start_desc">Start Date: Newest First</option>
+                  <option value="start_asc">Start Date: Oldest First</option>
+                </optgroup>
+                <optgroup label="Training End Date">
+                  <option value="end_desc">End Date: Newest First</option>
+                  <option value="end_asc">End Date: Oldest First</option>
+                </optgroup>
+                <optgroup label="Training Type">
+                  <option value="type_asc">Training Type: A → Z</option>
+                  <option value="type_desc">Training Type: Z → A</option>
+                </optgroup>
+                <optgroup label="Participants">
+                  <option value="count_desc">Most Participants First</option>
+                  <option value="count_asc">Fewest Participants First</option>
+                </optgroup>
               </select>
             </div>
           </div>

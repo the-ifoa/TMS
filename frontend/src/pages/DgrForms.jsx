@@ -14,6 +14,7 @@ import {
   HiOutlineX,
   HiOutlineSearch,
   HiOutlineOfficeBuilding,
+  HiOutlineSelector,
 } from 'react-icons/hi';
 import {
   getDgrAirlines, getDgrForms, createDgrForm, updateDgrForm, deleteDgrForm,
@@ -566,6 +567,7 @@ export default function DgrForms() {
   const [saving, setSaving]     = useState(false);
   const [search, setSearch]     = useState('');
   const [filterType, setFilterType] = useState('');
+  const [sortKey, setSortKey]   = useState('name_asc');
 
   // editModal shape: { airline_id?, _id?, _student?, ...formFields }
   const [editModal, setEditModal] = useState(null);
@@ -669,12 +671,25 @@ export default function DgrForms() {
 
   /* ── Airline view ─────────────────────────────────────────────────────── */
   if (!isAdmin) {
-    const filtered = forms.filter(f =>
-      (!filterType || f.dg_training_type === filterType) &&
-      (!search ||
-        f.dg_training_type?.toLowerCase().includes(search.toLowerCase()) ||
-        f.assignments?.some(a => a.participant_name?.toLowerCase().includes(search.toLowerCase())))
-    );
+    const ts = str => str ? new Date(str.split('.').reverse().join('-')).getTime() : 0;
+    const filtered = forms
+      .filter(f =>
+        (!filterType || f.dg_training_type === filterType) &&
+        (!search ||
+          f.dg_training_type?.toLowerCase().includes(search.toLowerCase()) ||
+          f.assignments?.some(a => a.participant_name?.toLowerCase().includes(search.toLowerCase())))
+      )
+      .sort((a, b) => {
+        switch (sortKey) {
+          case 'date_desc':   return ts(b.training_date) - ts(a.training_date);
+          case 'date_asc':    return ts(a.training_date) - ts(b.training_date);
+          case 'type_asc':    return (a.dg_training_type || '').localeCompare(b.dg_training_type || '');
+          case 'type_desc':   return (b.dg_training_type || '').localeCompare(a.dg_training_type || '');
+          case 'score_desc': { const sa = computeDgrScores(a).final ?? -1, sb = computeDgrScores(b).final ?? -1; return sb - sa; }
+          case 'score_asc':  { const sa = computeDgrScores(a).final ?? Infinity, sb = computeDgrScores(b).final ?? Infinity; return sa - sb; }
+          default:            return 0;
+        }
+      });
 
     return (
       <div className="flex flex-col -m-4 sm:-m-6 h-full overflow-hidden">
@@ -696,8 +711,8 @@ export default function DgrForms() {
           </div>
 
           {!loading && (
-            <div className="flex gap-2">
-              <div className="relative flex-1">
+            <div className="flex flex-wrap gap-2">
+              <div className="relative flex-1 min-w-[160px]">
                 <HiOutlineSearch className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-primary-400" />
                 <input
                   value={search}
@@ -715,6 +730,27 @@ export default function DgrForms() {
                 <option value="Initial">Initial</option>
                 <option value="Recurrent">Recurrent</option>
               </select>
+              <div className="relative">
+                <HiOutlineSelector className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-primary-400" />
+                <select
+                  value={sortKey}
+                  onChange={e => setSortKey(e.target.value)}
+                  className="pl-8 pr-3 py-2 text-sm rounded-lg border border-primary-200 outline-none focus:border-blue-400 bg-white text-primary-700 min-w-[170px]"
+                >
+                  <optgroup label="Training Date">
+                    <option value="date_desc">Date: Newest First</option>
+                    <option value="date_asc">Date: Oldest First</option>
+                  </optgroup>
+                  <optgroup label="Training Type">
+                    <option value="type_asc">Type: Initial First</option>
+                    <option value="type_desc">Type: Recurrent First</option>
+                  </optgroup>
+                  <optgroup label="Score">
+                    <option value="score_desc">Score: Highest First</option>
+                    <option value="score_asc">Score: Lowest First</option>
+                  </optgroup>
+                </select>
+              </div>
             </div>
           )}
         </div>
@@ -759,8 +795,8 @@ export default function DgrForms() {
       <div>
         {!loading && (
           <div className="sticky top-0 z-10 -mx-4 sm:-mx-6 px-4 sm:px-6 py-2.5 bg-white border-b border-primary-200 shadow-sm">
-            <div className="flex flex-col sm:flex-row gap-2">
-              <div className="relative flex-1">
+            <div className="flex flex-wrap gap-2">
+              <div className="relative flex-1 min-w-[160px]">
                 <HiOutlineSearch className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-primary-400" />
                 <input
                   value={search}
@@ -778,6 +814,27 @@ export default function DgrForms() {
                 <option value="Initial">Initial</option>
                 <option value="Recurrent">Recurrent</option>
               </select>
+              <div className="relative">
+                <HiOutlineSelector className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-primary-400" />
+                <select
+                  value={sortKey}
+                  onChange={e => setSortKey(e.target.value)}
+                  className="pl-8 pr-3 py-2 text-sm rounded-lg border border-primary-200 outline-none focus:border-blue-400 bg-white text-primary-700 min-w-[180px]"
+                >
+                  <optgroup label="Airline Name">
+                    <option value="name_asc">Airline: A → Z</option>
+                    <option value="name_desc">Airline: Z → A</option>
+                  </optgroup>
+                  <optgroup label="Students">
+                    <option value="students_desc">Most Students First</option>
+                    <option value="students_asc">Fewest Students First</option>
+                  </optgroup>
+                  <optgroup label="Forms">
+                    <option value="forms_desc">Most Forms First</option>
+                    <option value="forms_asc">Fewest Forms First</option>
+                  </optgroup>
+                </select>
+              </div>
             </div>
           </div>
         )}
@@ -797,6 +854,18 @@ export default function DgrForms() {
               airlineForms.some(f => f.dg_training_type === filterType) ||
               participants.some(p => p.training_type === filterType);
             return matchSearch && matchType;
+          }).sort((a, b) => {
+            const af = formsByAirline[String(a.airline._id)]?.length ?? 0;
+            const bf = formsByAirline[String(b.airline._id)]?.length ?? 0;
+            switch (sortKey) {
+              case 'name_asc':    return (a.airline.airlineName || '').localeCompare(b.airline.airlineName || '');
+              case 'name_desc':   return (b.airline.airlineName || '').localeCompare(a.airline.airlineName || '');
+              case 'students_desc': return b.participants.length - a.participants.length;
+              case 'students_asc':  return a.participants.length - b.participants.length;
+              case 'forms_desc':  return bf - af;
+              case 'forms_asc':   return af - bf;
+              default:            return 0;
+            }
           });
           return filtered.length === 0
             ? <div className="card p-12 text-center text-sm text-primary-400 mt-4">{airlines.length === 0 ? 'No airlines with students yet.' : 'No results match your search.'}</div>

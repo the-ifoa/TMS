@@ -22,7 +22,7 @@ import {
   HiOutlineSelector,
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
-import { getParticipants, deleteParticipant, generateCertificateBlob, downloadIssuedCertificate, listAttendanceSheets, getAttendanceSheet, API_BASE } from '../api';
+import { getParticipants, deleteParticipant, generateCertificateBlob, downloadIssuedCertificate, downloadDhlCertificate, listAttendanceSheets, getAttendanceSheet, API_BASE } from '../api';
 import AttendanceChecklistModal from '../components/AttendanceChecklistModal';
 import { buildAttendanceMap, generateAttendancePdf } from '../utils/generateAttendancePdf';
 
@@ -58,10 +58,11 @@ function initials(name = '') {
 
 // ─── Collapsible group used in airline view ───────────────────────────────────
 
-function SubmissionGroup({ groupKey, records, defaultOpen = false, focusId, attendanceSheets = [], onViewSheet }) {
-  const [open, setOpen]             = useState(defaultOpen);
+function SubmissionGroup({ groupKey, records, open, onToggle, focusId, attendanceSheets = [], onViewSheet }) {
   const [downloading, setDownloading] = useState(null);
   const [preview, setPreview]       = useState(null);
+  const [downloadingDhl, setDownloadingDhl] = useState(null);
+  const [dhlPreview, setDhlPreview] = useState(null);
   const [detailRecord, setDetailRecord] = useState(null);
   const [previewingSheet, setPreviewingSheet] = useState(null);
   const rowRefs = useRef({});
@@ -126,12 +127,34 @@ function SubmissionGroup({ groupKey, records, defaultOpen = false, focusId, atte
     }
   };
 
+  // DHL FORM ST-001 extra certificate — separate from the main cert above
+  const handleDownloadDhl = async (rec) => {
+    try {
+      setDownloadingDhl(rec.id || rec._id);
+      const res  = await downloadDhlCertificate(rec.id || rec._id);
+      const blob = new Blob([res.data], { type: 'application/pdf' });
+      const url  = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href     = url;
+      link.download = `DHL_ST001_${(rec.participant_name || '').replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      toast.success('DHL certificate downloaded');
+    } catch {
+      toast.error('Failed to download DHL certificate');
+    } finally {
+      setDownloadingDhl(null);
+    }
+  };
+
   return (
     <div className="card overflow-hidden">
       {/* Group header — click to collapse */}
       <button
         type="button"
-        onClick={() => setOpen(o => !o)}
+        onClick={onToggle}
         className="w-full flex flex-col sm:flex-row sm:items-center gap-3 px-4 sm:px-5 py-4 transition-colors text-left"
         style={{ background: open ? '#f9fafb' : '#ffffff' }}
         onMouseEnter={e => e.currentTarget.style.background='#f3f4f6'}
@@ -299,6 +322,31 @@ function SubmissionGroup({ groupKey, records, defaultOpen = false, focusId, atte
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-50 text-amber-600 border border-amber-200"><HiOutlineClock className="w-3 h-3" /> Pending</span>
                     )}
 
+                    {rec.dhl_cert_released && (
+                      // Extra DHL FORM ST-001 certificate — only present for DHL Bahrain / NDG records
+                      <>
+                        <button
+                          onClick={() => setDhlPreview(rec)}
+                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-violet-200 text-xs font-medium text-violet-700 bg-violet-50 hover:bg-violet-100 transition-colors"
+                        >
+                          <HiOutlineEye className="w-3.5 h-3.5" />
+                          <span className="hidden sm:inline">DHL Preview</span>
+                        </button>
+                        <button
+                          onClick={() => handleDownloadDhl(rec)}
+                          disabled={downloadingDhl === (rec.id || rec._id)}
+                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-violet-200 text-xs font-medium text-violet-700 bg-violet-50 hover:bg-violet-100 disabled:opacity-60 transition-colors"
+                        >
+                          {downloadingDhl === (rec.id || rec._id) ? (
+                            <div className="w-3.5 h-3.5 border-2 border-violet-300 border-t-violet-600 rounded-full animate-spin" />
+                          ) : (
+                            <HiOutlineDocumentDownload className="w-3.5 h-3.5" />
+                          )}
+                          <span className="hidden sm:inline">DHL PDF</span>
+                        </button>
+                      </>
+                    )}
+
                     {/* Locked badge */}
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border" style={{ background: '#eff6ff', borderColor: '#bfdbfe', color: '#0000ff' }}>
                       🔒 Locked
@@ -366,6 +414,69 @@ function SubmissionGroup({ groupKey, records, defaultOpen = false, focusId, atte
                 </div>
                 <div className="bg-primary-50 relative" style={{ height: '65vh' }}>
                   <iframe src={src} title="Certificate Preview" className="w-full h-full border-0" />
+                  <div className="absolute bottom-3 right-3 bg-white/80 backdrop-blur-sm rounded-lg px-3 py-1.5 text-[10px] text-primary-400">
+                    If blank, click Download PDF
+                  </div>
+                </div>
+                </motion.div>
+              </div>
+            </>
+          );
+        })()}
+      </AnimatePresence>
+
+      {/* DHL FORM ST-001 preview modal */}
+      <AnimatePresence>
+        {dhlPreview && (() => {
+          const token = localStorage.getItem('token') || '';
+          const pid   = dhlPreview.id || dhlPreview._id;
+          const src   = `${API_BASE}/certificates/dhl-preview/${pid}?token=${encodeURIComponent(token)}`;
+          return (
+            <>
+              <motion.div
+                key="dhl-backdrop"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed -inset-20 z-50 bg-black/50 backdrop-blur-sm pointer-events-none"
+              />
+              <div
+                key="dhl-layout"
+                className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4"
+                onClick={() => setDhlPreview(null)}
+              >
+                <motion.div
+                  key="dhl-card"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.15 }}
+                  className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden"
+                  onClick={e => e.stopPropagation()}
+                >
+                <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-primary-200">
+                  <div className="min-w-0">
+                    <p className="text-sm sm:text-base font-bold text-primary-800 truncate">DHL Certificate — {dhlPreview.participant_name}</p>
+                    <p className="text-xs text-primary-400 mt-0.5">DHL FORM ST-{String(dhlPreview.dhl_cert_sequence).padStart(3, '0')}</p>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button
+                      onClick={() => handleDownloadDhl(dhlPreview)}
+                      disabled={downloadingDhl === pid}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-violet-700 text-white text-xs font-semibold hover:bg-violet-800 disabled:opacity-60 transition-colors"
+                    >
+                      {downloadingDhl === pid
+                        ? <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        : <HiOutlineDocumentDownload className="w-4 h-4" />}
+                      {downloadingDhl === pid ? 'Downloading…' : 'Download PDF'}
+                    </button>
+                    <button onClick={() => setDhlPreview(null)} className="p-1.5 rounded-lg hover:bg-primary-100 text-primary-400">
+                      <HiOutlineX className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+                <div className="bg-primary-50 relative" style={{ height: '65vh' }}>
+                  <iframe src={src} title="DHL Certificate Preview" className="w-full h-full border-0" />
                   <div className="absolute bottom-3 right-3 bg-white/80 backdrop-blur-sm rounded-lg px-3 py-1.5 text-[10px] text-primary-400">
                     If blank, click Download PDF
                   </div>
@@ -467,10 +578,17 @@ export default function Participants() {
   const [filterType, setFilterType] = useState('');
   const [sortKey, setSortKey]       = useState('submitted_desc');
   const [loading, setLoading]       = useState(true);
+  // Which submission groups are expanded — lifted up here (rather than local
+  // state inside SubmissionGroup) so a background refresh after an in-group
+  // action (e.g. deleting a record) doesn't reset every group back to closed.
+  const [openGroups, setOpenGroups] = useState({});
 
-  const fetchRecords = async () => {
+  // `silent` skips the loading flag — used for background refreshes after an
+  // in-place action so the group list doesn't unmount/remount (which was
+  // collapsing open groups and jumping scroll position back to the top).
+  const fetchRecords = async ({ silent = false } = {}) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const params = {};
       if (search) params.search = search;
       if (filterType) params.training_type = filterType;
@@ -490,7 +608,7 @@ export default function Participants() {
     } catch {
       toast.error('Failed to load records');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -501,7 +619,7 @@ export default function Participants() {
     try {
       await deleteParticipant(id);
       toast.success('Record deleted');
-      fetchRecords();
+      fetchRecords({ silent: true });
     } catch {
       toast.error('Failed to delete');
     }
@@ -534,6 +652,16 @@ export default function Participants() {
       }
     });
   }, [records, isAdmin, sortKey]);
+
+  // Auto-open the group containing a notification-linked record, once —
+  // afterwards `openGroups` is authoritative so manual toggles stick.
+  useEffect(() => {
+    if (!focusId || !groups) return;
+    const match = groups.find(([, recs]) => recs.some(r => String(r.id || r._id) === focusId));
+    if (match) {
+      setOpenGroups(prev => (prev[match[0]] === undefined ? { ...prev, [match[0]]: true } : prev));
+    }
+  }, [focusId, groups]);
 
   const [detailRecord, setDetailRecord] = useState(null);
 
@@ -646,7 +774,8 @@ export default function Participants() {
                   key={key}
                   groupKey={key}
                   records={recs}
-                  defaultOpen={focusId ? recs.some(r => String(r.id || r._id) === focusId) : false}
+                  open={openGroups[key] ?? false}
+                  onToggle={() => setOpenGroups(prev => ({ ...prev, [key]: !prev[key] }))}
                   focusId={focusId}
                   attendanceSheets={groupSheets}
                   onViewSheet={sheet => setActiveSheet({ ...sheet, readOnly: true })}

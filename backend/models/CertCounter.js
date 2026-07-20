@@ -147,6 +147,84 @@ async function reserveCertSequence(training_type) {
   );
 }
 
+// Fixed counter key for the DHL FORM ST-001 extra certificate. It is ONE
+// shared pool across all DHL Bahrain / NDG candidates — not split per
+// training type — so it lives under its own single CertCounter document.
+const DHL_ST001_CODE = 'DHL-ST001';
+
+/**
+ * Reserve the next unique DHL ST-001 certificate number.
+ *
+ * Same gap-fill-first algorithm as reserveCertSequence(), but scans the
+ * separate DhlCertificate collection (one doc per participant) instead of
+ * Participant.cert_sequence, and is not scoped by training type.
+ */
+async function reserveDhlCertSequence() {
+  // Lazy-require to avoid circular dependency at module load time
+  const DhlCertificate = require('./DhlCertificate');
+
+  const MAX_SCAN_RETRIES = 15;
+
+  await ensureCounter(DHL_ST001_CODE);
+
+  for (let scanAttempt = 1; scanAttempt <= MAX_SCAN_RETRIES; scanAttempt++) {
+    const inUseDocs = await DhlCertificate.find(
+      { sequence: { $exists: true, $ne: null } },
+      { sequence: 1 },
+      { sort: { sequence: 1 } }
+    ).lean();
+
+    const inUse = new Set(
+      inUseDocs.map(d => d.sequence).filter(n => typeof n === 'number' && n > 0)
+    );
+
+    const counterDoc = await CertCounter.findOne({ training_type: DHL_ST001_CODE }).lean();
+    const floor      = counterDoc ? (counterDoc.floor || 0) : 0;
+    const highWater  = counterDoc ? (counterDoc.high_water || 0) : 0;
+
+    let candidate = 1;
+    while (inUse.has(candidate)) {
+      candidate++;
+    }
+
+    if (candidate > highWater && floor > 0 && candidate < floor) {
+      candidate = floor;
+      while (inUse.has(candidate)) {
+        candidate++;
+      }
+    }
+
+    const chosen = candidate;
+
+    if (chosen > highWater) {
+      const updateResult = await CertCounter.findOneAndUpdate(
+        { training_type: DHL_ST001_CODE, high_water: { $lt: chosen } },
+        { $set: { high_water: chosen } },
+        { upsert: true, returnDocument: 'after', new: true }
+      );
+
+      if (!updateResult) {
+        console.warn(
+          `[cert] Concurrent write detected for ${DHL_ST001_CODE} at candidate ${chosen}` +
+          ` (scan attempt ${scanAttempt}/${MAX_SCAN_RETRIES}) — retrying`
+        );
+        continue;
+      }
+    }
+
+    console.log(
+      `[cert] Reserved DHL ST-001 sequence #${chosen}` +
+      ` (highWater was ${highWater}, floor=${floor}, attempt=${scanAttempt})`
+    );
+    return chosen;
+  }
+
+  throw new Error(
+    `[cert] reserveDhlCertSequence failed after ${MAX_SCAN_RETRIES} scan attempts. ` +
+    'Check for extreme concurrency or stale CertCounter documents.'
+  );
+}
+
 /**
  * syncHighWater — call once at server startup.
  *
@@ -186,4 +264,4 @@ async function syncHighWater() {
   }
 }
 
-module.exports = { CertCounter, reserveCertSequence, syncHighWater, TO_CODE };
+module.exports = { CertCounter, reserveCertSequence, reserveDhlCertSequence, syncHighWater, TO_CODE };

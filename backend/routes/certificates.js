@@ -3,8 +3,16 @@ const express = require('express');
 const router = express.Router();
 const Participant = require('../models/Participant');
 const { generateCertificate, MODULES_LIST } = require('../services/certificateGenerator');
+const { generateDhlCertificate } = require('../services/dhlCertGenerator');
+const DhlCertificate = require('../models/DhlCertificate');
 const { authMiddleware } = require('./auth');
-const { CertCounter, reserveCertSequence, TO_CODE } = require('../models/CertCounter');
+const { CertCounter, reserveCertSequence, reserveDhlCertSequence, TO_CODE } = require('../models/CertCounter');
+
+// -- DHL Bahrain / DHL Air (Bahrain) — case-insensitive airline match ---------
+const DHL_BAHRAIN_NAMES = ['dhl bahrain', 'dhl air (bahrain)'];
+function isDhlBahrainAirline(name) {
+  return DHL_BAHRAIN_NAMES.includes(String(name || '').trim().toLowerCase());
+}
 
 // -- Token auth: accept via header OR ?token= query param ---------------------
 function certAuth(req, res, next) {
@@ -185,6 +193,127 @@ router.post('/generate/:id', async (req, res) => {
   } catch (err) {
     console.error('[POST /generate] error:', err);
     res.status(500).json({ error: 'Failed to generate certificate.' });
+  }
+});
+
+// -- POST /dhl-generate/:id ----------------------------------------------------
+// Extra DHL FORM ST-001 certificate — only for DHL Bahrain / DHL Air (Bahrain)
+// NDG (Dangerous Goods) participants. Fully separate pipeline from the main
+// cert_sequence/generateCertificate flow: own model (DhlCertificate), own
+// numbering pool (reserveDhlCertSequence), additive to the normal certificate.
+router.post('/dhl-generate/:id', async (req, res) => {
+  try {
+    if (!isAdmin(req)) {
+      return res.status(403).json({ error: 'Certificate generation is restricted to IFOA administrators.' });
+    }
+
+    const participant = await Participant.findById(req.params.id);
+    if (!participant) return res.status(404).json({ error: 'Participant not found.' });
+
+    if (!isDhlBahrainAirline(participant.airline_name)) {
+      return res.status(400).json({ error: 'This certificate is only available for DHL Bahrain / DHL Air (Bahrain) participants.' });
+    }
+    if (participant.training_type !== 'NDG') {
+      return res.status(400).json({ error: 'This certificate is only available for NDG (Dangerous Goods) training records.' });
+    }
+
+    let dhlCert = await DhlCertificate.findOne({ participant: participant._id });
+    if (!dhlCert) dhlCert = new DhlCertificate({ participant: participant._id });
+
+    if (!dhlCert.sequence) {
+      const MAX_RETRIES = 10;
+      let assigned = false;
+      for (let attempt = 1; attempt <= MAX_RETRIES && !assigned; attempt++) {
+        const seq = await reserveDhlCertSequence();
+        const collision = await DhlCertificate.findOne({ _id: { $ne: dhlCert._id }, sequence: seq }).lean();
+        if (collision) {
+          console.warn(`[dhl-cert] Collision on #${seq} (attempt ${attempt}/${MAX_RETRIES}) — retrying`);
+          continue;
+        }
+        dhlCert.sequence = seq;
+        assigned = true;
+      }
+      if (!assigned) {
+        return res.status(500).json({ error: 'Failed to assign a unique DHL certificate number. Please retry.' });
+      }
+    }
+
+    dhlCert.released = true;
+    await dhlCert.save();
+
+    const pdfBuffer = await generateDhlCertificate(participant.toObject(), dhlCert.sequence);
+    const safeName  = participant.participant_name.replace(/[^a-zA-Z0-9]/g, '_');
+    const filename  = `DHL_ST001_${safeName}.pdf`;
+
+    setPdfHeaders(res, filename, 'attachment');
+    res.setHeader('Content-Length', pdfBuffer.length);
+    res.send(pdfBuffer);
+  } catch (err) {
+    console.error('[POST /dhl-generate] error:', err);
+    res.status(500).json({ error: 'Failed to generate DHL certificate.' });
+  }
+});
+
+// -- GET /dhl-preview/:id ------------------------------------------------------
+// Airline-facing (or admin) read-only preview of an already-released DHL cert.
+router.get('/dhl-preview/:id', async (req, res) => {
+  try {
+    const participant = await Participant.findById(req.params.id);
+    if (!participant) return res.status(404).json({ error: 'Participant not found.' });
+
+    const dhlCert = await DhlCertificate.findOne({ participant: participant._id });
+
+    if (!isAdmin(req)) {
+      if (!airlineOwns(req, participant)) {
+        return res.status(403).json({ error: 'Access denied.' });
+      }
+      if (!dhlCert || !dhlCert.released) {
+        return res.status(403).json({ error: 'DHL certificate has not been released yet by IFOA.' });
+      }
+    }
+    if (!dhlCert || !dhlCert.sequence) {
+      return res.status(404).json({ error: 'DHL certificate not found for this participant.' });
+    }
+
+    const pdfBuffer = await generateDhlCertificate(participant.toObject(), dhlCert.sequence);
+    const safeName  = participant.participant_name.replace(/[^a-zA-Z0-9]/g, '_');
+
+    setPdfHeaders(res, `DHL_ST001_${safeName}_Preview.pdf`, 'inline');
+    res.setHeader('Content-Length', pdfBuffer.length);
+    res.send(pdfBuffer);
+  } catch (err) {
+    console.error('[GET /dhl-preview] error:', err);
+    res.status(500).json({ error: 'Failed to preview DHL certificate.' });
+  }
+});
+
+// -- GET /dhl-download/:id -----------------------------------------------------
+router.get('/dhl-download/:id', async (req, res) => {
+  try {
+    const participant = await Participant.findById(req.params.id);
+    if (!participant) return res.status(404).json({ error: 'Participant not found.' });
+
+    const dhlCert = await DhlCertificate.findOne({ participant: participant._id });
+
+    if (!isAdmin(req) && !airlineOwns(req, participant)) {
+      return res.status(403).json({ error: 'Access denied.' });
+    }
+    if (!dhlCert || !dhlCert.released) {
+      return res.status(403).json({ error: 'DHL certificate has not been released yet by IFOA.' });
+    }
+    if (!dhlCert.sequence) {
+      return res.status(409).json({ error: 'DHL certificate number not assigned. Please contact IFOA.' });
+    }
+
+    const pdfBuffer = await generateDhlCertificate(participant.toObject(), dhlCert.sequence);
+    const safeName  = participant.participant_name.replace(/[^a-zA-Z0-9]/g, '_');
+
+    setPdfHeaders(res, `DHL_ST001_${safeName}.pdf`, 'attachment');
+    res.setHeader('Content-Length', pdfBuffer.length);
+    res.send(pdfBuffer);
+  } catch (err) {
+    console.error('[GET /dhl-download] error:', err);
+    res.status(500).json({ error: 'Failed to download DHL certificate.' });
   }
 });
 

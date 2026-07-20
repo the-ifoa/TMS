@@ -70,6 +70,10 @@ export const revokeCertificateById = (id) =>
   api.delete(`/certificates/revoke/${id}`);
 export const downloadIssuedCertificate = (id) =>
   api.get(`/certificates/download/${id}`, { responseType: 'blob' });
+export const generateDhlCertificateBlob = (id) =>
+  api.post(`/certificates/dhl-generate/${id}`, {}, { responseType: 'blob' });
+export const downloadDhlCertificate = (id) =>
+  api.get(`/certificates/dhl-download/${id}`, { responseType: 'blob' });
 
 // ── Airline Auth ────────────────────────────────────────────────────────────
 export const airlineSignup     = (data) => api.post('/auth/airline/signup', data);
@@ -99,6 +103,7 @@ export const updateCertSequence       = (id, cert_sequence) => api.patch(`/parti
 export const updateFullCertId         = (id, cert_sequence, cert_year) => api.patch(`/participants/${id}/full-cert-id`, { cert_sequence, cert_year });
 export const updateNdgScore           = (id, ndg_score) => api.patch(`/participants/${id}/ndg-score`, { ndg_score });
 export const revokeCertificate        = (id)            => api.patch(`/participants/${id}/revoke-cert`);
+export const revokeDhlCertificate     = (id)            => api.patch(`/participants/${id}/revoke-dhl-cert`);
 export const updateValidity           = (id, cert_validity) => api.patch(`/participants/${id}/validity`, { cert_validity });
 export const sendSubmissionConfirmation = (data) => api.post('/participants/send-confirmation', data);
 export const getCertCounters          = () => api.get('/certificates/counters');

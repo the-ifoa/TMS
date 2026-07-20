@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Participant = require('../models/Participant');
 const Airline = require('../models/Airline');
+const DhlCertificate = require('../models/DhlCertificate');
 const { authMiddleware } = require('./auth');
 const { sendSubmissionConfirmation } = require('../services/emailService');
 
@@ -67,7 +68,21 @@ router.get('/', async (req, res) => {
     if (training_type) filter.training_type = training_type;
     if (company) filter.company = company;
 
-    const participants = await Participant.find(filter).sort({ created_at: -1 });
+    const participantDocs = await Participant.find(filter).sort({ created_at: -1 });
+
+    // Attach DHL ST-001 extra-cert status — lives in its own collection (see
+    // GET /by-airline for the same merge on the admin grouped view).
+    const ids      = participantDocs.map(p => p._id);
+    const dhlCerts = await DhlCertificate.find({ participant: { $in: ids } }).lean();
+    const dhlMap   = new Map(dhlCerts.map(d => [String(d.participant), d]));
+    const participants = participantDocs.map((p) => {
+      const obj = p.toJSON();
+      const dc  = dhlMap.get(String(p._id));
+      obj.dhl_cert_sequence = dc?.sequence ?? null;
+      obj.dhl_cert_released = dc?.released ?? false;
+      return obj;
+    });
+
     res.json(participants);
   } catch (err) {
     console.error('GET /participants error:', err.message);
@@ -82,8 +97,20 @@ router.get('/by-airline', async (req, res) => {
       return res.status(403).json({ error: 'Admin access required.' });
     }
 
-    const airlines     = await Airline.find({}).sort({ airlineName: 1 });
-    const participants = await Participant.find({}).sort({ created_at: -1 });
+    const airlines        = await Airline.find({}).sort({ airlineName: 1 });
+    const participantDocs = await Participant.find({}).sort({ created_at: -1 });
+
+    // Attach DHL ST-001 extra-cert status — lives in its own collection, so
+    // it's merged in here rather than being a field on Participant itself.
+    const dhlCerts = await DhlCertificate.find({}).lean();
+    const dhlMap   = new Map(dhlCerts.map(d => [String(d.participant), d]));
+    const participants = participantDocs.map((p) => {
+      const obj = p.toJSON();
+      const dc  = dhlMap.get(String(p._id));
+      obj.dhl_cert_sequence = dc?.sequence ?? null;
+      obj.dhl_cert_released = dc?.released ?? false;
+      return obj;
+    });
 
     const result = airlines.map((a) => ({
       airline: a.toJSON(),
@@ -416,9 +443,11 @@ router.delete('/airline/:airlineName', async (req, res) => {
       return res.status(403).json({ error: 'Only admins can perform bulk deletions.' });
     }
     const name = decodeURIComponent(req.params.airlineName);
-    const result = await Participant.deleteMany({
-      $or: [{ airline_name: name }, { company: name }],
-    });
+    const filter = { $or: [{ airline_name: name }, { company: name }] };
+    const ids = await Participant.find(filter, { _id: 1 }).lean();
+    const result = await Participant.deleteMany(filter);
+    // Cascade: free up any DHL ST-001 numbers held by the deleted participants
+    await DhlCertificate.deleteMany({ participant: { $in: ids.map(d => d._id) } });
     res.json({
       message: `Deleted ${result.deletedCount} participant(s) for "${name}"`,
       deletedCount: result.deletedCount,
@@ -443,7 +472,7 @@ router.delete('/airline-by-id/:airlineId', async (req, res) => {
 
     // Delete participants owned by this exact account (submitted_by = _id)
     // Also catch legacy records that have no submitted_by but match the name
-    const result = await Participant.deleteMany({
+    const deleteFilter = {
       $or: [
         { submitted_by: airlineDoc._id },
         {
@@ -454,7 +483,11 @@ router.delete('/airline-by-id/:airlineId', async (req, res) => {
           ],
         },
       ],
-    });
+    };
+    const ids = await Participant.find(deleteFilter, { _id: 1 }).lean();
+    const result = await Participant.deleteMany(deleteFilter);
+    // Cascade: free up any DHL ST-001 numbers held by the deleted participants
+    await DhlCertificate.deleteMany({ participant: { $in: ids.map(d => d._id) } });
 
     // NOTE: The Airline account document is intentionally NOT deleted here.
     // The airline can still log in — only their participant submissions are removed
@@ -479,6 +512,8 @@ router.delete('/:id', async (req, res) => {
     }
     const deleted = await Participant.findByIdAndDelete(req.params.id);
     if (!deleted) return res.status(404).json({ error: 'Participant not found' });
+    // Cascade: free up the DHL ST-001 number, if any, held by this participant
+    await DhlCertificate.deleteOne({ participant: deleted._id });
     res.json({ message: 'Participant deleted successfully' });
   } catch (err) {
     console.error('DELETE /participants/:id error:', err.message);
@@ -525,6 +560,33 @@ router.patch('/:id/revoke-cert', async (req, res) => {
     res.json({ message: `Certificate revoked for ${doc.participant_name}.`, participant: updated });
   } catch (err) {
     console.error('PATCH revoke-cert error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── PATCH /:id/revoke-dhl-cert (admin only) ─────────────────────────────────
+// Revokes the extra DHL ST-001 certificate. Unsetting `sequence` is what frees
+// the number for the next reserveDhlCertSequence() gap-fill scan — no separate
+// "release" bookkeeping needed, same mechanic as revoke-cert above.
+router.patch('/:id/revoke-dhl-cert', async (req, res) => {
+  try {
+    if (req.admin.role === 'airline') {
+      return res.status(403).json({ error: 'Only admins can revoke certificates.' });
+    }
+    const doc = await Participant.findById(req.params.id);
+    if (!doc) return res.status(404).json({ error: 'Participant not found.' });
+
+    const dhlCert = await DhlCertificate.findOne({ participant: doc._id });
+    if (!dhlCert || (!dhlCert.sequence && !dhlCert.released)) {
+      return res.status(400).json({ error: 'No DHL certificate exists to revoke for this participant.' });
+    }
+    await DhlCertificate.updateOne(
+      { _id: dhlCert._id },
+      { $unset: { sequence: '' }, $set: { released: false } }
+    );
+    res.json({ message: `DHL certificate revoked for ${doc.participant_name}.` });
+  } catch (err) {
+    console.error('PATCH revoke-dhl-cert error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });

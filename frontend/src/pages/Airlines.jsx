@@ -28,6 +28,7 @@ import {
   generateCertificateBlob, generateCertificateWithModules,
   updateFullCertId, getCertCounters, resetCertCounter, resetAllCertCounters,
   updateNdgScore, revokeCertificate, updateValidity, updateAirline,
+  generateDhlCertificateBlob, revokeDhlCertificate, downloadDhlCertificate,
   API_BASE,
 } from '../api';
 import ModuleSelector from '../components/ModuleSelector';
@@ -69,7 +70,7 @@ const VALIDITY_OPTIONS = [
   { val: 'Unlimited', label: 'Unlimited' },
 ];
 
-function VariantModal({ open, variant, setVariant, validity, setValidity, onConfirm, onClose, count }) {
+function VariantModal({ open, variant, setVariant, validity, setValidity, onConfirm, onClose, count, dhlEligibleCount, includeDhl, setIncludeDhl }) {
   if (!open) return null;
   return (
     <AnimatePresence>
@@ -141,6 +142,17 @@ function VariantModal({ open, variant, setVariant, validity, setValidity, onConf
               </div>
               <p className="text-[11px] text-primary-400 mt-1.5">Printed on certificate. Default: 36 Months.</p>
             </div>
+            {/* DHL extra cert — only offered when the selection includes an eligible (DHL Bahrain, NDG) record */}
+            {dhlEligibleCount > 0 && (
+              <label className="flex items-start gap-2.5 p-3 rounded-xl border-2 border-blue-200 bg-blue-50 cursor-pointer">
+                <input type="checkbox" checked={includeDhl} onChange={e => setIncludeDhl(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 accent-blue-600" />
+                <span>
+                  <span className="block text-sm font-bold text-blue-700">Also generate DHL Extra Certificate</span>
+                  <span className="block text-xs text-blue-500 mt-0.5">{dhlEligibleCount} of the selected candidate{dhlEligibleCount > 1 ? 's are' : ' is'} eligible (DHL Bahrain, NDG) — generates a DHL FORM ST-XXX certificate for {dhlEligibleCount > 1 ? 'each' : 'it'}, alongside the normal certificate.</span>
+                </span>
+              </label>
+            )}
           </div>
           <div className="px-5 pb-5 flex gap-3">
             <button onClick={onClose} className="btn-outline flex-1">Cancel</button>
@@ -475,6 +487,11 @@ function ParticipantCard({ p, checked, onCheck, onPreview, onDownload, onEdit, o
   );
 }
 
+// ─── DHL FORM ST-001 extra certificate — DHL Bahrain / DHL Air (Bahrain), NDG only ──
+const DHL_BAHRAIN_NAMES = ['dhl bahrain', 'dhl air (bahrain)'];
+const isDhlBahrainAirline = (name) => DHL_BAHRAIN_NAMES.includes(String(name || '').trim().toLowerCase());
+const eligibleForDhlExtra = (p) => p.training_type === 'NDG' && isDhlBahrainAirline(p.airline_name);
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function Airlines() {
   const [searchParams] = useSearchParams();
@@ -495,6 +512,8 @@ export default function Airlines() {
 
   const [variantModal, setVariantModal]       = useState(false);
   const [templateVariant, setTemplateVariant] = useState('default');
+  const [includeDhlExtra, setIncludeDhlExtra] = useState(false);
+  const [revokingDhlBulk, setRevokingDhlBulk] = useState(false);
   const [bulkValidity, setBulkValidity]       = useState('36'); // default 36 months
   const pendingGenerate = useRef(null);
 
@@ -513,6 +532,10 @@ export default function Airlines() {
   const [deletingAirlines, setDeletingAirlines] = useState(false);
   const [deletingSelected, setDeletingSelected] = useState(false);
   const [revoking, setRevoking] = useState(false);
+  const [generatingDhl, setGeneratingDhl] = useState(false);
+  const [revokingDhlId, setRevokingDhlId] = useState(null);
+  const [downloadingDhlId, setDownloadingDhlId] = useState(null);
+  const [dhlRowPreview, setDhlRowPreview] = useState(null);
   // Admin edit-airline modal: { open, id, airlineName, address }
   const [editAirline, setEditAirline] = useState({ open: false, id: null, airlineName: '', address: '' });
   const [savingAirline, setSavingAirline] = useState(false);
@@ -534,9 +557,13 @@ export default function Airlines() {
     return String(id);
   };
 
-  const fetchData = useCallback(async () => {
+  // `silent` skips the loading flag — used for background refreshes after an
+  // in-place action (revoke, delete, generate, ...) so the already-rendered
+  // list doesn't unmount/remount, which was collapsing expanded cards and
+  // resetting scroll position back to the top of the page on every update.
+  const fetchData = useCallback(async ({ silent = false } = {}) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const res = await getParticipantsByAirline();
       
       // Sort participants within each airline group by creation date (oldest/first entered first)
@@ -559,7 +586,7 @@ export default function Airlines() {
         return init;
       });
     } catch { toast.error('Failed to load airline data'); }
-    finally { setLoading(false); }
+    finally { if (!silent) setLoading(false); }
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
@@ -612,7 +639,7 @@ export default function Airlines() {
       await resetCertCounter(type, 0);
       toast.success(`${type} reset. All ${type} certificates must be regenerated.`, { duration: 4000 });
       setCounterModal(false);
-      await fetchData();                 // ← reload page data immediately
+      await fetchData({ silent: true });                 // ← reload page data immediately
     } catch { toast.error('Failed to reset'); }
     setResetting(null);
   };
@@ -626,7 +653,7 @@ export default function Airlines() {
       await resetAllCertCounters(0);
       toast.success('All counters reset. All certificates must be regenerated.', { duration: 4000 });
       setCounterModal(false);
-      await fetchData();                 // ← reload page data immediately
+      await fetchData({ silent: true });                 // ← reload page data immediately
     } catch { toast.error('Failed to reset'); }
     setResetting(null);
   };
@@ -649,7 +676,7 @@ export default function Airlines() {
       await updateFullCertId(pid, seq, year);
       toast.success('Certificate ID updated');
       setCertEdits(prev => { const n = { ...prev }; delete n[pid]; return n; });
-      fetchData();
+      fetchData({ silent: true });
     } catch (err) {
       setCertEdits(prev => ({ ...prev, [pid]: { ...prev[pid], saving: false, error: err.response?.data?.error || 'Failed' } }));
     }
@@ -772,7 +799,7 @@ export default function Airlines() {
   // ── Delete helpers ───────────────────────────────────────────────────────────
   const handleDelete = async (id, name) => {
     if (!window.confirm(`Delete record for "${name}"?`)) return;
-    try { await deleteParticipant(id); toast.success('Record deleted'); setChecked(prev => { const n = new Set(prev); n.delete(id); return n; }); fetchData(); }
+    try { await deleteParticipant(id); toast.success('Record deleted'); setChecked(prev => { const n = new Set(prev); n.delete(id); return n; }); fetchData({ silent: true }); }
     catch { toast.error('Failed to delete'); }
   };
 
@@ -784,7 +811,7 @@ export default function Airlines() {
     for (const id of checked) { try { await deleteParticipant(id); ok++; } catch { fail++; } }
     setDeletingSelected(false);
     setChecked(new Set());
-    fetchData();
+    fetchData({ silent: true });
     fail === 0 ? toast.success(`${ok} record${ok !== 1 ? 's' : ''} deleted`) : toast.error(`${ok} deleted, ${fail} failed`);
   };
 
@@ -808,7 +835,7 @@ export default function Airlines() {
     }
     setRevoking(false);
     setChecked(new Set());
-    fetchData();
+    fetchData({ silent: true });
     if (fail === 0) toast.success(`${ok} certificate${ok > 1 ? 's' : ''} revoked — now Pending`);
     else toast.error(`${ok} revoked, ${fail} failed`);
   };
@@ -907,16 +934,41 @@ export default function Airlines() {
     }
   };
 
-  const runBulkGenerate = async (toGenerate, modulesMap, variant = 'default', validity = '36') => {
+  // Generates the DHL extra cert for each eligible participant in `list`,
+  // returning result entries (for CertResultModal) — does not touch loading
+  // state or toasts, so it can be reused by both the standalone DHL bulk
+  // action and the "also generate" checkbox inside the normal generate flow.
+  const generateDhlForParticipants = async (list) => {
+    const results = [];
+    for (const p of list) {
+      const pid = p.id || p._id;
+      try {
+        const res     = await generateDhlCertificateBlob(pid);
+        const blob    = new Blob([res.data], { type: 'application/pdf' });
+        const blobUrl = window.URL.createObjectURL(blob);
+        results.push({ id: `dhl-${pid}`, name: p.participant_name, trainingType: 'DHL ST-001', certId: 'DHL', blobUrl, filename: `DHL_ST001_${(p.participant_name || '').replace(/[^a-zA-Z0-9]/g, '_')}.pdf` });
+      } catch (err) {
+        const msg = err.response?.data?.error || err.message || 'Unknown error';
+        toast.error(`DHL cert failed for ${p.participant_name}: ${msg}`);
+      }
+    }
+    return results;
+  };
+
+  const runBulkGenerate = async (toGenerate, modulesMap, variant = 'default', validity = '36', alsoDhl = false) => {
     setGenerating(true);
     const results = [];
     for (const p of toGenerate) {
       const r = await generateOneWithVariant(p, modulesMap[p.id || p._id] || null, variant, validity);
       if (r) results.push(r);
     }
+    if (alsoDhl) {
+      const eligible = toGenerate.filter(eligibleForDhlExtra);
+      if (eligible.length) results.push(...(await generateDhlForParticipants(eligible)));
+    }
     setGenerating(false);
     setChecked(new Set());
-    fetchData();
+    fetchData({ silent: true });
     if (results.length) setCertResults(results);
   };
 
@@ -937,7 +989,59 @@ export default function Airlines() {
       return;
     }
     pendingGenerate.current = { toGenerate, modulesMap: {} };
+    setIncludeDhlExtra(false);
     setVariantModal(true);
+  };
+
+  // Extra DHL FORM ST-001 certificate — DHL Bahrain / DHL Air (Bahrain), NDG only.
+  // Fully separate from the normal generate flow above: own endpoint, own numbering.
+  const handleGenerateDhlSelected = async () => {
+    const selected  = allParticipants.filter(p => checked.has(p.id || p._id));
+    const eligible  = selected.filter(eligibleForDhlExtra);
+    const skipped   = selected.length - eligible.length;
+    if (eligible.length === 0) {
+      toast.error('None of the selected participants are eligible (DHL Bahrain / DHL Air (Bahrain), NDG training only).');
+      return;
+    }
+    setGeneratingDhl(true);
+    const results = await generateDhlForParticipants(eligible);
+    setGeneratingDhl(false);
+    setChecked(new Set());
+    fetchData({ silent: true });
+    if (skipped > 0) toast(`${skipped} selected participant${skipped > 1 ? 's' : ''} skipped (not eligible).`, { icon: 'ℹ️' });
+    if (results.length) setCertResults(results);
+  };
+
+  const handleRevokeDhlCert = async (p) => {
+    const pid = p.id || p._id;
+    setRevokingDhlId(pid);
+    try {
+      await revokeDhlCertificate(pid);
+      toast.success('DHL certificate revoked');
+      fetchData({ silent: true });
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to revoke DHL certificate');
+    } finally {
+      setRevokingDhlId(null);
+    }
+  };
+
+  // Bulk revoke — clears the DHL extra cert for every checked+released participant
+  const handleRevokeDhlSelected = async () => {
+    const withDhl = allParticipants.filter(p => checked.has(p.id || p._id) && p.dhl_cert_released);
+    if (withDhl.length === 0) { toast.error('None of the selected participants have a DHL certificate to revoke'); return; }
+    if (!window.confirm(`Revoke DHL certificates for ${withDhl.length} participant${withDhl.length > 1 ? 's' : ''}?`)) return;
+    setRevokingDhlBulk(true);
+    let ok = 0, fail = 0;
+    for (const p of withDhl) {
+      try { await revokeDhlCertificate(p.id || p._id); ok++; }
+      catch { fail++; }
+    }
+    setRevokingDhlBulk(false);
+    setChecked(new Set());
+    fetchData({ silent: true });
+    if (fail === 0) toast.success(`${ok} DHL certificate${ok > 1 ? 's' : ''} revoked`);
+    else toast.error(`${ok} revoked, ${fail} failed`);
   };
 
   const handleModuleConfirm = modules => {
@@ -954,7 +1058,7 @@ export default function Airlines() {
     const { toGenerate, modulesMap } = pendingGenerate.current || {};
     pendingGenerate.current = null;
     if (!toGenerate) return;
-    await runBulkGenerate(toGenerate, modulesMap, templateVariant, bulkValidity);
+    await runBulkGenerate(toGenerate, modulesMap, templateVariant, bulkValidity, includeDhlExtra);
   };
 
   const closeResults = () => { if (certResults) certResults.forEach(r => window.URL.revokeObjectURL(r.blobUrl)); setCertResults(null); };
@@ -976,6 +1080,25 @@ export default function Airlines() {
       toast.error(msg);
     }
     finally { setDownloadingId(null); }
+  };
+
+  const handleDownloadDhlIssued = async p => {
+    const pid = p.id || p._id;
+    try {
+      setDownloadingDhlId(pid);
+      const res  = await downloadDhlCertificate(pid);
+      const blob = new Blob([res.data], { type: 'application/pdf' });
+      const url  = window.URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href = url; a.download = `DHL_ST001_${(p.participant_name || '').replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      toast.success('DHL certificate downloaded');
+    } catch (err) {
+      const msg = err.response?.data?.error || err.message || 'Download failed';
+      toast.error(msg);
+    }
+    finally { setDownloadingDhlId(null); }
   };
 
   // ── Derived ──────────────────────────────────────────────────────────────────
@@ -1015,7 +1138,9 @@ export default function Airlines() {
 
       {/* Modals */}
       <ModuleSelector isOpen={moduleModal.open} onClose={() => { setModuleModal({ open: false, record: null }); pendingFdrRecord.current = null; }} onConfirm={handleModuleConfirm} initialModules={moduleModal.record?.modules ? moduleModal.record.modules.split(',').map(m => m.trim()) : []} />
-      <VariantModal open={variantModal} variant={templateVariant} setVariant={setTemplateVariant} validity={bulkValidity} setValidity={setBulkValidity} onConfirm={handleVariantConfirm} onClose={() => { setVariantModal(false); pendingGenerate.current = null; }} count={pendingGenerate.current?.toGenerate?.length || checked.size} />
+      <VariantModal open={variantModal} variant={templateVariant} setVariant={setTemplateVariant} validity={bulkValidity} setValidity={setBulkValidity} onConfirm={handleVariantConfirm} onClose={() => { setVariantModal(false); pendingGenerate.current = null; }} count={pendingGenerate.current?.toGenerate?.length || checked.size}
+        dhlEligibleCount={(pendingGenerate.current?.toGenerate || []).filter(eligibleForDhlExtra).length}
+        includeDhl={includeDhlExtra} setIncludeDhl={setIncludeDhlExtra} />
       <CertResultModal results={certResults} onClose={closeResults} />
 
       {/* ── Admin: Edit Airline Modal ── */}
@@ -1122,6 +1247,59 @@ export default function Airlines() {
                 </div>
                 <div className="bg-primary-50 relative" style={{ height: '65vh' }}>
                   <iframe src={src} title="Certificate Preview" className="w-full h-full border-0" />
+                  <div className="absolute bottom-3 right-3 bg-white/80 backdrop-blur-sm rounded-lg px-3 py-1.5 text-[10px] text-primary-400">If blank, click Download PDF</div>
+                </div>
+                </motion.div>
+              </div>
+            </>
+          );
+        })()}
+      </AnimatePresence>
+
+      {/* Per-row DHL FORM ST-001 preview modal */}
+      <AnimatePresence>
+        {dhlRowPreview && (() => {
+          const token = localStorage.getItem('token') || '';
+          const pid   = dhlRowPreview.id || dhlRowPreview._id;
+          const src   = `${API_BASE}/certificates/dhl-preview/${pid}?token=${encodeURIComponent(token)}`;
+          return (
+            <>
+              <motion.div
+                key="dhl-backdrop"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed -inset-20 z-50 bg-black/50 backdrop-blur-sm pointer-events-none"
+              />
+              <div
+                key="dhl-layout"
+                className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4"
+                onClick={() => setDhlRowPreview(null)}
+              >
+                <motion.div
+                  key="dhl-card"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden"
+                  onClick={e => e.stopPropagation()}
+                >
+                <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-primary-200">
+                  <div className="min-w-0 mr-3">
+                    <p className="text-sm sm:text-base font-bold text-primary-800 truncate">DHL Certificate — {dhlRowPreview.participant_name}</p>
+                    <p className="text-xs text-primary-400 mt-0.5 truncate">DHL FORM ST-{String(dhlRowPreview.dhl_cert_sequence).padStart(3, '0')}</p>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button onClick={() => handleDownloadDhlIssued(dhlRowPreview)} disabled={downloadingDhlId === pid}
+                      className="flex items-center gap-1.5 px-3 py-2 bg-violet-700 text-white text-xs font-semibold rounded-lg hover:bg-violet-800 disabled:opacity-60">
+                      {downloadingDhlId === pid ? <Spin /> : <HiOutlineDocumentDownload className="w-4 h-4" />}
+                      <span className="hidden sm:inline">{downloadingDhlId === pid ? 'Downloading…' : 'Download PDF'}</span>
+                    </button>
+                    <button onClick={() => setDhlRowPreview(null)} className="p-2 rounded-lg hover:bg-primary-100 text-primary-400"><HiOutlineX className="w-5 h-5" /></button>
+                  </div>
+                </div>
+                <div className="bg-primary-50 relative" style={{ height: '65vh' }}>
+                  <iframe src={src} title="DHL Certificate Preview" className="w-full h-full border-0" />
                   <div className="absolute bottom-3 right-3 bg-white/80 backdrop-blur-sm rounded-lg px-3 py-1.5 text-[10px] text-primary-400">If blank, click Download PDF</div>
                 </div>
                 </motion.div>
@@ -1245,6 +1423,24 @@ export default function Airlines() {
                     : <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>}
                   {revoking ? 'Revoking…' : 'Revoke Cert'}
                 </button>
+
+                {/* Generate DHL extra cert — only shown when selection includes an eligible (DHL Bahrain, NDG) record */}
+                {allParticipants.some(p => checked.has(p.id || p._id) && eligibleForDhlExtra(p)) && (
+                  <button onClick={handleGenerateDhlSelected} disabled={generatingDhl}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-violet-300 bg-violet-50 text-violet-700 hover:bg-violet-100 transition-all disabled:opacity-60">
+                    {generatingDhl ? <Spin cls="w-3.5 h-3.5 border-2 border-violet-300 border-t-violet-600" /> : <HiOutlineDocumentDownload className="w-3.5 h-3.5" />}
+                    {generatingDhl ? 'Generating…' : 'Generate DHL Extra Cert'}
+                  </button>
+                )}
+
+                {/* Revoke DHL extra cert — only shown when selection includes a released DHL cert */}
+                {allParticipants.some(p => checked.has(p.id || p._id) && p.dhl_cert_released) && (
+                  <button onClick={handleRevokeDhlSelected} disabled={revokingDhlBulk}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-violet-300 text-violet-700 hover:bg-violet-50 transition-all disabled:opacity-60">
+                    {revokingDhlBulk ? <Spin cls="w-3.5 h-3.5 border-2 border-violet-300 border-t-violet-600" /> : null}
+                    {revokingDhlBulk ? 'Revoking…' : 'Revoke DHL Cert'}
+                  </button>
+                )}
 
                 {/* Delete candidates */}
                 <button onClick={handleDeleteSelected} disabled={checked.size === 0 || deletingSelected}
@@ -1487,7 +1683,7 @@ export default function Airlines() {
                                               try {
                                                 await updateValidity(pid, e.target.value);
                                                 toast.success('Validity updated');
-                                                fetchData();
+                                                fetchData({ silent: true });
                                               } catch { toast.error('Failed to update validity'); }
                                             }}
                                             onClick={e => e.stopPropagation()}
@@ -1592,6 +1788,24 @@ export default function Airlines() {
                                           className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-emerald-200 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-60">
                                           {downloadingId === pid ? <Spin cls="w-3.5 h-3.5 border-2 border-emerald-300 border-t-emerald-600" /> : <HiOutlineDocumentDownload className="w-3.5 h-3.5" />}
                                           PDF
+                                        </button>
+                                      </>
+                                    )}
+                                    {eligibleForDhlExtra(p) && p.dhl_cert_released && (
+                                      <>
+                                        <button onClick={() => setDhlRowPreview(p)}
+                                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-violet-200 text-xs font-medium text-violet-700 bg-violet-50 hover:bg-violet-100">
+                                          <HiOutlineEye className="w-3.5 h-3.5" /> DHL ST-{String(p.dhl_cert_sequence).padStart(3, '0')}
+                                        </button>
+                                        <button onClick={() => handleDownloadDhlIssued(p)} disabled={downloadingDhlId === pid}
+                                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-violet-200 text-xs font-medium text-violet-700 bg-violet-50 hover:bg-violet-100 disabled:opacity-60">
+                                          {downloadingDhlId === pid ? <Spin cls="w-3.5 h-3.5 border-2 border-violet-300 border-t-violet-600" /> : <HiOutlineDocumentDownload className="w-3.5 h-3.5" />}
+                                          PDF
+                                        </button>
+                                        <button onClick={() => handleRevokeDhlCert(p)} disabled={revokingDhlId === pid}
+                                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-violet-300 text-xs font-medium text-violet-700 bg-violet-50 hover:bg-violet-100 disabled:opacity-60">
+                                          {revokingDhlId === pid ? <Spin cls="w-3.5 h-3.5 border-2 border-violet-300 border-t-violet-600" /> : null}
+                                          Revoke DHL
                                         </button>
                                       </>
                                     )}

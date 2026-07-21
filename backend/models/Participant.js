@@ -33,6 +33,10 @@ const participantSchema = new mongoose.Schema(
     cert_year_override: { type: Number, default: null },
     ndg_score:          { type: Number, default: null, min: 0, max: 100 },
     ndg_subtype:        { type: String, default: 'I', enum: ['I', 'R'] },
+    // Optional hours figure for FDR certificates — shown on the certificate
+    // body ("Has successfully completed the {N} Hours Flight Dispatch...")
+    // only when set; null means the line is left as-is.
+    fdr_hours:          { type: Number, default: null, min: 0 },
     online_synchronous: { type: Boolean, default: false },
     cert_validity:      { type: String, default: '36', enum: ['12', '24', '36', 'Unlimited'] },
     cert_released:      { type: Boolean, default: false },

@@ -323,7 +323,7 @@ function SubmissionGroup({ groupKey, records, open, onToggle, focusId, attendanc
                     )}
 
                     {rec.dhl_cert_released && (
-                      // Extra DHL FORM ST-001 certificate — only present for DHL Bahrain / NDG records
+                      // Extra DHL FORM ST-001 certificate — only present for DHL Bahrain / FDR records
                       <>
                         <button
                           onClick={() => setDhlPreview(rec)}

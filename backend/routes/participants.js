@@ -413,6 +413,35 @@ router.patch('/:id/ndg-score', async (req, res) => {
   }
 });
 
+// ─── PATCH fdr_hours (admin only) ────────────────────────────────────────────
+// Unlike ndg-score above, this accepts null/empty to CLEAR the value — the
+// admin toggles hours on/off, and unchecking clears it back to unset.
+router.patch('/:id/fdr-hours', async (req, res) => {
+  try {
+    if (req.admin.role === 'airline') {
+      return res.status(403).json({ error: 'Only admins can update FDR hours.' });
+    }
+    const { fdr_hours } = req.body;
+    let hours = null;
+    if (fdr_hours !== undefined && fdr_hours !== null && String(fdr_hours).trim() !== '') {
+      hours = Number(fdr_hours);
+      if (isNaN(hours) || hours < 0) {
+        return res.status(400).json({ error: 'fdr_hours must be a non-negative number.' });
+      }
+    }
+    const doc = await Participant.findByIdAndUpdate(
+      req.params.id,
+      { fdr_hours: hours },
+      { new: true }
+    );
+    if (!doc) return res.status(404).json({ error: 'Participant not found' });
+    res.json(doc);
+  } catch (err) {
+    console.error('PATCH fdr-hours error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── PATCH cert_sequence only (admin only) ───────────────────────────────────
 router.patch('/:id/cert-sequence', async (req, res) => {
   try {

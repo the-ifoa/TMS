@@ -198,9 +198,9 @@ router.post('/generate/:id', async (req, res) => {
 
 // -- POST /dhl-generate/:id ----------------------------------------------------
 // Extra DHL FORM ST-001 certificate — only for DHL Bahrain / DHL Air (Bahrain)
-// NDG (Dangerous Goods) participants. Fully separate pipeline from the main
-// cert_sequence/generateCertificate flow: own model (DhlCertificate), own
-// numbering pool (reserveDhlCertSequence), additive to the normal certificate.
+// FDR (Flight Dispatch Recurrent) participants. Fully separate pipeline from
+// the main cert_sequence/generateCertificate flow: own model (DhlCertificate),
+// own numbering pool (reserveDhlCertSequence), additive to the normal certificate.
 router.post('/dhl-generate/:id', async (req, res) => {
   try {
     if (!isAdmin(req)) {
@@ -213,8 +213,8 @@ router.post('/dhl-generate/:id', async (req, res) => {
     if (!isDhlBahrainAirline(participant.airline_name)) {
       return res.status(400).json({ error: 'This certificate is only available for DHL Bahrain / DHL Air (Bahrain) participants.' });
     }
-    if (participant.training_type !== 'NDG') {
-      return res.status(400).json({ error: 'This certificate is only available for NDG (Dangerous Goods) training records.' });
+    if (participant.training_type !== 'FDR') {
+      return res.status(400).json({ error: 'This certificate is only available for FDR (Flight Dispatch Recurrent) training records.' });
     }
 
     let dhlCert = await DhlCertificate.findOne({ participant: participant._id });

@@ -27,7 +27,7 @@ import {
   getParticipantsByAirline, deleteParticipant, deleteAirlineData, deleteAirlineById,
   generateCertificateBlob, generateCertificateWithModules,
   updateFullCertId, getCertCounters, resetCertCounter, resetAllCertCounters,
-  updateNdgScore, revokeCertificate, updateValidity, updateAirline,
+  updateNdgScore, updateFdrHours, revokeCertificate, updateValidity, updateAirline,
   generateDhlCertificateBlob, revokeDhlCertificate, downloadDhlCertificate,
   API_BASE,
 } from '../api';
@@ -142,14 +142,14 @@ function VariantModal({ open, variant, setVariant, validity, setValidity, onConf
               </div>
               <p className="text-[11px] text-primary-400 mt-1.5">Printed on certificate. Default: 36 Months.</p>
             </div>
-            {/* DHL extra cert — only offered when the selection includes an eligible (DHL Bahrain, NDG) record */}
+            {/* DHL extra cert — only offered when the selection includes an eligible (DHL Bahrain, FDR) record */}
             {dhlEligibleCount > 0 && (
               <label className="flex items-start gap-2.5 p-3 rounded-xl border-2 border-blue-200 bg-blue-50 cursor-pointer">
                 <input type="checkbox" checked={includeDhl} onChange={e => setIncludeDhl(e.target.checked)}
                   className="mt-0.5 w-4 h-4 accent-blue-600" />
                 <span>
                   <span className="block text-sm font-bold text-blue-700">Also generate DHL Extra Certificate</span>
-                  <span className="block text-xs text-blue-500 mt-0.5">{dhlEligibleCount} of the selected candidate{dhlEligibleCount > 1 ? 's are' : ' is'} eligible (DHL Bahrain, NDG) — generates a DHL FORM ST-XXX certificate for {dhlEligibleCount > 1 ? 'each' : 'it'}, alongside the normal certificate.</span>
+                  <span className="block text-xs text-blue-500 mt-0.5">{dhlEligibleCount} of the selected candidate{dhlEligibleCount > 1 ? 's are' : ' is'} eligible (DHL Bahrain, FDR) — generates a DHL FORM ST-XXX certificate for {dhlEligibleCount > 1 ? 'each' : 'it'}, alongside the normal certificate.</span>
                 </span>
               </label>
             )}
@@ -343,7 +343,7 @@ function CounterResetModal({ open, onClose, counters, ALL_TYPES, resetting, onRe
 }
 
 // ─── Mobile participant card (replaces table row on small screens) ─────────────
-function ParticipantCard({ p, checked, onCheck, onPreview, onDownload, onEdit, onDelete, downloadingId, certEdits, onStartEdit, onCancelEdit, onSaveEdit, setCertEdits, ndgScores, setNdgScores, onNdgScoreSave }) {
+function ParticipantCard({ p, checked, onCheck, onPreview, onDownload, onEdit, onDelete, downloadingId, certEdits, onStartEdit, onCancelEdit, onSaveEdit, setCertEdits, ndgScores, setNdgScores, onNdgScoreSave, fdrHours, setFdrHours, onFdrHoursSave, onFdrHoursToggle }) {
   const pid      = p.id || p._id;
   const fullName = p.participant_name || `${p.first_name || ''} ${p.last_name || ''}`.trim();
   const isCk     = checked.has(pid);
@@ -451,6 +451,48 @@ function ParticipantCard({ p, checked, onCheck, onPreview, onDownload, onEdit, o
         );
       })()}
 
+      {/* FDR hours widget (mobile) */}
+      {p.training_type === 'FDR' && (() => {
+        const entry      = fdrHours?.[pid];
+        const enabled    = entry?.enabled ?? (p.fdr_hours != null);
+        const currentVal = entry !== undefined ? entry.value : (p.fdr_hours != null ? String(p.fdr_hours) : '');
+        const saving     = entry?.saving || false;
+        const saved      = entry?.saved  || false;
+        return (
+          <div className="mt-2 ml-8">
+            <label className="flex items-center gap-1.5 text-[11px] font-semibold text-primary-500 cursor-pointer w-fit">
+              <input type="checkbox" checked={enabled}
+                onChange={e => onFdrHoursToggle(pid, e.target.checked)}
+                className="w-3.5 h-3.5 accent-blue-600" />
+              Add Hours
+            </label>
+            {enabled && (
+              <div className="mt-1.5 flex items-center gap-1.5">
+                <div className="flex items-center gap-1 bg-blue-50 border border-blue-200 rounded-lg px-2 py-1">
+                  <input
+                    type="number" min="0" step="0.5"
+                    placeholder="e.g. 40"
+                    value={currentVal}
+                    onChange={e => setFdrHours(prev => ({ ...prev, [pid]: { enabled: true, value: e.target.value, saving: false, saved: false } }))}
+                    onKeyDown={e => { if (e.key === 'Enter') onFdrHoursSave(pid); }}
+                    className="w-14 px-1 py-0 text-[11px] bg-transparent border-none outline-none text-blue-800 font-semibold placeholder-blue-300"
+                    disabled={saving}
+                  />
+                  <span className="text-[10px] text-blue-500">hrs</span>
+                </div>
+                <button
+                  onClick={() => onFdrHoursSave(pid)}
+                  disabled={saving || !currentVal}
+                  className="flex items-center gap-0.5 px-2 py-1 rounded-lg text-[10px] font-semibold bg-[#0000ff] hover:bg-blue-700 text-white disabled:opacity-50 transition-colors"
+                >
+                  {saving ? <Spin cls="w-3 h-3 border-2 border-white/40 border-t-white" /> : saved ? '✓ Saved' : 'Save Hours'}
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
       {/* Action buttons */}
       <div className="mt-3 ml-8 flex flex-wrap gap-1.5">
         {!p.cert_sequence ? null : !p.cert_released ? (
@@ -487,10 +529,10 @@ function ParticipantCard({ p, checked, onCheck, onPreview, onDownload, onEdit, o
   );
 }
 
-// ─── DHL FORM ST-001 extra certificate — DHL Bahrain / DHL Air (Bahrain), NDG only ──
+// ─── DHL FORM ST-001 extra certificate — DHL Bahrain / DHL Air (Bahrain), FDR only ──
 const DHL_BAHRAIN_NAMES = ['dhl bahrain', 'dhl air (bahrain)'];
 const isDhlBahrainAirline = (name) => DHL_BAHRAIN_NAMES.includes(String(name || '').trim().toLowerCase());
-const eligibleForDhlExtra = (p) => p.training_type === 'NDG' && isDhlBahrainAirline(p.airline_name);
+const eligibleForDhlExtra = (p) => p.training_type === 'FDR' && isDhlBahrainAirline(p.airline_name);
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function Airlines() {
@@ -522,7 +564,9 @@ export default function Airlines() {
 
   const [certEdits, setCertEdits]   = useState({});
   const [ndgScores, setNdgScores]   = useState({}); // { [pid]: { value, saving, saved } }
+  const [fdrHours, setFdrHours]     = useState({}); // { [pid]: { enabled, value, saving, saved } }
   const [savingAllNdgScores, setSavingAllNdgScores] = useState(false); // Track bulk save progress
+  const [savingAllFdrHours, setSavingAllFdrHours] = useState(false);
   const [counterModal, setCounterModal] = useState(false);
   const [counters, setCounters]     = useState([]);
   const [resetting, setResetting]   = useState(null);
@@ -752,6 +796,97 @@ export default function Airlines() {
       toast.error(`${successCount} saved, ${failCount} failed`);
     } else {
       toast.error('Failed to save NDG scores');
+    }
+  };
+
+  // ── FDR hours — optional, admin-toggled figure shown on the FDR certificate ──
+  const handleFdrHoursSave = async (pid) => {
+    const entry = fdrHours[pid];
+    if (!entry || entry.value === '') return;
+    const val = Number(entry.value);
+    if (isNaN(val) || val < 0) { toast.error('Hours must be 0 or more'); return; }
+    setFdrHours(prev => ({ ...prev, [pid]: { ...prev[pid], saving: true } }));
+    try {
+      await updateFdrHours(pid, val);
+      toast.success('Hours saved');
+      setFdrHours(prev => ({ ...prev, [pid]: { enabled: true, value: String(val), saving: false, saved: true } }));
+      setData(prev => prev.map(({ airline, participants }) => ({
+        airline,
+        participants: participants.map(p =>
+          (p.id || p._id) === pid ? { ...p, fdr_hours: val } : p
+        ),
+      })));
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to save hours');
+      setFdrHours(prev => ({ ...prev, [pid]: { ...prev[pid], saving: false } }));
+    }
+  };
+
+  // Unchecking the "Add Hours" box clears and persists immediately, so the
+  // certificate line reverts to its plain form without a manual save step.
+  const handleFdrHoursToggle = async (pid, checked) => {
+    if (checked) {
+      setFdrHours(prev => ({ ...prev, [pid]: { enabled: true, value: prev[pid]?.value ?? '', saving: false, saved: false } }));
+      return;
+    }
+    setFdrHours(prev => ({ ...prev, [pid]: { enabled: false, value: '', saving: true, saved: false } }));
+    try {
+      await updateFdrHours(pid, null);
+      setData(prev => prev.map(({ airline, participants }) => ({
+        airline,
+        participants: participants.map(p =>
+          (p.id || p._id) === pid ? { ...p, fdr_hours: null } : p
+        ),
+      })));
+      setFdrHours(prev => ({ ...prev, [pid]: { enabled: false, value: '', saving: false, saved: false } }));
+    } catch {
+      toast.error('Failed to remove hours');
+      setFdrHours(prev => ({ ...prev, [pid]: { enabled: true, value: prev[pid]?.value ?? '', saving: false, saved: false } }));
+    }
+  };
+
+  // ── Save all FDR hours at once ─────────────────────────────────────────────
+  const handleSaveAllFdrHours = async () => {
+    const toSave = Object.entries(fdrHours)
+      .filter(([, entry]) => entry?.enabled && entry.value && !entry.saving)
+      .map(([pid, entry]) => ({ pid, val: Number(entry.value) }))
+      .filter(({ val }) => !isNaN(val) && val >= 0);
+
+    if (toSave.length === 0) {
+      toast.error('No hours to save');
+      return;
+    }
+
+    setSavingAllFdrHours(true);
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const { pid, val } of toSave) {
+      try {
+        setFdrHours(prev => ({ ...prev, [pid]: { ...prev[pid], saving: true } }));
+        await updateFdrHours(pid, val);
+        setFdrHours(prev => ({ ...prev, [pid]: { enabled: true, value: String(val), saving: false, saved: true } }));
+        setData(prev => prev.map(({ airline, participants }) => ({
+          airline,
+          participants: participants.map(p =>
+            (p.id || p._id) === pid ? { ...p, fdr_hours: val } : p
+          ),
+        })));
+        successCount++;
+      } catch (err) {
+        setFdrHours(prev => ({ ...prev, [pid]: { ...prev[pid], saving: false } }));
+        failCount++;
+      }
+    }
+
+    setSavingAllFdrHours(false);
+
+    if (failCount === 0) {
+      toast.success(`${successCount} hour${successCount !== 1 ? 's entry' : ' entry'} saved successfully`);
+    } else if (successCount > 0) {
+      toast.error(`${successCount} saved, ${failCount} failed`);
+    } else {
+      toast.error('Failed to save hours');
     }
   };
 
@@ -993,14 +1128,14 @@ export default function Airlines() {
     setVariantModal(true);
   };
 
-  // Extra DHL FORM ST-001 certificate — DHL Bahrain / DHL Air (Bahrain), NDG only.
+  // Extra DHL FORM ST-001 certificate — DHL Bahrain / DHL Air (Bahrain), FDR only.
   // Fully separate from the normal generate flow above: own endpoint, own numbering.
   const handleGenerateDhlSelected = async () => {
     const selected  = allParticipants.filter(p => checked.has(p.id || p._id));
     const eligible  = selected.filter(eligibleForDhlExtra);
     const skipped   = selected.length - eligible.length;
     if (eligible.length === 0) {
-      toast.error('None of the selected participants are eligible (DHL Bahrain / DHL Air (Bahrain), NDG training only).');
+      toast.error('None of the selected participants are eligible (DHL Bahrain / DHL Air (Bahrain), FDR training only).');
       return;
     }
     setGeneratingDhl(true);
@@ -1338,7 +1473,8 @@ export default function Airlines() {
       {(() => {
         const hasSelection = checked.size > 0 || checkedAirlines.size > 0;
         const hasNdg = Object.values(ndgScores).some(e => e?.value);
-        const showActions = controlBarOpen || hasSelection || hasNdg;
+        const hasFdrHours = Object.values(fdrHours).some(e => e?.enabled && e?.value);
+        const showActions = controlBarOpen || hasSelection || hasNdg || hasFdrHours;
         return (
           <div className="sticky top-0 z-20 bg-white border-b border-primary-200 shadow-sm">
             {/* ── Row 1: always visible ── */}
@@ -1424,7 +1560,7 @@ export default function Airlines() {
                   {revoking ? 'Revoking…' : 'Revoke Cert'}
                 </button>
 
-                {/* Generate DHL extra cert — only shown when selection includes an eligible (DHL Bahrain, NDG) record */}
+                {/* Generate DHL extra cert — only shown when selection includes an eligible (DHL Bahrain, FDR) record */}
                 {allParticipants.some(p => checked.has(p.id || p._id) && eligibleForDhlExtra(p)) && (
                   <button onClick={handleGenerateDhlSelected} disabled={generatingDhl}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-violet-300 bg-violet-50 text-violet-700 hover:bg-violet-100 transition-all disabled:opacity-60">
@@ -1464,6 +1600,15 @@ export default function Airlines() {
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${!savingAllNdgScores ? 'bg-[#0000ff] text-white hover:bg-blue-700 shadow-sm' : 'bg-blue-200 text-blue-700'}`}>
                     {savingAllNdgScores ? <Spin cls="w-3.5 h-3.5 border-2 border-white/40 border-t-white" /> : <HiOutlineCheckCircle className="w-3.5 h-3.5" />}
                     {savingAllNdgScores ? 'Saving…' : 'Save All NDG Scores'}
+                  </button>
+                )}
+
+                {/* Save All FDR Hours (only when hours entered) */}
+                {hasFdrHours && (
+                  <button onClick={handleSaveAllFdrHours} disabled={savingAllFdrHours}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${!savingAllFdrHours ? 'bg-[#0000ff] text-white hover:bg-blue-700 shadow-sm' : 'bg-blue-200 text-blue-700'}`}>
+                    {savingAllFdrHours ? <Spin cls="w-3.5 h-3.5 border-2 border-white/40 border-t-white" /> : <HiOutlineCheckCircle className="w-3.5 h-3.5" />}
+                    {savingAllFdrHours ? 'Saving…' : 'Save All FDR Hours'}
                   </button>
                 )}
 
@@ -1621,7 +1766,8 @@ export default function Airlines() {
                             certEdits={certEdits} onStartEdit={startCertEdit}
                             onCancelEdit={cancelCertEdit} onSaveEdit={saveCertEdit}
                             setCertEdits={setCertEdits}
-                            ndgScores={ndgScores} setNdgScores={setNdgScores} onNdgScoreSave={handleNdgScoreSave} />
+                            ndgScores={ndgScores} setNdgScores={setNdgScores} onNdgScoreSave={handleNdgScoreSave}
+                            fdrHours={fdrHours} setFdrHours={setFdrHours} onFdrHoursSave={handleFdrHoursSave} onFdrHoursToggle={handleFdrHoursToggle} />
                         </div>
                       ))}
                     </div>
@@ -1758,6 +1904,47 @@ export default function Airlines() {
                                         >
                                           {saving ? <Spin cls="w-3 h-3 border-2 border-white/40 border-t-white" /> : saved ? '✓' : 'Save'}
                                         </button>
+                                      </div>
+                                    );
+                                  })()}
+                                  {/* FDR hours toggle — admin only, shown inline for FDR participants */}
+                                  {p.training_type === 'FDR' && (() => {
+                                    const entry      = fdrHours[pid];
+                                    const enabled    = entry?.enabled ?? (p.fdr_hours != null);
+                                    const currentVal = entry !== undefined ? entry.value : (p.fdr_hours != null ? String(p.fdr_hours) : '');
+                                    const saving     = entry?.saving || false;
+                                    const saved      = entry?.saved  || false;
+                                    return (
+                                      <div className="mt-1.5" onClick={e => e.stopPropagation()}>
+                                        <label className="flex items-center gap-1 text-[10px] font-semibold text-primary-500 cursor-pointer w-fit">
+                                          <input type="checkbox" checked={enabled}
+                                            onChange={e => handleFdrHoursToggle(pid, e.target.checked)}
+                                            className="w-3 h-3 accent-blue-600" />
+                                          Add Hours
+                                        </label>
+                                        {enabled && (
+                                          <div className="mt-1 flex items-center gap-1">
+                                            <div className="flex items-center gap-1 bg-blue-50 border border-blue-200 rounded-lg px-1.5 py-1">
+                                              <input
+                                                type="number" min="0" step="0.5"
+                                                placeholder="e.g. 40"
+                                                value={currentVal}
+                                                onChange={e => setFdrHours(prev => ({ ...prev, [pid]: { enabled: true, value: e.target.value, saving: false, saved: false } }))}
+                                                onKeyDown={e => { if (e.key === 'Enter') handleFdrHoursSave(pid); }}
+                                                className="w-14 px-1 py-0 text-[11px] bg-transparent border-none outline-none text-blue-800 font-semibold placeholder-blue-300"
+                                                disabled={saving}
+                                              />
+                                              <span className="text-[10px] text-blue-500">hrs</span>
+                                            </div>
+                                            <button
+                                              onClick={() => handleFdrHoursSave(pid)}
+                                              disabled={saving || !currentVal}
+                                              className="flex items-center gap-0.5 px-1.5 py-1 rounded-lg text-[10px] font-semibold bg-[#0000ff] hover:bg-blue-700 text-white disabled:opacity-50 transition-colors"
+                                            >
+                                              {saving ? <Spin cls="w-3 h-3 border-2 border-white/40 border-t-white" /> : saved ? '✓' : 'Save'}
+                                            </button>
+                                          </div>
+                                        )}
                                       </div>
                                     );
                                   })()}

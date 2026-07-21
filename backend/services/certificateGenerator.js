@@ -407,7 +407,11 @@ async function generateCertificate(participant) {
     if (locationText) drawCentered(`Delivered in: ${locationText}`, 422, helvetica, 10);
 
   } else if (trainingType === 'Recurrent') {
-    drawCentered('Has successfully completed the Flight Dispatch Recurrent Training delivered in English', 327, helvetica, 11);
+    // Optional hours figure, admin-entered — e.g. "Has successfully completed
+    // the 40 Hours Flight Dispatch Recurrent Training delivered in English"
+    const hours     = participant.fdr_hours;
+    const hoursText = (hours != null && hours !== '') ? `${hours} Hour${Number(hours) === 1 ? '' : 's'} ` : '';
+    drawCentered(`Has successfully completed the ${hoursText}Flight Dispatch Recurrent Training delivered in English`, 327, helvetica, 11);
     drawCentered('in accordance with ICAO Doc 10106, ICAO Doc 9868, EASA Part ORO.GEN.110(c) and IOSA ISM Table 3.6', 341, helvetica, 11);
 
     const modules = participant.modules

@@ -102,6 +102,7 @@ export const deleteAirlineById        = (airlineId)   => api.delete(`/participan
 export const updateCertSequence       = (id, cert_sequence) => api.patch(`/participants/${id}/cert-sequence`, { cert_sequence });
 export const updateFullCertId         = (id, cert_sequence, cert_year) => api.patch(`/participants/${id}/full-cert-id`, { cert_sequence, cert_year });
 export const updateNdgScore           = (id, ndg_score) => api.patch(`/participants/${id}/ndg-score`, { ndg_score });
+export const updateFdrHours           = (id, fdr_hours) => api.patch(`/participants/${id}/fdr-hours`, { fdr_hours });
 export const revokeCertificate        = (id)            => api.patch(`/participants/${id}/revoke-cert`);
 export const revokeDhlCertificate     = (id)            => api.patch(`/participants/${id}/revoke-dhl-cert`);
 export const updateValidity           = (id, cert_validity) => api.patch(`/participants/${id}/validity`, { cert_validity });

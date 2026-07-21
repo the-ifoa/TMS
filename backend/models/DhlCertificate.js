@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 
-// ── DHL FORM ST-001 extra certificate (DHL Bahrain / DHL Air (Bahrain), NDG only) ──
+// ── DHL FORM ST-001 extra certificate (DHL Bahrain / DHL Air (Bahrain), FDR only) ──
 // One document per participant. Kept separate from Participant so the DHL
 // numbering pool (starts at 001, gap-filled on revoke/delete) never touches
 // the existing cert_sequence system used by every other certificate type.

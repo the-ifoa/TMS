@@ -2,7 +2,7 @@ const { PDFDocument, PDFName, rgb, StandardFonts } = require('pdf-lib');
 const fs = require('fs');
 const path = require('path');
 
-const TEMPLATE_PATH = path.join(__dirname, '..', '..', 'DHL_ST001_NDG.pdf');
+const TEMPLATE_PATH = path.join(__dirname, '..', '..', 'DHL_ST001_FDR.pdf');
 const ASSETS_DIR = path.join(__dirname, '..', 'assets');
 // Instructor signature. The .png is the background-stripped version and is
 // preferred — the source .jpeg has an opaque white box that covers the
@@ -111,8 +111,7 @@ async function generateDhlCertificate(participant, sequence) {
 
   // ── 2. Training type (inside the "Text4" blue box) — the baked-in module ─
   //      list paragraph below it is template content and is left untouched.
-  const ndgSubtype = participant.ndg_subtype === 'R' ? 'Recurrent' : 'Initial';
-  const trainingLine = `Dangerous Goods No-Carry ${ndgSubtype} Training`;
+  const trainingLine = 'Flight Dispatch Recurrent Training';
   drawInField(trainingLine, FIELD.trainingType, helveticaBold, 13);
 
   // ── 3. Course Date (= end_date, fallback training_date) ─────────────────

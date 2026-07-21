@@ -148,7 +148,7 @@ async function reserveCertSequence(training_type) {
 }
 
 // Fixed counter key for the DHL FORM ST-001 extra certificate. It is ONE
-// shared pool across all DHL Bahrain / NDG candidates — not split per
+// shared pool across all DHL Bahrain / FDR candidates — not split per
 // training type — so it lives under its own single CertCounter document.
 const DHL_ST001_CODE = 'DHL-ST001';
 

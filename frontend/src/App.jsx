@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { useAuth } from './context/AuthContext';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import Layout from './components/Layout';
 import LandingPage from './pages/LandingPage';
 import Login from './pages/Login';
@@ -19,6 +20,12 @@ import Profile from './pages/Profile';
 import ExamResults from './pages/ExamResults';
 import AttendanceSheets from './pages/AttendanceSheets';
 import DgrForms from './pages/DgrForms';
+import ExamSystem from './pages/ExamSystem';
+import ExamBuilder from './pages/ExamBuilder';
+import ExamAttempts from './pages/ExamAttempts';
+import AirlineExams from './pages/AirlineExams';
+import ExamTake from './pages/ExamTake';
+import ExamResultView from './pages/ExamResultView';
 
 // Requires any authenticated user (admin or airline)
 function ProtectedRoute({ children }) {
@@ -53,7 +60,7 @@ function GuestRoute({ children }) {
 
 function App() {
   return (
-    <>
+    <TooltipProvider delayDuration={200}>
       <Toaster
         position="top-right"
         toastOptions={{
@@ -89,6 +96,10 @@ function App() {
           <Route path="attendance"   element={<AdminRoute><AttendanceSheets /></AdminRoute>} />
           <Route path="exam-results" element={<AdminRoute><ExamResults /></AdminRoute>} />
           <Route path="dgr"          element={<AdminRoute><DgrForms /></AdminRoute>} />
+          <Route path="exams"           element={<AdminRoute><ExamSystem /></AdminRoute>} />
+          <Route path="exams/new"       element={<AdminRoute><ExamBuilder /></AdminRoute>} />
+          <Route path="exams/:id/edit"  element={<AdminRoute><ExamBuilder /></AdminRoute>} />
+          <Route path="exams/:id/attempts" element={<AdminRoute><ExamAttempts /></AdminRoute>} />
         </Route>
 
         {/* Airline-friendly URL aliases — same pages, nicer URLs for airline users */}
@@ -97,10 +108,13 @@ function App() {
           <Route path="submissions" element={<Participants />} />
           <Route path="enrollment/new" element={<AddParticipant />} />
           <Route path="dgr" element={<DgrForms />} />
+          <Route path="exams" element={<AirlineExams />} />
+          <Route path="exams/:examId/take/:attemptId" element={<ExamTake />} />
+          <Route path="exams/:examId/result/:attemptId" element={<ExamResultView />} />
           <Route path="profile" element={<Profile />} />
         </Route>
       </Routes>
-    </>
+    </TooltipProvider>
   );
 }
 

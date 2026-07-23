@@ -22,6 +22,11 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react(), htaccessPlugin()],
+    resolve: {
+      alias: {
+        '@': path.resolve(__dirname, './src'),
+      },
+    },
     build: {
       outDir: 'public_html',
       emptyOutDir: true,

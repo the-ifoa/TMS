@@ -30,6 +30,7 @@ import {
   previewContract,
   sendContract,
 } from '../api';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 
 const STRUCTURAL = { spacer: true, sigimage: true };
 
@@ -288,11 +289,12 @@ function ServicesBulletEditor({ block, onChange }) {
 
       <div>
         <label className="text-[10px] font-semibold text-primary-500 uppercase tracking-wide">Training Type</label>
-        <select value={TRAINING_TYPES_LIST.includes(type) ? type : TRAINING_TYPES_LIST[0]}
-          onChange={e => upd(setType, 'type', e.target.value)}
-          className="input-field w-full text-sm mt-0.5">
-          {TRAINING_TYPES_LIST.map(t => <option key={t} value={t}>{t}</option>)}
-        </select>
+        <Select value={TRAINING_TYPES_LIST.includes(type) ? type : TRAINING_TYPES_LIST[0]} onValueChange={v => upd(setType, 'type', v)}>
+          <SelectTrigger className="w-full mt-0.5"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {TRAINING_TYPES_LIST.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+          </SelectContent>
+        </Select>
       </div>
 
       <div>
@@ -306,11 +308,12 @@ function ServicesBulletEditor({ block, onChange }) {
 
       <div>
         <label className="text-[10px] font-semibold text-primary-500 uppercase tracking-wide">Delivery Mode</label>
-        <select value={DELIVERY_OPTIONS.includes(delivery) ? delivery : DELIVERY_OPTIONS[0]}
-          onChange={e => upd(setDelivery, 'delivery', e.target.value)}
-          className="input-field w-full text-sm mt-0.5">
-          {DELIVERY_OPTIONS.map(d => <option key={d} value={d}>{d}</option>)}
-        </select>
+        <Select value={DELIVERY_OPTIONS.includes(delivery) ? delivery : DELIVERY_OPTIONS[0]} onValueChange={v => upd(setDelivery, 'delivery', v)}>
+          <SelectTrigger className="w-full mt-0.5"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {DELIVERY_OPTIONS.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+          </SelectContent>
+        </Select>
       </div>
 
       <div>
@@ -335,10 +338,12 @@ function CurrencyParaEditor({ block, onChange }) {
       <span className="text-sm text-primary-700 flex-shrink-0">
         …all monetary amounts referred to in this Agreement are in
       </span>
-      <select value={currency} onChange={e => upd(e.target.value)}
-        className="input-field text-sm font-semibold text-amber-800 border-amber-300 w-44">
-        {CURRENCY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
-      </select>
+      <Select value={currency} onValueChange={v => upd(v)}>
+        <SelectTrigger className="font-semibold text-amber-800 border-amber-300 w-44"><SelectValue /></SelectTrigger>
+        <SelectContent>
+          {CURRENCY_OPTIONS.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+        </SelectContent>
+      </Select>
       <span className="text-sm text-primary-700">.</span>
     </div>
   );
@@ -360,10 +365,12 @@ function FeeBulletEditor({ block, onChange, showCurrency = true }) {
       <input type="text" value={amount} onChange={e => { setAmount(e.target.value); upd(e.target.value, currency); }}
         placeholder={showCurrency ? 'e.g. 2 x 1,100 = 2,200' : 'e.g. 2'} className="input-field text-sm flex-1 min-w-[100px]" />
       {showCurrency && (
-        <select value={currency} onChange={e => { setCurrency(e.target.value); upd(amount, e.target.value); }}
-          className="input-field text-sm font-semibold text-amber-800 border-amber-300 w-24">
-          {CURRENCY_SHORT.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
+        <Select value={currency} onValueChange={v => { setCurrency(v); upd(amount, v); }}>
+          <SelectTrigger className="font-semibold text-amber-800 border-amber-300 w-24"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {CURRENCY_SHORT.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+          </SelectContent>
+        </Select>
       )}
     </div>
   );
@@ -548,166 +555,164 @@ function AirlinesList({ airlines, onCreateContract, onViewContract, loading }) {
   });
 
   return (
-    <div className="space-y-3">
-
-      {/* ── Sticky search + filter card ── */}
-      <div className="sticky top-0 z-20 card p-4 space-y-3 shadow-md bg-white">
+    <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden">
+      {/* ── Unified Sticky Search + Filter Header Bar ── */}
+      <div className="sticky top-0 z-20 bg-white border-b border-slate-200/80 p-3.5 sm:p-4 space-y-3 sm:space-y-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         {/* Search bar */}
-        <div className="relative">
-          <HiOutlineSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-primary-400 pointer-events-none" />
+        <div className="relative flex-1 max-w-md">
+          <HiOutlineSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
           <input
             type="text"
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Search airline name or email…"
-            className="input-field pl-9 pr-8 w-full text-sm"
+            className="w-full pl-10 pr-8 py-2 bg-slate-50 border border-slate-200/90 rounded-xl text-xs sm:text-sm font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900 transition-all"
           />
           {search && (
             <button onClick={() => setSearch('')}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded text-primary-400 hover:text-primary-600">
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 transition-colors">
               <HiOutlineX className="w-3.5 h-3.5" />
             </button>
           )}
         </div>
 
         {/* Filter tabs */}
-        <div className="flex items-center gap-1.5 flex-wrap">
-          {FILTERS.map(f => {
-            const count =
-              f.key === 'all'     ? airlines.length :
-              f.key === 'sent'    ? airlines.filter(a => a.contractSent).length :
-              airlines.filter(a => !a.contractSent).length;
-            return (
-              <button
-                key={f.key}
-                onClick={() => setFilter(f.key)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                  filter === f.key
-                    ? 'bg-primary-800 text-white'
-                    : 'text-primary-500 hover:bg-primary-100 border border-primary-100'
-                }`}
-              >
-                {f.label}
-                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
-                  filter === f.key ? 'bg-white/20 text-white' : 'bg-primary-100 text-primary-500'
-                }`}>
-                  {count}
-                </span>
-              </button>
-            );
-          })}
-          {(search || filter !== 'all') && (
-            <span className="ml-auto text-[11px] text-primary-400">
-              {visible.length} result{visible.length !== 1 ? 's' : ''}
-            </span>
-          )}
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1 bg-slate-100/80 rounded-xl p-1 border border-slate-200/60">
+            {FILTERS.map(f => {
+              const count =
+                f.key === 'all'     ? airlines.length :
+                f.key === 'sent'    ? airlines.filter(a => a.contractSent).length :
+                airlines.filter(a => !a.contractSent).length;
+              const isActive = filter === f.key;
+              return (
+                <button
+                  key={f.key}
+                  onClick={() => setFilter(f.key)}
+                  className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all w-28 flex-shrink-0 ${
+                    isActive
+                      ? 'bg-slate-900 text-white shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <span>{f.label}</span>
+                  <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ${
+                    isActive ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600'
+                  }`}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          <span className="text-[11px] font-semibold text-slate-400 min-w-[56px] text-left">
+            {visible.length} {visible.length === 1 ? 'result' : 'results'}
+          </span>
         </div>
       </div>
 
-      {/* ── Scrollable airlines list card ── */}
-      <div className="card overflow-hidden">
-        <div className="overflow-y-auto divide-y divide-primary-100" style={{ maxHeight: 'calc(100vh - 320px)', minHeight: '120px' }}>
-          {loading ? (
-            <div className="flex items-center justify-center py-16">
-              <div className="w-6 h-6 border-2 border-primary-300 border-t-primary-600 rounded-full animate-spin" />
-            </div>
-          ) : !visible.length ? (
-            <div className="py-14 text-center text-primary-400 text-sm">
-              {airlines.length === 0
-                ? 'No airlines found. Add airlines first.'
-                : 'No airlines match your search or filter.'}
-            </div>
-          ) : visible.map(airline => (
-            <div key={airline.id}
-              className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 px-4 sm:px-5 py-4 hover:bg-primary-50/60 transition-colors">
+      {/* ── Scrollable airlines list ── */}
+      <div className="divide-y divide-slate-100 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 300px)', minHeight: '160px' }}>
+        {loading ? (
+          <div className="flex items-center justify-center py-16 gap-2 text-slate-400">
+            <div className="w-5 h-5 border-2 border-slate-200 border-t-slate-900 rounded-full animate-spin" />
+            <span className="text-xs font-medium">Loading contracts…</span>
+          </div>
+        ) : !visible.length ? (
+          <div className="py-14 text-center text-slate-400 text-xs sm:text-sm font-medium">
+            {airlines.length === 0
+              ? 'No airlines found. Add airlines first.'
+              : 'No airlines match your search or filter.'}
+          </div>
+        ) : visible.map(airline => (
+          <div key={airline.id}
+            className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 px-4 sm:px-6 py-4 hover:bg-slate-50/80 transition-colors">
 
-              {/* Top row on mobile: icon + info + status badge */}
-              <div className="flex items-center gap-3 flex-1 min-w-0">
-                <div className="flex-shrink-0 w-9 h-9 rounded-xl bg-primary-100 flex items-center justify-center overflow-hidden">
-                  {airline.logoUrl
-                    ? <img src={airline.logoUrl} alt={airline.airlineName} className="w-full h-full object-contain p-0.5" />
-                    : <HiOutlineOfficeBuilding className="w-5 h-5 text-primary-600" />
-                  }
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-primary-800 truncate">{airline.airlineName}</p>
-                  <p className="text-xs text-primary-400 truncate">{airline.email}</p>
-                  {/* Mobile-only status inline */}
-                  <div className="sm:hidden mt-1">
-                    {airline.contractSent ? (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-green-700">
-                        <HiOutlineCheckCircle className="w-3 h-3" />
-                        Sent · {airline.contractEmail}
-                        {airline.contractSentAt && ` · ${new Date(airline.contractSentAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`}
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-primary-400">
-                        <HiOutlineClock className="w-3 h-3" /> Not sent
-                      </span>
-                    )}
-                  </div>
+            {/* Top row on mobile: icon + info + status badge */}
+            <div className="flex items-center gap-3 flex-1 min-w-0">
+              <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-slate-100 border border-slate-200/80 flex items-center justify-center overflow-hidden">
+                {airline.logoUrl
+                  ? <img src={airline.logoUrl} alt={airline.airlineName} className="w-full h-full object-contain p-1" />
+                  : <HiOutlineOfficeBuilding className="w-5 h-5 text-slate-600" />
+                }
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-slate-900 truncate leading-tight">{airline.airlineName}</p>
+                <p className="text-xs text-slate-500 truncate mt-0.5">{airline.email}</p>
+                {/* Mobile-only status inline */}
+                <div className="sm:hidden mt-1">
+                  {airline.contractSent ? (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                      <HiOutlineCheckCircle className="w-3 h-3 text-emerald-600" />
+                      Sent · {airline.contractEmail}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
+                      <HiOutlineClock className="w-3 h-3 text-slate-400" /> Not sent
+                    </span>
+                  )}
                 </div>
               </div>
+            </div>
 
-              {/* Desktop status column */}
-              <div className="hidden sm:flex flex-col items-end gap-0.5 flex-shrink-0 w-[175px]">
-                {airline.contractSent ? (
-                  <>
-                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-50 border border-green-200">
-                      <HiOutlineCheckCircle className="w-3.5 h-3.5 text-green-600" />
-                      <span className="text-[11px] font-semibold text-green-700">Contract sent</span>
-                    </div>
-                    {airline.contractEmail && (
-                      <span className="text-[10px] text-primary-400 truncate max-w-[175px]">
-                        → {airline.contractEmail}
-                      </span>
-                    )}
-                    {airline.contractSentAt && (
-                      <span className="text-[10px] text-primary-400">
-                        {new Date(airline.contractSentAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                      </span>
-                    )}
-                  </>
-                ) : (
-                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary-50 border border-primary-200">
-                    <HiOutlineClock className="w-3.5 h-3.5 text-primary-400" />
-                    <span className="text-[11px] font-semibold text-primary-500">Not sent</span>
+            {/* Desktop status column */}
+            <div className="hidden sm:flex flex-col items-end gap-0.5 flex-shrink-0 w-[185px]">
+              {airline.contractSent ? (
+                <>
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200">
+                    <HiOutlineCheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                    <span className="text-[11px] font-bold text-emerald-700">Contract sent</span>
                   </div>
-                )}
-              </div>
+                  {airline.contractEmail && (
+                    <span className="text-[10px] font-medium text-slate-400 truncate max-w-[185px]">
+                      &rarr; {airline.contractEmail}
+                    </span>
+                  )}
+                  {airline.contractSentAt && (
+                    <span className="text-[10px] text-slate-400">
+                      {new Date(airline.contractSentAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </span>
+                  )}
+                </>
+              ) : (
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-200">
+                  <HiOutlineClock className="w-3.5 h-3.5 text-slate-400" />
+                  <span className="text-[11px] font-semibold text-slate-500">Not sent</span>
+                </div>
+              )}
+            </div>
 
-              {/* Actions */}
-              <div className="flex items-center gap-2 flex-shrink-0 sm:pl-0 pl-12">
-                {airline.contractSent ? (
-                  <>
-                    <button
-                      onClick={() => onViewContract(airline)}
-                      className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-primary-200 text-xs font-semibold text-primary-600 hover:bg-primary-100 transition-colors"
-                    >
-                      <HiOutlineEye className="w-4 h-4" />
-                      <span className="hidden xs:inline sm:inline">View</span>
-                    </button>
-                    <button
-                      onClick={() => onCreateContract(airline)}
-                      className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-amber-200 bg-amber-50 text-xs font-semibold text-amber-700 hover:bg-amber-100 transition-colors"
-                    >
-                      <HiOutlineRefresh className="w-4 h-4" />
-                      <span className="hidden xs:inline sm:inline">Resend</span>
-                    </button>
-                  </>
-                ) : (
+            {/* Actions */}
+            <div className="flex items-center gap-2 flex-shrink-0 sm:pl-0 pl-13">
+              {airline.contractSent ? (
+                <>
+                  <button
+                    onClick={() => onViewContract(airline)}
+                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 hover:border-slate-300 transition-all shadow-2xs"
+                  >
+                    <HiOutlineEye className="w-4 h-4 text-slate-500" />
+                    <span>View</span>
+                  </button>
                   <button
                     onClick={() => onCreateContract(airline)}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-primary-800 text-white text-xs font-semibold hover:bg-primary-900 transition-colors shadow-sm"
+                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-amber-200 bg-amber-50/90 text-xs font-semibold text-amber-800 hover:bg-amber-100 transition-all shadow-2xs"
                   >
-                    <HiOutlinePencil className="w-4 h-4" />
-                    <span>Create Contract</span>
+                    <HiOutlineRefresh className="w-4 h-4 text-amber-600" />
+                    <span>Resend</span>
                   </button>
-                )}
-              </div>
+                </>
+              ) : (
+                <button
+                  onClick={() => onCreateContract(airline)}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition-all shadow-2xs"
+                >
+                  <HiOutlinePencil className="w-4 h-4" />
+                  <span>Create Contract</span>
+                </button>
+              )}
             </div>
-          ))}
-        </div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -1115,16 +1120,16 @@ export default function Contract() {
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-      className="max-w-4xl mx-auto space-y-5 sm:space-y-6 px-0 pb-4">
+      className="max-w-4xl mx-auto space-y-5 sm:space-y-6 px-4 sm:px-6 pt-4 sm:pt-6 mt-2 pb-8">
 
-      {/* Header */}
+      {/* Page Header */}
       <div className="flex items-center gap-3">
-        <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-primary-700 to-primary-900 flex items-center justify-center shadow-sm">
+        <div className="w-10 h-10 rounded-xl bg-slate-900 flex items-center justify-center shadow-2xs">
           <HiOutlineDocumentText className="w-5 h-5 text-white" />
         </div>
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-primary-800">Contracts</h1>
-          <p className="text-xs sm:text-sm text-primary-400 mt-0.5">
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">Contracts</h1>
+          <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
             {view === 'list'
               ? 'Manage & send contracts to airlines'
               : `Editing contract for ${selectedAirline?.airlineName || 'airline'}`}

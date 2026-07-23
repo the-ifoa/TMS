@@ -132,6 +132,32 @@ export const createDgrForm  = (data)        => api.post('/dgr', data);
 export const updateDgrForm  = (id, data)    => api.put(`/dgr/${id}`, data);
 export const deleteDgrForm  = (id)          => api.delete(`/dgr/${id}`);
 
+// ── Exam System ───────────────────────────────────────────────────────────────
+export const getExamAirlines  = ()         => api.get('/exams/airlines');        // admin: airlines + students
+export const listExams        = (params = {}) => api.get('/exams', { params });
+export const getExam          = (id)       => api.get(`/exams/${id}`);
+export const createExam       = (data)     => api.post('/exams', data);
+export const updateExam       = (id, data) => api.put(`/exams/${id}`, data);
+export const deleteExam       = (id)       => api.delete(`/exams/${id}`);
+export const publishExam      = (id)       => api.post(`/exams/${id}/publish`);
+export const assignExam       = (id, participantIds) => api.post(`/exams/${id}/assign`, { participant_ids: participantIds });
+export const uploadExamImage  = (file) => {
+  const fd = new FormData();
+  fd.append('image', file);
+  return api.post('/exams/questions/upload-image', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+};
+export const deleteExamImage  = (publicId) => api.delete(`/exams/questions/image/${encodeURIComponent(publicId)}`);
+
+export const getAssignedExams     = ()                        => api.get('/exams/assigned');
+export const startExamAttempt     = (examId, participantId)   => api.post(`/exams/${examId}/attempts`, { participant_id: participantId });
+export const getExamAttempt       = (attemptId)                => api.get(`/exams/attempts/${attemptId}`);
+export const saveExamAnswer       = (attemptId, questionId, response) => api.put(`/exams/attempts/${attemptId}/answer`, { question_id: questionId, response });
+export const submitExamAttempt    = (attemptId)                => api.post(`/exams/attempts/${attemptId}/submit`);
+export const reportExamViolation  = (attemptId, type)           => api.post(`/exams/attempts/${attemptId}/violation`, { type });
+export const listExamAttempts     = (params = {})              => api.get('/exams/attempts', { params });
+export const getExamAttemptResult = (attemptId)                => api.get(`/exams/attempts/${attemptId}/result`);
+export const gradeExamAttempt     = (attemptId, data)           => api.put(`/exams/attempts/${attemptId}/grade`, data);
+
 // ── Password Reset ────────────────────────────────────────────────────────────
 export const forgotPassword = (email)                     => api.post('/auth/airline/forgot-password', { email });
 export const resetPassword  = (email, token, newPassword) => api.post('/auth/airline/reset-password', { email, token, newPassword });

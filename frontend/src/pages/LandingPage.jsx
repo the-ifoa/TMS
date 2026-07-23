@@ -1,5 +1,5 @@
-import { Link } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { Link, useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { useState } from 'react';
 import {
   HiOutlineDocumentText,
@@ -11,51 +11,73 @@ import {
   HiOutlineGlobe,
   HiOutlineMenu,
   HiOutlineX,
+  HiOutlineLogout,
+  HiOutlineChevronDown,
 } from 'react-icons/hi';
 import { useAuth } from '../context/AuthContext';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
 import logoImg from '../assets/logo.png';
 
+/* ── Animation Variants ── */
 const fadeUp = {
-  hidden: { opacity: 0, y: 40 },
-  show:   { opacity: 1, y: 0, transition: { duration: 0.6, ease: 'easeOut' } },
+  hidden: { opacity: 0, y: 24 },
+  show:   { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.25, 1, 0.5, 1] } },
 };
 
 const stagger = {
-  hidden: { opacity: 0 },
-  show:   { opacity: 1, transition: { staggerChildren: 0.15, delayChildren: 0.3 } },
+  hidden: {},
+  show:   { transition: { staggerChildren: 0.1, delayChildren: 0.15 } },
 };
 
+/* ── Data Configs ── */
 const features = [
-  { icon: HiOutlineUsers,        title: 'Participant Management',  desc: 'Add, edit and manage training participant records with full CRUD operations.',                          bg: 'bg-blue-50',    iconColor: 'text-blue-600'    },
-  { icon: HiOutlineDocumentText, title: 'Certificate Generation',  desc: 'Generate professional PDF certificates from official IFOA-approved templates instantly.',               bg: 'bg-emerald-50', iconColor: 'text-emerald-600' },
-  { icon: HiOutlineAcademicCap,  title: 'Training Modules',        desc: 'Track completed training modules for recurrent dispatcher certification.',                             bg: 'bg-violet-50',  iconColor: 'text-violet-600'  },
-  { icon: HiOutlineLightningBolt,title: 'Instant Processing',      desc: 'Generate certificates in seconds with automatic data population.',                                     bg: 'bg-amber-50',   iconColor: 'text-amber-600'   },
-  { icon: HiOutlineShieldCheck,  title: 'Regulation Compliant',          desc: 'Certificates comply with ICAO Doc 10106, Doc 9868, and international aviation training standards.',   bg: 'bg-rose-50',    iconColor: 'text-rose-600'    },
-  { icon: HiOutlineGlobe,        title: 'Multi-Type Training',     desc: 'Supports FDI, FDR, FDA, FTL, NDG, HF, GD and TCD training types.',                                   bg: 'bg-cyan-50',    iconColor: 'text-cyan-600'    },
+  { icon: HiOutlineUsers,        title: 'Participant Management',  desc: 'Add, edit and manage training participant records with full CRUD operations.' },
+  { icon: HiOutlineDocumentText, title: 'Certificate Generation',  desc: 'Generate professional PDF certificates from official IFOA-approved templates instantly.' },
+  { icon: HiOutlineAcademicCap,  title: 'Training Modules',        desc: 'Track completed training modules for recurrent dispatcher certification.' },
+  { icon: HiOutlineLightningBolt,title: 'Instant Processing',      desc: 'Generate certificates in seconds with automatic data population and smart templates.' },
+  { icon: HiOutlineShieldCheck,  title: 'Regulation Compliant',    desc: 'Certificates comply with ICAO Doc 10106, Doc 9868, and international aviation training standards.' },
+  { icon: HiOutlineGlobe,        title: 'Multi-Type Training',     desc: 'Supports FDI, FDR, FDA, FTL, NDG, HF, GD and TCD training types out-of-the-box.' },
 ];
 
 const stats = [
-  { value: '8',    label: 'Training Types' },
-  { value: '12',   label: 'Modules' },
-  { value: 'Regulation', label: 'Compliant' },
-  { value: 'PDF',  label: 'Export' },
+  { value: '8',          label: 'Training Types',      sub: 'Fully supported' },
+  { value: '12',         label: 'Modules',             sub: 'Per training type' },
+  { value: 'ICAO',       label: 'Reg. Compliant',      sub: 'Doc 10106 & 9868' },
+  { value: 'PDF',        label: 'Export',               sub: 'One-click generation' },
 ];
 
 export default function LandingPage() {
-  const { admin } = useAuth();
+  const { admin, isAdmin, logout } = useAuth();
+  const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  return (
-    <div className="min-h-screen bg-white overflow-x-hidden">
+  const initials = admin?.name
+    ? admin.name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
+    : 'AD';
+  const profileLabel = isAdmin ? (admin?.name || 'Admin') : (admin?.airlineName || admin?.name || 'Airline');
+  const profileSublabel = isAdmin ? 'Administrator' : 'Airline User';
+  const dashboardPath = isAdmin ? '/admin' : '/airline';
 
-      {/* ── Navbar ── */}
+  function handleLogout() {
+    logout();
+    navigate('/');
+    setMobileMenuOpen(false);
+  }
+
+  return (
+    <div className="min-h-screen bg-white overflow-x-hidden font-sans text-slate-800">
+
+      {/* ══════════════ NAVBAR ══════════════ */}
       <motion.nav
-        initial={{ opacity: 0, y: -20 }}
+        initial={{ opacity: 0, y: -12 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-xl border-b border-gray-100"
+        transition={{ duration: 0.4 }}
+        className="fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-md border-b border-slate-200/80 shadow-2xs"
       >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2 flex-shrink-0">
             <img src={logoImg} alt="IFOA Logo" className="h-9 w-auto object-contain" />
@@ -64,48 +86,114 @@ export default function LandingPage() {
           {/* Desktop nav */}
           <div className="hidden sm:flex items-center gap-3">
             {admin ? (
-              <Link to="/admin" className="group px-4 py-2 bg-primary-800 text-white rounded-xl text-sm font-semibold hover:bg-primary-900 transition-all flex items-center gap-2 shadow-md">
-                Dashboard <HiOutlineArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
-              </Link>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="group flex items-center gap-2 pl-1.5 pr-2.5 py-1.5 rounded-full border border-slate-200 bg-white hover:border-slate-300 hover:shadow-2xs transition-all outline-none">
+                    <Avatar className="w-8 h-8 ring-2 ring-blue-50">
+                      {!isAdmin && admin?.logo_url && <AvatarImage src={admin.logo_url} alt={admin.airlineName} />}
+                      <AvatarFallback className="text-xs bg-blue-600 text-white font-bold">
+                        {!isAdmin && admin?.airlineName ? admin.airlineName.charAt(0).toUpperCase() : initials}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="text-left leading-tight hidden md:block">
+                      <p className="text-xs font-bold text-slate-900">{profileLabel}</p>
+                      <p className="text-[10px] text-slate-500">{profileSublabel}</p>
+                    </div>
+                    <HiOutlineChevronDown className="w-3.5 h-3.5 text-slate-400 transition-transform group-data-[state=open]:rotate-180" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56 p-0 overflow-hidden">
+                  <div className="flex items-center gap-3 px-4 py-3.5 bg-slate-50 border-b border-slate-100">
+                    <Avatar className="w-9 h-9 ring-2 ring-white shadow-2xs">
+                      {!isAdmin && admin?.logo_url && <AvatarImage src={admin.logo_url} alt={admin.airlineName} />}
+                      <AvatarFallback className="text-xs bg-blue-600 text-white font-bold">
+                        {!isAdmin && admin?.airlineName ? admin.airlineName.charAt(0).toUpperCase() : initials}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="leading-tight min-w-0">
+                      <p className="text-sm font-bold text-slate-900 truncate">{profileLabel}</p>
+                      <p className="text-[11px] font-medium text-blue-600">{profileSublabel}</p>
+                    </div>
+                  </div>
+                  <div className="p-1.5">
+                    <DropdownMenuItem asChild>
+                      <Link to={dashboardPath} className="font-semibold text-slate-800">
+                        <span className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0">
+                          <HiOutlineArrowRight className="w-4 h-4" />
+                        </span>
+                        Dashboard
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem danger onClick={handleLogout} className="font-semibold">
+                      <span className="w-7 h-7 rounded-lg bg-red-50 text-red-600 flex items-center justify-center flex-shrink-0">
+                        <HiOutlineLogout className="w-4 h-4" />
+                      </span>
+                      Logout
+                    </DropdownMenuItem>
+                  </div>
+                </DropdownMenuContent>
+              </DropdownMenu>
             ) : (
               <>
-                <Link to="/login" className="px-4 py-2 text-sm font-semibold text-primary-700 hover:text-primary-900 transition-colors">
+                <Link to="/login"
+                  className="px-4 py-2 text-sm font-semibold text-slate-600 hover:text-slate-900 transition-colors rounded-lg hover:bg-slate-100/60">
                   Sign In
                 </Link>
-                <Link to="/signup" className="group px-4 py-2 bg-primary-800 text-white rounded-xl text-sm font-semibold hover:bg-primary-900 transition-all flex items-center gap-2 shadow-md">
+                <Link to="/signup"
+                  className="group inline-flex items-center gap-2 px-4.5 py-2 bg-slate-900 text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-2xs">
                   Get Started <HiOutlineArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
                 </Link>
               </>
             )}
           </div>
 
-          {/* Mobile hamburger */}
+          {/* Mobile burger */}
           <button
-            className="sm:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors"
+            className="sm:hidden p-2 rounded-lg hover:bg-slate-100 transition-colors"
             onClick={() => setMobileMenuOpen(o => !o)}
           >
             {mobileMenuOpen
-              ? <HiOutlineX className="w-6 h-6 text-primary-700" />
-              : <HiOutlineMenu className="w-6 h-6 text-primary-700" />}
+              ? <HiOutlineX className="w-5 h-5 text-slate-700" />
+              : <HiOutlineMenu className="w-5 h-5 text-slate-700" />}
           </button>
         </div>
 
-        {/* Mobile menu dropdown */}
+        {/* Mobile menu */}
         {mobileMenuOpen && (
-          <div className="sm:hidden bg-white border-t border-gray-100 px-4 py-4 space-y-2">
+          <div className="sm:hidden bg-white border-t border-slate-200/80 px-4 py-4 space-y-2 shadow-lg">
             {admin ? (
-              <Link to="/admin" onClick={() => setMobileMenuOpen(false)}
-                className="flex items-center justify-center gap-2 w-full py-2.5 bg-primary-800 text-white rounded-xl text-sm font-semibold">
-                Dashboard <HiOutlineArrowRight className="w-4 h-4" />
-              </Link>
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2.5 w-full py-2 px-3 bg-slate-100 rounded-xl">
+                  <Avatar className="w-8 h-8">
+                    {!isAdmin && admin?.logo_url && <AvatarImage src={admin.logo_url} alt={admin.airlineName} />}
+                    <AvatarFallback className="text-xs bg-slate-200 text-slate-900 font-bold">
+                      {!isAdmin && admin?.airlineName ? admin.airlineName.charAt(0).toUpperCase() : initials}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="text-left leading-tight">
+                    <p className="text-xs font-bold text-slate-900">{profileLabel}</p>
+                    <p className="text-[10px] text-slate-500">{profileSublabel}</p>
+                  </div>
+                </div>
+                <Link to={dashboardPath} onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center gap-2 w-full py-2.5 px-3 bg-slate-900 text-white rounded-xl text-sm font-semibold">
+                  <HiOutlineArrowRight className="w-4 h-4" /> Dashboard
+                </Link>
+                <button onClick={handleLogout}
+                  className="w-full flex items-center gap-2 py-2.5 px-3 border border-red-200 text-red-600 rounded-xl text-sm font-semibold hover:bg-red-50 transition-colors">
+                  <HiOutlineLogout className="w-4 h-4" />
+                  Logout
+                </button>
+              </div>
             ) : (
               <>
                 <Link to="/login" onClick={() => setMobileMenuOpen(false)}
-                  className="flex items-center justify-center w-full py-2.5 border border-primary-200 text-primary-700 rounded-xl text-sm font-semibold hover:bg-primary-50 transition-colors">
+                  className="flex items-center justify-center w-full py-2.5 border border-slate-200 text-slate-700 rounded-xl text-sm font-semibold hover:bg-slate-50 transition-colors">
                   Sign In
                 </Link>
                 <Link to="/signup" onClick={() => setMobileMenuOpen(false)}
-                  className="flex items-center justify-center gap-2 w-full py-2.5 bg-primary-800 text-white rounded-xl text-sm font-semibold">
+                  className="flex items-center justify-center gap-2 w-full py-2.5 bg-slate-900 text-white rounded-xl text-sm font-semibold">
                   Get Started <HiOutlineArrowRight className="w-4 h-4" />
                 </Link>
               </>
@@ -115,137 +203,119 @@ export default function LandingPage() {
       </motion.nav>
 
       {/* ── Hero ── */}
-      <section className="relative pt-28 sm:pt-32 pb-16 sm:pb-20 px-4 sm:px-6">
-        <div className="max-w-7xl mx-auto relative">
-          <motion.div variants={stagger} initial="hidden" animate="show" className="text-center max-w-4xl mx-auto">
-
-            {/* Badge */}
-            <motion.div variants={fadeUp} className="mb-6">
-              <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border text-xs font-bold tracking-widest uppercase bg-white"
-                style={{ borderColor: '#0000ff40' }}>
-                <span style={{ color: '#000021' }}>Training</span>
-                <span style={{ color: '#0000ff' }}>Management System</span>
-              </span>
-            </motion.div>
+      <section className="relative min-h-[85vh] pt-20 pb-16 px-4 sm:px-6 flex flex-col items-center justify-center">
+        <div className="max-w-7xl mx-auto relative w-full flex flex-col items-center justify-center text-center">
+          <motion.div variants={stagger} initial="hidden" animate="show" className="text-center max-w-4xl mx-auto flex flex-col items-center justify-center">
 
             {/* Heading */}
             <motion.h1 variants={fadeUp}
-              className="text-3xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold leading-[1.1] tracking-tight">
-              <span style={{ color: '#000021' }}>Automated Certificate</span>
-              <span className="block mt-1 sm:mt-2" style={{ color: '#0000ff' }}>Generation System</span>
+              className="text-4xl sm:text-6xl md:text-7xl lg:text-[5rem] font-extrabold leading-[1.08] tracking-tight">
+              <span style={{ color: '#000021' }}>Training</span>
+              <span className="block mt-1 sm:mt-2" style={{ color: '#0000ff' }}>Management System</span>
             </motion.h1>
 
-            {/* Sub */}
+            {/* Sub-heading */}
             <motion.p variants={fadeUp}
-              className="mt-5 sm:mt-6 text-base sm:text-lg md:text-xl text-primary-500 max-w-2xl mx-auto leading-relaxed px-2">
-              Streamline your Aviation Profession training certification process.
-              Generate internationally recognised certificates in seconds.
+              className="mt-6 text-base sm:text-lg md:text-xl text-slate-600 max-w-2xl mx-auto leading-relaxed font-normal"
+            >
+              A centralised platform to plan, manage and track all aviation training activities.
+              Keep your team compliant, organised and audit-ready at every stage.
             </motion.p>
 
-            {/* CTA buttons */}
-            <motion.div variants={fadeUp} className="mt-8 sm:mt-10 flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 px-4">
+            {/* CTA */}
+            <motion.div variants={fadeUp} className="mt-9">
               {admin ? (
                 <Link to="/admin"
-                  className="group w-full sm:w-auto px-8 py-3.5 bg-primary-800 text-white rounded-2xl text-sm font-semibold shadow-xl hover:bg-primary-900 transition-all duration-300 flex items-center justify-center gap-2">
+                  className="group inline-flex items-center justify-center gap-2 px-8 py-3.5 bg-slate-900 text-white rounded-xl text-sm font-semibold shadow-md hover:bg-slate-800 transition-all duration-200">
                   Open Dashboard
                   <HiOutlineArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </Link>
               ) : (
-                <>
-                  <Link to="/signup"
-                    className="group w-full sm:w-auto px-8 py-3.5 bg-primary-800 text-white rounded-2xl text-sm font-semibold shadow-xl hover:bg-primary-900 transition-all duration-300 flex items-center justify-center gap-2">
-                    Get Started
-                    <HiOutlineArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                  </Link>
-                  <Link to="/login"
-                    className="group w-full sm:w-auto px-8 py-3.5 border-2 border-primary-200 text-primary-700 rounded-2xl text-sm font-semibold hover:border-primary-300 hover:bg-primary-50 transition-all duration-300 flex items-center justify-center">
-                    Sign In
-                  </Link>
-                </>
+                <Link to="/signup"
+                  className="group inline-flex items-center justify-center gap-2 px-8 py-3.5 bg-slate-900 text-white rounded-xl text-sm font-semibold shadow-md hover:bg-slate-800 transition-all duration-200">
+                  Get Started
+                  <HiOutlineArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                </Link>
               )}
             </motion.div>
-          </motion.div>
-
-          {/* Stats */}
-          <motion.div
-            initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.8, duration: 0.6 }}
-            className="mt-14 sm:mt-20 max-w-2xl mx-auto px-4"
-          >
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-              {stats.map((stat, i) => (
-                <motion.div key={stat.label}
-                  initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: 1 + i * 0.1, duration: 0.4 }}
-                  className="text-center p-3 sm:p-4 rounded-2xl bg-white border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
-                  <p className="text-xl sm:text-2xl font-bold text-primary-800">{stat.value}</p>
-                  <p className="text-xs font-medium mt-1 text-primary-500">{stat.label}</p>
-                </motion.div>
-              ))}
-            </div>
           </motion.div>
         </div>
       </section>
 
-      {/* ── Features ── */}
-      <section className="py-16 sm:py-24 px-4 sm:px-6 bg-gray-50">
-        <div className="max-w-7xl mx-auto">
+      {/* ── Stats ── */}
+      <section className="border-y border-slate-200/80 bg-white py-10 px-4 sm:px-6">
+        <motion.div
+          initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }} transition={{ duration: 0.5 }}
+          className="max-w-3xl mx-auto grid grid-cols-2 sm:grid-cols-4 divide-x divide-slate-200/80"
+        >
+          {stats.map((s) => (
+            <div key={s.label} className="flex flex-col items-center py-5 px-4 text-center">
+              <span className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{s.value}</span>
+              <span className="text-xs font-bold text-slate-700 mt-1.5">{s.label}</span>
+              <span className="text-[11px] font-medium text-slate-400 mt-0.5">{s.sub}</span>
+            </div>
+          ))}
+        </motion.div>
+      </section>
+
+      {/* ══════════════ FEATURES SECTION ══════════════ */}
+      <section className="py-20 sm:py-28 px-4 sm:px-6">
+        <div className="max-w-6xl mx-auto">
+          {/* Section header */}
           <motion.div
-            initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }} transition={{ duration: 0.6 }}
-            className="text-center mb-10 sm:mb-16"
+            initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }} transition={{ duration: 0.5 }}
+            className="text-center mb-14 sm:mb-18"
           >
-            <span className="inline-block px-3 py-1 rounded-full text-xs font-semibold tracking-wider uppercase mb-4 bg-primary-100 text-primary-600">
+            <span className="inline-block px-3.5 py-1 rounded-full text-xs font-bold tracking-wider uppercase mb-3 bg-slate-200/70 text-slate-700">
               Features
             </span>
-            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-primary-800">Everything you need</h2>
-            <p className="mt-4 text-primary-500 max-w-xl mx-auto text-sm sm:text-base">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-slate-900 tracking-tight">
+              Everything you need
+            </h2>
+            <p className="mt-3 text-slate-600 max-w-xl mx-auto text-sm sm:text-base leading-relaxed">
               A complete solution for managing flight dispatcher training records and generating professional certificates.
             </p>
           </motion.div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-            {features.map((feature, i) => (
-              <motion.div key={feature.title}
-                initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }} transition={{ delay: i * 0.08, duration: 0.5 }}
-                className="group p-5 sm:p-6 rounded-2xl bg-white shadow-sm hover:shadow-lg transition-all duration-300 border"
-                style={{ borderColor: '#0000ff18' }}>
-                {/* Icon box */}
-                <div
-                  className="w-11 h-11 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300"
-                  style={{ background: '#0000ff0d', border: '1px solid #0000ff30' }}>
-                  <feature.icon className="w-5 h-5" style={{ color: '#0000ff' }} />
+          {/* Grid with Black Icons */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {features.map((f, i) => (
+              <motion.div key={f.title}
+                initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }} transition={{ delay: i * 0.05, duration: 0.4 }}
+                className="group p-7 rounded-2xl bg-white border border-slate-200/90 shadow-2xs hover:shadow-lg hover:border-slate-300 transition-all duration-300 flex flex-col justify-between"
+              >
+                <div>
+                  {/* Black Icon Container */}
+                  <div className="w-12 h-12 rounded-xl bg-slate-100 border border-slate-200/80 flex items-center justify-center mb-5 text-slate-900 shadow-2xs group-hover:bg-slate-900 group-hover:text-white group-hover:border-slate-900 transition-all duration-300">
+                    <f.icon className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-base font-bold text-slate-900 mb-2 tracking-tight">{f.title}</h3>
+                  <p className="text-xs sm:text-sm text-slate-600 leading-relaxed font-normal">{f.desc}</p>
                 </div>
-                <h3 className="text-base font-bold mb-2" style={{ color: '#000021' }}>{feature.title}</h3>
-                <p className="text-sm leading-relaxed text-primary-500">{feature.desc}</p>
               </motion.div>
             ))}
           </div>
         </div>
       </section>
 
-
-
-      {/* ── CTA ── */}
-      <section className="py-16 sm:py-24 px-4 sm:px-6">
+      {/* ══════════════ CTA BANNER ══════════════ */}
+      <section className="py-16 px-4 sm:px-6">
         <div className="max-w-4xl mx-auto">
           <motion.div
-            initial={{ opacity: 0, scale: 0.95 }} whileInView={{ opacity: 1, scale: 1 }}
-            viewport={{ once: true }} transition={{ duration: 0.6 }}
-            className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-primary-800 p-8 sm:p-12 md:p-16 text-center"
+            initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }} transition={{ duration: 0.5 }}
+            className="rounded-3xl bg-slate-900 p-8 sm:p-14 text-center text-white relative overflow-hidden shadow-xl"
           >
-            <div className="absolute inset-0 overflow-hidden pointer-events-none">
-              <div className="absolute -top-20 -right-20 w-72 h-72 bg-white/5 rounded-full blur-3xl" />
-              <div className="absolute -bottom-20 -left-20 w-72 h-72 bg-white/5 rounded-full blur-3xl" />
-            </div>
-            <div className="relative">
-              <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-4">Ready to get started?</h2>
-              <p className="text-primary-300 text-sm sm:text-lg max-w-xl mx-auto mb-6 sm:mb-8">
-                Access the admin panel to manage participants and generate Regulation-compliant training certificates.
+            <div className="relative z-10 max-w-xl mx-auto">
+              <h2 className="text-2xl sm:text-3xl font-extrabold text-white mb-3 tracking-tight">Ready to get started?</h2>
+              <p className="text-slate-300 text-sm sm:text-base mb-7 leading-relaxed">
+                Access the admin panel to manage participants and generate regulation-compliant training certificates.
               </p>
               <Link to={admin ? '/admin' : '/signup'}
-                className="group inline-flex items-center gap-2 px-6 sm:px-8 py-3 sm:py-3.5 bg-white text-primary-800 rounded-2xl text-sm font-bold shadow-xl hover:shadow-2xl transition-all duration-300">
+                className="group inline-flex items-center gap-2 px-7 py-3.5 bg-white text-slate-900 rounded-xl text-sm font-bold shadow-md hover:bg-slate-100 transition-all duration-200">
                 {admin ? 'Open Dashboard' : 'Get Started'}
                 <HiOutlineArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
               </Link>
@@ -254,15 +324,18 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── Footer ── */}
-      <footer className="border-t border-gray-100 py-6 sm:py-8 px-4 sm:px-6">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
-          <div className="flex items-center gap-2">
+      {/* ══════════════ FOOTER ══════════════ */}
+      <footer className="border-t border-slate-200/80 bg-white py-8 px-4 sm:px-6">
+        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
             <img src={logoImg} alt="IFOA Logo" className="h-7 w-auto object-contain" />
-            <span className="text-sm font-semibold text-primary-800">IFOA Training Management System</span>
+            <div>
+              <p className="text-sm font-bold text-slate-900 leading-none">IFOA Training Management System</p>
+              <p className="text-[11px] text-slate-500 mt-1">International Flight Operations Academy</p>
+            </div>
           </div>
-          <p className="text-xs text-primary-400">
-            &copy; {new Date().getFullYear()} International Flight Operations Academy. All rights reserved.
+          <p className="text-xs text-slate-500">
+            © {new Date().getFullYear()} International Flight Operations Academy. All rights reserved.
           </p>
         </div>
       </footer>

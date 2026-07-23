@@ -31,4 +31,38 @@ const upload = multer({
   },
 });
 
-module.exports = { upload, cloudinary };
+// ─── Exam question images ────────────────────────────────────────────────────
+// Cloudinary free plan = 25 credits/month (1 credit = 1,000 transformations,
+// OR 1 GB storage, OR 1 GB bandwidth). Budget: ~10 storage / ~10 bandwidth /
+// ~5 transformations. To stay inside that:
+//   - resize+compress happens ONCE, baked into this upload's eager
+//     `transformation`, never requested again on-the-fly per view
+//   - f_auto/q_auto shrinks delivered bytes (bandwidth) without extra credits
+//   - image_public_id is stored alongside every image so deleteCloudinaryImage
+//     can reclaim storage when a question/exam is deleted or an image replaced
+const examImageStorage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder:          'IFOA_EXAM',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+    transformation:  [{ width: 1200, crop: 'limit', quality: 'auto:good', fetch_format: 'auto' }],
+  },
+});
+
+const examImageUpload = multer({
+  storage: examImageStorage,
+  limits: { fileSize: 3 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (!file.mimetype.startsWith('image/')) {
+      return cb(new Error('Only image files are allowed.'), false);
+    }
+    cb(null, true);
+  },
+});
+
+async function deleteCloudinaryImage(publicId) {
+  if (!publicId) return;
+  await cloudinary.uploader.destroy(publicId).catch(() => {});
+}
+
+module.exports = { upload, cloudinary, examImageUpload, deleteCloudinaryImage };

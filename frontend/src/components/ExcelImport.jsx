@@ -20,6 +20,7 @@ import {
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import { createParticipant, getAirlinesList } from '../api';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const TRAINING_TYPES = ['FDI','FDR','FDA','FTL','NDG','HF','GD','TCD'];
@@ -240,10 +241,12 @@ function EditableCell({ value, onChange, type = 'text', options, hasError, disab
 
   if (options) {
     return (
-      <select value={value} onChange={e => onChange(e.target.value)} className={base} disabled={disabled}>
-        <option value="">Select…</option>
-        {options.map(o => <option key={o} value={o}>{o} – {TRAINING_LABELS[o]}</option>)}
-      </select>
+      <Select value={value || undefined} onValueChange={onChange} disabled={disabled}>
+        <SelectTrigger className={`h-auto ${base}`}><SelectValue placeholder="Select…" /></SelectTrigger>
+        <SelectContent>
+          {options.map(o => <SelectItem key={o} value={o}>{o} – {TRAINING_LABELS[o]}</SelectItem>)}
+        </SelectContent>
+      </Select>
     );
   }
   return (
@@ -425,17 +428,15 @@ export default function ExcelImport({ isAdmin, airlineName, company, onSuccess }
       {isAdmin && (
         <div className="card p-4 space-y-2">
           <label className="label">Airline Name *</label>
-          <select
-            value={selectedAirline}
-            onChange={e => setSelectedAirline(e.target.value)}
-            className="input-field appearance-none cursor-pointer max-w-sm"
-          >
-            <option value="">Select airline</option>
-            {airlineOptions.map(a => (
-              <option key={a.airlineName} value={a.airlineName}>{a.airlineName}</option>
-            ))}
-            <option value="__other__">Other (type manually)</option>
-          </select>
+          <Select value={selectedAirline || undefined} onValueChange={setSelectedAirline}>
+            <SelectTrigger className="max-w-sm"><SelectValue placeholder="Select airline" /></SelectTrigger>
+            <SelectContent>
+              {airlineOptions.map(a => (
+                <SelectItem key={a.airlineName} value={a.airlineName}>{a.airlineName}</SelectItem>
+              ))}
+              <SelectItem value="__other__">Other (type manually)</SelectItem>
+            </SelectContent>
+          </Select>
           {selectedAirline === '__other__' && (
             <input
               value={customAirline}

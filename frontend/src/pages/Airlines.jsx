@@ -32,6 +32,9 @@ import {
   API_BASE,
 } from '../api';
 import ModuleSelector from '../components/ModuleSelector';
+import { useConfirm } from '@/hooks/use-confirm';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem, SelectGroup, SelectLabel } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 
 const TRAINING_LABELS = {
   FDI: 'Flight Dispatch Initial',
@@ -145,8 +148,7 @@ function VariantModal({ open, variant, setVariant, validity, setValidity, onConf
             {/* DHL extra cert — only offered when the selection includes an eligible (DHL Bahrain, FDR) record */}
             {dhlEligibleCount > 0 && (
               <label className="flex items-start gap-2.5 p-3 rounded-xl border-2 border-blue-200 bg-blue-50 cursor-pointer">
-                <input type="checkbox" checked={includeDhl} onChange={e => setIncludeDhl(e.target.checked)}
-                  className="mt-0.5 w-4 h-4 accent-blue-600" />
+                <Checkbox checked={includeDhl} onCheckedChange={c => setIncludeDhl(!!c)} className="mt-0.5" />
                 <span>
                   <span className="block text-sm font-bold text-blue-700">Also generate DHL Extra Certificate</span>
                   <span className="block text-xs text-blue-500 mt-0.5">{dhlEligibleCount} of the selected candidate{dhlEligibleCount > 1 ? 's are' : ' is'} eligible (DHL Bahrain, FDR) — generates a DHL FORM ST-XXX certificate for {dhlEligibleCount > 1 ? 'each' : 'it'}, alongside the normal certificate.</span>
@@ -461,9 +463,7 @@ function ParticipantCard({ p, checked, onCheck, onPreview, onDownload, onEdit, o
         return (
           <div className="mt-2 ml-8">
             <label className="flex items-center gap-1.5 text-[11px] font-semibold text-primary-500 cursor-pointer w-fit">
-              <input type="checkbox" checked={enabled}
-                onChange={e => onFdrHoursToggle(pid, e.target.checked)}
-                className="w-3.5 h-3.5 accent-blue-600" />
+              <Checkbox checked={enabled} onCheckedChange={c => onFdrHoursToggle(pid, !!c)} className="h-3.5 w-3.5" />
               Add Hours
             </label>
             {enabled && (
@@ -551,6 +551,7 @@ export default function Airlines() {
   const [certResults, setCertResults]   = useState(null);
   const [rowPreview, setRowPreview]     = useState(null);
   const [downloadingId, setDownloadingId] = useState(null);
+  const { confirm, ConfirmDialog } = useConfirm();
 
   const [variantModal, setVariantModal]       = useState(false);
   const [templateVariant, setTemplateVariant] = useState('default');
@@ -675,9 +676,11 @@ export default function Airlines() {
   };
 
   const handleResetCounter = async (type) => {
-    if (!window.confirm(
-      `Reset "${type}" to 0?\n\nThis will:\n• Clear ALL certificate numbers for ${type} participants\n• Existing certificates become invalid\n• You must regenerate every ${type} certificate\n\nThe page will reload after reset.`
-    )) return;
+    const ok = await confirm(
+      `Reset "${type}" to 0?\n\nThis will:\n• Clear ALL certificate numbers for ${type} participants\n• Existing certificates become invalid\n• You must regenerate every ${type} certificate\n\nThe page will reload after reset.`,
+      { title: `Reset ${type} counter`, confirmLabel: 'Reset' }
+    );
+    if (!ok) return;
     setResetting(type);
     try {
       await resetCertCounter(type, 0);
@@ -689,9 +692,11 @@ export default function Airlines() {
   };
 
   const handleResetAll = async () => {
-    if (!window.confirm(
-      'Reset ALL counters to 0?\n\nThis will:\n• Clear certificate numbers for EVERY participant\n• All existing certificates become invalid\n• You must regenerate ALL certificates\n\nThe page will reload after reset.'
-    )) return;
+    const ok = await confirm(
+      'Reset ALL counters to 0?\n\nThis will:\n• Clear certificate numbers for EVERY participant\n• All existing certificates become invalid\n• You must regenerate ALL certificates\n\nThe page will reload after reset.',
+      { title: 'Reset ALL counters', confirmLabel: 'Reset All' }
+    );
+    if (!ok) return;
     setResetting('ALL');
     try {
       await resetAllCertCounters(0);
@@ -929,18 +934,59 @@ export default function Airlines() {
       return n;
     });
   };
-  const toggle             = key => setExpanded(prev => ({ ...prev, [key]: !prev[key] }));
+  const toggle = (key) => {
+    const isOpening = !expanded[key];
+    setExpanded(prev => ({ ...prev, [key]: !prev[key] }));
+    if (isOpening) {
+      // Wait for framer-motion animation to complete (~350ms) then smart-scroll
+      setTimeout(() => {
+        const card = airlineCardRefs.current[key];
+        if (!card) return;
+
+        // Walk up the DOM to find the actual scrollable <main> container
+        let scrollEl = card.parentElement;
+        while (scrollEl && scrollEl !== document.body) {
+          const overflow = getComputedStyle(scrollEl).overflowY;
+          if (overflow === 'auto' || overflow === 'scroll') break;
+          scrollEl = scrollEl.parentElement;
+        }
+        if (!scrollEl || scrollEl === document.body) return;
+
+        const HEADER_H = 64; // h-16 sticky header
+        const GAP      = 12; // breathing room above the card
+
+        // offsetTop of card relative to the scroll container
+        let offsetFromTop = 0;
+        let el = card;
+        while (el && el !== scrollEl) {
+          offsetFromTop += el.offsetTop;
+          el = el.offsetParent;
+        }
+
+        const targetScrollTop = offsetFromTop - HEADER_H - GAP;
+
+        // Only scroll down (don't jump back up if already visible above)
+        const cardBottomInView = offsetFromTop + card.offsetHeight - scrollEl.scrollTop;
+        const viewportH = scrollEl.clientHeight;
+
+        if (targetScrollTop < scrollEl.scrollTop || cardBottomInView > viewportH) {
+          scrollEl.scrollTo({ top: targetScrollTop, behavior: 'smooth' });
+        }
+      }, 380);
+    }
+  };
 
   // ── Delete helpers ───────────────────────────────────────────────────────────
   const handleDelete = async (id, name) => {
-    if (!window.confirm(`Delete record for "${name}"?`)) return;
+    if (!(await confirm(`Delete record for "${name}"?`, { title: 'Delete record', confirmLabel: 'Delete' }))) return;
     try { await deleteParticipant(id); toast.success('Record deleted'); setChecked(prev => { const n = new Set(prev); n.delete(id); return n; }); fetchData({ silent: true }); }
     catch { toast.error('Failed to delete'); }
   };
 
   const handleDeleteSelected = async () => {
     if (checked.size === 0) { toast.error('Select at least one participant'); return; }
-    if (!window.confirm(`Delete ${checked.size} record(s)?`)) return;
+    const confirmed = await confirm(`Delete ${checked.size} record(s)?`, { title: 'Delete records', confirmLabel: 'Delete' });
+    if (!confirmed) return;
     setDeletingSelected(true);
     let ok = 0, fail = 0;
     for (const id of checked) { try { await deleteParticipant(id); ok++; } catch { fail++; } }
@@ -956,12 +1002,14 @@ export default function Airlines() {
     if (withCerts.length === 0) {
       toast.error('None of the selected participants have a certificate to revoke'); return;
     }
-    if (!window.confirm(
+    const confirmed = await confirm(
       `Revoke certificates for ${withCerts.length} participant${withCerts.length > 1 ? 's' : ''}?\n\n` +
       `This will set them back to Pending status.\n` +
       `The airline will immediately lose access to download/preview.\n\n` +
-      `You can regenerate them at any time.`
-    )) return;
+      `You can regenerate them at any time.`,
+      { title: 'Revoke certificates', confirmLabel: 'Revoke' }
+    );
+    if (!confirmed) return;
     setRevoking(true);
     let ok = 0, fail = 0;
     for (const p of withCerts) {
@@ -1011,7 +1059,11 @@ export default function Airlines() {
     const aKey        = airlineKey(airline);
     const airlineId   = airline._id;
     const airlineName = airline.airlineName;
-    if (!window.confirm(`Remove all submissions for "${airlineName}"?\n\nThis deletes ${count} participant record(s) from the admin view.\nThe airline account and login remain intact. Cannot be undone.`)) return;
+    const confirmed = await confirm(
+      `Remove all submissions for "${airlineName}"?\n\nThis deletes ${count} participant record(s) from the admin view.\nThe airline account and login remain intact. Cannot be undone.`,
+      { title: 'Remove all submissions', confirmLabel: 'Remove' }
+    );
+    if (!confirmed) return;
     try {
       const res = await deleteAirlineById(airlineId);
       toast.success(res.data.message || `"${airlineName}" deleted`);
@@ -1028,7 +1080,11 @@ export default function Airlines() {
 
   const handleDeleteSelectedAirlines = async () => {
     if (checkedAirlines.size === 0) { toast.error('Select at least one airline'); return; }
-    if (!window.confirm(`Remove all submissions for ${checkedAirlines.size} airline(s)?\n\nThis deletes their participant records from the admin view.\nAll airline accounts and logins remain intact. Cannot be undone.`)) return;
+    const confirmed = await confirm(
+      `Remove all submissions for ${checkedAirlines.size} airline(s)?\n\nThis deletes their participant records from the admin view.\nAll airline accounts and logins remain intact. Cannot be undone.`,
+      { title: 'Remove all submissions', confirmLabel: 'Remove' }
+    );
+    if (!confirmed) return;
     setDeletingAirlines(true);
     const deletedIds = new Set(); let fail = 0;
     for (const airlineId of checkedAirlines) {
@@ -1165,7 +1221,8 @@ export default function Airlines() {
   const handleRevokeDhlSelected = async () => {
     const withDhl = allParticipants.filter(p => checked.has(p.id || p._id) && p.dhl_cert_released);
     if (withDhl.length === 0) { toast.error('None of the selected participants have a DHL certificate to revoke'); return; }
-    if (!window.confirm(`Revoke DHL certificates for ${withDhl.length} participant${withDhl.length > 1 ? 's' : ''}?`)) return;
+    const confirmed = await confirm(`Revoke DHL certificates for ${withDhl.length} participant${withDhl.length > 1 ? 's' : ''}?`, { title: 'Revoke DHL certificates', confirmLabel: 'Revoke' });
+    if (!confirmed) return;
     setRevokingDhlBulk(true);
     let ok = 0, fail = 0;
     for (const p of withDhl) {
@@ -1476,51 +1533,51 @@ export default function Airlines() {
         const hasFdrHours = Object.values(fdrHours).some(e => e?.enabled && e?.value);
         const showActions = controlBarOpen || hasSelection || hasNdg || hasFdrHours;
         return (
-          <div className="sticky top-0 z-20 bg-white border-b border-primary-200 shadow-sm">
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-2.5 sm:px-4 sm:py-2.5 shadow-2xs mb-3">
             {/* ── Row 1: always visible ── */}
-            <div className="px-4 sm:px-5 py-2 flex items-center justify-between gap-2 w-full">
+            <div className="flex items-center justify-between gap-3 w-full flex-wrap sm:flex-nowrap">
               {/* Left: checkboxes */}
-              <div className="flex items-center gap-3 min-w-0">
-                <label className="flex items-center gap-1.5 cursor-pointer select-none">
+              <div className="flex items-center gap-3.5 min-w-0">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
                   <div onClick={toggleSelectAll}
-                    className={`w-4 h-4 rounded border-2 flex items-center justify-center cursor-pointer transition-colors flex-shrink-0 ${allChecked ? 'bg-primary-800 border-primary-800' : 'border-primary-300 hover:border-primary-500'}`}>
+                    className={`w-4 h-4 rounded-md border-2 flex items-center justify-center cursor-pointer transition-colors flex-shrink-0 ${allChecked ? 'bg-slate-900 border-slate-900' : 'border-slate-300 hover:border-slate-500'}`}>
                     {allChecked && <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
-                    {!allChecked && checked.size > 0 && <div className="w-2 h-0.5 bg-primary-500 rounded" />}
+                    {!allChecked && checked.size > 0 && <div className="w-2 h-0.5 bg-slate-700 rounded" />}
                   </div>
-                  <span className="text-xs font-medium text-primary-600 whitespace-nowrap">
+                  <span className="text-xs font-semibold text-slate-700 whitespace-nowrap">
                     <span className="hidden sm:inline">{allChecked ? 'Deselect All' : 'Select All'} </span>Candidates
                   </span>
-                  {checked.size > 0 && <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-primary-100 text-primary-700 text-[10px] font-bold">{checked.size}</span>}
+                  {checked.size > 0 && <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-900 text-[10px] font-bold border border-slate-200">{checked.size}</span>}
                 </label>
 
-                <div className="w-px h-3.5 bg-primary-200 flex-shrink-0" />
+                <div className="w-px h-3.5 bg-slate-200 flex-shrink-0" />
 
-                <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
                   <div onClick={toggleAllAirlines}
-                    className={`w-4 h-4 rounded border-2 flex items-center justify-center cursor-pointer transition-colors flex-shrink-0 ${allAirlinesChecked ? 'bg-red-600 border-red-600' : 'border-primary-300 hover:border-red-400'}`}>
+                    className={`w-4 h-4 rounded-md border-2 flex items-center justify-center cursor-pointer transition-colors flex-shrink-0 ${allAirlinesChecked ? 'bg-slate-900 border-slate-900' : 'border-slate-300 hover:border-slate-500'}`}>
                     {allAirlinesChecked && <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
-                    {!allAirlinesChecked && checkedAirlines.size > 0 && <div className="w-2 h-0.5 bg-red-400 rounded" />}
+                    {!allAirlinesChecked && checkedAirlines.size > 0 && <div className="w-2 h-0.5 bg-slate-700 rounded" />}
                   </div>
-                  <span className="text-xs font-medium text-primary-600 whitespace-nowrap">
+                  <span className="text-xs font-semibold text-slate-700 whitespace-nowrap">
                     <span className="hidden sm:inline">{allAirlinesChecked ? 'Deselect All' : 'Select All'} </span>Airlines
                   </span>
-                  {checkedAirlines.size > 0 && <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 text-[10px] font-bold">{checkedAirlines.size}</span>}
+                  {checkedAirlines.size > 0 && <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-900 text-[10px] font-bold border border-slate-200">{checkedAirlines.size}</span>}
                 </label>
               </div>
 
               {/* Right: SHOW filter + collapse toggle */}
-              <div className="flex items-center gap-2 flex-shrink-0">
+              <div className="flex items-center gap-2 flex-shrink-0 ml-auto">
                 {/* SHOW filter */}
                 <div className="flex items-center gap-1.5">
-                  <span className="text-[10px] font-semibold text-primary-400 uppercase tracking-wider hidden sm:inline">Show</span>
-                  <div className="flex items-center gap-0.5 bg-primary-50 rounded-lg p-0.5">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider hidden sm:inline">Show</span>
+                  <div className="flex items-center gap-0.5 bg-slate-100/80 rounded-lg p-0.5 border border-slate-200/60">
                     {[
-                      { val: '', label: 'All', active: 'bg-[#0000ff] text-white' },
-                      { val: 'pending', label: 'Pending', active: 'bg-amber-500 text-white', icon: <Clock className="w-3 h-3" /> },
-                      { val: 'generated', label: 'Done', active: 'bg-emerald-600 text-white', icon: <CheckCircle2 className="w-3 h-3" /> },
+                      { val: '', label: 'All', active: 'bg-slate-900 text-white font-bold shadow-2xs' },
+                      { val: 'pending', label: 'Pending', active: 'bg-amber-600 text-white font-bold shadow-2xs', icon: <Clock className="w-3 h-3" /> },
+                      { val: 'generated', label: 'Done', active: 'bg-emerald-600 text-white font-bold shadow-2xs', icon: <CheckCircle2 className="w-3 h-3" /> },
                     ].map(({ val, label, active, icon }) => (
                       <button key={val} onClick={() => setFilterCertStatus(val)}
-                        className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all ${filterCertStatus === val ? active : 'text-gray-500 hover:text-gray-700'}`}>
+                        className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs transition-all ${filterCertStatus === val ? active : 'text-slate-600 hover:text-slate-900 font-medium'}`}>
                         {icon}{label}
                       </button>
                     ))}
@@ -1530,49 +1587,48 @@ export default function Airlines() {
                 {/* Collapse toggle */}
                 <button
                   onClick={() => setControlBarOpen(o => !o)}
-                  className={`flex items-center gap-1 px-2 py-1 rounded-lg border text-[11px] font-semibold transition-colors ${controlBarOpen ? 'border-primary-300 bg-primary-100 text-primary-700' : 'border-primary-200 text-primary-500 hover:bg-primary-50'}`}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${controlBarOpen ? 'bg-slate-900 text-white shadow-2xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200/80'}`}
                 >
-                  <span className="hidden sm:inline">Actions</span>
+                  <span>Actions</span>
                   {(checked.size + checkedAirlines.size) > 0 && (
-                    <span className="bg-primary-800 text-white text-[9px] px-1 rounded-full font-bold">{checked.size + checkedAirlines.size}</span>
+                    <span className="bg-white text-slate-900 text-[9px] px-1.5 rounded-full font-bold">{checked.size + checkedAirlines.size}</span>
                   )}
                   <HiOutlineChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${controlBarOpen ? 'rotate-180' : ''}`} />
                 </button>
               </div>
             </div>
 
-            {/* ── Row 2: action buttons — auto-shows when selected, toggle to reveal ── */}
+            {/* ── Row 2: action buttons ── */}
             {showActions && (
-              <div className="px-4 sm:px-5 pb-2 pt-1.5 flex flex-wrap items-center gap-1.5 border-t border-primary-100">
+              <div className="pt-2 mt-2 flex flex-wrap items-center gap-1.5 border-t border-slate-100">
                 {/* Generate */}
                 <button onClick={handleGenerateSelected} disabled={checked.size === 0 || generating}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${checked.size > 0 && !generating ? 'bg-primary-800 text-white hover:bg-primary-900 shadow-sm' : 'bg-primary-100 text-primary-400 cursor-not-allowed'}`}>
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${checked.size > 0 && !generating ? 'bg-slate-900 text-white hover:bg-slate-800 shadow-2xs' : 'bg-slate-100 text-slate-400 border border-slate-200/60 cursor-not-allowed'}`}>
                   {generating ? <Spin /> : <HiOutlineDocumentDownload className="w-3.5 h-3.5" />}
                   {generating ? 'Generating…' : checked.size > 0 ? `Generate ${checked.size} Cert${checked.size > 1 ? 's' : ''}` : 'Generate Selected'}
                 </button>
 
                 {/* Revoke */}
                 <button onClick={handleRevokeSelected} disabled={checked.size === 0 || revoking}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${checked.size > 0 && !revoking ? 'border-blue-200 text-blue-700 hover:bg-blue-50' : 'border-primary-200 bg-primary-50 text-primary-300 cursor-not-allowed'}`}
-                  style={checked.size > 0 && !revoking ? { background: '#eff6ff' } : {}}>
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all ${checked.size > 0 && !revoking ? 'border-blue-200 bg-blue-50/80 text-blue-700 hover:bg-blue-100' : 'border-slate-200/60 bg-slate-50 text-slate-400 cursor-not-allowed'}`}>
                   {revoking ? <Spin cls="w-3.5 h-3.5 border-2 border-blue-300 border-t-blue-600" />
                     : <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>}
                   {revoking ? 'Revoking…' : 'Revoke Cert'}
                 </button>
 
-                {/* Generate DHL extra cert — only shown when selection includes an eligible (DHL Bahrain, FDR) record */}
+                {/* Generate DHL extra cert */}
                 {allParticipants.some(p => checked.has(p.id || p._id) && eligibleForDhlExtra(p)) && (
                   <button onClick={handleGenerateDhlSelected} disabled={generatingDhl}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-violet-300 bg-violet-50 text-violet-700 hover:bg-violet-100 transition-all disabled:opacity-60">
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100 transition-all disabled:opacity-60">
                     {generatingDhl ? <Spin cls="w-3.5 h-3.5 border-2 border-violet-300 border-t-violet-600" /> : <HiOutlineDocumentDownload className="w-3.5 h-3.5" />}
                     {generatingDhl ? 'Generating…' : 'Generate DHL Extra Cert'}
                   </button>
                 )}
 
-                {/* Revoke DHL extra cert — only shown when selection includes a released DHL cert */}
+                {/* Revoke DHL extra cert */}
                 {allParticipants.some(p => checked.has(p.id || p._id) && p.dhl_cert_released) && (
                   <button onClick={handleRevokeDhlSelected} disabled={revokingDhlBulk}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-violet-300 text-violet-700 hover:bg-violet-50 transition-all disabled:opacity-60">
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100 transition-all disabled:opacity-60">
                     {revokingDhlBulk ? <Spin cls="w-3.5 h-3.5 border-2 border-violet-300 border-t-violet-600" /> : null}
                     {revokingDhlBulk ? 'Revoking…' : 'Revoke DHL Cert'}
                   </button>
@@ -1580,33 +1636,33 @@ export default function Airlines() {
 
                 {/* Delete candidates */}
                 <button onClick={handleDeleteSelected} disabled={checked.size === 0 || deletingSelected}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${checked.size > 0 && !deletingSelected ? 'border-red-200 bg-red-50 text-red-600 hover:bg-red-100' : 'border-primary-200 bg-primary-50 text-primary-300 cursor-not-allowed'}`}>
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all ${checked.size > 0 && !deletingSelected ? 'border-red-200 bg-red-50 text-red-600 hover:bg-red-100' : 'border-slate-200/60 bg-slate-50 text-slate-400 cursor-not-allowed'}`}>
                   {deletingSelected ? <Spin cls="w-3.5 h-3.5 border-2 border-red-300 border-t-red-600" /> : <HiOutlineTrash className="w-3.5 h-3.5" />}
                   {deletingSelected ? 'Deleting…' : checked.size > 0 ? `Delete ${checked.size}` : 'Delete Candidates'}
                 </button>
 
-                {/* Delete airlines (only when airline selected) */}
+                {/* Delete airlines */}
                 {checkedAirlines.size > 0 && (
                   <button onClick={handleDeleteSelectedAirlines} disabled={deletingAirlines}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-300 bg-red-600 text-white text-xs font-semibold hover:bg-red-700 disabled:opacity-60">
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-red-300 bg-red-600 text-white text-xs font-semibold hover:bg-red-700 disabled:opacity-60">
                     {deletingAirlines ? <Spin /> : <HiOutlineTrash className="w-3.5 h-3.5" />}
                     {deletingAirlines ? 'Deleting…' : `Delete ${checkedAirlines.size} Airline${checkedAirlines.size > 1 ? 's' : ''}`}
                   </button>
                 )}
 
-                {/* Save All NDG Scores (only when scores entered) */}
+                {/* Save All NDG Scores */}
                 {hasNdg && (
                   <button onClick={handleSaveAllNdgScores} disabled={savingAllNdgScores}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${!savingAllNdgScores ? 'bg-[#0000ff] text-white hover:bg-blue-700 shadow-sm' : 'bg-blue-200 text-blue-700'}`}>
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${!savingAllNdgScores ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-2xs' : 'bg-blue-200 text-blue-700'}`}>
                     {savingAllNdgScores ? <Spin cls="w-3.5 h-3.5 border-2 border-white/40 border-t-white" /> : <HiOutlineCheckCircle className="w-3.5 h-3.5" />}
                     {savingAllNdgScores ? 'Saving…' : 'Save All NDG Scores'}
                   </button>
                 )}
 
-                {/* Save All FDR Hours (only when hours entered) */}
+                {/* Save All FDR Hours */}
                 {hasFdrHours && (
                   <button onClick={handleSaveAllFdrHours} disabled={savingAllFdrHours}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${!savingAllFdrHours ? 'bg-[#0000ff] text-white hover:bg-blue-700 shadow-sm' : 'bg-blue-200 text-blue-700'}`}>
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${!savingAllFdrHours ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-2xs' : 'bg-blue-200 text-blue-700'}`}>
                     {savingAllFdrHours ? <Spin cls="w-3.5 h-3.5 border-2 border-white/40 border-t-white" /> : <HiOutlineCheckCircle className="w-3.5 h-3.5" />}
                     {savingAllFdrHours ? 'Saving…' : 'Save All FDR Hours'}
                   </button>
@@ -1616,7 +1672,7 @@ export default function Airlines() {
 
                 {/* Reset Counters */}
                 <button onClick={openCounterModal}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-200 text-xs font-semibold text-red-600 hover:bg-red-50 transition-colors">
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-red-200/80 text-xs font-semibold text-red-600 hover:bg-red-50/80 transition-colors">
                   <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                   </svg>
@@ -1638,23 +1694,31 @@ export default function Airlines() {
           </div>
           <div className="relative">
             <HiOutlineFilter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-primary-400" />
-            <select value={filterType} onChange={e => setFilterType(e.target.value)} className="input-field pl-10 pr-8 appearance-none cursor-pointer w-full sm:w-auto sm:min-w-[200px]">
-              <option value="">All Training Types</option>
-              {TRAINING_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-            </select>
+            <Select value={filterType || 'all'} onValueChange={v => setFilterType(v === 'all' ? '' : v)}>
+              <SelectTrigger className="pl-10 w-full sm:w-auto sm:min-w-[200px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Training Types</SelectItem>
+                {TRAINING_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
           <div className="relative">
-            <HiOutlineSelector className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-primary-400" />
-            <select value={sortKey} onChange={e => setSortKey(e.target.value)} className="input-field pl-10 pr-8 appearance-none cursor-pointer w-full sm:w-auto sm:min-w-[200px]">
-              <optgroup label="Airline Name">
-                <option value="name_asc">Airline: A → Z</option>
-                <option value="name_desc">Airline: Z → A</option>
-              </optgroup>
-              <optgroup label="Participants">
-                <option value="count_desc">Most Participants First</option>
-                <option value="count_asc">Fewest Participants First</option>
-              </optgroup>
-            </select>
+            <HiOutlineSelector className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-primary-400 z-10" />
+            <Select value={sortKey} onValueChange={setSortKey}>
+              <SelectTrigger className="pl-10 w-full sm:w-auto sm:min-w-[200px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectLabel>Airline Name</SelectLabel>
+                  <SelectItem value="name_asc">Airline: A → Z</SelectItem>
+                  <SelectItem value="name_desc">Airline: Z → A</SelectItem>
+                </SelectGroup>
+                <SelectGroup>
+                  <SelectLabel>Participants</SelectLabel>
+                  <SelectItem value="count_desc">Most Participants First</SelectItem>
+                  <SelectItem value="count_asc">Fewest Participants First</SelectItem>
+                </SelectGroup>
+              </SelectContent>
+            </Select>
           </div>
         </div>
       </div>
@@ -1676,14 +1740,17 @@ export default function Airlines() {
         const groupAllCk = groupIds.length > 0 && groupIds.every(id => checked.has(id));
         const groupSome  = groupIds.some(id => checked.has(id));
 
+        const isForceOpen = Boolean(search.trim() || filterType || filterCertStatus);
+        const isCardOpen = isForceOpen || Boolean(expanded[aKey]);
+
         return (
-          <div key={aKey} ref={el => { airlineCardRefs.current[aKey] = el; }} className={`card${expanded[aKey] ? ' overflow-x-hidden overflow-y-auto max-h-[520px]' : ''}`}>
+          <div key={aKey} ref={el => { airlineCardRefs.current[aKey] = el; }} className={`bg-white rounded-2xl border border-slate-200/80 shadow-2xs transition-all duration-300 mb-3.5 overflow-hidden ${isCardOpen ? 'shadow-md border-slate-300' : 'hover:border-slate-300'}`}>
 
             {/* ── Airline header ── */}
-            <div className={`flex items-center gap-2 px-3 sm:px-5 py-3 sm:py-4 flex-wrap overflow-visible bg-white${expanded[aKey] ? ' sticky top-0 z-10' : ''}`}>
+            <div className={`flex items-center gap-2 px-3.5 sm:px-6 py-3.5 sm:py-4 flex-wrap overflow-visible bg-white transition-colors ${isCardOpen ? 'border-b border-slate-100' : ''}`}>
               {/* Airline checkbox */}
               <div onClick={e => { e.stopPropagation(); toggleAirline(aKey); }}
-                className={`w-5 h-5 rounded border-2 flex items-center justify-center cursor-pointer flex-shrink-0 transition-colors ${checkedAirlines.has(aKey) ? 'bg-red-600 border-red-600' : 'border-primary-300 hover:border-red-400'}`}>
+                className={`w-5 h-5 rounded-lg border-2 flex items-center justify-center cursor-pointer flex-shrink-0 transition-colors ${checkedAirlines.has(aKey) ? 'bg-red-600 border-red-600' : 'border-slate-300 hover:border-red-400'}`}>
                 {checkedAirlines.has(aKey) && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
               </div>
 
@@ -1692,11 +1759,11 @@ export default function Airlines() {
                 {/* Avatar: logo with zoom hover effect */}
                 <div className="relative flex-shrink-0 group/logo">
                   {/* Main avatar */}
-                  <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-primary-800 flex items-center justify-center overflow-hidden transition-transform duration-200 group-hover/logo:scale-110">
+                  <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-slate-900 text-white font-bold flex items-center justify-center overflow-hidden transition-transform duration-200 group-hover/logo:scale-105 shadow-2xs">
                     {airline.logo_url
                       ? <img src={airline.logo_url} alt={airline.airlineName}
                           className="w-full h-full object-contain p-1 bg-white" />
-                      : <span className="text-white text-sm sm:text-base font-bold">{mkInitials(airline.airlineName)}</span>
+                      : <span className="text-white text-xs sm:text-sm font-bold">{mkInitials(airline.airlineName)}</span>
                     }
                   </div>
                   {/* Zoomed popup — appears above the avatar on hover */}
@@ -1708,53 +1775,66 @@ export default function Airlines() {
                       style={{ bottom: 'calc(100% + 8px)' }}
                     >
                       {/* Popup box */}
-                      <div className="bg-white rounded-2xl shadow-2xl border border-primary-200 p-3 w-28 h-28 flex items-center justify-center">
+                      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-3 w-28 h-28 flex items-center justify-center">
                         <img src={airline.logo_url} alt={airline.airlineName}
                           className="w-full h-full object-contain" />
                       </div>
                       {/* Caret — centered under the box */}
                       <div className="absolute bottom-0 left-1/2 translate-y-full -translate-x-1/2 pt-0.5">
-                        <div className="w-3 h-3 bg-white border-r border-b border-primary-200 rotate-45" />
+                        <div className="w-3 h-3 bg-white border-r border-b border-slate-200 rotate-45" />
                       </div>
                     </div>
                   )}
                 </div>
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <p className="text-sm sm:text-base font-bold text-primary-800 truncate">{airline.airlineName}</p>
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-primary-100 text-primary-600">
-                      <HiOutlineUsers className="w-3 h-3" />{participants.length}
+                    <p className="text-sm sm:text-base font-bold text-slate-900 truncate tracking-tight">{airline.airlineName}</p>
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200/80">
+                      <HiOutlineUsers className="w-3 h-3 text-slate-400" />{participants.length}
                     </span>
                   </div>
-                  {/* Always show email — it’s the unique identifier that distinguishes two airlines with the same name */}
+                  {/* Always show email */}
                   {airline.email && (
                     <div className="flex items-center gap-1 mt-0.5">
-                      <HiOutlineMail className="w-3 h-3 text-primary-400" />
-                      <p className="text-[11px] font-medium text-primary-500 truncate">{airline.email}</p>
+                      <HiOutlineMail className="w-3 h-3 text-slate-400" />
+                      <p className="text-[11px] font-medium text-slate-500 truncate">{airline.email}</p>
                     </div>
                   )}
                 </div>
               </button>
 
               {/* Airline action buttons */}
-              <div className="flex items-center gap-1.5 flex-shrink-0">
+              <div className="flex items-center gap-2 flex-shrink-0">
                 <button onClick={() => openEditAirline(airline)}
-                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-primary-200 text-xs font-medium text-primary-600 hover:bg-primary-100 transition-colors">
-                  <HiOutlinePencil className="w-3.5 h-3.5" /> Edit
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 hover:border-slate-300 transition-all shadow-2xs">
+                  <HiOutlinePencil className="w-3.5 h-3.5 text-slate-500" /> Edit
                 </button>
-                <button onClick={() => toggle(aKey)} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
-                  {expanded[aKey] ? <HiOutlineChevronUp className="w-5 h-5 text-primary-400" /> : <HiOutlineChevronDown className="w-5 h-5 text-primary-400" />}
+                <button onClick={() => toggle(aKey)} className="p-1.5 rounded-xl hover:bg-slate-100 transition-all">
+                  <HiOutlineChevronDown className={`w-5 h-5 text-slate-400 transition-transform duration-300 ease-out ${isCardOpen ? 'rotate-180 text-slate-800' : 'rotate-0'}`} />
                 </button>
               </div>
             </div>
 
             {/* ── Participants ── */}
-            <AnimatePresence initial={false}>
-              {expanded[aKey] && participants.length > 0 && (
-                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden rounded-b-xl">
+            {participants.length > 0 && (
+                <motion.div
+                  animate={{ height: isCardOpen ? 'auto' : 0, opacity: isCardOpen ? 1 : 0 }}
+                  transition={{ height: { duration: 0.35, ease: [0.25, 1, 0.5, 1] }, opacity: { duration: 0.25 } }}
+                  className="overflow-hidden"
+                >
 
-                  <div className="border-t border-primary-100">
+                  <div
+                    className="border-t border-slate-100 max-h-[460px] overflow-y-auto overflow-x-hidden"
+                    onWheel={e => {
+                      const el = e.currentTarget;
+                      const atTop    = el.scrollTop === 0;
+                      const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 1;
+                      // Only stop propagation when the inner div can still scroll in that direction
+                      if (!(atTop && e.deltaY < 0) && !(atBottom && e.deltaY > 0)) {
+                        e.stopPropagation();
+                      }
+                    }}
+                  >
 
                     {/* Mobile: cards */}
                     <div className="sm:hidden p-3 space-y-2">
@@ -1773,7 +1853,7 @@ export default function Airlines() {
                     </div>
 
                     {/* Desktop: table */}
-                    <div className="hidden sm:block overflow-x-auto">
+                    <div className="hidden sm:block">
                       <table className="w-full min-w-[700px]">
                         <thead>
                           <tr className="bg-primary-50/60">
@@ -1823,20 +1903,26 @@ export default function Airlines() {
                                             {p.cert_released ? <><HiOutlineCheckCircle className="inline w-2.5 h-2.5 mr-0.5" />Released</> : <><HiOutlineClock className="inline w-2.5 h-2.5 mr-0.5" />Not Released</>}
                                           </span>
                                           {/* Per-row validity dropdown */}
-                                          <select
+                                          <Select
                                             value={p.cert_validity || '36'}
-                                            onChange={async e => {
+                                            onValueChange={async v => {
                                               try {
-                                                await updateValidity(pid, e.target.value);
+                                                await updateValidity(pid, v);
                                                 toast.success('Validity updated');
                                                 fetchData({ silent: true });
                                               } catch { toast.error('Failed to update validity'); }
                                             }}
-                                            onClick={e => e.stopPropagation()}
-                                            className="text-[9px] font-semibold border border-primary-200 rounded px-1 py-0.5 bg-white text-primary-600 cursor-pointer"
                                           >
-                                            {VALIDITY_OPTIONS.map(o => <option key={o.val} value={o.val}>{o.label}</option>)}
-                                          </select>
+                                            <SelectTrigger
+                                              onClick={e => e.stopPropagation()}
+                                              className="h-auto text-[9px] font-semibold border-primary-200 rounded px-1 py-0.5 text-primary-600 w-auto gap-1"
+                                            >
+                                              <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent onClick={e => e.stopPropagation()}>
+                                              {VALIDITY_OPTIONS.map(o => <SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>)}
+                                            </SelectContent>
+                                          </Select>
                                         </div>
                                       )}
                                       {p.cert_sequence && (
@@ -1917,9 +2003,7 @@ export default function Airlines() {
                                     return (
                                       <div className="mt-1.5" onClick={e => e.stopPropagation()}>
                                         <label className="flex items-center gap-1 text-[10px] font-semibold text-primary-500 cursor-pointer w-fit">
-                                          <input type="checkbox" checked={enabled}
-                                            onChange={e => handleFdrHoursToggle(pid, e.target.checked)}
-                                            className="w-3 h-3 accent-blue-600" />
+                                          <Checkbox checked={enabled} onCheckedChange={c => handleFdrHoursToggle(pid, !!c)} className="h-3 w-3" />
                                           Add Hours
                                         </label>
                                         {enabled && (
@@ -2014,10 +2098,9 @@ export default function Airlines() {
                     </div>
                   </div>
                 </motion.div>
-              )}
-            </AnimatePresence>
+            )}
 
-            {expanded[aKey] && participants.length === 0 && (
+            {isCardOpen && participants.length === 0 && (
               <div className="border-t border-primary-100 px-5 py-6 text-center text-sm text-primary-400">
                 No participants submitted by this airline yet.
               </div>
@@ -2027,6 +2110,7 @@ export default function Airlines() {
       })}
 
       </div> {/* end padded content wrapper */}
+      {ConfirmDialog}
     </motion.div>
   );
 }

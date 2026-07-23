@@ -34,6 +34,8 @@ delete mongoose.models.Airline;
 delete mongoose.models.CertCounter;
 delete mongoose.models.ExamResult;
 delete mongoose.models.Contract;
+delete mongoose.models.Exam;
+delete mongoose.models.ExamAttempt;
 
 // Register all models fresh
 require('./models/Admin');
@@ -42,6 +44,8 @@ require('./models/Participant');
 require('./models/CertCounter');
 require('./models/ExamResult');
 require('./models/Contract');
+require('./models/Exam');
+require('./models/ExamAttempt');
 
 const { initDB } = require('./database');
 
@@ -120,6 +124,7 @@ const examResultsRouter     = require('./routes/examResults');
 const attendanceRouter      = require('./routes/attendance');
 const contractsRouter       = require('./routes/contracts');
 const dgrRouter             = require('./routes/dgr');
+const examsRouter           = require('./routes/exams');
 
 app.use('/api/auth', authRouter);
 app.use('/api/participants', participantsRouter);
@@ -129,6 +134,7 @@ app.use('/api/exam-results', examResultsRouter);
 app.use('/api/attendance', attendanceRouter);
 app.use('/api/contracts', contractsRouter);
 app.use('/api/dgr', dgrRouter);
+app.use('/api/exams', examsRouter);
 
 // Frontend is served separately (localhost in dev, or its own host in prod).
 // The backend is API-only — do NOT serve static files from here.

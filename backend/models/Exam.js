@@ -1,0 +1,145 @@
+const mongoose = require('mongoose');
+
+// ─── Exam question ────────────────────────────────────────────────────────────
+// One flat schema shared by all 13 question types. Only the fields relevant to
+// `type` are populated; the rest stay at their defaults. Type-specific
+// validation happens in routes/exams.js, matching this repo's pragmatic style
+// (see DgrForm.js) rather than Mongoose discriminators.
+const optionSchema = new mongoose.Schema(
+  {
+    text:            { type: String, default: '' },
+    image_url:       { type: String, default: '' },
+    image_public_id: { type: String, default: '' },
+    is_correct:      { type: Boolean, default: false },
+  },
+  { _id: true }
+);
+
+const questionSchema = new mongoose.Schema(
+  {
+    type: {
+      type: String,
+      required: true,
+      enum: [
+        'mcq', 'multi_response', 'true_false', 'short_answer', 'numeric',
+        'sequence', 'matching', 'fill_blank', 'select_list', 'drag_words',
+        'hotspot', 'drag_drop', 'likert', 'essay',
+      ],
+    },
+    prompt:          { type: String, default: '' },
+    image_url:       { type: String, default: '' },
+    image_public_id: { type: String, default: '' },
+    points:          { type: Number, default: 1 },
+    order:           { type: Number, default: 0 },
+    explanation:     { type: String, default: '' },
+
+    // mcq / multi_response / true_false / select_list
+    options: [optionSchema],
+
+    // short_answer — accepted answers, case-insensitive match
+    correct_text: [{ type: String }],
+
+    // numeric
+    numeric_answer:    { type: Number, default: null },
+    numeric_tolerance: { type: Number, default: 0 },
+
+    // sequence — correct order is array order
+    sequence_items: [
+      { text: { type: String, default: '' }, image_url: { type: String, default: '' } },
+    ],
+
+    // matching
+    matching_pairs: [
+      { left: { type: String, default: '' }, right: { type: String, default: '' } },
+    ],
+
+    // fill_blank — template text with {{1}}, {{2}}... placeholders
+    blanks_text:    { type: String, default: '' },
+    blanks_answers: [[{ type: String }]],
+
+    // drag_words — template text with {{1}}... placeholders. `drag_words_bank`
+    // is the full draggable word pool (correct answers + distractors);
+    // `drag_words_answers` is the correct word for each blank, in order.
+    drag_words_text:    { type: String, default: '' },
+    drag_words_bank:    [{ type: String }],
+    drag_words_answers: [{ type: String }],
+
+    // hotspot — regions given as % of image (0-100), responsive-safe
+    hotspot_regions: [
+      {
+        shape:      { type: String, enum: ['rect', 'circle'], default: 'rect' },
+        x:          { type: Number, default: 0 },
+        y:          { type: Number, default: 0 },
+        width:      { type: Number, default: 0 },
+        height:     { type: Number, default: 0 },
+        is_correct: { type: Boolean, default: false },
+      },
+    ],
+
+    // drag_drop — draggable items dropped onto labeled target zones (% of image)
+    dragdrop_targets: [
+      {
+        label:  { type: String, default: '' },
+        x:      { type: Number, default: 0 },
+        y:      { type: Number, default: 0 },
+        width:  { type: Number, default: 0 },
+        height: { type: Number, default: 0 },
+      },
+    ],
+    dragdrop_items: [
+      { label: { type: String, default: '' }, correct_target_index: { type: Number, default: 0 } },
+    ],
+
+    // likert — survey only, not scored
+    likert_statements:   [{ type: String }],
+    likert_scale_labels: [{ type: String }],
+
+    // essay — manual grade only
+    essay_min_words: { type: Number, default: 0 },
+  },
+  { timestamps: false }
+);
+
+const examSchema = new mongoose.Schema(
+  {
+    title:       { type: String, required: true, trim: true },
+    description: { type: String, default: '' },
+    created_by:  { type: mongoose.Schema.Types.ObjectId, ref: 'Admin' },
+
+    status: { type: String, enum: ['draft', 'published', 'archived'], default: 'draft' },
+
+    duration_minutes: { type: Number, default: 30 },
+    pass_percentage:  { type: Number, default: 60 },
+    max_attempts:     { type: Number, default: 1 },
+    shuffle_questions: { type: Boolean, default: false },
+    shuffle_options:   { type: Boolean, default: false },
+
+    // Lockdown mode — fullscreen exam view with violation tracking (tab-switch,
+    // exiting fullscreen, etc). max_violations is how many infractions are
+    // tolerated before the attempt is auto-submitted. 0 disables lockdown mode.
+    lockdown_enabled: { type: Boolean, default: true },
+    max_violations:   { type: Number, default: 4 },
+
+    questions: [questionSchema],
+
+    // Students this exam has been assigned to
+    assignments: [
+      {
+        participant_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Participant' },
+        airline_id:      { type: mongoose.Schema.Types.ObjectId, ref: 'Airline' },
+        assigned_at:     { type: Date, default: Date.now },
+      },
+    ],
+  },
+  { timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } }
+);
+
+examSchema.methods.toJSON = function () {
+  const obj = this.toObject();
+  obj._id = String(obj._id);
+  obj.id  = obj._id;
+  return obj;
+};
+
+module.exports = mongoose.model('Exam', examSchema);
+module.exports.questionSchema = questionSchema;

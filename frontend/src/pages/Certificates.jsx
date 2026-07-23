@@ -24,6 +24,9 @@ import {
 } from '../api';
 import { useAuth } from '../context/AuthContext';
 import ModuleSelector from '../components/ModuleSelector';
+import { useConfirm } from '@/hooks/use-confirm';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 
 const TRAINING_TYPES = [
   { value: 'FDI', label: 'FDI – Flight Dispatch Initial' },
@@ -161,6 +164,7 @@ export default function Certificates() {
   const [moduleModal, setModuleModal] = useState({ open: false, record: null });
   const [selected, setSelected]         = useState(new Set());
   const [bulkGenerating, setBulkGenerating] = useState(false);
+  const { confirm, ConfirmDialog } = useConfirm();
   // certResults: array of { id, name, trainingType, certId, blobUrl, filename }
   const [certResults, setCertResults]   = useState(null);
   // Per-row preview + download (only for already-issued certs)
@@ -352,9 +356,11 @@ export default function Certificates() {
 
   // ── Revoke an issued certificate (frees the cert number for reuse) ──────────────
   const handleRevoke = async (record) => {
-    if (!window.confirm(`Revoke certificate #${record.cert_sequence} for "${record.participant_name}"?\n\nThe certificate number will become available for reassignment.`)) {
-      return;
-    }
+    const ok = await confirm(
+      `Revoke certificate #${record.cert_sequence} for "${record.participant_name}"?\n\nThe certificate number will become available for reassignment.`,
+      { title: 'Revoke certificate', confirmLabel: 'Revoke' }
+    );
+    if (!ok) return;
     try {
       await revokeCertificateById(record.id);
       toast.success(`Certificate #${record.cert_sequence} revoked. Number is now available for reuse.`);
@@ -516,30 +522,28 @@ export default function Certificates() {
           </form>
           <div className="relative">
             <HiOutlineFilter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-primary-400" />
-            <select
-              value={filterType}
-              onChange={(e) => setFilterType(e.target.value)}
-              className="input-field pl-10 pr-8 appearance-none cursor-pointer min-w-[220px]"
-            >
-              <option value="">All Training Types</option>
-              {TRAINING_TYPES.map((t) => (
-                <option key={t.value} value={t.value}>{t.label}</option>
-              ))}
-            </select>
+            <Select value={filterType || 'all'} onValueChange={v => setFilterType(v === 'all' ? '' : v)}>
+              <SelectTrigger className="pl-10 min-w-[220px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Training Types</SelectItem>
+                {TRAINING_TYPES.map((t) => (
+                  <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           
           {/* Sort Controls */}
           <div className="flex gap-2">
             <div className="relative flex-1 sm:flex-none">
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                className="input-field pr-8 appearance-none cursor-pointer min-w-[180px] text-sm"
-              >
-                <option value="creation">Sort: Upload Time</option>
-                <option value="name">Sort: Name</option>
-                <option value="training_date">Sort: Training Date</option>
-              </select>
+              <Select value={sortBy} onValueChange={setSortBy}>
+                <SelectTrigger className="min-w-[180px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="creation">Sort: Upload Time</SelectItem>
+                  <SelectItem value="name">Sort: Name</SelectItem>
+                  <SelectItem value="training_date">Sort: Training Date</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <button
               onClick={() => setSortDir(sortDir === 'asc' ? 'desc' : 'asc')}
@@ -559,12 +563,9 @@ export default function Certificates() {
             <thead>
               <tr className="bg-primary-50 border-b border-primary-200">
                 <th className="px-4 py-3 w-10">
-                  <input
-                    type="checkbox"
-                    checked={selected.size === records.length && records.length > 0}
-                    ref={el => { if (el) el.indeterminate = selected.size > 0 && selected.size < records.length; }}
-                    onChange={toggleAll}
-                    className="rounded border-primary-300 text-primary-600 cursor-pointer"
+                  <Checkbox
+                    checked={selected.size === records.length && records.length > 0 ? true : selected.size > 0 ? 'indeterminate' : false}
+                    onCheckedChange={toggleAll}
                   />
                 </th>
                 <th className="text-left text-[10px] font-semibold text-primary-500 uppercase tracking-wider px-4 py-3">Participant Name</th>
@@ -601,11 +602,9 @@ export default function Certificates() {
                     }`}
                   >
                     <td className="px-4 py-4">
-                      <input
-                        type="checkbox"
+                      <Checkbox
                         checked={selected.has(record.id)}
-                        onChange={() => toggleSelect(record.id)}
-                        className="rounded border-primary-300 text-primary-600 cursor-pointer"
+                        onCheckedChange={() => toggleSelect(record.id)}
                       />
                     </td>
                     <td className="px-4 py-4">
@@ -715,6 +714,7 @@ export default function Certificates() {
           </div>
         )}
       </div>
+      {ConfirmDialog}
     </motion.div>
   );
 }

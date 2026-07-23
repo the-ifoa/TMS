@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { HiOutlineArrowLeft } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import { getParticipant, updateParticipant } from '../api';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 
 const TRAINING_TYPES = [
   { value: 'FDI', label: 'FDI – Flight Dispatch Initial' },
@@ -117,18 +118,32 @@ export default function EditParticipant() {
   }
 
   return (
-    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-2xl mx-auto space-y-6">
-      <button onClick={() => navigate(-1)}
-        className="flex items-center gap-2 text-sm text-primary-500 hover:text-primary-700 transition-colors">
-        <HiOutlineArrowLeft className="w-4 h-4" /> Back
-      </button>
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="min-h-full">
+      {/* ── Sticky Page Header Bar (Clean, balanced design) ── */}
+      <div className="sticky top-0 z-20 bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-4 sm:px-6 py-3 shadow-2xs">
+        <div className="max-w-3xl mx-auto flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <button 
+              type="button"
+              onClick={() => navigate(-1)}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 hover:text-slate-900 bg-white border border-slate-200 shadow-2xs hover:bg-slate-50 transition-all flex-shrink-0"
+              title="Go back"
+            >
+              <HiOutlineArrowLeft className="w-3.5 h-3.5 text-slate-500" />
+              <span className="hidden sm:inline">Back</span>
+            </button>
 
-      <div>
-        <h1 className="text-xl sm:text-2xl font-bold text-primary-800">Edit Participant</h1>
-        <p className="text-sm text-primary-400 mt-1">
-          Update training record — {form.first_name} {form.last_name}
-        </p>
+            <div className="flex items-baseline gap-2 min-w-0">
+              <h1 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight whitespace-nowrap">Edit Participant</h1>
+              <span className="hidden sm:inline text-xs text-slate-400 truncate">
+                {form.first_name} {form.last_name}
+              </span>
+            </div>
+          </div>
+        </div>
       </div>
+
+      <div className="max-w-2xl mx-auto p-4 sm:p-6 space-y-6">
 
       <form onSubmit={handleSubmit} className="card p-6 space-y-5">
 
@@ -163,13 +178,14 @@ export default function EditParticipant() {
         {/* Training Type */}
         <div>
           <label className="label">Type of Training *</label>
-          <select name="training_type" value={form.training_type} onChange={handleChange}
-            className="input-field appearance-none cursor-pointer">
-            <option value="">Select training type</option>
-            {TRAINING_TYPES.map(type => (
-              <option key={type.value} value={type.value}>{type.label}</option>
-            ))}
-          </select>
+          <Select value={form.training_type || undefined} onValueChange={v => handleChange({ target: { name: 'training_type', value: v } })}>
+            <SelectTrigger><SelectValue placeholder="Select training type" /></SelectTrigger>
+            <SelectContent>
+              {TRAINING_TYPES.map(type => (
+                <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         {/* NDG subtype — Initial or Recurrent */}
@@ -289,6 +305,7 @@ export default function EditParticipant() {
           </button>
         </div>
       </form>
+      </div>
     </motion.div>
   );
 }

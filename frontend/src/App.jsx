@@ -25,6 +25,7 @@ import ExamAttempts from './pages/ExamAttempts';
 import AirlineExams from './pages/AirlineExams';
 import ExamTake from './pages/ExamTake';
 import ExamResultView from './pages/ExamResultView';
+import PublicExam from './pages/PublicExam';
 
 // Requires any authenticated user (admin or airline)
 function ProtectedRoute({ children }) {
@@ -79,6 +80,9 @@ function App() {
         <Route path="/admin-login"    element={<GuestRoute><AdminLogin /></GuestRoute>} />
         <Route path="/admin-signup"   element={<GuestRoute><AdminSignup /></GuestRoute>} />
         <Route path="/reset-password" element={<ResetPassword />} />
+
+        {/* Public, passwordless exam link — no login, token in the URL */}
+        <Route path="/exam/:token" element={<PublicExam />} />
 
         <Route path="/admin" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
           {/* Available to all authenticated users */}

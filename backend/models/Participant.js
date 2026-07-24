@@ -5,6 +5,10 @@ const participantSchema = new mongoose.Schema(
     first_name:       { type: String, default: '', trim: true },
     last_name:        { type: String, default: '', trim: true },
     participant_name: { type: String, default: '' },
+    // Candidate's own email — collected by the airline at enrollment time so
+    // the admin can email exam links directly to the participant. Optional
+    // (older records won't have it); required only when sending an exam invite.
+    email:            { type: String, default: '', trim: true, lowercase: true },
     company:          { type: String, required: true },
     department:       { type: String, required: true },
     training_type: {

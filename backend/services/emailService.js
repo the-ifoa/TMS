@@ -783,4 +783,135 @@ async function sendContractEmail({ toEmail, clientName, pdfBuffer, message }) {
   return info;
 }
 
-module.exports = { sendSubmissionConfirmation, sendPasswordResetEmail, sendOtpEmail, sendContractEmail };
+// ─── Send exam invitation email (passwordless take link) ──────────────────────
+async function sendExamInviteEmail({ toEmail, participantName, examTitle, durationMinutes, maxAttempts, link }) {
+  const transporter = getTransporter();
+  if (!transporter) throw new Error('SMTP not configured — cannot send exam invite.');
+
+  const name = participantName || 'Candidate';
+  const durationLine = durationMinutes ? `${durationMinutes} minutes` : 'No time limit';
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Your Exam Invitation – IFOA</title>
+</head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:'Segoe UI',Helvetica,Arial,sans-serif">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:40px 16px">
+  <tr><td align="center">
+    <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 32px rgba(0,0,0,0.10)">
+      <tr>
+        <td bgcolor="#0c1a2e" style="background:#0c1a2e;padding:28px 40px 24px;text-align:center">
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+              <td align="center" bgcolor="#ffffff" style="background:#ffffff;border-radius:12px;padding:16px 20px">
+                <img src="cid:ifoa_logo" width="460" alt="IFOA" style="display:block;border:0;width:460px;max-width:100%;height:auto"/>
+              </td>
+            </tr>
+          </table>
+          <div style="height:16px"></div>
+          <div style="width:40px;height:2px;background:#2563eb;margin:0 auto 14px"></div>
+          <p style="margin:0 0 4px;font-size:11px;font-weight:600;letter-spacing:2.5px;text-transform:uppercase;color:#94a3b8">International Flight Operations Academy</p>
+          <p style="margin:0;font-size:22px;font-weight:800;color:#ffffff">You've Been Invited to an Exam</p>
+        </td>
+      </tr>
+      <tr><td style="background:linear-gradient(90deg,#2563eb,#3b82f6);height:4px;font-size:0;line-height:0">&nbsp;</td></tr>
+      <tr>
+        <td style="padding:36px 40px 0">
+          <p style="margin:0 0 8px;font-size:16px;font-weight:700;color:#111827">Dear ${name},</p>
+          <p style="margin:0 0 24px;font-size:14px;color:#4b5563;line-height:1.7">
+            You have been invited to complete the assessment below. Click the button to begin — no login is required, the link is personal to you.
+          </p>
+
+          <!-- Exam summary card -->
+          <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;margin-bottom:24px">
+            <tr><td style="padding:18px 22px">
+              <p style="margin:0 0 10px;font-size:17px;font-weight:800;color:#0f172a">${examTitle}</p>
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="padding:5px 0;font-size:13px;color:#6b7280;width:40%">Time allowed</td>
+                  <td style="padding:5px 0;font-size:13px;color:#111827;font-weight:600">${durationLine}</td>
+                </tr>
+                <tr>
+                  <td style="padding:5px 0;font-size:13px;color:#6b7280;border-top:1px solid #f1f5f9">Attempts allowed</td>
+                  <td style="padding:5px 0;font-size:13px;color:#111827;font-weight:600;border-top:1px solid #f1f5f9">${maxAttempts || 1}</td>
+                </tr>
+              </table>
+            </td></tr>
+          </table>
+
+          <!-- CTA -->
+          <table cellpadding="0" cellspacing="0" style="margin:0 auto 28px">
+            <tr>
+              <td style="background:#1d4ed8;border-radius:10px;text-align:center">
+                <a href="${link}" style="display:inline-block;padding:14px 40px;font-size:15px;font-weight:700;color:#ffffff;text-decoration:none;letter-spacing:0.3px">
+                  Start the Exam
+                </a>
+              </td>
+            </tr>
+          </table>
+
+          <p style="margin:0 0 6px;font-size:13px;color:#6b7280">If the button doesn't work, copy and paste this link:</p>
+          <p style="margin:0 0 24px;font-size:12px;color:#2563eb;word-break:break-all;line-height:1.6">${link}</p>
+
+          <table width="100%" cellpadding="0" cellspacing="0" style="background:#fef9c3;border:1px solid #fde047;border-radius:10px;margin-bottom:8px">
+            <tr><td style="padding:14px 18px">
+              <p style="margin:0;font-size:13px;color:#854d0e;line-height:1.6">
+                ⚠️ &nbsp;This link is personal to you — do not share it. Make sure you have a stable internet connection before you begin.
+              </p>
+            </td></tr>
+          </table>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:28px 40px 32px">
+          <p style="margin:0;font-size:13px;color:#374151;line-height:1.7">
+            Best regards,<br/>
+            <strong style="color:#111827">IFOA Administration Team</strong><br/>
+            <span style="font-size:12px;color:#6b7280">International Flight Operations Academy</span>
+          </p>
+        </td>
+      </tr>
+      <tr>
+        <td bgcolor="#0c1a2e" style="background:#0c1a2e;padding:16px 40px">
+          <p style="margin:0;font-size:11px;color:#64748b;text-align:center">
+            This is an automated email — please do not reply. &nbsp;|&nbsp;
+            &copy; ${new Date().getFullYear()} International Flight Operations Academy
+          </p>
+        </td>
+      </tr>
+    </table>
+  </td></tr>
+</table>
+</body>
+</html>`;
+
+  const text = [
+    `Dear ${name},`,
+    '',
+    `You have been invited to complete the exam: ${examTitle}`,
+    `Time allowed: ${durationLine}`,
+    `Attempts allowed: ${maxAttempts || 1}`,
+    '',
+    'Start the exam using this personal link (do not share it):',
+    link,
+    '',
+    'Best regards,',
+    'IFOA Administration Team',
+  ].join('\n');
+
+  const info = await transporter.sendMail({
+    from:    `"IFOA – International Flight Operations Academy" <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER}>`,
+    to:      toEmail,
+    subject: `Exam Invitation: ${examTitle} – IFOA`,
+    text,
+    html,
+    attachments: logoAttachment(),
+  });
+  console.log(`[email] Exam invite sent to ${toEmail} — messageId: ${info.messageId}`);
+  return info;
+}
+
+module.exports = { sendSubmissionConfirmation, sendPasswordResetEmail, sendOtpEmail, sendContractEmail, sendExamInviteEmail };

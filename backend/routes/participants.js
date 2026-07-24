@@ -170,7 +170,7 @@ router.get('/:id', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const {
-      first_name, last_name,
+      first_name, last_name, email,
       participant_name,
       company, department,
       training_type, training_date,
@@ -200,6 +200,7 @@ router.post('/', async (req, res) => {
     const doc = new Participant({
       first_name:       fName,
       last_name:        lName,
+      email:            (email || '').trim().toLowerCase(),
       participant_name: `${fName} ${lName}`.trim(),
       company,
       department,
@@ -346,7 +347,7 @@ router.put('/:id', async (req, res) => {
     }
 
     const {
-      first_name, last_name,
+      first_name, last_name, email,
       participant_name,
       company, department,
       training_type, training_date,
@@ -359,6 +360,7 @@ router.put('/:id', async (req, res) => {
 
     if (first_name !== undefined) doc.first_name = first_name.trim();
     if (last_name  !== undefined) doc.last_name  = last_name.trim();
+    if (email      !== undefined) doc.email      = (email || '').trim().toLowerCase();
 
     if (!first_name && !last_name && participant_name) {
       const parts = participant_name.trim().split(' ');

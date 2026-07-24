@@ -6,9 +6,10 @@ import {
   HiOutlineAcademicCap, HiOutlinePlusCircle, HiOutlinePencil, HiOutlineTrash,
   HiOutlineUserAdd, HiOutlineClipboardCheck, HiOutlineOfficeBuilding,
   HiOutlineSearch, HiOutlineX, HiOutlineUserGroup, HiChevronRight,
-  HiOutlineClock, HiOutlineDocumentText,
+  HiOutlineClock, HiOutlineDocumentText, HiOutlineMail, HiOutlineCheckCircle,
+  HiOutlinePaperAirplane,
 } from 'react-icons/hi';
-import { listExams, deleteExam, publishExam, getExamAirlines, assignExam } from '../api';
+import { listExams, deleteExam, publishExam, getExamAirlines, assignExam, sendExamInvites, getExamInvites } from '../api';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
@@ -371,11 +372,202 @@ function AssignModal({ exam, onClose, onAssigned }) {
   );
 }
 
+// ─── Send-invite modal — emails the passwordless take-link to participants ────
+// Shows every participant grouped by airline WITH their email and current
+// invite/attempt status, so the admin can review who's been sent/completed and
+// send (or re-send) links to those who have an email.
+const INVITE_BADGE = {
+  sent:        { label: 'Sent',       cls: 'bg-blue-50 text-blue-700 border-blue-200' },
+  opened:      { label: 'Opened',     cls: 'bg-amber-50 text-amber-700 border-amber-200' },
+  in_progress: { label: 'In Progress',cls: 'bg-violet-50 text-violet-700 border-violet-200' },
+  completed:   { label: 'Completed',  cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+};
+
+function SendInviteModal({ exam, onClose, onSent }) {
+  const [groups, setGroups] = useState([]);
+  const [inviteByPid, setInviteByPid] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState(new Set());
+  const [sending, setSending] = useState(false);
+  const [search, setSearch] = useState('');
+  const [expanded, setExpanded] = useState(new Set());
+
+  const load = () => {
+    setLoading(true);
+    Promise.all([getExamAirlines(), getExamInvites(exam.id)])
+      .then(([airRes, invRes]) => {
+        setGroups(airRes.data);
+        setInviteByPid(Object.fromEntries((invRes.data || []).map((i) => [String(i.participant_id), i])));
+      })
+      .catch(() => toast.error('Failed to load participants.'))
+      .finally(() => setLoading(false));
+  };
+  useEffect(load, [exam.id]);
+
+  const hasEmail = (p) => !!(p.email && p.email.trim());
+  const toggle = (id) => setSelected((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const toggleExpand = (id) => setExpanded((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+
+  const send = async () => {
+    if (selected.size === 0) return;
+    setSending(true);
+    try {
+      const res = await sendExamInvites(exam.id, [...selected]);
+      const { sent = [], skipped = [] } = res.data || {};
+      if (sent.length) toast.success(`${sent.length} exam link${sent.length > 1 ? 's' : ''} sent.`);
+      if (skipped.length) toast(`${skipped.length} skipped (${skipped[0].reason}${skipped.length > 1 ? ', …' : ''}).`, { icon: 'ℹ️' });
+      setSelected(new Set());
+      load();
+      onSent?.();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to send invites.');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const filteredGroups = groups
+    .map((g) => {
+      const matchAir = g.airline.airlineName.toLowerCase().includes(search.toLowerCase());
+      const parts = g.participants.filter((p) => matchAir || p.participant_name.toLowerCase().includes(search.toLowerCase()) || (p.email || '').toLowerCase().includes(search.toLowerCase()));
+      return { ...g, participants: parts };
+    })
+    .filter((g) => g.participants.length > 0);
+
+  const sendableInGroup = (parts) => parts.filter(hasEmail);
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-2xl w-[92vw] h-[85vh] max-h-[750px] flex flex-col p-0 overflow-hidden rounded-2xl border border-slate-200/80 shadow-2xl bg-white">
+        <DialogHeader className="flex-shrink-0 px-6 py-4 border-b border-slate-100 bg-white space-y-1">
+          <div className="flex items-center gap-2">
+            <span className="p-1.5 rounded-lg bg-blue-50 text-blue-600"><HiOutlineMail className="w-5 h-5" /></span>
+            <DialogTitle className="text-base sm:text-lg font-bold text-slate-900 truncate">
+              Send &ldquo;{exam.title}&rdquo; to participants
+            </DialogTitle>
+          </div>
+          <p className="text-xs text-slate-500">Each participant gets a personal, passwordless exam link by email. Participants without an email can't be sent to.</p>
+          <div className="relative pt-2">
+            <HiOutlineSearch className="absolute left-3 top-1/2 -translate-y-1/2 mt-1 w-4 h-4 text-slate-400 pointer-events-none" />
+            <input
+              type="text" placeholder="Search participant, email or airline…"
+              value={search} onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200/90 rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
+            />
+          </div>
+        </DialogHeader>
+
+        <div className="flex-1 overflow-y-auto min-h-0 p-5 space-y-3.5 bg-slate-50/50">
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-12 gap-2 text-slate-400">
+              <div className="w-6 h-6 border-2 border-slate-300 border-t-slate-900 rounded-full animate-spin" />
+              <p className="text-xs font-medium">Loading participants…</p>
+            </div>
+          ) : filteredGroups.length === 0 ? (
+            <div className="py-12 text-center text-slate-400">
+              <HiOutlineUserGroup className="w-8 h-8 mx-auto mb-2 opacity-50" />
+              <p className="text-sm font-medium">No participants match your filter.</p>
+            </div>
+          ) : (
+            filteredGroups.map(({ airline, participants }) => {
+              const sendable = sendableInGroup(participants);
+              const allSel = sendable.length > 0 && sendable.every((p) => selected.has(p._id));
+              const isOpen = search.trim() !== '' || expanded.has(airline._id);
+              return (
+                <div key={airline._id} className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden">
+                  <div onClick={() => toggleExpand(airline._id)} className="px-4 py-3 bg-slate-50/80 hover:bg-slate-100/70 cursor-pointer flex items-center justify-between gap-4 select-none">
+                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                      <HiChevronRight className={`w-4 h-4 text-slate-400 flex-shrink-0 transition-transform ${isOpen ? 'rotate-90 text-slate-600' : ''}`} />
+                      <div className="w-7 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-700 shadow-2xs flex-shrink-0">
+                        <HiOutlineOfficeBuilding className="w-4 h-4" />
+                      </div>
+                      <span className="text-sm font-bold text-slate-800 truncate">{airline.airlineName}</span>
+                      <span className="px-2 py-0.5 rounded-full bg-slate-200/80 text-slate-700 text-[11px] font-bold">{participants.length}</span>
+                    </div>
+                    {sendable.length > 0 && (
+                      <div role="button" tabIndex={0} onClick={(e) => { e.stopPropagation(); setSelected((prev) => { const n = new Set(prev); allSel ? sendable.forEach((p) => n.delete(p._id)) : sendable.forEach((p) => n.add(p._id)); return n; }); }}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold border select-none cursor-pointer ${allSel ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'}`}>
+                        {allSel ? 'Selected' : `Select ${sendable.length}`}
+                      </div>
+                    )}
+                  </div>
+
+                  <AnimatePresence initial={false}>
+                    {isOpen && (
+                      <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden border-t border-slate-100 bg-white">
+                        <div className="p-3 space-y-2 max-h-72 overflow-y-auto">
+                          {participants.map((p) => {
+                            const email = hasEmail(p);
+                            const inv = inviteByPid[String(p._id)];
+                            const badge = inv && INVITE_BADGE[inv.status];
+                            const isChecked = selected.has(p._id);
+                            const ini = p.participant_name ? p.participant_name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase() : 'ST';
+                            return (
+                              <div key={p._id}
+                                onClick={() => email && toggle(p._id)}
+                                className={`flex items-center justify-between gap-3 px-3 py-2 rounded-xl border transition-all ${
+                                  !email ? 'bg-slate-50/70 border-slate-100 opacity-70 cursor-not-allowed'
+                                  : isChecked ? 'bg-slate-900/5 border-slate-900/30 cursor-pointer shadow-2xs'
+                                  : 'bg-white border-slate-100 hover:bg-slate-50 cursor-pointer'}`}>
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  <Checkbox disabled={!email} checked={isChecked} onCheckedChange={() => email && toggle(p._id)} className="w-4 h-4 flex-shrink-0" />
+                                  <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-extrabold text-slate-600 flex-shrink-0">{ini}</div>
+                                  <div className="min-w-0">
+                                    <p className="text-xs font-bold text-slate-800 truncate">{p.participant_name}</p>
+                                    {email ? (
+                                      <p className="text-[11px] text-slate-500 truncate flex items-center gap-1"><HiOutlineMail className="w-3 h-3" />{p.email}</p>
+                                    ) : (
+                                      <p className="text-[11px] text-rose-500 font-semibold truncate">No email on file</p>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2 flex-shrink-0">
+                                  {badge && (
+                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${badge.cls}`}>{badge.label}</span>
+                                  )}
+                                  {inv?.attempt && inv.attempt.percentage != null && (
+                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${inv.attempt.passed ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                                      {inv.attempt.percentage}%
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        <DialogFooter className="flex-shrink-0 px-6 py-3.5 border-t border-slate-100 bg-white flex items-center justify-between">
+          <div className="text-xs font-semibold text-slate-500">
+            {selected.size > 0 ? <span className="text-slate-900 font-bold">{selected.size} selected</span> : 'No participants selected'}
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" onClick={onClose} className="rounded-xl text-xs font-bold">Close</Button>
+            <Button variant="primary" onClick={send} disabled={sending || selected.size === 0}
+              className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold px-4 py-2 shadow-2xs flex items-center gap-1.5">
+              <HiOutlinePaperAirplane className="w-4 h-4 rotate-45" />
+              {sending ? 'Sending…' : `Send Link${selected.size !== 1 ? 's' : ''} (${selected.size})`}
+            </Button>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function ExamSystem() {
   const navigate = useNavigate();
   const [exams, setExams] = useState([]);
   const [loading, setLoading] = useState(true);
   const [assignTarget, setAssignTarget] = useState(null);
+  const [sendTarget, setSendTarget] = useState(null);
   const { confirm, ConfirmDialog } = useConfirm();
 
   const load = () => listExams().then((res) => setExams(res.data)).catch(() => toast.error('Failed to load exams.')).finally(() => setLoading(false));
@@ -505,10 +697,20 @@ export default function ExamSystem() {
                     Publish
                   </Button>
                 )}
+                {exam.status === 'published' && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="rounded-xl border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold text-xs shadow-2xs"
+                    onClick={() => setSendTarget(exam)}
+                  >
+                    <HiOutlineMail className="w-3.5 h-3.5" /> Send Link
+                  </Button>
+                )}
                 <Button
                   size="sm"
                   variant="outline"
-                  className="rounded-xl border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold text-xs shadow-2xs"
+                  className="rounded-xl border-slate-200 bg-white text-slate-700 hover:bg-slate-50 font-bold text-xs shadow-2xs"
                   onClick={() => setAssignTarget(exam)}
                 >
                   <HiOutlineUserAdd className="w-3.5 h-3.5" /> Assign
@@ -539,6 +741,9 @@ export default function ExamSystem() {
 
       {assignTarget && (
         <AssignModal exam={assignTarget} onClose={() => setAssignTarget(null)} onAssigned={() => { setAssignTarget(null); load(); }} />
+      )}
+      {sendTarget && (
+        <SendInviteModal exam={sendTarget} onClose={() => setSendTarget(null)} onSent={load} />
       )}
       {ConfirmDialog}
     </div>

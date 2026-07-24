@@ -158,6 +158,19 @@ export const listExamAttempts     = (params = {})              => api.get('/exam
 export const getExamAttemptResult = (attemptId)                => api.get(`/exams/attempts/${attemptId}/result`);
 export const gradeExamAttempt     = (attemptId, data)           => api.put(`/exams/attempts/${attemptId}/grade`, data);
 
+// ── Exam invites (email a passwordless take-link to participants) ─────────────
+export const sendExamInvites       = (examId, participantIds) => api.post(`/exams/${examId}/send-invites`, { participant_ids: participantIds });
+export const getExamInvites        = (examId)                 => api.get(`/exams/${examId}/invites`);
+export const getAirlineExamResults = ()                       => api.get('/exams/airline-results');
+
+// ── Public token-based exam taking (no auth) ─────────────────────────────────
+export const getPublicExam        = (token)                          => api.get(`/public-exam/${token}`);
+export const startPublicExam      = (token)                          => api.post(`/public-exam/${token}/start`);
+export const savePublicAnswer     = (token, attemptId, questionId, response) => api.put(`/public-exam/${token}/attempts/${attemptId}/answer`, { question_id: questionId, response });
+export const submitPublicExam     = (token, attemptId)              => api.post(`/public-exam/${token}/attempts/${attemptId}/submit`);
+export const reportPublicViolation = (token, attemptId, type)       => api.post(`/public-exam/${token}/attempts/${attemptId}/violation`, { type });
+export const getPublicExamResult  = (token, attemptId)              => api.get(`/public-exam/${token}/attempts/${attemptId}/result`);
+
 // ── Password Reset ────────────────────────────────────────────────────────────
 export const forgotPassword = (email)                     => api.post('/auth/airline/forgot-password', { email });
 export const resetPassword  = (email, token, newPassword) => api.post('/auth/airline/reset-password', { email, token, newPassword });

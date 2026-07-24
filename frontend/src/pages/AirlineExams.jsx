@@ -15,7 +15,7 @@ import {
   HiOutlineSearch,
   HiOutlineX,
 } from 'react-icons/hi';
-import { getAssignedExams, startExamAttempt } from '../api';
+import { getAssignedExams, startExamAttempt, getAirlineExamResults } from '../api';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
@@ -57,13 +57,29 @@ export default function AirlineExams() {
   // is expanded on load.
   const [rosterExam, setRosterExam] = useState(null);
   const [rosterSearch, setRosterSearch] = useState('');
+  const [results, setResults] = useState([]);
+  const [resultsSearch, setResultsSearch] = useState('');
 
   useEffect(() => {
     getAssignedExams()
       .then((res) => setExams(res.data))
       .catch(() => toast.error('Failed to load exams.'))
       .finally(() => setLoading(false));
+    getAirlineExamResults()
+      .then((res) => setResults(res.data || []))
+      .catch(() => {}); // non-blocking
   }, []);
+
+  const INVITE_STATUS = {
+    sent:        { label: 'Sent',        cls: 'bg-blue-50 text-blue-700 border-blue-200' },
+    opened:      { label: 'Opened',      cls: 'bg-amber-50 text-amber-700 border-amber-200' },
+    in_progress: { label: 'In Progress', cls: 'bg-violet-50 text-violet-700 border-violet-200' },
+    completed:   { label: 'Completed',   cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  };
+  const filteredResults = results.filter((r) => {
+    const q = resultsSearch.trim().toLowerCase();
+    return !q || (r.participant_name || '').toLowerCase().includes(q) || (r.exam_title_snapshot || '').toLowerCase().includes(q);
+  });
 
   // Attempt is only created once the candidate confirms inside the modal —
   // closing the modal (X / overlay / Cancel) creates nothing, so no
@@ -206,6 +222,70 @@ export default function AirlineExams() {
                 </Card>
               );
             })}
+          </div>
+        )}
+
+        {/* ── Participant Results (emailed-exam results) ── */}
+        {results.length > 0 && (
+          <div className="space-y-3 pt-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h2 className="text-base font-black text-slate-900 tracking-tight">Participant Results</h2>
+                <p className="text-xs font-medium text-slate-400">Exam links sent to your participants and their scores.</p>
+              </div>
+              {results.length > 4 && (
+                <div className="relative w-full sm:w-64">
+                  <HiOutlineSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                  <input
+                    type="text" value={resultsSearch} onChange={(e) => setResultsSearch(e.target.value)}
+                    placeholder="Search participant or exam…"
+                    className="w-full pl-9 pr-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs divide-y divide-slate-100 overflow-hidden">
+              {filteredResults.length === 0 ? (
+                <div className="p-8 text-center text-xs font-medium text-slate-400">No results match your search.</div>
+              ) : filteredResults.map((r) => {
+                const st = INVITE_STATUS[r.status] || INVITE_STATUS.sent;
+                const att = r.attempt;
+                const pending = att && att.status === 'pending_review';
+                return (
+                  <div key={r.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 hover:bg-slate-50/70 transition-colors">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <Avatar className="w-9 h-9 border border-slate-200 shadow-2xs flex-shrink-0">
+                        <AvatarFallback className="bg-slate-900 text-white text-xs font-bold">
+                          {r.participant_name ? r.participant_name.charAt(0).toUpperCase() : 'S'}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold text-slate-900 truncate">{r.participant_name}</p>
+                        <p className="text-[11px] text-slate-400 font-medium truncate">{r.exam_title_snapshot}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
+                      {att && att.percentage != null && !pending && (
+                        <span className={`text-xs font-extrabold px-2.5 py-1 rounded-xl border ${att.passed ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'}`}>
+                          {att.percentage}%
+                        </span>
+                      )}
+                      {pending && (
+                        <span className="text-xs font-bold px-2.5 py-1 rounded-xl border bg-amber-50 text-amber-700 border-amber-200">Awaiting Review</span>
+                      )}
+                      <span className={`text-xs font-bold px-2.5 py-1 rounded-xl border ${st.cls}`}>{st.label}</span>
+                      {att && att.status !== 'in_progress' && (
+                        <button type="button" onClick={() => navigate(`/airline/exams/${r.exam_id}/result/${att.id}`)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 shadow-2xs">
+                          <HiOutlineEye className="w-3.5 h-3.5 text-slate-500" /> View
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>

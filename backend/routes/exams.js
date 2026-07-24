@@ -1,12 +1,16 @@
+const crypto = require('crypto');
 const express = require('express');
 const router = express.Router();
 const Exam = require('../models/Exam');
 const ExamAttempt = require('../models/ExamAttempt');
+const ExamInvite = require('../models/ExamInvite');
 const Airline = require('../models/Airline');
 const Participant = require('../models/Participant');
 const { authMiddleware } = require('./auth');
 const { examImageUpload, deleteCloudinaryImage } = require('../services/upload');
-const { gradeAnswer, sanitizeQuestionForTaking, MANUAL_TYPES, UNSCORED_TYPES } = require('../services/examGrading');
+const { sanitizeQuestionForTaking } = require('../services/examGrading');
+const { finalizeAttempt } = require('../services/examAttemptFlow');
+const { sendExamInviteEmail } = require('../services/emailService');
 
 router.use(authMiddleware);
 
@@ -21,52 +25,6 @@ async function deleteExamImages(exam) {
     (q.options || []).forEach((o) => o.image_public_id && ids.push(o.image_public_id));
   });
   await Promise.all(ids.map((id) => deleteCloudinaryImage(id)));
-}
-
-// Grades every question in an in-progress attempt and mutates it into its
-// final submitted/pending_review state. Shared by the normal submit endpoint
-// and the violation endpoint's auto-submit-on-max-violations path. Does not
-// save() — caller is responsible for persisting.
-async function finalizeAttempt(attempt) {
-  let maxScore = 0;
-  let score = 0;
-  let hasPending = false;
-
-  attempt.questions_snapshot.forEach((question) => {
-    if (!UNSCORED_TYPES.has(question.type)) maxScore += question.points;
-
-    const answerEntry = attempt.answers.find((a) => String(a.question_id) === String(question._id));
-    const response = answerEntry ? answerEntry.response : null;
-    const graded = gradeAnswer(question, response);
-
-    if (answerEntry) {
-      answerEntry.is_correct = graded.is_correct;
-      answerEntry.points_awarded = graded.points_awarded;
-      answerEntry.needs_manual_grading = graded.needs_manual_grading;
-    } else {
-      attempt.answers.push({
-        question_id: question._id, type: question.type, response: null,
-        is_correct: graded.is_correct, points_awarded: graded.points_awarded,
-        needs_manual_grading: graded.needs_manual_grading,
-      });
-    }
-    if (graded.needs_manual_grading) hasPending = true;
-    else score += graded.points_awarded || 0;
-  });
-
-  attempt.submitted_at = new Date();
-  attempt.time_taken_seconds = Math.round((attempt.submitted_at - attempt.started_at) / 1000);
-  attempt.max_score = maxScore;
-
-  if (hasPending) {
-    attempt.status = 'pending_review';
-  } else {
-    attempt.status = 'submitted';
-    attempt.score = score;
-    attempt.percentage = maxScore > 0 ? Math.round((score / maxScore) * 10000) / 100 : 0;
-    const exam = await Exam.findById(attempt.exam_id).select('pass_percentage');
-    attempt.passed = attempt.percentage >= (exam ? exam.pass_percentage : 60);
-  }
 }
 
 // ─── GET /exams/airlines — admin only: airlines with participants, for assigning ──
@@ -85,12 +43,42 @@ router.get('/airlines', async (req, res) => {
             (p.submitted_by && String(p.submitted_by) === String(a._id)) ||
             (!p.submitted_by && (p.company === a.airlineName || p.airline_name === a.airlineName))
         )
-        .map((p) => ({ _id: String(p._id), participant_name: p.participant_name, training_type: p.training_type })),
+        .map((p) => ({ _id: String(p._id), participant_name: p.participant_name, training_type: p.training_type, email: p.email || '' })),
     }));
 
     res.json(result.filter((r) => r.participants.length > 0));
   } catch (err) {
     console.error('GET /exams/airlines error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── GET /exams/airline-results — airline: their participants' invite + score status ──
+// Defined BEFORE `GET /exams/:id` so the literal path isn't captured as an :id.
+router.get('/airline-results', async (req, res) => {
+  try {
+    if (isAdmin(req)) return res.status(403).json({ error: 'Airline access required.' });
+    const invites = await ExamInvite.find({ airline_id: req.admin.id }).sort({ created_at: -1 });
+    const attemptIds = invites.map((i) => i.attempt_id).filter(Boolean);
+    const attempts = await ExamAttempt.find({ _id: { $in: attemptIds } })
+      .select('score max_score percentage passed status submitted_at time_taken_seconds');
+    const attemptById = Object.fromEntries(attempts.map((a) => [String(a._id), a]));
+
+    res.json(invites.map((i) => {
+      const json = i.toJSON();
+      const att = i.attempt_id && attemptById[String(i.attempt_id)];
+      json.attempt = att
+        ? {
+            id: String(att._id),
+            score: att.score, max_score: att.max_score, percentage: att.percentage,
+            passed: att.passed, status: att.status, submitted_at: att.submitted_at,
+            time_taken_seconds: att.time_taken_seconds,
+          }
+        : null;
+      return json;
+    }));
+  } catch (err) {
+    console.error('GET /exams/airline-results error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -458,6 +446,102 @@ router.post('/:id/assign', async (req, res) => {
     res.json(exam.toJSON());
   } catch (err) {
     console.error('POST /exams/:id/assign error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── POST /exams/:id/send-invites — admin emails the take-link to participants ──
+// Ensures each participant is assigned, creates/refreshes their ExamInvite (one
+// per participant, stable token), and emails the passwordless take link.
+router.post('/:id/send-invites', async (req, res) => {
+  try {
+    if (!isAdmin(req)) return res.status(403).json({ error: 'Admin access required.' });
+    const exam = await Exam.findById(req.params.id);
+    if (!exam) return res.status(404).json({ error: 'Exam not found.' });
+    if (exam.status !== 'published') return res.status(400).json({ error: 'Publish the exam before sending invites.' });
+
+    const { participant_ids = [] } = req.body;
+    if (participant_ids.length === 0) return res.status(400).json({ error: 'Select at least one participant.' });
+
+    const participants = await Participant.find({ _id: { $in: participant_ids } });
+    const airlines = await Airline.find({});
+    const airlineName = (id) => airlines.find((a) => String(a._id) === String(id))?.airlineName || '';
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+
+    const sent = [];
+    const skipped = [];
+
+    for (const p of participants) {
+      if (!p.email) { skipped.push({ id: String(p._id), name: p.participant_name, reason: 'no email' }); continue; }
+
+      // Make sure the participant is assigned (send implies assign).
+      const alreadyAssigned = exam.assignments.some((a) => String(a.participant_id) === String(p._id));
+      if (!alreadyAssigned) exam.assignments.push({ participant_id: p._id, airline_id: p.submitted_by });
+
+      let invite = await ExamInvite.findOne({ exam_id: exam._id, participant_id: p._id });
+      if (!invite) {
+        invite = new ExamInvite({
+          token: crypto.randomBytes(24).toString('hex'),
+          exam_id: exam._id,
+          exam_title_snapshot: exam.title,
+          participant_id: p._id,
+          participant_name: p.participant_name,
+          participant_email: p.email,
+          airline_id: p.submitted_by,
+          airline_name: airlineName(p.submitted_by),
+        });
+      } else {
+        invite.participant_email = p.email;
+        invite.participant_name = p.participant_name;
+        invite.exam_title_snapshot = exam.title;
+        invite.sent_at = new Date();
+        invite.sent_count = (invite.sent_count || 1) + 1;
+      }
+      await invite.save();
+
+      try {
+        await sendExamInviteEmail({
+          toEmail: p.email,
+          participantName: p.participant_name,
+          examTitle: exam.title,
+          durationMinutes: exam.duration_minutes,
+          maxAttempts: exam.max_attempts,
+          link: `${frontendUrl}/exam/${invite.token}`,
+        });
+        sent.push({ id: String(p._id), name: p.participant_name, email: p.email });
+      } catch (mailErr) {
+        skipped.push({ id: String(p._id), name: p.participant_name, reason: mailErr.message });
+      }
+    }
+
+    await exam.save();
+    res.json({ sent, skipped });
+  } catch (err) {
+    console.error('POST /exams/:id/send-invites error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── GET /exams/:id/invites — admin: invite + attempt status for an exam ────────
+router.get('/:id/invites', async (req, res) => {
+  try {
+    if (!isAdmin(req)) return res.status(403).json({ error: 'Admin access required.' });
+    const invites = await ExamInvite.find({ exam_id: req.params.id }).sort({ created_at: -1 });
+    const attemptIds = invites.map((i) => i.attempt_id).filter(Boolean);
+    const attempts = await ExamAttempt.find({ _id: { $in: attemptIds } })
+      .select('score max_score percentage passed status');
+    const attemptById = Object.fromEntries(attempts.map((a) => [String(a._id), a]));
+
+    res.json(invites.map((i) => {
+      const json = i.toJSON();
+      const att = i.attempt_id && attemptById[String(i.attempt_id)];
+      json.attempt = att
+        ? { score: att.score, max_score: att.max_score, percentage: att.percentage, passed: att.passed, status: att.status }
+        : null;
+      return json;
+    }));
+  } catch (err) {
+    console.error('GET /exams/:id/invites error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });

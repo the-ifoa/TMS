@@ -125,6 +125,7 @@ const attendanceRouter      = require('./routes/attendance');
 const contractsRouter       = require('./routes/contracts');
 const dgrRouter             = require('./routes/dgr');
 const examsRouter           = require('./routes/exams');
+const publicExamRouter      = require('./routes/publicExam');
 
 app.use('/api/auth', authRouter);
 app.use('/api/participants', participantsRouter);
@@ -135,6 +136,7 @@ app.use('/api/attendance', attendanceRouter);
 app.use('/api/contracts', contractsRouter);
 app.use('/api/dgr', dgrRouter);
 app.use('/api/exams', examsRouter);
+app.use('/api/public-exam', publicExamRouter);
 
 // Frontend is served separately (localhost in dev, or its own host in prod).
 // The backend is API-only — do NOT serve static files from here.

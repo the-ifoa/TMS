@@ -50,6 +50,7 @@ const emptyRow = (defaultNdgSubtype = 'I', defaultDepartment = '') => ({
   id: Date.now() + Math.random(),
   first_name: '',
   last_name: '',
+  email: '',
   department: defaultDepartment,
   ndg_subtype: defaultNdgSubtype, // I or R for NDG training overrides
 });
@@ -64,6 +65,7 @@ function SingleForm({ isAdmin, airlineName, airlineOptions, onSuccess }) {
   const [form, setForm] = useState({
     first_name: '',
     last_name: '',
+    email: '',
     company: isAdmin ? '' : (airlineName || ''),
     department: '',
     training_type: '',
@@ -128,6 +130,12 @@ function SingleForm({ isAdmin, airlineName, airlineOptions, onSuccess }) {
           <label className="label">Last Name *</label>
           <input name="last_name" value={form.last_name} onChange={handleChange} className="input-field" placeholder="e.g. Al Mansouri" />
         </div>
+      </div>
+
+      {/* Email — used to send the participant their exam link */}
+      <div>
+        <label className="label">Email <span className="text-primary-400 font-normal normal-case">(for exam invitations)</span></label>
+        <input type="email" name="email" value={form.email} onChange={handleChange} className="input-field" placeholder="e.g. ahmed@example.com" />
       </div>
 
       {/* Airline + Department */}
@@ -380,6 +388,16 @@ function BulkRow({ row, idx, onChange, onRemove, result, isNDG, ndgMode, departm
           placeholder="Last name"
           disabled={hasSuccess}
         />
+
+        {/* Email — for exam invitations */}
+        <input
+          type="email"
+          value={row.email}
+          onChange={e => onChange(row.id, 'email', e.target.value)}
+          className="input-field text-sm flex-1"
+          placeholder="Email (optional)"
+          disabled={hasSuccess}
+        />
       </div>
 
       {(departmentMode === 'manual' || isNDG) && (
@@ -548,6 +566,7 @@ function BulkForm({ isAdmin, airlineName, airlineOptions, onSuccess }) {
         await createParticipant({
           first_name:         row.first_name.trim(),
           last_name:          row.last_name.trim(),
+          email:              (row.email || '').trim(),
           company:            isAdmin ? effectiveCompany : airlineName,
           department:         shared.department_mode === 'manual' ? row.department.trim() : shared.department.trim(),
           training_type:      shared.training_type,

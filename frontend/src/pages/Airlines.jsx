@@ -35,6 +35,14 @@ import ModuleSelector from '../components/ModuleSelector';
 import { useConfirm } from '@/hooks/use-confirm';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem, SelectGroup, SelectLabel } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+} from '@/components/ui/dropdown-menu';
 
 const TRAINING_LABELS = {
   FDI: 'Flight Dispatch Initial',
@@ -369,7 +377,7 @@ function ParticipantCard({ p, checked, onCheck, onPreview, onDownload, onEdit, o
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold text-primary-800 truncate">{fullName}</p>
-            <p className="text-xs text-primary-400 truncate">{p.department}</p>
+            <p className="text-xs text-primary-400 whitespace-normal break-words">{p.department}</p>
           </div>
         </div>
       </div>
@@ -437,7 +445,7 @@ function ParticipantCard({ p, checked, onCheck, onPreview, onDownload, onEdit, o
                 value={currentVal}
                 onChange={e => setNdgScores(prev => ({ ...prev, [pid]: { value: e.target.value, saving: false, saved: false } }))}
                 onKeyDown={e => { if (e.key === 'Enter') onNdgScoreSave(pid); }}
-                className="w-14 px-1 py-0 text-[11px] bg-transparent border-none outline-none text-blue-800 font-semibold placeholder-blue-300"
+                className="w-12 px-1 py-0 text-[11px] bg-transparent border-none outline-none text-blue-800 font-semibold placeholder-blue-300 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 disabled={saving}
               />
               <span className="text-[10px] text-blue-500">%</span>
@@ -538,6 +546,7 @@ const eligibleForDhlExtra = (p) => p.training_type === 'FDR' && isDhlBahrainAirl
 export default function Airlines() {
   const [searchParams] = useSearchParams();
   const focusId = searchParams.get('focus') || null;
+  const pendingCertsMode = searchParams.get('pendingCerts') === '1';
   const airlineCardRefs    = useRef({});
   const participantRowRefs = useRef({});
 
@@ -625,8 +634,8 @@ export default function Airlines() {
       setExpanded(prev => {
         const init = {};
         sortedData.forEach(({ airline }) => {
-          const key = airline._id || airline.email || airline.airlineName;
-          init[key] = prev[key] ?? false;
+          const key = airlineKey(airline);
+          if (key) init[key] = prev[key] ?? false;
         });
         return init;
       });
@@ -636,8 +645,9 @@ export default function Airlines() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  const hasProcessedFocus = useRef(false);
   useEffect(() => {
-    if (!focusId || loading || data.length === 0) return;
+    if (!focusId || loading || data.length === 0 || hasProcessedFocus.current) return;
     // Check if focusId is an airline _id
     let match = data.find(({ airline }) => String(airline._id || airline.id) === focusId);
     let isParticipantFocus = false;
@@ -649,6 +659,7 @@ export default function Airlines() {
     if (!match) return;
     const aKey = airlineKey(match.airline);
     if (!aKey) return;
+    hasProcessedFocus.current = true;
     setExpanded(prev => ({ ...prev, [aKey]: true }));
     setTimeout(() => {
       if (isParticipantFocus) {
@@ -667,7 +678,38 @@ export default function Airlines() {
         }
       }
     }, 350);
-  }, [focusId, loading, data]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [focusId, loading, data]);
+
+  // Highlight + expand every airline that has a participant still awaiting
+  // certificate generation — entry point for the "Certificates Pending"
+  // notification / dashboard quick-link, which isn't tied to one record.
+  const hasProcessedPendingCerts = useRef(false);
+  useEffect(() => {
+    if (!pendingCertsMode || loading || data.length === 0 || hasProcessedPendingCerts.current) return;
+    const pendingKeys = [];
+    data.forEach(({ airline, participants }) => {
+      const aKey = airlineKey(airline);
+      if (aKey && participants.some(p => !p.cert_sequence)) pendingKeys.push(aKey);
+    });
+    if (pendingKeys.length === 0) return;
+    hasProcessedPendingCerts.current = true;
+    setExpanded(prev => {
+      const next = { ...prev };
+      pendingKeys.forEach(k => { next[k] = true; });
+      return next;
+    });
+    setTimeout(() => {
+      pendingKeys.forEach(k => {
+        const el = airlineCardRefs.current[k];
+        if (el) {
+          el.classList.add('notif-highlight');
+          el.addEventListener('animationend', () => el.classList.remove('notif-highlight'), { once: true });
+        }
+      });
+      const firstEl = airlineCardRefs.current[pendingKeys[0]];
+      if (firstEl) firstEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 350);
+  }, [pendingCertsMode, loading, data]);
 
   // ── Counter reset ────────────────────────────────────────────────────────────
   const openCounterModal = async () => {
@@ -952,7 +994,7 @@ export default function Airlines() {
         }
         if (!scrollEl || scrollEl === document.body) return;
 
-        const HEADER_H = 64; // h-16 sticky header
+        const HEADER_H = 110; // sticky filter bar height offset
         const GAP      = 12; // breathing room above the card
 
         // offsetTop of card relative to the scroll container
@@ -1017,7 +1059,6 @@ export default function Airlines() {
       catch (err) { console.error('Revoke failed:', err.response?.data?.error); fail++; }
     }
     setRevoking(false);
-    setChecked(new Set());
     fetchData({ silent: true });
     if (fail === 0) toast.success(`${ok} certificate${ok > 1 ? 's' : ''} revoked — now Pending`);
     else toast.error(`${ok} revoked, ${fail} failed`);
@@ -1158,7 +1199,6 @@ export default function Airlines() {
       if (eligible.length) results.push(...(await generateDhlForParticipants(eligible)));
     }
     setGenerating(false);
-    setChecked(new Set());
     fetchData({ silent: true });
     if (results.length) setCertResults(results);
   };
@@ -1187,18 +1227,30 @@ export default function Airlines() {
   // Extra DHL FORM ST-001 certificate — DHL Bahrain / DHL Air (Bahrain), FDR only.
   // Fully separate from the normal generate flow above: own endpoint, own numbering.
   const handleGenerateDhlSelected = async () => {
-    const selected  = allParticipants.filter(p => checked.has(p.id || p._id));
-    const eligible  = selected.filter(eligibleForDhlExtra);
-    const skipped   = selected.length - eligible.length;
+    const selected   = allParticipants.filter(p => checked.has(p.id || p._id));
+    const alreadyHas = selected.filter(p => eligibleForDhlExtra(p) && p.dhl_cert_released);
+    const eligible   = selected.filter(p => eligibleForDhlExtra(p) && !p.dhl_cert_released);
+    const skipped    = selected.length - eligible.length - alreadyHas.length;
+
     if (eligible.length === 0) {
-      toast.error('None of the selected participants are eligible (DHL Bahrain / DHL Air (Bahrain), FDR training only).');
+      if (alreadyHas.length > 0) {
+        toast.error(
+          alreadyHas.length === 1
+            ? `${alreadyHas[0].participant_name} already has a DHL certificate.`
+            : `All ${alreadyHas.length} selected participants already have a DHL certificate.`
+        );
+      } else {
+        toast.error('None of the selected participants are eligible (DHL Bahrain / DHL Air (Bahrain), FDR training only).');
+      }
       return;
     }
     setGeneratingDhl(true);
     const results = await generateDhlForParticipants(eligible);
     setGeneratingDhl(false);
-    setChecked(new Set());
     fetchData({ silent: true });
+    if (alreadyHas.length > 0) {
+      toast(`${alreadyHas.length} selected participant${alreadyHas.length > 1 ? 's' : ''} skipped — already has a DHL certificate.`, { icon: 'ℹ️' });
+    }
     if (skipped > 0) toast(`${skipped} selected participant${skipped > 1 ? 's' : ''} skipped (not eligible).`, { icon: 'ℹ️' });
     if (results.length) setCertResults(results);
   };
@@ -1230,7 +1282,6 @@ export default function Airlines() {
       catch { fail++; }
     }
     setRevokingDhlBulk(false);
-    setChecked(new Set());
     fetchData({ silent: true });
     if (fail === 0) toast.success(`${ok} DHL certificate${ok > 1 ? 's' : ''} revoked`);
     else toast.error(`${ok} revoked, ${fail} failed`);
@@ -1501,227 +1552,287 @@ export default function Airlines() {
         })()}
       </AnimatePresence>
 
-      {/* ── Page content (padded) ── */}
-      <div className="px-4 sm:px-6 pt-5 sm:pt-6 pb-6 space-y-4 sm:space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-primary-800">Airlines &amp; Submissions</h1>
-          <p className="text-xs sm:text-sm text-primary-400 mt-1">View airline submissions, generate and manage certificates</p>
-        </div>
-        <div className="flex items-center gap-3 sm:gap-4">
-          <div className="text-right">
-            <p className="text-[10px] text-primary-400 uppercase tracking-wider">Airlines</p>
-            <p className="text-lg sm:text-xl font-bold text-primary-800">{totalAirlines}</p>
+      {/* ── Page Header (Full Width Edge-to-Edge) ── */}
+      <div className="w-full bg-white border-b border-slate-200/80 px-4 sm:px-6 lg:px-8 py-3.5 shadow-2xs flex flex-row items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h1 className="text-base sm:text-xl font-bold text-primary-800 tracking-tight truncate">Airlines &amp; Submissions</h1>
+            <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
+              <span>{totalAirlines} Airlines</span>
+              <span>•</span>
+              <span>{totalParticipants} Participants</span>
+            </div>
           </div>
-          <div className="w-px h-7 bg-primary-200" />
-          <div className="text-right">
-            <p className="text-[10px] text-primary-400 uppercase tracking-wider">Participants</p>
-            <p className="text-lg sm:text-xl font-bold text-primary-800">{totalParticipants}</p>
-          </div>
-          <Link to="/admin/participants/add" className="btn-primary flex items-center gap-1.5 text-xs sm:text-sm px-3 sm:px-4 py-2 sm:py-2.5 whitespace-nowrap">
-            <HiOutlinePlusCircle className="w-4 h-4" />
-            <span className="hidden sm:inline">Add Participant</span>
-            <span className="sm:hidden">Add</span>
-          </Link>
+          <p className="text-xs text-primary-400 mt-0.5 hidden sm:block">View airline submissions, generate and manage certificates</p>
         </div>
+        <Link to="/admin/participants/add" className="btn-primary flex items-center justify-center gap-1.5 text-xs px-3 py-1.5 sm:px-4 sm:py-2 whitespace-nowrap flex-shrink-0">
+          <HiOutlinePlusCircle className="w-4 h-4" />
+          <span>Add</span>
+        </Link>
       </div>
 
-      {/* ── Sticky Control Bar ── */}
+      {/* ── Page content (padded) ── */}
+      <div className="px-3.5 sm:px-6 lg:px-8 py-4 space-y-3 sm:space-y-5">
+
+      {/* ── Unified Compact Control & Filter Bar ── */}
       {(() => {
         const hasSelection = checked.size > 0 || checkedAirlines.size > 0;
         const hasNdg = Object.values(ndgScores).some(e => e?.value);
         const hasFdrHours = Object.values(fdrHours).some(e => e?.enabled && e?.value);
-        const showActions = controlBarOpen || hasSelection || hasNdg || hasFdrHours;
+
         return (
-          <div className="bg-white rounded-2xl border border-slate-200/80 p-2.5 sm:px-4 sm:py-2.5 shadow-2xs mb-3">
-            {/* ── Row 1: always visible ── */}
-            <div className="flex items-center justify-between gap-3 w-full flex-wrap sm:flex-nowrap">
-              {/* Left: checkboxes */}
-              <div className="flex items-center gap-3.5 min-w-0">
-                <label className="flex items-center gap-2 cursor-pointer select-none">
-                  <div onClick={toggleSelectAll}
-                    className={`w-4 h-4 rounded-md border-2 flex items-center justify-center cursor-pointer transition-colors flex-shrink-0 ${allChecked ? 'bg-slate-900 border-slate-900' : 'border-slate-300 hover:border-slate-500'}`}>
-                    {allChecked && <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
-                    {!allChecked && checked.size > 0 && <div className="w-2 h-0.5 bg-slate-700 rounded" />}
-                  </div>
-                  <span className="text-xs font-semibold text-slate-700 whitespace-nowrap">
-                    <span className="hidden sm:inline">{allChecked ? 'Deselect All' : 'Select All'} </span>Candidates
-                  </span>
-                  {checked.size > 0 && <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-900 text-[10px] font-bold border border-slate-200">{checked.size}</span>}
-                </label>
+          <div className="sticky top-0 z-20 bg-gray-50/95 backdrop-blur-md py-1.5 -mx-3.5 px-3.5 sm:-mx-6 sm:px-6 transition-all mb-3">
+            <div className="bg-white rounded-xl border border-slate-200/80 p-2 sm:p-3 shadow-2xs space-y-2">
+              {/* ── Row 1: Selection Checkboxes + Actions Dropdown Button ── */}
+              <div className="flex items-center justify-between gap-2">
+                {/* Left: Checkboxes */}
+                <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-shrink-0">
+                  <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                    <div onClick={toggleSelectAll}
+                      className={`w-3.5 h-3.5 rounded border-2 flex items-center justify-center cursor-pointer transition-colors flex-shrink-0 ${allChecked ? 'bg-slate-900 border-slate-900' : 'border-slate-300 hover:border-slate-500'}`}>
+                      {allChecked && <svg className="w-2 h-2 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                      {!allChecked && checked.size > 0 && <div className="w-1.5 h-0.5 bg-slate-700 rounded" />}
+                    </div>
+                    <span className="text-xs font-semibold text-slate-700 whitespace-nowrap">
+                      Candidates {checked.size > 0 && <span className="ml-1 px-1 rounded bg-slate-100 text-slate-900 text-[10px] font-bold border border-slate-200">{checked.size}</span>}
+                    </span>
+                  </label>
 
-                <div className="w-px h-3.5 bg-slate-200 flex-shrink-0" />
+                  <div className="w-px h-3 bg-slate-200 flex-shrink-0" />
 
-                <label className="flex items-center gap-2 cursor-pointer select-none">
-                  <div onClick={toggleAllAirlines}
-                    className={`w-4 h-4 rounded-md border-2 flex items-center justify-center cursor-pointer transition-colors flex-shrink-0 ${allAirlinesChecked ? 'bg-slate-900 border-slate-900' : 'border-slate-300 hover:border-slate-500'}`}>
-                    {allAirlinesChecked && <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
-                    {!allAirlinesChecked && checkedAirlines.size > 0 && <div className="w-2 h-0.5 bg-slate-700 rounded" />}
-                  </div>
-                  <span className="text-xs font-semibold text-slate-700 whitespace-nowrap">
-                    <span className="hidden sm:inline">{allAirlinesChecked ? 'Deselect All' : 'Select All'} </span>Airlines
-                  </span>
-                  {checkedAirlines.size > 0 && <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-900 text-[10px] font-bold border border-slate-200">{checkedAirlines.size}</span>}
-                </label>
-              </div>
-
-              {/* Right: SHOW filter + collapse toggle */}
-              <div className="flex items-center gap-2 flex-shrink-0 ml-auto">
-                {/* SHOW filter */}
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider hidden sm:inline">Show</span>
-                  <div className="flex items-center gap-0.5 bg-slate-100/80 rounded-lg p-0.5 border border-slate-200/60">
-                    {[
-                      { val: '', label: 'All', active: 'bg-slate-900 text-white font-bold shadow-2xs' },
-                      { val: 'pending', label: 'Pending', active: 'bg-amber-600 text-white font-bold shadow-2xs', icon: <Clock className="w-3 h-3" /> },
-                      { val: 'generated', label: 'Done', active: 'bg-emerald-600 text-white font-bold shadow-2xs', icon: <CheckCircle2 className="w-3 h-3" /> },
-                    ].map(({ val, label, active, icon }) => (
-                      <button key={val} onClick={() => setFilterCertStatus(val)}
-                        className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs transition-all ${filterCertStatus === val ? active : 'text-slate-600 hover:text-slate-900 font-medium'}`}>
-                        {icon}{label}
-                      </button>
-                    ))}
-                  </div>
+                  <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                    <div onClick={toggleAllAirlines}
+                      className={`w-3.5 h-3.5 rounded border-2 flex items-center justify-center cursor-pointer transition-colors flex-shrink-0 ${allAirlinesChecked ? 'bg-slate-900 border-slate-900' : 'border-slate-300 hover:border-slate-500'}`}>
+                      {allAirlinesChecked && <svg className="w-2 h-2 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                      {!allAirlinesChecked && checkedAirlines.size > 0 && <div className="w-1.5 h-0.5 bg-slate-700 rounded" />}
+                    </div>
+                    <span className="text-xs font-semibold text-slate-700 whitespace-nowrap">
+                      Airlines {checkedAirlines.size > 0 && <span className="ml-1 px-1 rounded bg-slate-100 text-slate-900 text-[10px] font-bold border border-slate-200">{checkedAirlines.size}</span>}
+                    </span>
+                  </label>
                 </div>
 
-                {/* Collapse toggle */}
-                <button
-                  onClick={() => setControlBarOpen(o => !o)}
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${controlBarOpen ? 'bg-slate-900 text-white shadow-2xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200/80'}`}
-                >
-                  <span>Actions</span>
-                  {(checked.size + checkedAirlines.size) > 0 && (
-                    <span className="bg-white text-slate-900 text-[9px] px-1.5 rounded-full font-bold">{checked.size + checkedAirlines.size}</span>
+                {/* Right: Quick Action Buttons (Outside when screen has space) + Actions Dropdown */}
+                <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0 ml-auto flex-wrap sm:flex-nowrap justify-end">
+                  {/* 1. Generate Selected Certs (Visible on sm+ screens) */}
+                  {checked.size > 0 && (
+                    <button
+                      onClick={handleGenerateSelected}
+                      disabled={generating}
+                      className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-bold bg-slate-900 text-white hover:bg-slate-800 transition-all shadow-2xs disabled:opacity-50 flex-shrink-0"
+                    >
+                      {generating ? <Spin /> : <HiOutlineDocumentDownload className="w-4 h-4" />}
+                      <span>{generating ? 'Generating…' : `Generate (${checked.size})`}</span>
+                    </button>
                   )}
-                  <HiOutlineChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${controlBarOpen ? 'rotate-180' : ''}`} />
-                </button>
+
+                  {/* 2. Revoke Selected Certs (Visible on md+ screens) */}
+                  {checked.size > 0 && (
+                    <button
+                      onClick={handleRevokeSelected}
+                      disabled={revoking}
+                      className="hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200/80 hover:bg-blue-100 transition-all shadow-2xs disabled:opacity-50 flex-shrink-0"
+                    >
+                      {revoking ? <Spin cls="w-3.5 h-3.5 border-2 border-blue-300 border-t-blue-600" /> : <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>}
+                      <span>{revoking ? 'Revoking…' : 'Revoke Certs'}</span>
+                    </button>
+                  )}
+
+                  {/* 3. Generate DHL Extra Cert (Visible on lg+ screens) */}
+                  {allParticipants.some(p => checked.has(p.id || p._id) && eligibleForDhlExtra(p) && !p.dhl_cert_released) && (
+                    <button
+                      onClick={handleGenerateDhlSelected}
+                      disabled={generatingDhl}
+                      className="hidden lg:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-violet-600 text-white hover:bg-violet-700 transition-all shadow-2xs disabled:opacity-50 flex-shrink-0"
+                    >
+                      {generatingDhl ? <Spin cls="w-3.5 h-3.5 border-2 border-violet-200 border-t-white" /> : <HiOutlineDocumentDownload className="w-4 h-4" />}
+                      <span>{generatingDhl ? 'Generating…' : 'Generate DHL Extra'}</span>
+                    </button>
+                  )}
+
+                  {/* 4. Revoke DHL Extra Cert (Visible on lg+ screens) */}
+                  {allParticipants.some(p => checked.has(p.id || p._id) && p.dhl_cert_released) && (
+                    <button
+                      onClick={handleRevokeDhlSelected}
+                      disabled={revokingDhlBulk}
+                      className="hidden lg:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-violet-50 text-violet-700 border border-violet-200/80 hover:bg-violet-100 transition-all shadow-2xs disabled:opacity-50 flex-shrink-0"
+                    >
+                      {revokingDhlBulk ? <Spin cls="w-3.5 h-3.5 border-2 border-violet-300 border-t-violet-600" /> : <HiOutlineX className="w-4 h-4 text-violet-600" />}
+                      <span>{revokingDhlBulk ? 'Revoking…' : 'Revoke DHL Extra'}</span>
+                    </button>
+                  )}
+
+                  {/* 5. Save All NDG Scores (Visible on xl+ screens) */}
+                  {hasNdg && (
+                    <button
+                      onClick={handleSaveAllNdgScores}
+                      disabled={savingAllNdgScores}
+                      className="hidden xl:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-600 text-white hover:bg-blue-700 transition-all shadow-2xs disabled:opacity-50 flex-shrink-0"
+                    >
+                      {savingAllNdgScores ? <Spin cls="w-3.5 h-3.5 border-2 border-blue-200 border-t-white" /> : <HiOutlineCheckCircle className="w-4 h-4" />}
+                      <span>{savingAllNdgScores ? 'Saving…' : 'Save NDG Scores'}</span>
+                    </button>
+                  )}
+
+                  {/* 6. Save All FDR Hours (Visible on xl+ screens) */}
+                  {hasFdrHours && (
+                    <button
+                      onClick={handleSaveAllFdrHours}
+                      disabled={savingAllFdrHours}
+                      className="hidden xl:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-600 text-white hover:bg-blue-700 transition-all shadow-2xs disabled:opacity-50 flex-shrink-0"
+                    >
+                      {savingAllFdrHours ? <Spin cls="w-3.5 h-3.5 border-2 border-blue-200 border-t-white" /> : <HiOutlineCheckCircle className="w-4 h-4" />}
+                      <span>{savingAllFdrHours ? 'Saving…' : 'Save FDR Hours'}</span>
+                    </button>
+                  )}
+
+                  {/* Actions Dropdown Button */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-1.5 rounded-xl text-xs sm:text-sm font-bold bg-slate-900 sm:bg-white text-white sm:text-slate-900 sm:border sm:border-slate-200/90 hover:bg-slate-800 sm:hover:bg-slate-50 transition-all shadow-2xs flex-shrink-0"
+                      >
+                        <span>Actions</span>
+                        {(checked.size + checkedAirlines.size) > 0 && (
+                          <span className="bg-white sm:bg-slate-900 text-slate-900 sm:text-white text-[10px] px-1.5 rounded-full font-extrabold">{checked.size + checkedAirlines.size}</span>
+                        )}
+                        <HiOutlineChevronDown className="w-3.5 h-3.5 text-slate-300 sm:text-slate-500" />
+                      </button>
+                    </DropdownMenuTrigger>
+
+                  <DropdownMenuContent align="end" className="w-56">
+                    <DropdownMenuLabel>Batch Actions</DropdownMenuLabel>
+                    
+                    <DropdownMenuItem className="sm:hidden" onClick={handleGenerateSelected} disabled={checked.size === 0 || generating}>
+                      <HiOutlineDocumentDownload className="w-4 h-4 text-slate-500" />
+                      <span>{generating ? 'Generating…' : checked.size > 0 ? `Generate (${checked.size}) Certs` : 'Generate Selected'}</span>
+                    </DropdownMenuItem>
+
+                    <DropdownMenuItem className="md:hidden" onClick={handleRevokeSelected} disabled={checked.size === 0 || revoking}>
+                      <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>
+                      <span>{revoking ? 'Revoking…' : 'Revoke Certificates'}</span>
+                    </DropdownMenuItem>
+
+                    {allParticipants.some(p => checked.has(p.id || p._id) && eligibleForDhlExtra(p) && !p.dhl_cert_released) && (
+                      <DropdownMenuItem className="lg:hidden" onClick={handleGenerateDhlSelected} disabled={generatingDhl}>
+                        <HiOutlineDocumentDownload className="w-4 h-4 text-violet-600" />
+                        <span>{generatingDhl ? 'Generating…' : 'Generate DHL Extra Cert'}</span>
+                      </DropdownMenuItem>
+                    )}
+
+                    {allParticipants.some(p => checked.has(p.id || p._id) && p.dhl_cert_released) && (
+                      <DropdownMenuItem className="lg:hidden" onClick={handleRevokeDhlSelected} disabled={revokingDhlBulk}>
+                        <HiOutlineX className="w-4 h-4 text-violet-600" />
+                        <span>{revokingDhlBulk ? 'Revoking…' : 'Revoke DHL Extra Cert'}</span>
+                      </DropdownMenuItem>
+                    )}
+
+                    {hasNdg && (
+                      <DropdownMenuItem className="xl:hidden" onClick={handleSaveAllNdgScores} disabled={savingAllNdgScores}>
+                        <HiOutlineCheckCircle className="w-4 h-4 text-blue-600" />
+                        <span>{savingAllNdgScores ? 'Saving…' : 'Save All NDG Scores'}</span>
+                      </DropdownMenuItem>
+                    )}
+
+                    {hasFdrHours && (
+                      <DropdownMenuItem className="xl:hidden" onClick={handleSaveAllFdrHours} disabled={savingAllFdrHours}>
+                        <HiOutlineCheckCircle className="w-4 h-4 text-blue-600" />
+                        <span>{savingAllFdrHours ? 'Saving…' : 'Save All FDR Hours'}</span>
+                      </DropdownMenuItem>
+                    )}
+
+                    <DropdownMenuSeparator />
+
+                    {checked.size > 0 && (
+                      <DropdownMenuItem onClick={handleDeleteSelected} disabled={deletingSelected} danger>
+                        <HiOutlineTrash className="w-4 h-4" />
+                        <span>{deletingSelected ? 'Deleting…' : `Delete (${checked.size}) Candidates`}</span>
+                      </DropdownMenuItem>
+                    )}
+
+                    {checkedAirlines.size > 0 && (
+                      <DropdownMenuItem onClick={handleDeleteSelectedAirlines} disabled={deletingAirlines} danger>
+                        <HiOutlineTrash className="w-4 h-4" />
+                        <span>{deletingAirlines ? 'Deleting…' : `Delete (${checkedAirlines.size}) Airlines`}</span>
+                      </DropdownMenuItem>
+                    )}
+
+                    <DropdownMenuSeparator />
+
+                    <DropdownMenuItem onClick={openCounterModal}>
+                      <svg className="w-4 h-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      <span>Reset Cert Counters</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
 
-            {/* ── Row 2: action buttons ── */}
-            {showActions && (
-              <div className="pt-2 mt-2 flex flex-wrap items-center gap-1.5 border-t border-slate-100">
-                {/* Generate */}
-                <button onClick={handleGenerateSelected} disabled={checked.size === 0 || generating}
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${checked.size > 0 && !generating ? 'bg-slate-900 text-white hover:bg-slate-800 shadow-2xs' : 'bg-slate-100 text-slate-400 border border-slate-200/60 cursor-not-allowed'}`}>
-                  {generating ? <Spin /> : <HiOutlineDocumentDownload className="w-3.5 h-3.5" />}
-                  {generating ? 'Generating…' : checked.size > 0 ? `Generate ${checked.size} Cert${checked.size > 1 ? 's' : ''}` : 'Generate Selected'}
-                </button>
+              {/* ── Row 2: Search Input + 3 Filter Select Dropdowns ── */}
+              <div className="pt-2 border-t border-slate-100 flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5">
+                {/* Search */}
+                <div className="flex-1 min-w-0 relative">
+                  <HiOutlineSearch className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                  <input
+                    type="text"
+                    placeholder="Search…"
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    className="w-full pl-8 pr-2 py-1 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-900 transition-all shadow-2xs"
+                  />
+                </div>
 
-                {/* Revoke */}
-                <button onClick={handleRevokeSelected} disabled={checked.size === 0 || revoking}
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all ${checked.size > 0 && !revoking ? 'border-blue-200 bg-blue-50/80 text-blue-700 hover:bg-blue-100' : 'border-slate-200/60 bg-slate-50 text-slate-400 cursor-not-allowed'}`}>
-                  {revoking ? <Spin cls="w-3.5 h-3.5 border-2 border-blue-300 border-t-blue-600" />
-                    : <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>}
-                  {revoking ? 'Revoking…' : 'Revoke Cert'}
-                </button>
+                {/* 3 Dropdown Filters Grid on mobile / flex on desktop */}
+                <div className="grid grid-cols-3 sm:flex items-center gap-1.5 flex-shrink-0">
+                  {/* 1. Status Filter Select */}
+                  <div className="w-full sm:w-[110px]">
+                    <Select value={filterCertStatus || 'all'} onValueChange={v => setFilterCertStatus(v === 'all' ? '' : v)}>
+                      <SelectTrigger className="px-2 text-xs py-1 h-7 font-semibold text-slate-700 rounded-lg bg-white border border-slate-200 w-full"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Statuses</SelectItem>
+                        <SelectItem value="pending">Pending</SelectItem>
+                        <SelectItem value="generated">Done</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-                {/* Generate DHL extra cert */}
-                {allParticipants.some(p => checked.has(p.id || p._id) && eligibleForDhlExtra(p)) && (
-                  <button onClick={handleGenerateDhlSelected} disabled={generatingDhl}
-                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100 transition-all disabled:opacity-60">
-                    {generatingDhl ? <Spin cls="w-3.5 h-3.5 border-2 border-violet-300 border-t-violet-600" /> : <HiOutlineDocumentDownload className="w-3.5 h-3.5" />}
-                    {generatingDhl ? 'Generating…' : 'Generate DHL Extra Cert'}
-                  </button>
-                )}
+                  {/* 2. Training Type Filter Select */}
+                  <div className="w-full sm:w-[130px]">
+                    <Select value={filterType || 'all'} onValueChange={v => setFilterType(v === 'all' ? '' : v)}>
+                      <SelectTrigger className="px-2 text-xs py-1 h-7 font-semibold text-slate-700 rounded-lg bg-white border border-slate-200 w-full"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Types</SelectItem>
+                        {TRAINING_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-                {/* Revoke DHL extra cert */}
-                {allParticipants.some(p => checked.has(p.id || p._id) && p.dhl_cert_released) && (
-                  <button onClick={handleRevokeDhlSelected} disabled={revokingDhlBulk}
-                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100 transition-all disabled:opacity-60">
-                    {revokingDhlBulk ? <Spin cls="w-3.5 h-3.5 border-2 border-violet-300 border-t-violet-600" /> : null}
-                    {revokingDhlBulk ? 'Revoking…' : 'Revoke DHL Cert'}
-                  </button>
-                )}
-
-                {/* Delete candidates */}
-                <button onClick={handleDeleteSelected} disabled={checked.size === 0 || deletingSelected}
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all ${checked.size > 0 && !deletingSelected ? 'border-red-200 bg-red-50 text-red-600 hover:bg-red-100' : 'border-slate-200/60 bg-slate-50 text-slate-400 cursor-not-allowed'}`}>
-                  {deletingSelected ? <Spin cls="w-3.5 h-3.5 border-2 border-red-300 border-t-red-600" /> : <HiOutlineTrash className="w-3.5 h-3.5" />}
-                  {deletingSelected ? 'Deleting…' : checked.size > 0 ? `Delete ${checked.size}` : 'Delete Candidates'}
-                </button>
-
-                {/* Delete airlines */}
-                {checkedAirlines.size > 0 && (
-                  <button onClick={handleDeleteSelectedAirlines} disabled={deletingAirlines}
-                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-red-300 bg-red-600 text-white text-xs font-semibold hover:bg-red-700 disabled:opacity-60">
-                    {deletingAirlines ? <Spin /> : <HiOutlineTrash className="w-3.5 h-3.5" />}
-                    {deletingAirlines ? 'Deleting…' : `Delete ${checkedAirlines.size} Airline${checkedAirlines.size > 1 ? 's' : ''}`}
-                  </button>
-                )}
-
-                {/* Save All NDG Scores */}
-                {hasNdg && (
-                  <button onClick={handleSaveAllNdgScores} disabled={savingAllNdgScores}
-                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${!savingAllNdgScores ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-2xs' : 'bg-blue-200 text-blue-700'}`}>
-                    {savingAllNdgScores ? <Spin cls="w-3.5 h-3.5 border-2 border-white/40 border-t-white" /> : <HiOutlineCheckCircle className="w-3.5 h-3.5" />}
-                    {savingAllNdgScores ? 'Saving…' : 'Save All NDG Scores'}
-                  </button>
-                )}
-
-                {/* Save All FDR Hours */}
-                {hasFdrHours && (
-                  <button onClick={handleSaveAllFdrHours} disabled={savingAllFdrHours}
-                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${!savingAllFdrHours ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-2xs' : 'bg-blue-200 text-blue-700'}`}>
-                    {savingAllFdrHours ? <Spin cls="w-3.5 h-3.5 border-2 border-white/40 border-t-white" /> : <HiOutlineCheckCircle className="w-3.5 h-3.5" />}
-                    {savingAllFdrHours ? 'Saving…' : 'Save All FDR Hours'}
-                  </button>
-                )}
-
-                <div className="flex-1" />
-
-                {/* Reset Counters */}
-                <button onClick={openCounterModal}
-                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-red-200/80 text-xs font-semibold text-red-600 hover:bg-red-50/80 transition-colors">
-                  <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  <span className="hidden sm:inline">Reset Counters</span>
-                  <span className="sm:hidden">Reset</span>
-                </button>
+                  {/* 3. Sort Key Select */}
+                  <div className="w-full sm:w-[125px]">
+                    <Select value={sortKey} onValueChange={setSortKey}>
+                      <SelectTrigger className="px-2 text-xs py-1 h-7 font-semibold text-slate-700 rounded-lg bg-white border border-slate-200 w-full"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          <SelectLabel>Airline Name</SelectLabel>
+                          <SelectItem value="name_asc">Airline: A → Z</SelectItem>
+                          <SelectItem value="name_desc">Airline: Z → A</SelectItem>
+                        </SelectGroup>
+                        <SelectGroup>
+                          <SelectLabel>Participants</SelectLabel>
+                          <SelectItem value="count_desc">Most Participants</SelectItem>
+                          <SelectItem value="count_asc">Fewest Participants</SelectItem>
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
               </div>
-            )}
+            </div>
           </div>
         );
       })()}
-
-      {/* ── Search + Filter + Sort ── */}
-      <div className="card p-3 sm:p-4">
-        <div className="flex flex-col sm:flex-row gap-3">
-          <div className="flex-1 relative">
-            <HiOutlineSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-primary-400" />
-            <input type="text" placeholder="Search by name, department or airline…" value={search} onChange={e => setSearch(e.target.value)} className="input-field pl-10 w-full" />
-          </div>
-          <div className="relative">
-            <HiOutlineFilter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-primary-400" />
-            <Select value={filterType || 'all'} onValueChange={v => setFilterType(v === 'all' ? '' : v)}>
-              <SelectTrigger className="pl-10 w-full sm:w-auto sm:min-w-[200px]"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Training Types</SelectItem>
-                {TRAINING_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="relative">
-            <HiOutlineSelector className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-primary-400 z-10" />
-            <Select value={sortKey} onValueChange={setSortKey}>
-              <SelectTrigger className="pl-10 w-full sm:w-auto sm:min-w-[200px]"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  <SelectLabel>Airline Name</SelectLabel>
-                  <SelectItem value="name_asc">Airline: A → Z</SelectItem>
-                  <SelectItem value="name_desc">Airline: Z → A</SelectItem>
-                </SelectGroup>
-                <SelectGroup>
-                  <SelectLabel>Participants</SelectLabel>
-                  <SelectItem value="count_desc">Most Participants First</SelectItem>
-                  <SelectItem value="count_asc">Fewest Participants First</SelectItem>
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-      </div>
 
       {/* ── Loading / empty ── */}
       {loading && (
@@ -1747,7 +1858,7 @@ export default function Airlines() {
           <div key={aKey} ref={el => { airlineCardRefs.current[aKey] = el; }} className={`bg-white rounded-2xl border border-slate-200/80 shadow-2xs transition-all duration-300 mb-3.5 overflow-hidden ${isCardOpen ? 'shadow-md border-slate-300' : 'hover:border-slate-300'}`}>
 
             {/* ── Airline header ── */}
-            <div className={`flex items-center gap-2 px-3.5 sm:px-6 py-3.5 sm:py-4 flex-wrap overflow-visible bg-white transition-colors ${isCardOpen ? 'border-b border-slate-100' : ''}`}>
+            <div className={`flex items-center gap-2 px-3.5 sm:px-6 py-3.5 sm:py-4 flex-wrap overflow-visible transition-colors ${isCardOpen ? 'bg-slate-100/90 border-b border-slate-200/80' : 'bg-white hover:bg-slate-50'}`}>
               {/* Airline checkbox */}
               <div onClick={e => { e.stopPropagation(); toggleAirline(aKey); }}
                 className={`w-5 h-5 rounded-lg border-2 flex items-center justify-center cursor-pointer flex-shrink-0 transition-colors ${checkedAirlines.has(aKey) ? 'bg-red-600 border-red-600' : 'border-slate-300 hover:border-red-400'}`}>
@@ -1854,16 +1965,25 @@ export default function Airlines() {
 
                     {/* Desktop: table */}
                     <div className="hidden sm:block">
-                      <table className="w-full min-w-[700px]">
+                      <table className="w-full min-w-[850px] border-collapse">
+                        <colgroup>
+                          <col className="w-10" />
+                          <col className="w-[24%]" />
+                          <col className="w-[12%]" />
+                          <col className="w-[16%]" />
+                          <col className="w-[10%]" />
+                          <col className="w-[10%]" />
+                          <col className="w-[28%]" />
+                        </colgroup>
                         <thead>
-                          <tr className="bg-primary-50/60">
-                            <th className="w-10 px-3 py-2.5" />
-                            <th className="text-left text-[10px] font-semibold text-primary-500 uppercase tracking-wider px-3 py-2.5">Participant</th>
-                            <th className="text-left text-[10px] font-semibold text-primary-500 uppercase tracking-wider px-3 py-2.5">Dept</th>
-                            <th className="text-left text-[10px] font-semibold text-primary-500 uppercase tracking-wider px-3 py-2.5">Training</th>
-                            <th className="text-left text-[10px] font-semibold text-primary-500 uppercase tracking-wider px-3 py-2.5">Start</th>
-                            <th className="text-left text-[10px] font-semibold text-primary-500 uppercase tracking-wider px-3 py-2.5">End</th>
-                            <th className="text-right text-[10px] font-semibold text-primary-500 uppercase tracking-wider px-3 py-2.5">Actions</th>
+                          <tr className="bg-primary-50/60 border-b border-primary-100">
+                            <th className="px-3 py-2.5 text-center" />
+                            <th className="text-left text-[10px] font-bold text-primary-500 uppercase tracking-wider px-3 py-2.5">Participant</th>
+                            <th className="text-left text-[10px] font-bold text-primary-500 uppercase tracking-wider px-3 py-2.5">Dept</th>
+                            <th className="text-left text-[10px] font-bold text-primary-500 uppercase tracking-wider px-3 py-2.5">Training</th>
+                            <th className="text-left text-[10px] font-bold text-primary-500 uppercase tracking-wider px-3 py-2.5">Start</th>
+                            <th className="text-left text-[10px] font-bold text-primary-500 uppercase tracking-wider px-3 py-2.5">End</th>
+                            <th className="text-center text-[10px] font-bold text-primary-500 uppercase tracking-wider px-3 py-2.5">Actions</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1876,13 +1996,13 @@ export default function Airlines() {
 
                             return (
                               <tr key={pid} ref={el => { participantRowRefs.current[String(pid)] = el; }} className={`border-t border-primary-100 transition-colors ${isCk ? 'bg-blue-50/40' : 'hover:bg-primary-50/40'}`}>
-                                <td className="px-3 py-3 w-10">
+                                <td className="px-3 py-3.5 align-middle w-10">
                                   <div onClick={() => toggleOne(pid)}
                                     className={`w-5 h-5 rounded border-2 flex items-center justify-center cursor-pointer transition-colors ${isCk ? 'bg-primary-800 border-primary-800' : 'border-primary-300 hover:border-primary-600'}`}>
                                     {isCk && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
                                   </div>
                                 </td>
-                                <td className="px-3 py-3">
+                                <td className="px-3 py-3.5 align-middle">
                                   <div className="flex items-center gap-2.5">
                                     <div className="w-8 h-8 rounded-full bg-primary-200 flex items-center justify-center flex-shrink-0">
                                       <span className="text-[10px] font-bold text-primary-600">{mkInitials(fullName)}</span>
@@ -1958,8 +2078,8 @@ export default function Airlines() {
                                     </div>
                                   </div>
                                 </td>
-                                <td className="px-3 py-3 text-sm text-primary-600 max-w-[100px] truncate">{p.department}</td>
-                                <td className="px-3 py-3">
+                                <td className="px-3 py-3.5 align-middle text-xs font-medium text-primary-700 leading-snug whitespace-normal break-words">{p.department || '—'}</td>
+                                <td className="px-3 py-3.5 align-middle">
                                   <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold" style={badgeStyle()}>{p.training_type}</span>
                                   <p className="text-[10px] mt-0.5 text-primary-400">{TRAINING_LABELS[p.training_type] || p.training_type}</p>
                                   {/* NDG score input — admin only, shown inline for NDG participants */}
@@ -1978,7 +2098,7 @@ export default function Airlines() {
                                             value={currentVal}
                                             onChange={e => setNdgScores(prev => ({ ...prev, [pid]: { value: e.target.value, saving: false, saved: false } }))}
                                             onKeyDown={e => { if (e.key === 'Enter') handleNdgScoreSave(pid); }}
-                                            className="w-14 px-1 py-0 text-[11px] bg-transparent border-none outline-none text-blue-800 font-semibold placeholder-blue-300"
+                                            className="w-12 px-1 py-0 text-[11px] bg-transparent border-none outline-none text-blue-800 font-semibold placeholder-blue-300 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                             disabled={saving}
                                           />
                                           <span className="text-[10px] text-blue-500">%</span>
@@ -2033,10 +2153,10 @@ export default function Airlines() {
                                     );
                                   })()}
                                 </td>
-                                <td className="px-3 py-3 text-sm text-primary-500 whitespace-nowrap">{fmtDate(p.training_date)}</td>
-                                <td className="px-3 py-3 text-sm text-primary-500 whitespace-nowrap">{fmtDate(p.end_date)}</td>
-                                <td className="px-3 py-3">
-                                  <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                                <td className="px-3 py-3.5 align-middle text-xs font-medium text-primary-600 whitespace-nowrap">{fmtDate(p.training_date)}</td>
+                                <td className="px-3 py-3.5 align-middle text-xs font-medium text-primary-600 whitespace-nowrap">{fmtDate(p.end_date)}</td>
+                                <td className="px-3 py-3.5 align-middle">
+                                  <div className="flex items-center justify-end gap-1.5 flex-nowrap whitespace-nowrap">
                                     {!p.cert_sequence ? (
                                       /* Never generated — admin hasn't run generate yet */
                                       <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-medium bg-amber-50 text-amber-600 border border-amber-200"><HiOutlineClock className="w-3 h-3" /> Pending</span>
@@ -2072,11 +2192,6 @@ export default function Airlines() {
                                           className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-violet-200 text-xs font-medium text-violet-700 bg-violet-50 hover:bg-violet-100 disabled:opacity-60">
                                           {downloadingDhlId === pid ? <Spin cls="w-3.5 h-3.5 border-2 border-violet-300 border-t-violet-600" /> : <HiOutlineDocumentDownload className="w-3.5 h-3.5" />}
                                           PDF
-                                        </button>
-                                        <button onClick={() => handleRevokeDhlCert(p)} disabled={revokingDhlId === pid}
-                                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-violet-300 text-xs font-medium text-violet-700 bg-violet-50 hover:bg-violet-100 disabled:opacity-60">
-                                          {revokingDhlId === pid ? <Spin cls="w-3.5 h-3.5 border-2 border-violet-300 border-t-violet-600" /> : null}
-                                          Revoke DHL
                                         </button>
                                       </>
                                     )}

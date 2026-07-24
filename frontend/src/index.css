@@ -43,6 +43,23 @@
   }
 }
 
+@media print {
+  .app-layout,
+  .app-layout-main,
+  .app-layout-main main {
+    position: static !important;
+    inset: auto !important;
+    overflow: visible !important;
+    height: auto !important;
+    display: block !important;
+  }
+  .app-sidebar-overlay,
+  .app-sidebar,
+  .app-header {
+    display: none !important;
+  }
+}
+
 @layer components {
   .btn-primary {
     @apply px-4 py-2 bg-slate-900 text-white rounded-xl hover:bg-slate-800 transition-all duration-200 font-semibold text-sm shadow-sm hover:shadow-md;
@@ -159,4 +176,14 @@ input[type='month']::-webkit-calendar-picker-indicator {
 /* Prevent body scroll when mobile sidebar is open */
 .sidebar-open body {
   overflow: hidden;
+}
+
+/* Remove default browser up/down spin dialer arrows from number inputs */
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type='number'] {
+  -moz-appearance: textfield;
 }

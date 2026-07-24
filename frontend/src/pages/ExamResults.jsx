@@ -1171,52 +1171,55 @@ export default function ExamResults() {
       : results.filter(r => r.sheet_issued);
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
-      {/* Top Card Header */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-6 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2.5">
-            <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">Exam Results & Result Sheets</h1>
-            <span className="px-2.5 py-0.5 rounded-full bg-slate-100 border border-slate-200 text-[11px] font-bold text-slate-700">
-              Reporting Suite
+    <div className="w-full space-y-4">
+      {/* Top Card Header (Full Width Edge-to-Edge) */}
+      <div className="w-full bg-white border-b border-slate-200/80 px-4 sm:px-6 lg:px-8 py-3.5 shadow-2xs flex flex-row items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h1 className="text-base sm:text-xl font-bold text-slate-900 tracking-tight truncate">Exam Results &amp; Sheets</h1>
+            <span className="hidden xs:inline-block px-2 py-0.5 rounded-full bg-slate-100 border border-slate-200 text-[10px] sm:text-[11px] font-bold text-slate-700 flex-shrink-0">
+              Suite
             </span>
           </div>
-          <p className="text-xs sm:text-sm font-medium text-slate-500">
+          <p className="text-xs font-medium text-slate-500 hidden sm:block mt-0.5">
             Manage student scores, grades, and issue official result sheets
           </p>
         </div>
 
         {isAdmin && (
-          <div className="flex items-center gap-2.5 flex-shrink-0">
+          <div className="flex items-center gap-2 flex-shrink-0">
             <button onClick={() => setShowImport(true)}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 text-slate-700 text-xs sm:text-sm font-semibold rounded-xl hover:bg-slate-50 transition-all shadow-2xs">
+              className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 bg-white border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl hover:bg-slate-50 transition-all shadow-2xs">
               <HiOutlineUpload className="w-4 h-4 text-slate-500" />
-              <span>Import Excel</span>
+              <span>Import</span>
             </button>
             <button onClick={openAdd}
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white text-xs sm:text-sm font-semibold rounded-xl hover:bg-slate-800 transition-all shadow-2xs">
+              className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 bg-slate-900 text-white text-xs font-semibold rounded-xl hover:bg-slate-800 transition-all shadow-2xs">
               <HiOutlinePlus className="w-4 h-4" />
-              <span>Add Result</span>
+              <span>Add</span>
             </button>
           </div>
         )}
       </div>
 
+      {/* Page Content */}
+      <div className="px-4 sm:px-6 lg:px-8 space-y-6">
+
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-4">
         {[
           { label: 'Total Students', value: results.length,  Icon: HiOutlineUsers,       bg: 'bg-slate-100 text-slate-700 border-slate-200' },
           { label: 'Batch Average',  value: `${avgMark}%`,   Icon: HiOutlineChartBar,     bg: 'bg-emerald-50 text-emerald-600 border-emerald-200' },
           { label: 'Pass Rate',      value: `${passRate}%`,  Icon: HiOutlineCheckCircle,  bg: 'bg-violet-50 text-violet-600 border-violet-200' },
           { label: 'Sheets Issued',  value: sheetCount,      Icon: HiOutlineDocumentText, bg: 'bg-amber-50 text-amber-600 border-amber-200' },
         ].map(({ label, value, Icon, bg }) => (
-          <div key={label} className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-2xs flex items-center gap-4">
-            <div className={`w-11 h-11 rounded-xl ${bg} border flex items-center justify-center flex-shrink-0 shadow-2xs`}>
-              <Icon className="w-5 h-5" />
+          <div key={label} className="bg-white rounded-xl border border-slate-200/80 p-3 sm:p-4 shadow-2xs flex items-center gap-3">
+            <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl ${bg} border flex items-center justify-center flex-shrink-0 shadow-2xs`}>
+              <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
             <div className="min-w-0">
-              <p className="text-2xl font-extrabold text-slate-900 tracking-tight leading-none">{value}</p>
-              <p className="text-xs font-semibold text-slate-500 mt-1">{label}</p>
+              <p className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight leading-none">{value}</p>
+              <p className="text-[11px] sm:text-xs font-semibold text-slate-500 mt-1 truncate">{label}</p>
             </div>
           </div>
         ))}
@@ -1627,6 +1630,7 @@ export default function ExamResults() {
         )}
       </AnimatePresence>
       {ConfirmDialog}
+      </div>
     </div>
   );
 }

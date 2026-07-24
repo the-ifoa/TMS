@@ -473,60 +473,52 @@ function MonthPicker({ value, onChange }) {
       </button>
 
       {/* Popup */}
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ opacity: 0, y: -6, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -6, scale: 0.97 }}
-            transition={{ duration: 0.15 }}
-            className="absolute z-50 mt-1 w-64 bg-white rounded-2xl shadow-xl border border-primary-200 p-4"
-          >
-            {/* Year nav */}
-            <div className="flex items-center justify-between mb-3">
-              <button type="button" onClick={() => changeYear(-1)}
-                className="p-1.5 rounded-lg hover:bg-primary-100 text-primary-500 transition-colors">
-                <HiOutlineChevronLeft className="w-4 h-4" />
-              </button>
-              <span className="text-sm font-bold text-primary-800">{year}</span>
-              <button type="button" onClick={() => changeYear(1)}
-                className="p-1.5 rounded-lg hover:bg-primary-100 text-primary-500 transition-colors">
-                <HiOutlineChevronRight className="w-4 h-4" />
-              </button>
-            </div>
+      {open && (
+        <div className="absolute z-50 mt-1 w-64 bg-white rounded-2xl shadow-xl border border-primary-200 p-4">
+          {/* Year nav */}
+          <div className="flex items-center justify-between mb-3">
+            <button type="button" onClick={() => changeYear(-1)}
+              className="p-1.5 rounded-lg hover:bg-primary-100 text-primary-500 transition-colors">
+              <HiOutlineChevronLeft className="w-4 h-4" />
+            </button>
+            <span className="text-sm font-bold text-primary-800">{year}</span>
+            <button type="button" onClick={() => changeYear(1)}
+              className="p-1.5 rounded-lg hover:bg-primary-100 text-primary-500 transition-colors">
+              <HiOutlineChevronRight className="w-4 h-4" />
+            </button>
+          </div>
 
-            {/* Month grid */}
-            <div className="grid grid-cols-4 gap-1.5">
-              {MONTHS.map((m, i) => (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => select(i)}
-                  className={`py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                    i === month && year === parse(value).year
-                      ? 'bg-primary-800 text-white'
-                      : 'text-primary-600 hover:bg-primary-100'
-                  }`}
-                >
-                  {m}
-                </button>
-              ))}
-            </div>
+          {/* Month grid */}
+          <div className="grid grid-cols-4 gap-1.5">
+            {MONTHS.map((m, i) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => select(i)}
+                className={`py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                  i === month && year === parse(value).year
+                    ? 'bg-primary-800 text-white'
+                    : 'text-primary-600 hover:bg-primary-100'
+                }`}
+              >
+                {m}
+              </button>
+            ))}
+          </div>
 
-            {/* This month shortcut */}
-            <div className="mt-3 pt-3 border-t border-primary-100 flex justify-between">
-              <button type="button" onClick={() => { select(new Date().getMonth()); setYear(new Date().getFullYear()); }}
-                className="text-xs font-semibold text-accent-600 hover:text-accent-700">
-                This month
-              </button>
-              <button type="button" onClick={() => setOpen(false)}
-                className="text-xs font-semibold text-primary-400 hover:text-primary-600">
-                Close
-              </button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          {/* This month shortcut */}
+          <div className="mt-3 pt-3 border-t border-primary-100 flex justify-between">
+            <button type="button" onClick={() => { select(new Date().getMonth()); setYear(new Date().getFullYear()); }}
+              className="text-xs font-semibold text-accent-600 hover:text-accent-700">
+              This month
+            </button>
+            <button type="button" onClick={() => setOpen(false)}
+              className="text-xs font-semibold text-primary-400 hover:text-primary-600">
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -555,9 +547,9 @@ function AirlinesList({ airlines, onCreateContract, onViewContract, loading }) {
   });
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden">
-      {/* ── Unified Sticky Search + Filter Header Bar ── */}
-      <div className="sticky top-0 z-20 bg-white border-b border-slate-200/80 p-3.5 sm:p-4 space-y-3 sm:space-y-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+    <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden flex flex-col">
+      {/* ── Fixed Search & Filter Header Bar (No negative margin shifts) ── */}
+      <div className="bg-slate-50/95 border-b border-slate-200/80 px-4 py-3 sm:px-6 sm:py-3.5 flex-shrink-0 space-y-3 sm:space-y-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         {/* Search bar */}
         <div className="relative flex-1 max-w-md">
           <HiOutlineSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
@@ -566,7 +558,7 @@ function AirlinesList({ airlines, onCreateContract, onViewContract, loading }) {
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Search airline name or email…"
-            className="w-full pl-10 pr-8 py-2 bg-slate-50 border border-slate-200/90 rounded-xl text-xs sm:text-sm font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900 transition-all"
+            className="w-full pl-10 pr-8 py-2 bg-white border border-slate-200/90 rounded-xl text-xs sm:text-sm font-medium text-slate-800 placeholder-slate-400 shadow-2xs focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900 transition-all"
           />
           {search && (
             <button onClick={() => setSearch('')}
@@ -576,9 +568,9 @@ function AirlinesList({ airlines, onCreateContract, onViewContract, loading }) {
           )}
         </div>
 
-        {/* Filter tabs */}
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1 bg-slate-100/80 rounded-xl p-1 border border-slate-200/60">
+        {/* Filter tabs + counter */}
+        <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto">
+          <div className="inline-flex items-center gap-1 bg-white border border-slate-200/80 rounded-xl p-1 shadow-2xs">
             {FILTERS.map(f => {
               const count =
                 f.key === 'all'     ? airlines.length :
@@ -589,15 +581,15 @@ function AirlinesList({ airlines, onCreateContract, onViewContract, loading }) {
                 <button
                   key={f.key}
                   onClick={() => setFilter(f.key)}
-                  className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all w-28 flex-shrink-0 ${
+                  className={`inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
                     isActive
                       ? 'bg-slate-900 text-white shadow-2xs'
-                      : 'text-slate-600 hover:text-slate-900'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                   }`}
                 >
                   <span>{f.label}</span>
                   <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ${
-                    isActive ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600'
+                    isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
                   }`}>
                     {count}
                   </span>
@@ -605,14 +597,20 @@ function AirlinesList({ airlines, onCreateContract, onViewContract, loading }) {
               );
             })}
           </div>
-          <span className="text-[11px] font-semibold text-slate-400 min-w-[56px] text-left">
-            {visible.length} {visible.length === 1 ? 'result' : 'results'}
+          <span className="text-[11px] font-semibold text-slate-500 whitespace-nowrap flex-shrink-0">
+            {visible.length} {visible.length === 1 ? 'airline' : 'airlines'}
           </span>
         </div>
       </div>
 
-      {/* ── Scrollable airlines list ── */}
-      <div className="divide-y divide-slate-100 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 300px)', minHeight: '160px' }}>
+      {/* ── Scrollable Airlines List Container Card ── */}
+      <div className="divide-y divide-slate-100 overflow-y-auto overflow-x-hidden flex-1"
+        style={{
+          height: 'calc(100vh - 240px)',
+          maxHeight: 'calc(100vh - 220px)',
+          minHeight: '380px',
+        }}
+      >
         {loading ? (
           <div className="flex items-center justify-center py-16 gap-2 text-slate-400">
             <div className="w-5 h-5 border-2 border-slate-200 border-t-slate-900 rounded-full animate-spin" />
@@ -842,22 +840,9 @@ function ContractEditor({ airline, onBack, onSent }) {
 
   return (
     <div className="space-y-5 sm:space-y-6">
-      {/* Back + airline context */}
-      <div className="flex items-center gap-3">
-        <button onClick={onBack}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-primary-200 text-xs font-semibold text-primary-600 hover:bg-primary-100 transition-colors">
-          <HiOutlineArrowLeft className="w-4 h-4" /> Back to Airlines
-        </button>
-        {airline && (
-          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary-50 border border-primary-100">
-            <HiOutlineOfficeBuilding className="w-4 h-4 text-primary-500" />
-            <span className="text-xs font-semibold text-primary-700">{airline.airlineName}</span>
-          </div>
-        )}
-      </div>
 
       {/* Recipient + header date */}
-      <div className="card p-4 sm:p-6 space-y-4">
+      <div className="bg-white rounded-2xl border border-slate-200/80 p-4 sm:p-6 space-y-4 shadow-sm">
         <div className="flex items-center gap-2">
           <HiOutlineOfficeBuilding className="w-5 h-5 text-primary-500" />
           <h3 className="text-base font-bold text-primary-800">Recipient &amp; Document</h3>
@@ -884,7 +869,7 @@ function ContractEditor({ airline, onBack, onSent }) {
       </div>
 
       {/* Contract content */}
-      <div className="card p-4 sm:p-6 space-y-4">
+      <div className="bg-white rounded-2xl border border-slate-200/80 p-4 sm:p-6 space-y-4 shadow-sm">
         <div className="flex items-center gap-2">
           <HiOutlineDocumentText className="w-5 h-5 text-primary-500" />
           <h3 className="text-base font-bold text-primary-800">Contract Content</h3>
@@ -1020,45 +1005,23 @@ function ContractEditor({ airline, onBack, onSent }) {
       </div>
 
       {/* Preview modal */}
-      <AnimatePresence>
-        {previewUrl && (
-          <>
-            <motion.div
-              key="backdrop"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed -inset-20 z-50 bg-black/50 backdrop-blur-sm pointer-events-none"
-            />
-            <div
-              key="layout"
-              className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4"
-              onClick={closePreview}
-            >
-              <motion.div
-                key="card"
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden"
-                onClick={e => e.stopPropagation()}
-              >
-              <div className="flex items-center justify-between px-4 sm:px-6 py-3 border-b border-primary-200">
-                <p className="text-sm sm:text-base font-bold text-primary-800">Contract Preview</p>
-                <div className="flex items-center gap-2">
-                  <a href={previewUrl} download="Services_Agreement.pdf"
-                    className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-primary-800 text-white hover:bg-primary-900">Download</a>
-                  <button onClick={closePreview} className="p-2 rounded-lg hover:bg-primary-100 text-primary-400"><HiOutlineX className="w-5 h-5" /></button>
-                </div>
+      {previewUrl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-900/60 backdrop-blur-xs" onClick={closePreview}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-4 sm:px-6 py-3 border-b border-primary-200">
+              <p className="text-sm sm:text-base font-bold text-primary-800">Contract Preview</p>
+              <div className="flex items-center gap-2">
+                <a href={previewUrl} download="Services_Agreement.pdf"
+                  className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-primary-800 text-white hover:bg-primary-900">Download</a>
+                <button onClick={closePreview} className="p-2 rounded-lg hover:bg-primary-100 text-primary-400"><HiOutlineX className="w-5 h-5" /></button>
               </div>
-              <div className="bg-primary-50" style={{ height: '72vh' }}>
-                <iframe src={previewUrl} title="Contract Preview" className="w-full h-full border-0" />
-              </div>
-              </motion.div>
             </div>
-          </>
-        )}
-      </AnimatePresence>
+            <div className="bg-primary-50" style={{ height: '72vh' }}>
+              <iframe src={previewUrl} title="Contract Preview" className="w-full h-full border-0" />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1119,84 +1082,81 @@ export default function Contract() {
   };
 
   return (
-    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-      className="max-w-4xl mx-auto space-y-5 sm:space-y-6 px-4 sm:px-6 pt-4 sm:pt-6 mt-2 pb-8">
+    <div className="w-full min-h-full pb-12">
 
-      {/* Page Header */}
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-slate-900 flex items-center justify-center shadow-2xs">
-          <HiOutlineDocumentText className="w-5 h-5 text-white" />
+      {/* Sticky Full-Width Page Header */}
+      <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-4 py-3.5 sm:px-6 sm:py-4 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 w-full">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-9 h-9 rounded-xl bg-slate-900 flex items-center justify-center flex-shrink-0 shadow-2xs">
+            <HiOutlineDocumentText className="w-5 h-5 text-white" />
+          </div>
+          <div className="min-w-0">
+            <h1 className="text-base sm:text-xl font-bold text-slate-900 tracking-tight truncate">Contracts</h1>
+            <p className="text-xs text-slate-500 truncate">
+              {view === 'list'
+                ? 'Manage & send contracts to airlines'
+                : `Editing contract for ${selectedAirline?.airlineName || 'airline'}`}
+            </p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">Contracts</h1>
-          <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-            {view === 'list'
-              ? 'Manage & send contracts to airlines'
-              : `Editing contract for ${selectedAirline?.airlineName || 'airline'}`}
-          </p>
-        </div>
+
+        {view === 'editor' && (
+          <div className="flex items-center gap-2.5 flex-shrink-0">
+            {selectedAirline && (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200">
+                <HiOutlineOfficeBuilding className="w-4 h-4 text-slate-600" />
+                <span className="text-xs font-bold text-slate-800">{selectedAirline.airlineName}</span>
+              </div>
+            )}
+            <button onClick={handleBack}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 transition-all shadow-2xs">
+              <HiOutlineArrowLeft className="w-4 h-4 text-slate-500" /> Back to Airlines
+            </button>
+          </div>
+        )}
       </div>
 
-      {view === 'list' ? (
-        <AirlinesList
-          airlines={airlines}
-          loading={loadingList}
-          onCreateContract={handleCreateContract}
-          onViewContract={handleViewContract}
-        />
-      ) : (
-        <ContractEditor
-          airline={selectedAirline}
-          onBack={handleBack}
-          onSent={handleSent}
-        />
-      )}
+      {/* Page Body Content */}
+      <div className="px-3.5 sm:px-6 pt-4 sm:pt-6 w-full space-y-4 sm:space-y-6">
+        {view === 'list' ? (
+          <AirlinesList
+            airlines={airlines}
+            loading={loadingList}
+            onCreateContract={handleCreateContract}
+            onViewContract={handleViewContract}
+          />
+        ) : (
+          <ContractEditor
+            airline={selectedAirline}
+            onBack={handleBack}
+            onSent={handleSent}
+          />
+        )}
+      </div>
 
       {/* View sent contract PDF modal */}
-      <AnimatePresence>
-        {(viewPdfUrl || loadingPdf) && (
-          <>
-            <motion.div
-              key="backdrop"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed -inset-20 z-50 bg-black/50 backdrop-blur-sm pointer-events-none"
-            />
-            <div
-              key="layout"
-              className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4"
-              onClick={closePdfModal}
-            >
-              <motion.div
-                key="card"
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden"
-                onClick={e => e.stopPropagation()}
-              >
-              <div className="flex items-center justify-between px-4 sm:px-6 py-3 border-b border-primary-200">
-                <p className="text-sm sm:text-base font-bold text-primary-800">Sent Contract</p>
-                <div className="flex items-center gap-2">
-                  {viewPdfUrl && (
-                    <a href={viewPdfUrl} download="Contract.pdf"
-                      className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-primary-800 text-white hover:bg-primary-900">Download</a>
-                  )}
-                  <button onClick={closePdfModal} className="p-2 rounded-lg hover:bg-primary-100 text-primary-400"><HiOutlineX className="w-5 h-5" /></button>
-                </div>
+      {(viewPdfUrl || loadingPdf) && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-900/60 backdrop-blur-xs" onClick={closePdfModal}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-4 sm:px-6 py-3 border-b border-primary-200">
+              <p className="text-sm sm:text-base font-bold text-primary-800">Sent Contract</p>
+              <div className="flex items-center gap-2">
+                {viewPdfUrl && (
+                  <a href={viewPdfUrl} download="Contract.pdf"
+                    className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-primary-800 text-white hover:bg-primary-900">Download</a>
+                )}
+                <button onClick={closePdfModal} className="p-2 rounded-lg hover:bg-primary-100 text-primary-400"><HiOutlineX className="w-5 h-5" /></button>
               </div>
-              <div className="bg-primary-50 flex items-center justify-center" style={{ height: '72vh' }}>
-                {loadingPdf
-                  ? <div className="w-8 h-8 border-2 border-primary-300 border-t-primary-600 rounded-full animate-spin" />
-                  : <iframe src={viewPdfUrl} title="Sent Contract" className="w-full h-full border-0" />
-                }
-              </div>
-              </motion.div>
             </div>
-          </>
-        )}
-      </AnimatePresence>
-    </motion.div>
+            <div className="bg-primary-50 flex items-center justify-center" style={{ height: '72vh' }}>
+              {loadingPdf
+                ? <div className="w-8 h-8 border-2 border-primary-300 border-t-primary-600 rounded-full animate-spin" />
+                : <iframe src={viewPdfUrl} title="Sent Contract" className="w-full h-full border-0" />
+              }
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

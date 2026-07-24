@@ -239,63 +239,80 @@ export default function ExamTake() {
 
   const answeredCount = questions.filter((qq) => answers[qq._id] !== undefined && answers[qq._id] !== null && answers[qq._id] !== '').length;
 
-  const shellClass = lockdownEnabled
-    ? 'fixed inset-0 z-[9999] bg-gray-100 select-none flex flex-col h-screen overflow-hidden'
-    : 'h-screen bg-gray-100 flex flex-col overflow-hidden';
+  // Always full-screen — the exam route renders outside the app's Layout
+  // (no sidebar/header), and this fixed overlay covers the full viewport
+  // regardless of lockdown mode so nothing else is ever visible behind it.
+  const shellClass = `fixed inset-0 z-[9999] bg-gray-100 flex flex-col h-screen overflow-hidden ${lockdownEnabled ? 'select-none' : ''}`;
 
   return (
     <div className={shellClass} style={lockdownEnabled ? { userSelect: 'none' } : undefined}>
-      {/* ── Top Header Navigation Bar ── */}
-      <header className="bg-slate-900 text-white px-4 sm:px-6 py-3 flex items-center justify-between border-b border-slate-800 shadow-md flex-shrink-0 z-30">
-        {/* Left: Back button + Assessment label + Exam title */}
-        <div className="flex items-center gap-3 min-w-0">
-          <button
-            onClick={() => navigate(-1)}
-            className="p-1.5 rounded-xl hover:bg-slate-800 text-slate-300 hover:text-white transition-colors"
-            title="Back to Exams"
-          >
-            <HiOutlineChevronLeft className="w-5 h-5" />
-          </button>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">
+      {/* ── Top Header Navigation Bar (Responsive layout to prevent overlap on mobile) ── */}
+      <header className="bg-slate-900 text-white px-3.5 sm:px-6 py-2.5 sm:py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 shadow-md flex-shrink-0 z-30">
+        {/* Top row / Left section */}
+        <div className="flex items-center justify-between sm:justify-start gap-2.5 min-w-0 w-full sm:w-auto">
+          <div className="flex items-center gap-2 min-w-0">
+            <button
+              onClick={() => navigate(-1)}
+              className="p-1 rounded-lg hover:bg-slate-800 text-slate-300 hover:text-white transition-colors flex-shrink-0"
+              title="Back to Exams"
+            >
+              <HiOutlineChevronLeft className="w-5 h-5" />
+            </button>
+            <div className="min-w-0">
+              <span className="text-[9px] sm:text-[10px] font-extrabold uppercase tracking-widest text-slate-400 block sm:hidden">
                 ASSESSMENT
               </span>
-              <span className="text-[10px] font-bold text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded-full">
-                {answeredCount} / {questions.length} Answered
-              </span>
+              <h1 className="text-xs sm:text-base font-bold text-white truncate max-w-[200px] xs:max-w-xs sm:max-w-md">
+                {exam.title}
+              </h1>
             </div>
-            <h1 className="text-sm sm:text-base font-bold text-white truncate max-w-md">
-              {exam.title}
-            </h1>
+          </div>
+
+          {/* Mobile Timer Badge (Top Right on Mobile) */}
+          <div className={`inline-flex sm:hidden items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-extrabold flex-shrink-0 transition-colors ${secondsLeft < 120 ? 'bg-rose-600 text-white animate-pulse' : 'bg-slate-800 text-slate-200 border border-slate-700/80'}`}>
+            <HiOutlineClock className="w-3.5 h-3.5 text-blue-400" />
+            <span>{formatTime(secondsLeft)}</span>
           </div>
         </div>
 
-        {/* Right: Security, Warnings & Timer badges */}
-        <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-          {/* Secure badge */}
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-            <HiOutlineShieldCheck className="w-3.5 h-3.5" /> SECURE
-          </span>
-
-          {/* Warnings badge if lockdown enabled */}
-          {lockdownEnabled && violationCount > 0 && (
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-rose-500/20 text-rose-300 border border-rose-500/30">
-              {violationCount}/{maxViolations} WARNINGS
+        {/* Bottom row on Mobile / Right section on Desktop */}
+        <div className="flex items-center justify-between sm:justify-end gap-2 flex-wrap sm:flex-nowrap w-full sm:w-auto pt-1 sm:pt-0 border-t sm:border-t-0 border-slate-800/80">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="hidden sm:inline-block text-[10px] font-extrabold uppercase tracking-widest text-slate-400">
+              ASSESSMENT
             </span>
-          )}
+            <span className="text-[10px] font-bold text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded-full flex-shrink-0">
+              {answeredCount} / {questions.length} Answered
+            </span>
+          </div>
 
-          {/* Timer Badge */}
-          <div className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-extrabold transition-colors ${secondsLeft < 120 ? 'bg-rose-600 text-white animate-pulse' : 'bg-slate-800 text-slate-200 border border-slate-700/80 shadow-2xs'}`}>
-            <HiOutlineClock className="w-4 h-4 text-blue-400" />
-            <span>{formatTime(secondsLeft)}</span>
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+            {/* Secure badge — only shown when lockdown mode is actually enforcing it */}
+            {lockdownEnabled && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 sm:px-3 sm:py-1 rounded-full text-[10px] sm:text-xs font-extrabold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                <HiOutlineShieldCheck className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> SECURE
+              </span>
+            )}
+
+            {/* Warnings badge if lockdown enabled */}
+            {lockdownEnabled && violationCount > 0 && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 sm:px-3 sm:py-1 rounded-full text-[10px] sm:text-xs font-extrabold bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                {violationCount}/{maxViolations} WARN
+              </span>
+            )}
+
+            {/* Desktop Timer Badge */}
+            <div className={`hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-extrabold transition-colors ${secondsLeft < 120 ? 'bg-rose-600 text-white animate-pulse' : 'bg-slate-800 text-slate-200 border border-slate-700/80 shadow-2xs'}`}>
+              <HiOutlineClock className="w-4 h-4 text-blue-400" />
+              <span>{formatTime(secondsLeft)}</span>
+            </div>
           </div>
         </div>
       </header>
 
       {/* Shown until the candidate's first click/keypress lets us actually enter fullscreen */}
       {awaitingFsGesture && !warning && (
-        <div className="bg-blue-50 border-b border-blue-200 text-blue-900 px-6 py-2 text-xs font-medium flex items-center justify-center gap-2 flex-shrink-0">
+        <div className="bg-blue-50 border-b border-blue-200 text-blue-900 px-4 sm:px-6 py-2 text-xs font-medium flex items-center justify-center gap-2 flex-shrink-0">
           <HiOutlineShieldCheck className="w-4 h-4 text-blue-600 flex-shrink-0" />
           <span>Click anywhere or press a key to enter the required fullscreen lockdown.</span>
         </div>
@@ -303,7 +320,7 @@ export default function ExamTake() {
 
       {/* Warning banner if violation triggered */}
       {warning && (
-        <div className="bg-amber-50 border-b border-amber-200 text-amber-900 px-6 py-2 text-xs font-medium flex items-center justify-center gap-2 flex-shrink-0">
+        <div className="bg-amber-50 border-b border-amber-200 text-amber-900 px-4 sm:px-6 py-2 text-xs font-medium flex items-center justify-center gap-2 flex-shrink-0">
           <HiOutlineExclamationCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
           <span><strong>Warning {warning.count}/{maxViolations}:</strong> {warning.message} {warning.remaining > 0 ? `${warning.remaining} more will auto-submit your exam.` : ''}</span>
         </div>
@@ -317,12 +334,48 @@ export default function ExamTake() {
         />
       </div>
 
-      {/* ── Main Workspace: 2-Column Grid ── */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 flex flex-col overflow-hidden min-h-0">
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-6 flex-1 h-full min-h-0 overflow-hidden">
+      {/* ── Main Workspace: Responsive Layout ── */}
+      <main className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-6 lg:p-8 flex flex-col overflow-y-auto md:overflow-hidden min-h-0">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-4 sm:gap-6 flex-1 h-full min-h-0 md:overflow-hidden">
           
-          {/* Left Column: QUESTIONS Sidebar Panel */}
-          <aside className="md:col-span-3 lg:col-span-3 bg-white border border-slate-200/80 rounded-2xl p-5 shadow-2xs flex flex-col justify-between space-y-6 h-full min-h-0 flex-shrink-0 overflow-y-auto">
+          {/* Mobile Question Horizontal Quick Navigator (Only shown < md) */}
+          <div className="md:hidden bg-white border border-slate-200/80 rounded-xl p-3 shadow-2xs flex flex-col gap-2 flex-shrink-0">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">QUESTIONS ({index + 1}/{questions.length})</span>
+              <span className="text-[10px] font-extrabold text-blue-700 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-full">
+                {Math.round((answeredCount / questions.length) * 100)}% Completed
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 overflow-x-auto py-1 scrollbar-none">
+              {questions.map((qq, i) => {
+                const isCurrent = i === index;
+                const isAnswered = answers[qq._id] !== undefined && answers[qq._id] !== null && answers[qq._id] !== '';
+                const isMarked = marked.has(qq._id);
+
+                let btnCls = 'bg-slate-100 text-slate-600';
+                if (isCurrent) {
+                  btnCls = 'bg-blue-600 text-white font-bold ring-2 ring-blue-600/30';
+                } else if (isMarked) {
+                  btnCls = 'bg-amber-500 text-white font-bold';
+                } else if (isAnswered) {
+                  btnCls = 'bg-emerald-500 text-white font-bold';
+                }
+
+                return (
+                  <button
+                    key={qq._id}
+                    onClick={() => setIndex(i)}
+                    className={`w-8 h-8 rounded-full text-xs font-bold transition-all flex items-center justify-center flex-shrink-0 ${btnCls}`}
+                  >
+                    {i + 1}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Desktop Left Column: QUESTIONS Sidebar Panel (Hidden < md) */}
+          <aside className="hidden md:flex md:col-span-3 lg:col-span-3 bg-white border border-slate-200/80 rounded-2xl p-5 shadow-2xs flex-col justify-between space-y-6 h-full min-h-0 flex-shrink-0 overflow-y-auto">
             <div className="space-y-4">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <span className="text-xs font-extrabold text-slate-500 uppercase tracking-wider">QUESTIONS</span>
@@ -377,16 +430,16 @@ export default function ExamTake() {
             </div>
           </aside>
 
-          {/* Right Column: MAIN QUESTION DISPLAY */}
+          {/* Main Column: MAIN QUESTION DISPLAY */}
           <section className="md:col-span-9 lg:col-span-9 bg-white border border-slate-200/80 rounded-2xl shadow-2xs flex flex-col h-full overflow-hidden min-h-0">
             
-            {/* Question Header Row (FIXED at Top of Question Card) */}
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between flex-shrink-0 bg-white rounded-t-2xl z-10">
+            {/* Question Header Row */}
+            <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100 flex items-center justify-between flex-shrink-0 bg-white rounded-t-2xl z-10">
               <div>
-                <span className="text-xs font-extrabold text-slate-400 uppercase tracking-wider block">
+                <span className="text-[11px] sm:text-xs font-extrabold text-slate-400 uppercase tracking-wider block">
                   QUESTION {index + 1} OF {questions.length}
                 </span>
-                <span className="text-xs font-semibold text-slate-500 mt-0.5 block">
+                <span className="text-[10px] sm:text-xs font-semibold text-slate-500 mt-0.5 block">
                   1 mark
                 </span>
               </div>
@@ -395,51 +448,54 @@ export default function ExamTake() {
                 variant="outline"
                 size="sm"
                 onClick={() => toggleMarked(q._id)}
-                className={`rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
+                className={`rounded-xl text-[11px] sm:text-xs font-bold flex items-center gap-1.5 transition-all ${
                   marked.has(q._id)
                     ? 'border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100'
                     : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
                 }`}
               >
                 <HiOutlineBookmark className={`w-3.5 h-3.5 ${marked.has(q._id) ? 'fill-amber-500 text-amber-600' : 'text-slate-400'}`} />
-                {marked.has(q._id) ? 'MARKED FOR REVIEW' : 'REVIEW'}
+                {marked.has(q._id) ? 'MARKED' : 'REVIEW'}
               </Button>
             </div>
 
-            {/* Inner Question Scroll Body (ONLY THIS SECTION SCROLLS) */}
-            <div className="p-6 sm:p-8 flex-1 overflow-y-auto space-y-6 min-h-0">
+            {/* Inner Question Scroll Body */}
+            <div className="p-4 sm:p-8 flex-1 overflow-y-auto space-y-6 min-h-0">
               <QuestionPlayer question={q} response={answers[q._id]} onChange={setResponse} />
             </div>
 
-            {/* Bottom Footer Actions (FIXED at Bottom of Question Card) */}
-            <div className="px-6 py-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4 flex-shrink-0 bg-white rounded-b-2xl z-10">
-              <div className="flex items-center gap-1.5 text-xs font-medium text-slate-400">
-                <HiOutlineCheckCircle className="w-4 h-4 text-emerald-500" />
-                <span>Autosave enabled</span>
+            {/* Bottom Footer Actions */}
+            <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-slate-100 flex items-center justify-between gap-2 flex-shrink-0 bg-white rounded-b-2xl z-10">
+              <div className="flex items-center gap-1.5 text-[11px] sm:text-xs font-medium text-slate-400">
+                <HiOutlineCheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-500" />
+                <span className="hidden xs:inline">Autosave enabled</span>
               </div>
 
-              <div className="flex items-center gap-3 w-full sm:w-auto">
+              <div className="flex items-center gap-2 sm:gap-3">
                 <Button
                   variant="outline"
+                  size="sm"
                   onClick={() => setIndex((i) => Math.max(0, i - 1))}
                   disabled={index === 0}
-                  className="rounded-xl px-5 border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold"
+                  className="rounded-xl px-3 sm:px-5 border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold text-xs"
                 >
-                  <HiOutlineChevronLeft className="w-4 h-4 mr-1" /> PREVIOUS
+                  <HiOutlineChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-0.5 sm:mr-1" /> PREV
                 </Button>
 
                 {index < questions.length - 1 ? (
                   <Button
+                    size="sm"
                     onClick={() => setIndex((i) => Math.min(questions.length - 1, i + 1))}
-                    className="rounded-xl px-6 bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-2xs"
+                    className="rounded-xl px-4 sm:px-6 bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-2xs text-xs"
                   >
-                    NEXT <HiOutlineChevronRight className="w-4 h-4 ml-1" />
+                    NEXT <HiOutlineChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 ml-0.5 sm:ml-1" />
                   </Button>
                 ) : (
                   <Button
+                    size="sm"
                     onClick={handleSubmit}
                     disabled={submitting}
-                    className="rounded-xl px-7 bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-2xs"
+                    className="rounded-xl px-5 sm:px-7 bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-2xs text-xs"
                   >
                     {submitting ? 'Submitting…' : 'SUBMIT'}
                   </Button>

@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   HiOutlineClipboardCheck,
-  HiOutlineOfficeBuilding,
   HiOutlineCalendar,
   HiOutlineUsers,
   HiOutlineChevronDown,
@@ -17,6 +16,7 @@ import { listAttendanceSheets, getAttendanceSheet, getContractAirlines } from '.
 import AttendanceChecklistModal from '../components/AttendanceChecklistModal';
 import { buildAttendanceMap, generateAttendancePdf } from '../utils/generateAttendancePdf';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
+import { airlineInitials } from '../components/AirlineLogo';
 
 const TRAINING_TYPES = [
   { value: 'FDI', label: 'Flight Dispatch Initial',    color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
@@ -58,8 +58,7 @@ function SheetCard({ sheet, onEdit, onPreview, previewing, forceOpen }) {
         tabIndex={0}
         onClick={() => setOpen(o => !o)}
         onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && setOpen(o => !o)}
-        className={`flex items-center gap-3 px-4 sm:px-5 py-3.5 cursor-pointer select-none${isOpen ? ' sticky top-0 z-10' : ''}`}
-        style={{ background: isOpen ? '#f8fafc' : '#ffffff' }}
+        className={`flex items-center gap-3 px-4 sm:px-5 py-3.5 cursor-pointer select-none transition-colors ${isOpen ? 'sticky top-0 z-10 bg-slate-100/90 border-b border-slate-200/80 shadow-2xs' : 'bg-white hover:bg-slate-50'}`}
       >
         {/* Chevron */}
         <span className="flex-shrink-0 text-slate-400">
@@ -176,13 +175,29 @@ function AirlineGroup({ airlineName, logoUrl, sheets, onEdit, onPreview, preview
       {/* Group header */}
       <button
         onClick={() => setCollapsed(c => !c)}
-        className="w-full flex items-center gap-3 px-5 py-4 hover:bg-slate-50 transition-colors text-left"
-        style={{ background: isOpen ? '#f8fafc' : '#fff' }}
+        className={`w-full flex items-center gap-3 px-5 py-4 transition-colors text-left ${isOpen ? 'bg-slate-100/90 border-b border-slate-200/80' : 'bg-white hover:bg-slate-50'}`}
       >
-        <div className="flex-shrink-0 w-9 h-9 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center overflow-hidden shadow-2xs">
-          {logoUrl
-            ? <img src={logoUrl} alt={airlineName} className="w-full h-full object-contain p-0.5 bg-white" />
-            : <HiOutlineOfficeBuilding className="w-4.5 h-4.5 text-white" />}
+        <div className="relative flex-shrink-0 group/logo">
+          <div className="w-9 h-9 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center overflow-hidden shadow-2xs transition-transform duration-200 group-hover/logo:scale-105">
+            {logoUrl
+              ? <img src={logoUrl} alt={airlineName} className="w-full h-full object-contain p-0.5 bg-white" />
+              : <span className="text-white text-xs font-bold">{airlineInitials(airlineName)}</span>}
+          </div>
+          {logoUrl && (
+            <div
+              className="pointer-events-none absolute z-[999] left-1/2 -translate-x-1/2
+                opacity-0 scale-50 group-hover/logo:opacity-100 group-hover/logo:scale-100
+                transition-all duration-200 ease-out origin-bottom"
+              style={{ bottom: 'calc(100% + 8px)' }}
+            >
+              <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-3 w-28 h-28 flex items-center justify-center">
+                <img src={logoUrl} alt={airlineName} className="w-full h-full object-contain" />
+              </div>
+              <div className="absolute bottom-0 left-1/2 translate-y-full -translate-x-1/2 pt-0.5">
+                <div className="w-3 h-3 bg-white border-r border-b border-slate-200 rotate-45" />
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="flex-1 min-w-0">
@@ -307,7 +322,7 @@ export default function AttendanceSheets() {
   const sortedGroups = Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
 
   return (
-    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
+    <div className="w-full space-y-4">
       {activeSheet && (
         <AttendanceChecklistModal
           participants={activeSheet.participants || []}
@@ -321,33 +336,33 @@ export default function AttendanceSheets() {
         />
       )}
 
-      {/* Header Card */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-6 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2.5">
-            <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">Attendance Records</h1>
-            <span className="px-2.5 py-0.5 rounded-full bg-slate-100 border border-slate-200 text-[11px] font-bold text-slate-700">
-              Admin Overview
+      {/* Header Card (Full Width Edge-to-Edge) */}
+      <div className="w-full bg-white border-b border-slate-200/80 px-4 sm:px-6 lg:px-8 py-3.5 shadow-2xs flex flex-row items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h1 className="text-base sm:text-xl font-bold text-slate-900 tracking-tight truncate">Attendance Records</h1>
+            <span className="hidden xs:inline-block px-2 py-0.5 rounded-full bg-slate-100 border border-slate-200 text-[10px] sm:text-[11px] font-bold text-slate-700 flex-shrink-0">
+              Overview
             </span>
           </div>
-          <p className="text-xs sm:text-sm font-medium text-slate-500">
+          <p className="text-xs font-medium text-slate-500 hidden sm:block mt-0.5">
             View and edit attendance sheets submitted by contract airlines
           </p>
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <span className="px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-xs font-bold text-slate-700 shadow-2xs">
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          <span className="px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-200 text-[11px] sm:text-xs font-bold text-slate-700 shadow-2xs">
             {sortedGroups.length} airline{sortedGroups.length !== 1 ? 's' : ''}
           </span>
-          <span className="px-3 py-1.5 rounded-xl bg-slate-900 text-white text-xs font-bold shadow-2xs">
+          <span className="px-2.5 py-1 rounded-lg bg-slate-900 text-white text-[11px] sm:text-xs font-bold shadow-2xs">
             {filtered.length} record{filtered.length !== 1 ? 's' : ''}
           </span>
         </div>
       </div>
 
-      {/* Search + filter bar */}
-      <div className="sticky top-0 z-20 bg-slate-50/95 backdrop-blur-md py-3 -mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 border-b border-slate-200/60 transition-all">
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-2xs space-y-3 sm:space-y-0">
-          <div className="flex flex-col sm:flex-row items-center gap-3">
+      {/* Sticky Search & Filter Bar */}
+      <div className="sticky top-0 z-20 bg-slate-50/95 backdrop-blur-md px-4 sm:px-6 lg:px-8 py-2.5 border-b border-slate-200/60 shadow-2xs transition-all">
+        <div className="bg-white rounded-xl border border-slate-200/80 p-3 shadow-2xs space-y-2.5 sm:space-y-0">
+          <div className="flex flex-col sm:flex-row items-center gap-2.5">
             <div className="flex-1 relative w-full">
               <HiOutlineSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
               <input
@@ -355,13 +370,13 @@ export default function AttendanceSheets() {
                 placeholder="Search by airline, training type, or participant name…"
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 shadow-2xs rounded-xl text-xs sm:text-sm font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900 transition-all"
+                className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 shadow-2xs rounded-xl text-xs sm:text-sm font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900 transition-all"
               />
             </div>
             <div className="relative w-full sm:w-auto">
               <HiOutlineFilter className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none z-10" />
               <Select value={filterType || 'all'} onValueChange={v => setFilterType(v === 'all' ? '' : v)}>
-                <SelectTrigger className="w-full sm:w-64 pl-10 font-semibold text-slate-700">
+                <SelectTrigger className="w-full sm:w-64 pl-10 font-semibold text-slate-700 text-xs sm:text-sm py-2">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -376,32 +391,36 @@ export default function AttendanceSheets() {
         </div>
       </div>
 
-      {/* Content */}
-      {loading ? (
-        <div className="flex items-center justify-center py-20 gap-2 text-slate-400">
-          <div className="w-5 h-5 border-2 border-slate-300 border-t-slate-800 rounded-full animate-spin" />
-          <span className="text-sm font-medium">Loading attendance records…</span>
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-12 text-center text-sm font-medium text-slate-500 shadow-2xs">
-          {sheets.length === 0 ? 'No attendance records submitted yet.' : 'No records match your search.'}
-        </div>
-      ) : (
-        <div className="space-y-5">
-          {sortedGroups.map(([airlineName, airlineSheets]) => (
-            <AirlineGroup
-              key={airlineName}
-              airlineName={airlineName}
-              logoUrl={airlineMap[airlineName]?.logoUrl || null}
-              sheets={airlineSheets}
-              forceOpen={Boolean(search.trim() || filterType)}
-              onEdit={setActiveSheet}
-              onPreview={handlePreview}
-              previewing={previewing}
-            />
-          ))}
-        </div>
-      )}
-    </motion.div>
+      {/* Page Content */}
+      <div className="px-4 sm:px-6 lg:px-8 py-4 space-y-4">
+
+        {/* Content */}
+        {loading ? (
+          <div className="flex items-center justify-center py-20 gap-2 text-slate-400">
+            <div className="w-5 h-5 border-2 border-slate-300 border-t-slate-800 rounded-full animate-spin" />
+            <span className="text-sm font-medium">Loading attendance records…</span>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-12 text-center text-sm font-medium text-slate-500 shadow-2xs">
+            {sheets.length === 0 ? 'No attendance records submitted yet.' : 'No records match your search.'}
+          </div>
+        ) : (
+          <div className="space-y-5">
+            {sortedGroups.map(([airlineName, airlineSheets]) => (
+              <AirlineGroup
+                key={airlineName}
+                airlineName={airlineName}
+                logoUrl={airlineMap[airlineName]?.logoUrl || null}
+                sheets={airlineSheets}
+                forceOpen={Boolean(search.trim() || filterType)}
+                onEdit={setActiveSheet}
+                onPreview={handlePreview}
+                previewing={previewing}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

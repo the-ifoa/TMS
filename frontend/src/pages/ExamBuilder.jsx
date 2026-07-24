@@ -125,183 +125,183 @@ export default function ExamBuilder() {
       {/* ── 2-Column Split Workspace Container ── */}
       <div className="w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 space-y-6 flex-1">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        
-        {/* LEFT COLUMN: Questions List (Scrollable with page) */}
-        <div className="lg:col-span-7 xl:col-span-8 space-y-4">
-          <div className="flex items-center justify-between px-1 pb-1">
-            <h2 className="text-sm font-extrabold text-slate-900 uppercase tracking-wider">
-              Exam Questions ({exam.questions.length})
-            </h2>
-            <span className="text-xs text-slate-400 font-medium">
-              Drag or reorder questions below
-            </span>
-          </div>
-
-          {exam.questions.length === 0 ? (
-            <Card className="p-10 text-center text-sm font-medium text-slate-400 border-dashed rounded-2xl">
-              No questions added yet. Use the control below to add your first question.
-            </Card>
-          ) : (
-            <div className="space-y-4">
-              {exam.questions.map((q, idx) => (
-                <QuestionEditor
-                  key={q._id || idx}
-                  question={q}
-                  index={idx}
-                  onChange={(next) => updateQuestion(idx, next)}
-                  onDelete={() => deleteQuestion(idx)}
-                  onMoveUp={() => moveQuestion(idx, -1)}
-                  onMoveDown={() => moveQuestion(idx, 1)}
-                  isFirst={idx === 0}
-                  isLast={idx === exam.questions.length - 1}
-                />
-              ))}
-            </div>
-          )}
-
-          {/* Add Question Component */}
-          <Card className="flex items-center gap-3 border-dashed p-4 rounded-2xl bg-slate-50/50">
-            <Select value={newType} onValueChange={setNewType}>
-              <SelectTrigger className="flex-1 bg-white rounded-xl">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {QUESTION_TYPES.map((t) => (
-                  <SelectItem key={t.value} value={t.value}>
-                    {t.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button variant="primary" onClick={addQuestion} className="rounded-xl shadow-2xs">
-              <HiOutlinePlusCircle className="w-4 h-4" /> Add Question
-            </Button>
-          </Card>
-        </div>
-
-        {/* RIGHT COLUMN: Exam Settings Panel (Fixed / Sticky on Right) */}
-        <div className="lg:col-span-5 xl:col-span-4 lg:sticky lg:top-20 space-y-4">
-          <Card className="p-5 space-y-4 rounded-2xl border border-slate-200/80 shadow-2xs bg-white">
-            <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
-              <h3 className="text-sm font-black text-slate-900 tracking-tight">Exam Settings</h3>
-              <span className="text-[11px] font-bold text-blue-600 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-full">
-                Configuration
-              </span>
-            </div>
-
-            {/* Title & Description Fields */}
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Exam Title</label>
-                <input
-                  value={exam.title}
-                  onChange={(e) => set('title', e.target.value)}
-                  placeholder="e.g. Initial Competency Assessment"
-                  className="w-full px-3 py-2 text-sm font-bold text-slate-900 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500 bg-white"
-                />
+          
+          {/* EXAM SETTINGS PANEL (Rendered FIRST on mobile at top of questions, Right column on desktop) */}
+          <div className="order-1 lg:order-2 lg:col-span-5 xl:col-span-4 lg:sticky lg:top-20 space-y-4">
+            <Card className="p-4 sm:p-5 space-y-4 rounded-2xl border border-slate-200/80 shadow-2xs bg-white">
+              <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
+                <h3 className="text-sm font-black text-slate-900 tracking-tight">Exam Settings</h3>
+                <span className="text-[11px] font-bold text-blue-600 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-full">
+                  Configuration
+                </span>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Description</label>
-                <textarea
-                  value={exam.description}
-                  onChange={(e) => set('description', e.target.value)}
-                  rows={2}
-                  placeholder="Overview or instructions for candidates..."
-                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500 bg-white"
-                />
-              </div>
-            </div>
-
-            {/* Column-wise Parameters */}
-            <div className="space-y-3 pt-2 border-t border-slate-100">
-              <div className="grid grid-cols-2 gap-3">
+              {/* Title & Description Fields */}
+              <div className="space-y-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Duration (min)</label>
-                  <Input
-                    type="number"
-                    min="1"
-                    value={exam.duration_minutes}
-                    onChange={(e) => set('duration_minutes', Number(e.target.value))}
-                    className="text-xs rounded-xl"
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Exam Title</label>
+                  <input
+                    value={exam.title}
+                    onChange={(e) => set('title', e.target.value)}
+                    placeholder="e.g. Initial Competency Assessment"
+                    className="w-full px-3 py-2 text-sm font-bold text-slate-900 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500 bg-white"
                   />
                 </div>
+
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Pass %</label>
-                  <Input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={exam.pass_percentage}
-                    onChange={(e) => set('pass_percentage', Number(e.target.value))}
-                    className="text-xs rounded-xl"
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Description</label>
+                  <textarea
+                    value={exam.description}
+                    onChange={(e) => set('description', e.target.value)}
+                    rows={2}
+                    placeholder="Overview or instructions for candidates..."
+                    className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500 bg-white"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Max attempts</label>
-                  <Input
-                    type="number"
-                    min="1"
-                    value={exam.max_attempts}
-                    onChange={(e) => set('max_attempts', Number(e.target.value))}
-                    className="text-xs rounded-xl"
-                  />
-                </div>
-                <div className="flex flex-col justify-end pb-1 text-xs text-slate-600">
-                  <label className="flex items-center gap-2 cursor-pointer font-bold select-none">
-                    <Checkbox
-                      checked={exam.shuffle_questions}
-                      onCheckedChange={(checked) => set('shuffle_questions', !!checked)}
-                    />
-                    Shuffle questions
-                  </label>
-                </div>
-              </div>
-            </div>
-
-            {/* Lockdown Settings Panel */}
-            <div className="pt-2 border-t border-slate-100">
-              <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3.5 space-y-3">
-                <label className="flex items-start gap-2.5 cursor-pointer select-none">
-                  <Checkbox
-                    checked={exam.lockdown_enabled}
-                    onCheckedChange={(checked) => set('lockdown_enabled', !!checked)}
-                    className="mt-0.5"
-                  />
-                  <div className="space-y-0.5">
-                    <span className="font-bold text-slate-900 text-xs block">Lockdown Mode</span>
-                    <span className="text-[11px] text-slate-500 leading-snug block font-medium">
-                      Fullscreen required. Tab switches & exits count as violations.
-                    </span>
-                  </div>
-                </label>
-
-                {exam.lockdown_enabled && (
-                  <div className="pt-1 border-t border-slate-200/60">
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Max violations</label>
+              {/* Column-wise Parameters */}
+              <div className="space-y-3 pt-2 border-t border-slate-100">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Duration (min)</label>
                     <Input
                       type="number"
                       min="1"
-                      value={exam.max_violations}
-                      disabled={!exam.lockdown_enabled}
-                      onChange={(e) => set('max_violations', Number(e.target.value))}
-                      className="text-xs bg-white rounded-xl"
+                      value={exam.duration_minutes}
+                      onChange={(e) => set('duration_minutes', Number(e.target.value))}
+                      className="text-xs rounded-xl"
                     />
-                    <span className="block text-[10px] text-slate-400 mt-1 font-semibold">
-                      Auto-submits exam when violations exceeded
-                    </span>
                   </div>
-                )}
-              </div>
-            </div>
-          </Card>
-        </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Pass %</label>
+                    <Input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={exam.pass_percentage}
+                      onChange={(e) => set('pass_percentage', Number(e.target.value))}
+                      className="text-xs rounded-xl"
+                    />
+                  </div>
+                </div>
 
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Max attempts</label>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={exam.max_attempts}
+                      onChange={(e) => set('max_attempts', Number(e.target.value))}
+                      className="text-xs rounded-xl"
+                    />
+                  </div>
+                  <div className="flex flex-col justify-end pb-1 text-xs text-slate-600">
+                    <label className="flex items-center gap-2 cursor-pointer font-bold select-none">
+                      <Checkbox
+                        checked={exam.shuffle_questions}
+                        onCheckedChange={(checked) => set('shuffle_questions', !!checked)}
+                      />
+                      Shuffle questions
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              {/* Lockdown Settings Panel */}
+              <div className="pt-2 border-t border-slate-100">
+                <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3.5 space-y-3">
+                  <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                    <Checkbox
+                      checked={exam.lockdown_enabled}
+                      onCheckedChange={(checked) => set('lockdown_enabled', !!checked)}
+                      className="mt-0.5"
+                    />
+                    <div className="space-y-0.5">
+                      <span className="font-bold text-slate-900 text-xs block">Lockdown Mode</span>
+                      <span className="text-[11px] text-slate-500 leading-snug block font-medium">
+                        Fullscreen required. Tab switches & exits count as violations.
+                      </span>
+                    </div>
+                  </label>
+
+                  {exam.lockdown_enabled && (
+                    <div className="pt-1 border-t border-slate-200/60">
+                      <label className="block text-xs font-bold text-slate-700 mb-1">Max violations</label>
+                      <Input
+                        type="number"
+                        min="1"
+                        value={exam.max_violations}
+                        disabled={!exam.lockdown_enabled}
+                        onChange={(e) => set('max_violations', Number(e.target.value))}
+                        className="text-xs bg-white rounded-xl"
+                      />
+                      <span className="block text-[10px] text-slate-400 mt-1 font-semibold">
+                        Auto-submits exam when violations exceeded
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </Card>
+          </div>
+
+          {/* QUESTIONS LIST (Rendered SECOND on mobile, Left column on desktop) */}
+          <div className="order-2 lg:order-1 lg:col-span-7 xl:col-span-8 space-y-4">
+            <div className="flex items-center justify-between px-1 pb-1">
+              <h2 className="text-sm font-extrabold text-slate-900 uppercase tracking-wider">
+                Exam Questions ({exam.questions.length})
+              </h2>
+              <span className="text-xs text-slate-400 font-medium">
+                Drag or reorder questions below
+              </span>
+            </div>
+
+            {exam.questions.length === 0 ? (
+              <Card className="p-10 text-center text-sm font-medium text-slate-400 border-dashed rounded-2xl">
+                No questions added yet. Use the control below to add your first question.
+              </Card>
+            ) : (
+              <div className="space-y-4">
+                {exam.questions.map((q, idx) => (
+                  <QuestionEditor
+                    key={q._id || idx}
+                    question={q}
+                    index={idx}
+                    onChange={(next) => updateQuestion(idx, next)}
+                    onDelete={() => deleteQuestion(idx)}
+                    onMoveUp={() => moveQuestion(idx, -1)}
+                    onMoveDown={() => moveQuestion(idx, 1)}
+                    isFirst={idx === 0}
+                    isLast={idx === exam.questions.length - 1}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* Add Question Component */}
+            <Card className="flex items-center gap-3 border-dashed p-4 rounded-2xl bg-slate-50/50">
+              <Select value={newType} onValueChange={setNewType}>
+                <SelectTrigger className="flex-1 bg-white rounded-xl">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {QUESTION_TYPES.map((t) => (
+                    <SelectItem key={t.value} value={t.value}>
+                      {t.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button variant="primary" onClick={addQuestion} className="rounded-xl shadow-2xs">
+                <HiOutlinePlusCircle className="w-4 h-4" /> Add Question
+              </Button>
+            </Card>
+          </div>
+
+        </div>
       </div>
-    </div>
   </div>
 );
 }

@@ -61,7 +61,8 @@ export default function Sidebar({ open, setOpen }) {
   return (
     <aside
       className={[
-        'fixed inset-y-0 left-0 z-30',
+        'app-sidebar',
+        'fixed inset-y-0 left-0 z-50',
         'lg:static lg:z-auto lg:translate-x-0',
         'flex flex-col bg-white border-r border-slate-200/80 shadow-2xs',
         'sidebar-transition',

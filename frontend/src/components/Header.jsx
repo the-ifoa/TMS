@@ -199,6 +199,12 @@ export default function Header({ sidebarOpen, setSidebarOpen }) {
   const markAllRead  = () => setReadIds(prev => new Set([...prev, ...notifications.map(n => n.id)]));
   const dismissNotif = (id) => setReadIds(prev => new Set([...prev, id]));
 
+  const handleNotifClick = (notif) => {
+    setReadIds(prev => new Set([...prev, notif.id]));
+    setNotifOpen(false);
+    if (notif.link) navigate(notif.link);
+  };
+
   // Ring the bell every 12s when there are unread notifications and panel is closed
   useEffect(() => {
     if (unreadCount === 0 || notifOpen) return;
@@ -276,9 +282,9 @@ export default function Header({ sidebarOpen, setSidebarOpen }) {
   };
 
   return (
-    <header className="sticky top-0 z-40 h-16 w-full bg-white/95 backdrop-blur-md border-b border-slate-200/80 flex items-center justify-between px-4 sm:px-6 shadow-2xs flex-shrink-0">
+    <header className="app-header sticky top-0 z-30 h-16 w-full bg-white/95 backdrop-blur-md border-b border-slate-200/80 flex items-center justify-between px-4 sm:px-6 shadow-2xs flex-shrink-0">
       {/* Left side */}
-      <div className="flex items-center gap-3 min-w-0">
+      <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0 max-w-[260px] xs:max-w-[320px] sm:max-w-md">
         {/* Hamburger — mobile only */}
         <SimpleTooltip label="Menu" side="bottom">
           <button
@@ -291,16 +297,16 @@ export default function Header({ sidebarOpen, setSidebarOpen }) {
 
         {/* Search */}
         {location.pathname !== '/airline/enrollment/new' && location.pathname !== '/admin/participants/add' && (
-        <div className="relative" ref={searchRef}>
+        <div className="relative flex-1 min-w-0" ref={searchRef}>
           <form onSubmit={handleSearchSubmit}>
-            <HiOutlineSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <HiOutlineSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
             <input
               type="text"
-              placeholder="Search participants..."
+              placeholder="Search participants…"
               value={searchQuery}
               onChange={handleSearchChange}
               onFocus={() => searchResults.length > 0 && setSearchOpen(true)}
-              className="pl-9 pr-3.5 py-1.5 w-36 sm:w-52 md:w-64 bg-slate-50 border border-slate-200/90 rounded-xl text-xs sm:text-sm font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900 transition-all"
+              className="w-full pl-9 pr-7 py-1.5 bg-slate-50 border border-slate-200/90 rounded-xl text-xs sm:text-sm font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900 transition-all truncate"
             />
             {searchQuery && (
               <button
@@ -381,7 +387,7 @@ export default function Header({ sidebarOpen, setSidebarOpen }) {
               )}
             </button>
           </PopoverTrigger>
-          <PopoverContent className="w-[calc(100vw-2rem)] sm:w-80 md:w-96 p-0">
+          <PopoverContent align="end" sideOffset={8} className="w-[calc(100vw-2rem)] sm:w-80 md:w-96 max-w-[calc(100vw-2rem)] p-0 z-50 overflow-hidden shadow-xl border border-slate-200/80 rounded-2xl bg-white">
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50/50">
               <div className="flex items-center gap-2">
                 <p className="text-sm font-bold text-slate-800">Notifications</p>
@@ -416,8 +422,9 @@ export default function Header({ sidebarOpen, setSidebarOpen }) {
                   const cfg = NOTIF_CONFIG[notif.type] || { icon: HiOutlineBell, color: 'text-slate-500', bg: 'bg-slate-100' };
                   const Icon = cfg.icon;
                   return (
-                    <div key={notif.id}
-                      className={`flex items-start gap-3 px-4 py-3 transition-colors ${
+                    <button key={notif.id}
+                      onClick={() => handleNotifClick(notif)}
+                      className={`w-full text-left flex items-start gap-3 px-4 py-3 transition-colors hover:bg-slate-100/80 ${
                         isRead ? 'bg-white' : 'bg-slate-50/80'
                       }`}>
                       <span className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${cfg.bg}`}>
@@ -426,8 +433,9 @@ export default function Header({ sidebarOpen, setSidebarOpen }) {
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-semibold text-slate-800 leading-tight">{notif.title}</p>
                         <p className="text-xs text-slate-600 mt-0.5 leading-snug">{notif.message}</p>
+                        <p className="text-[10px] text-slate-400 mt-1 font-medium">{timeAgo(notif.time)}</p>
                       </div>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
@@ -438,44 +446,75 @@ export default function Header({ sidebarOpen, setSidebarOpen }) {
         {/* Profile dropdown */}
         <DropdownMenu open={profileOpen} onOpenChange={(open) => { setProfileOpen(open); if (open) setNotifOpen(false); }}>
           <DropdownMenuTrigger asChild>
-            <button className="flex items-center gap-2.5 p-1.5 rounded-xl hover:bg-slate-100 transition-colors focus:outline-none">
-              <Avatar className="w-9 h-9 border border-slate-200/80 shadow-2xs">
+            <button className="flex items-center gap-2.5 p-1 rounded-full hover:opacity-90 transition-all outline-none focus:outline-none cursor-pointer">
+              <Avatar className="w-9 h-9 border border-slate-200 shadow-2xs">
                 {!isAdmin && admin?.logo_url && <AvatarImage src={admin.logo_url} alt={admin.airlineName} />}
-                <AvatarFallback className="bg-slate-900 text-white font-bold text-xs">
+                <AvatarFallback className="bg-[#0B132B] text-white font-bold text-xs">
                   {!isAdmin && admin?.airlineName ? admin.airlineName.charAt(0).toUpperCase() : initials}
                 </AvatarFallback>
               </Avatar>
-              <div className="hidden md:block text-left">
+              <div className="hidden md:block text-left leading-tight">
                 <p className="text-sm font-bold text-slate-900 leading-tight">
                   {isAdmin ? (admin?.name || 'Admin') : (admin?.airlineName || admin?.name || 'Airline')}
                 </p>
-                <p className="text-[10px] text-slate-500 font-semibold mt-0.5">
+                <p className="text-xs text-slate-500 font-normal mt-0.5">
                   {isAdmin ? 'Administrator' : 'Airline User'}
                 </p>
               </div>
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-56">
-            <div className="px-3 pt-2 pb-2.5">
-              <p className="text-sm font-bold text-slate-900">{admin?.name || 'Admin'}</p>
+          <DropdownMenuContent align="end" className="w-64 p-0 rounded-2xl bg-white shadow-xl border border-slate-100 overflow-hidden">
+            {/* User Info Header */}
+            <div className="px-5 py-4 space-y-0.5">
+              <p className="text-base font-extrabold text-slate-900 leading-tight">
+                {admin?.name || 'User'}
+              </p>
               {!isAdmin && admin?.airlineName && (
-                <p className="text-[10px] font-bold text-slate-700 mt-0.5">{admin.airlineName}</p>
+                <p className="text-xs font-semibold text-slate-700">
+                  {admin.airlineName}
+                </p>
               )}
-              <p className="text-xs text-slate-500">{admin?.email || ''}</p>
+              {isAdmin && (
+                <p className="text-xs font-semibold text-slate-700">
+                  Administrator
+                </p>
+              )}
+              {admin?.email && (
+                <p className="text-xs text-slate-400 font-normal truncate">
+                  {admin.email}
+                </p>
+              )}
             </div>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => navigate(isAdmin ? '/admin/profile' : '/airline/profile')}>
-              <HiOutlineUserCircle className="w-4 h-4 text-slate-700" />
-              My Profile
+
+            <div className="border-t border-slate-100" />
+
+            {/* Menu Items */}
+            <DropdownMenuItem
+              onClick={() => navigate(isAdmin ? '/admin/profile' : '/airline/profile')}
+              className="px-5 py-3.5 cursor-pointer text-slate-700 font-semibold text-sm flex items-center gap-3 hover:bg-slate-50 focus:bg-slate-50 focus:outline-none"
+            >
+              <HiOutlineUserCircle className="w-5 h-5 text-slate-600 flex-shrink-0" />
+              <span>My Profile</span>
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => navigate(isAdmin ? '/admin' : '/airline')}>
-              <HiOutlineCog className="w-4 h-4 text-slate-500" />
-              Dashboard
+
+            <div className="border-t border-slate-100" />
+
+            <DropdownMenuItem
+              onClick={() => navigate(isAdmin ? '/admin' : '/airline')}
+              className="px-5 py-3.5 cursor-pointer text-slate-700 font-semibold text-sm flex items-center gap-3 hover:bg-slate-50 focus:bg-slate-50 focus:outline-none"
+            >
+              <HiOutlineCog className="w-5 h-5 text-slate-600 flex-shrink-0" />
+              <span>Dashboard</span>
             </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem danger onClick={handleLogout}>
-              <HiOutlineLogout className="w-4 h-4" />
-              Logout
+
+            <div className="border-t border-slate-100" />
+
+            <DropdownMenuItem
+              onClick={handleLogout}
+              className="px-5 py-3.5 cursor-pointer text-red-500 font-semibold text-sm flex items-center gap-3 hover:bg-red-50/40 focus:bg-red-50/40 focus:outline-none"
+            >
+              <HiOutlineLogout className="w-5 h-5 text-red-500 flex-shrink-0" />
+              <span>Logout</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

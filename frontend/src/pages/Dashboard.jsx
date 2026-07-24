@@ -181,7 +181,7 @@ export default function Dashboard() {
 
             {isAdmin && (
               <Link
-                to="/admin/certificates"
+                to="/admin/airlines?pendingCerts=1"
                 className="flex items-center gap-4 p-4 rounded-xl border border-slate-100 hover:border-emerald-100 hover:bg-emerald-50/20 transition-all duration-300 group shadow-sm hover:shadow-md"
               >
                 <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center transition-colors group-hover:bg-emerald-100/50 flex-shrink-0">

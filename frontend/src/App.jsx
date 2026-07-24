@@ -13,7 +13,6 @@ import Dashboard from './pages/Dashboard';
 import Participants from './pages/Participants';
 import AddParticipant from './pages/AddParticipant';
 import EditParticipant from './pages/EditParticipant';
-import Certificates from './pages/Certificates';
 import Airlines from './pages/Airlines';
 import Contract from './pages/Contract';
 import Profile from './pages/Profile';
@@ -92,7 +91,6 @@ function App() {
           <Route path="airlines" element={<AdminRoute><Airlines /></AdminRoute>} />
           <Route path="contracts" element={<AdminRoute><Contract /></AdminRoute>} />
           <Route path="participants/edit/:id" element={<AdminRoute><EditParticipant /></AdminRoute>} />
-          <Route path="certificates" element={<AdminRoute><Certificates /></AdminRoute>} />
           <Route path="attendance"   element={<AdminRoute><AttendanceSheets /></AdminRoute>} />
           <Route path="exam-results" element={<AdminRoute><ExamResults /></AdminRoute>} />
           <Route path="dgr"          element={<AdminRoute><DgrForms /></AdminRoute>} />
@@ -109,10 +107,12 @@ function App() {
           <Route path="enrollment/new" element={<AddParticipant />} />
           <Route path="dgr" element={<DgrForms />} />
           <Route path="exams" element={<AirlineExams />} />
-          <Route path="exams/:examId/take/:attemptId" element={<ExamTake />} />
           <Route path="exams/:examId/result/:attemptId" element={<ExamResultView />} />
           <Route path="profile" element={<Profile />} />
         </Route>
+
+        {/* Exam taking — full-screen, no sidebar/header chrome */}
+        <Route path="/airline/exams/:examId/take/:attemptId" element={<ProtectedRoute><ExamTake /></ProtectedRoute>} />
       </Routes>
     </TooltipProvider>
   );

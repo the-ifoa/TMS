@@ -114,7 +114,7 @@ router.get('/', async (req, res) => {
           message:  `${pending.length} participant${pending.length > 1 ? 's are' : ' is'} awaiting certificate generation`,
           time:     now - 1000,
           priority: 'normal',
-          link:     '/admin/certificates',
+          link:     '/admin/airlines?pendingCerts=1',
         });
       }
     } else {

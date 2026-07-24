@@ -91,7 +91,7 @@ function SelectDropdown({ icon: Icon, value, options, onChange, placeholder, min
   const isFiltered = value !== '' && value !== 'submitted_desc';
 
   return (
-    <div className="relative w-full sm:w-auto flex-shrink-0" style={{ minWidth }} ref={ref}>
+    <div className="relative w-full sm:w-auto flex-shrink-0 min-w-0 sm:min-w-[170px]" style={{ minWidth: window.innerWidth < 640 ? '100%' : minWidth }} ref={ref}>
       {Icon && <Icon className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none z-10 ${isFiltered ? 'text-blue-600' : 'text-slate-400'}`} />}
       <button
         type="button"
@@ -112,7 +112,7 @@ function SelectDropdown({ icon: Icon, value, options, onChange, placeholder, min
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -6, scale: 0.98 }}
             transition={{ duration: 0.15 }}
-            className="absolute left-0 sm:left-auto right-0 sm:right-auto z-30 mt-1.5 min-w-[260px] max-w-[340px] w-max bg-white rounded-xl shadow-xl border border-slate-200/90 py-1.5 max-h-80 overflow-y-auto overflow-x-hidden"
+            className="absolute left-0 right-0 sm:right-auto z-30 mt-1.5 w-full sm:w-max min-w-full sm:min-w-[240px] sm:max-w-[340px] bg-white rounded-xl shadow-xl border border-slate-200/90 py-1.5 max-h-80 overflow-y-auto overflow-x-hidden"
           >
             {options.map((opt, gi) =>
               opt.items ? (
@@ -225,62 +225,62 @@ function SubmissionGroup({ groupKey, records, open, onToggle, focusId, attendanc
   };
 
   return (
-    <div className={`bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-[0_8px_30px_rgba(0,0,0,0.02)] transition-all duration-300 ${
-      open ? 'overflow-x-hidden overflow-y-auto max-h-[480px]' : 'overflow-hidden'
+    <div className={`bg-white rounded-2xl border border-slate-200/80 shadow-2xs hover:shadow-xs transition-all duration-300 ${
+      open ? 'overflow-x-hidden overflow-y-auto max-h-[480px] border-slate-300' : 'overflow-hidden'
     }`}>
       {/* Group header — click to collapse */}
       <button
         type="button"
         onClick={onToggle}
-        className={`w-full flex flex-col sm:flex-row sm:items-center gap-3 px-5 py-4 text-left transition-all duration-200 group ${
-          open ? 'bg-slate-50/95 sticky top-0 z-10 backdrop-blur-sm' : 'bg-white'
-        } hover:bg-slate-50/85`}
+        className={`w-full flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-4 px-4 sm:px-5 py-3.5 sm:py-4 text-left transition-all duration-200 group ${
+          open ? 'bg-slate-100/90 sticky top-0 z-10 border-b border-slate-200/80 backdrop-blur-sm' : 'bg-white hover:bg-slate-50'
+        }`}
       >
         <div className="flex items-center justify-between sm:justify-start gap-3 w-full sm:w-auto min-w-0">
           <div className="flex items-center gap-2.5 min-w-0">
             {/* Chevron */}
             <span className="text-slate-400 group-hover:text-slate-600 transition-colors flex-shrink-0">
               {open
-                ? <HiOutlineChevronDown className="w-4 h-4" />
+                ? <HiOutlineChevronDown className="w-4 h-4 text-slate-700" />
                 : <HiOutlineChevronRight className="w-4 h-4" />}
             </span>
 
-            {/* Title (Plain professional layout, no heavy colored badge) */}
+            {/* Title */}
             <div className="flex items-center gap-2 min-w-0">
-              <div className="w-8 h-8 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center flex-shrink-0 text-slate-500 group-hover:bg-slate-100 group-hover:text-slate-700 transition-colors">
+              <div className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center flex-shrink-0 text-slate-600 group-hover:text-slate-900 transition-colors shadow-2xs">
                 <HiOutlineAcademicCap className="w-4 h-4" />
               </div>
-              <span className="text-sm font-semibold text-slate-700 group-hover:text-slate-900 transition-colors truncate">
+              <span className="text-xs sm:text-sm font-bold text-slate-800 group-hover:text-slate-900 transition-colors truncate">
                 {first.training_type} — {typeInfo.label || first.training_type}
               </span>
             </div>
           </div>
 
           {/* Mobile count pill */}
-          <span className="inline-flex sm:hidden items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-50 border border-slate-100 text-slate-500 text-[10px] font-semibold flex-shrink-0">
-            <HiOutlineUsers className="w-3 h-3" />
+          <span className="inline-flex sm:hidden items-center gap-1 px-2.5 py-0.5 rounded-full bg-white border border-slate-200 text-slate-700 text-[10px] font-semibold flex-shrink-0 shadow-2xs">
+            <HiOutlineUsers className="w-3 h-3 text-slate-500" />
             {records.length}
           </span>
         </div>
 
         {/* Metadata info */}
-        <div className="flex flex-wrap items-center justify-between sm:justify-end gap-3 flex-1 min-w-0 pl-6 sm:pl-0">
+        <div className="flex flex-wrap items-center justify-between sm:justify-end gap-2.5 sm:gap-3 flex-1 min-w-0 pl-7 sm:pl-0">
           {/* Date range */}
-          <span className="text-xs text-slate-400 font-medium flex-shrink-0">
+          <span className="text-[11px] sm:text-xs text-slate-600 font-semibold flex-shrink-0">
             {fmtDate(first.training_date)}
             {first.end_date && first.end_date !== first.training_date ? ` – ${fmtDate(first.end_date)}` : ''}
           </span>
 
           {/* Submitted timestamp */}
           {first.created_at && (
-            <span className="text-[10px] text-slate-400 hidden sm:block flex-shrink-0">
+            <span className="text-[10px] text-slate-500 font-medium hidden md:block flex-shrink-0">
               Submitted {new Date(first.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
             </span>
           )}
 
           {/* Desktop count pill */}
-          <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-50 border border-slate-100 text-slate-500 text-[11px] font-medium flex-shrink-0">
-            <HiOutlineUsers className="w-3.5 h-3.5 text-slate-400" />
+          <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white border border-slate-200 text-slate-700 text-[11px] font-semibold flex-shrink-0 shadow-2xs">
+            <HiOutlineUsers className="w-3.5 h-3.5 text-slate-500" />
             {records.length} participant{records.length !== 1 ? 's' : ''}
           </span>
         </div>
@@ -299,7 +299,7 @@ function SubmissionGroup({ groupKey, records, open, onToggle, focusId, attendanc
           >
             {/* Shared details bar — location & modules are batch-level */}
             {(first.location || first.modules) && (
-              <div className="px-5 py-3 bg-slate-50/30 border-b border-slate-100 flex flex-wrap gap-x-6 gap-y-1.5 text-xs text-slate-500">
+              <div className="px-4 sm:px-5 py-2.5 bg-slate-50/40 border-b border-slate-100 flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-500">
                 {first.location && <span><span className="font-semibold text-slate-700">Location:</span> {first.location}</span>}
                 {first.modules  && <span><span className="font-semibold text-slate-700">Modules:</span> {first.modules}</span>}
               </div>
@@ -307,22 +307,24 @@ function SubmissionGroup({ groupKey, records, open, onToggle, focusId, attendanc
 
             {/* Attendance sheets for this group */}
             {attendanceSheets.length > 0 && (
-              <div className="px-5 py-3.5 bg-emerald-50/30 border-b border-emerald-100/70">
-                <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block mb-2.5">Attendance</span>
+              <div className="px-4 sm:px-5 py-3 bg-emerald-50/30 border-b border-emerald-100/70">
+                <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block mb-2">Attendance</span>
                 <div className="flex flex-wrap gap-2">
                   {attendanceSheets.map(sheet => (
-                    <div key={sheet._id} className="flex items-center gap-2 bg-white border border-emerald-150 rounded-xl px-3 py-1.5 shadow-sm">
-                      <HiOutlineClipboardList className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-                      <span className="text-xs text-emerald-800 font-semibold">
-                        {sheet.start_date}{sheet.end_date && sheet.end_date !== sheet.start_date ? ` – ${sheet.end_date}` : ''}
-                        <span className="text-emerald-500 font-normal ml-1.5">· {sheet.participants?.length ?? 0} participants</span>
-                      </span>
-                      <div className="flex items-center gap-1.5 ml-2">
+                    <div key={sheet._id} className="flex items-center justify-between sm:justify-start gap-2 bg-white border border-emerald-150 rounded-xl px-3 py-1.5 shadow-2xs w-full sm:w-auto">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <HiOutlineClipboardList className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                        <span className="text-xs text-emerald-800 font-semibold truncate">
+                          {sheet.start_date}{sheet.end_date && sheet.end_date !== sheet.start_date ? ` – ${sheet.end_date}` : ''}
+                          <span className="text-emerald-500 font-normal ml-1 hidden sm:inline">· {sheet.participants?.length ?? 0} participants</span>
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
                         <button
                           type="button"
                           onClick={() => handlePreviewPdf(sheet)}
                           disabled={previewingSheet === sheet._id}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-50 border border-slate-200/80 text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-50"
+                          className="inline-flex items-center gap-1 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg text-[11px] sm:text-xs font-semibold bg-slate-50 border border-slate-200/80 text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-50"
                         >
                           {previewingSheet === sheet._id
                             ? <div className="w-3 h-3 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" />
@@ -332,7 +334,7 @@ function SubmissionGroup({ groupKey, records, open, onToggle, focusId, attendanc
                         <button
                           type="button"
                           onClick={() => onViewSheet(sheet)}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-50 border border-emerald-200/80 text-emerald-700 hover:bg-emerald-100 transition-colors"
+                          className="inline-flex items-center gap-1 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg text-[11px] sm:text-xs font-semibold bg-emerald-50 border border-emerald-200/80 text-emerald-700 hover:bg-emerald-100 transition-colors"
                         >
                           <HiOutlineEye className="w-3.5 h-3.5" />
                           View
@@ -350,20 +352,20 @@ function SubmissionGroup({ groupKey, records, open, onToggle, focusId, attendanc
                 <div key={rec.id || rec._id}
                   ref={el => { rowRefs.current[String(rec.id || rec._id)] = el; }}
                   onClick={() => setDetailRecord(rec)}
-                  className="flex items-center gap-4 px-5 py-3.5 hover:bg-slate-50/30 transition-colors justify-between flex-wrap sm:flex-nowrap cursor-pointer group/row"
+                  className="flex flex-col md:flex-row md:items-center gap-2.5 md:gap-4 px-4 sm:px-5 py-3 hover:bg-slate-50/50 transition-colors justify-between cursor-pointer group/row"
                 >
-                  <div className="flex items-center gap-4 flex-1 min-w-0">
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
                     {/* Number */}
-                    <span className="w-5 text-xs font-semibold text-slate-400 flex-shrink-0">{i + 1}</span>
+                    <span className="w-4 text-xs font-semibold text-slate-400 flex-shrink-0">{i + 1}</span>
 
                     {/* Avatar + Name */}
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div className="flex items-center gap-2.5 flex-1 min-w-0">
                       <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0 group-hover/row:bg-blue-50 group-hover/row:text-blue-600 transition-colors">
                         <span className="text-[10px] font-bold text-slate-600">{initials(rec.participant_name)}</span>
                       </div>
                       <div className="min-w-0">
-                        <span className="text-sm font-semibold text-slate-700 truncate block">{rec.participant_name}</span>
-                        <span className="text-[11px] text-slate-400 mt-0.5 block">
+                        <span className="text-xs sm:text-sm font-bold text-slate-800 truncate block">{rec.participant_name}</span>
+                        <span className="text-[11px] text-slate-400 mt-0.5 block truncate">
                           {rec.department && <>{rec.department} &middot; </>}
                           {fmtDate(rec.training_date)}
                           {rec.end_date && <> → {fmtDate(rec.end_date)}</>}
@@ -372,62 +374,63 @@ function SubmissionGroup({ groupKey, records, open, onToggle, focusId, attendanc
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 flex-wrap" onClick={e => e.stopPropagation()}>
+                  {/* Actions buttons row - sleek compact inline layout for mobile & desktop */}
+                  <div className="flex items-center gap-1.5 flex-wrap md:flex-nowrap pl-7 md:pl-0 pt-1 md:pt-0" onClick={e => e.stopPropagation()}>
                     {rec.cert_released ? (
-                      <>
+                      <div className="flex items-center gap-1">
                         <button
                           onClick={() => setPreview(rec)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-blue-100 bg-blue-50 text-xs font-semibold text-blue-600 hover:bg-blue-100 transition-all duration-200"
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl border border-blue-200/80 bg-blue-50/80 text-[11px] font-semibold text-blue-700 hover:bg-blue-100/80 transition-all"
                         >
-                          <HiOutlineEye className="w-4 h-4" />
+                          <HiOutlineEye className="w-3.5 h-3.5" />
                           <span>Preview</span>
                         </button>
                         <button
                           onClick={() => handleDownload(rec)}
                           disabled={downloading === (rec.id || rec._id)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-emerald-100 bg-emerald-50 text-xs font-semibold text-emerald-600 hover:bg-emerald-100 disabled:opacity-60 transition-all duration-200"
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl border border-emerald-200/80 bg-emerald-50/80 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100/80 disabled:opacity-60 transition-all"
                         >
                           {downloading === (rec.id || rec._id) ? (
-                            <div className="w-3.5 h-3.5 border-2 border-emerald-300 border-t-emerald-600 rounded-full animate-spin" />
+                            <div className="w-3 h-3 border-2 border-emerald-300 border-t-emerald-700 rounded-full animate-spin" />
                           ) : (
-                            <HiOutlineDocumentDownload className="w-4 h-4" />
+                            <HiOutlineDocumentDownload className="w-3.5 h-3.5" />
                           )}
                           <span>PDF</span>
                         </button>
-                      </>
+                      </div>
                     ) : (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-600 border border-amber-100/70">
-                        <HiOutlineClock className="w-3.5 h-3.5" /> Pending
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-600 border border-amber-200/60">
+                        <HiOutlineClock className="w-3 h-3" /> Pending
                       </span>
                     )}
 
                     {rec.dhl_cert_released && (
-                      <>
+                      <div className="flex items-center gap-1">
                         <button
                           onClick={() => setDhlPreview(rec)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-purple-100 bg-purple-50 text-xs font-semibold text-purple-600 hover:bg-purple-100 transition-all duration-200"
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl border border-purple-200/80 bg-purple-50/80 text-[11px] font-semibold text-purple-700 hover:bg-purple-100/80 transition-all"
                         >
-                          <HiOutlineEye className="w-4 h-4" />
+                          <HiOutlineEye className="w-3.5 h-3.5" />
                           <span>DHL Preview</span>
                         </button>
                         <button
                           onClick={() => handleDownloadDhl(rec)}
                           disabled={downloadingDhl === (rec.id || rec._id)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-purple-100 bg-purple-50 text-xs font-semibold text-purple-600 hover:bg-purple-100 disabled:opacity-60 transition-all duration-200"
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl border border-purple-200/80 bg-purple-50/80 text-[11px] font-semibold text-purple-700 hover:bg-purple-100/80 disabled:opacity-60 transition-all"
                         >
                           {downloadingDhl === (rec.id || rec._id) ? (
-                            <div className="w-3.5 h-3.5 border-2 border-purple-300 border-t-purple-600 rounded-full animate-spin" />
+                            <div className="w-3 h-3 border-2 border-purple-300 border-t-purple-700 rounded-full animate-spin" />
                           ) : (
-                            <HiOutlineDocumentDownload className="w-4 h-4" />
+                            <HiOutlineDocumentDownload className="w-3.5 h-3.5" />
                           )}
                           <span>DHL PDF</span>
                         </button>
-                      </>
+                      </div>
                     )}
 
                     {/* Locked badge */}
-                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-50/50 border border-blue-100/60 text-blue-600">
-                      <HiOutlineLockClosed className="w-3.5 h-3.5" /> Locked
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-slate-100 border border-slate-200/80 text-slate-600">
+                      <HiOutlineLockClosed className="w-3 h-3 text-slate-400" /> Locked
                     </span>
                   </div>
                 </div>
@@ -756,27 +759,24 @@ export default function Participants() {
             onClose={() => setActiveSheet(null)}
           />
         )}
-        {/* Page Header (Clean, professional & prominent design) */}
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-6 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2.5">
-              <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">My Submissions</h1>
-              
-            </div>
-            <p className="text-xs sm:text-sm font-medium text-slate-500">
+        {/* Page Header (Full width header banner) */}
+        <div className="-mx-3 sm:-mx-6 -mt-3 sm:-mt-6 bg-white border-b border-slate-200/80 px-7 pt-6 pb-4 sm:px-12 sm:pt-8 sm:pb-5 shadow-2xs flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-base sm:text-xl font-bold text-slate-900 tracking-tight break-words leading-tight">My Submissions</h1>
+            <p className="text-xs font-medium text-slate-500 hidden sm:block mt-0.5">
               Your training enrollment records, organized and grouped by training batch
             </p>
           </div>
           <Link 
             to="/airline/enrollment/new" 
-            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl transition-all font-semibold text-xs sm:text-sm shadow-sm whitespace-nowrap flex-shrink-0"
+            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl transition-all font-semibold text-xs shadow-sm whitespace-nowrap flex-shrink-0"
           >
             <HiOutlinePlusCircle className="w-4 h-4" />
             <span>New Enrollment</span>
           </Link>
         </div>
 
-        <div className="p-4 sm:p-6 space-y-6">
+        <div className="p-3 sm:p-6 space-y-4 sm:space-y-6">
 
         {/* Search + filter + sort bar (no outer card box) */}
         <div className="space-y-2.5">
@@ -890,7 +890,15 @@ export default function Participants() {
         ) : groups && groups.length === 0 ? (
           <div className="bg-white rounded-2xl border border-slate-100 p-12 text-center text-sm text-slate-400 font-medium">No submissions found.</div>
         ) : (
-          <div className="space-y-3.5">
+          <div
+            className="space-y-3.5 max-h-[calc(100vh-260px)] sm:max-h-[calc(100vh-240px)] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-200"
+            onWheel={e => {
+              const el = e.currentTarget;
+              const atTop = el.scrollTop === 0;
+              const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 1;
+              if (!(atTop && e.deltaY < 0) && !(atBottom && e.deltaY > 0)) e.stopPropagation();
+            }}
+          >
             {groups && groups.map(([key, recs]) => {
               const [groupType, groupDate] = key.split('||');
               const groupSheets = attendanceSheets.filter(s =>
@@ -944,39 +952,34 @@ export default function Participants() {
       )}
 
       {/* ── Sticky Top Header & Control Bar ── */}
-      <div className="sticky top-0 z-20 bg-slate-50/95 backdrop-blur-md pt-1 pb-3 space-y-3.5 border-b border-slate-200/50">
-        {/* Page Header */}
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-4 sm:p-5 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2.5">
-              <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">Participants</h1>
-              <span className="px-2.5 py-0.5 rounded-full bg-slate-100 border border-slate-200 text-[11px] font-bold text-slate-700">Admin Roster</span>
-            </div>
-            <p className="text-xs sm:text-sm font-medium text-slate-500">
-              Manage and view all training participant records across airlines
-            </p>
+      <div className="sticky top-0 z-20 bg-slate-50/95 backdrop-blur-md -mx-4 sm:-mx-6 -mt-5 px-4 sm:px-6 pt-0 pb-3 space-y-3 border-b border-slate-200/80">
+        {/* Page Header (Full width) */}
+        <div className="-mx-4 sm:-mx-6 bg-white border-b border-slate-200/80 px-4 sm:px-6 py-3 sm:py-3.5 shadow-2xs flex flex-row items-center justify-between gap-2.5">
+          <div className="min-w-0 flex items-center gap-2.5">
+            <h1 className="text-base sm:text-xl font-bold text-slate-900 tracking-tight truncate">Participants</h1>
+            <span className="hidden xs:inline-block px-2.5 py-0.5 rounded-full bg-slate-100 border border-slate-200 text-[10px] sm:text-[11px] font-bold text-slate-700 flex-shrink-0">Roster</span>
           </div>
           <Link
             to="/admin/participants/add"
-            className="inline-flex items-center justify-center gap-2 px-4 sm:px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl transition-all font-semibold text-xs sm:text-sm shadow-sm whitespace-nowrap flex-shrink-0"
+            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl transition-all font-semibold text-xs shadow-xs whitespace-nowrap flex-shrink-0"
           >
             <HiOutlinePlusCircle className="w-4 h-4" />
             <span>Add Participant</span>
           </Link>
         </div>
 
-        {/* Tab Toggle */}
-        <div className="flex items-center gap-1.5 bg-white border border-slate-200/80 rounded-xl p-1 shadow-2xs w-fit">
+        {/* Tab Toggle (Natural width pill layout) */}
+        <div className="inline-flex items-center gap-1 bg-white border border-slate-200/80 rounded-xl p-1 shadow-2xs">
           <button
             onClick={() => setActiveTab('participants')}
-            className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 ${
+            className={`inline-flex items-center justify-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 cursor-pointer ${
               activeTab === 'participants'
-                ? 'bg-slate-900 text-white shadow-sm'
-                : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
+                ? 'bg-slate-900 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
             }`}
           >
             <HiOutlineUsers className="w-3.5 h-3.5" />
-            Participants
+            <span>Participants</span>
             {records.length > 0 && (
               <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ${
                 activeTab === 'participants' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
@@ -985,14 +988,14 @@ export default function Participants() {
           </button>
           <button
             onClick={() => setActiveTab('attendance')}
-            className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 ${
+            className={`inline-flex items-center justify-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 cursor-pointer ${
               activeTab === 'attendance'
-                ? 'bg-slate-900 text-white shadow-sm'
-                : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
+                ? 'bg-slate-900 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
             }`}
           >
             <HiOutlineClipboardList className="w-3.5 h-3.5" />
-            Attendance Records
+            <span>Attendance</span>
             {attendanceSheets.length > 0 && (
               <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ${
                 activeTab === 'attendance' ? 'bg-white/20 text-white' : 'bg-emerald-50 text-emerald-700'

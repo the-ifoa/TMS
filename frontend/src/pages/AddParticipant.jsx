@@ -935,15 +935,15 @@ export default function AddParticipant() {
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="min-h-full">
-      {/* ── Sticky Page Header Bar (Clean, balanced design) ── */}
-      <div className="sticky top-0 z-20 bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-4 sm:px-6 py-3 shadow-2xs">
-        <div className="max-w-4xl mx-auto flex items-center justify-between gap-3">
+      {/* ── Sticky Page Header Bar (Clean, balanced responsive design) ── */}
+      <div className="sticky top-0 z-20 bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-3.5 sm:px-6 py-2.5 sm:py-3 shadow-2xs">
+        <div className="max-w-4xl mx-auto flex items-center justify-between gap-2 sm:gap-3">
           {/* Left: Back button + Title + Subtitle */}
-          <div className="flex items-center gap-3 min-w-0">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
             <button 
               type="button"
               onClick={() => navigate(-1)}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 hover:text-slate-900 bg-white border border-slate-200 shadow-2xs hover:bg-slate-50 transition-all flex-shrink-0"
+              className="inline-flex items-center gap-1 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-lg text-xs font-semibold text-slate-700 hover:text-slate-900 bg-white border border-slate-200 shadow-2xs hover:bg-slate-50 transition-all flex-shrink-0"
               title="Go back"
             >
               <HiOutlineArrowLeft className="w-3.5 h-3.5 text-slate-500" />
@@ -951,7 +951,7 @@ export default function AddParticipant() {
             </button>
 
             <div className="flex items-baseline gap-2 min-w-0">
-              <h1 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight whitespace-nowrap">
+              <h1 className="text-sm sm:text-xl font-bold text-slate-900 tracking-tight truncate">
                 {isAdmin ? 'Add Participant' : 'New Enrollment'}
               </h1>
               <span className="hidden md:inline text-xs text-slate-400 truncate max-w-sm">
@@ -961,19 +961,19 @@ export default function AddParticipant() {
           </div>
 
           {/* Right: Single / Group Add tabs */}
-          <div className="flex items-center gap-1 p-1 bg-slate-100/90 rounded-xl border border-slate-200/60 flex-shrink-0">
+          <div className="flex items-center gap-0.5 sm:gap-1 p-1 bg-slate-100/90 rounded-xl border border-slate-200/60 flex-shrink-0">
             {TABS.map(({ val, label, Icon }) => (
               <button 
                 key={val} 
                 type="button" 
                 onClick={() => setMode(val)}
-                className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
+                className={`flex items-center gap-1 px-2 sm:px-3 py-1 rounded-lg text-[11px] sm:text-xs font-semibold transition-all ${
                   mode === val 
                     ? 'bg-white text-slate-900 shadow-2xs border border-slate-200/50' 
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                <Icon className="w-3.5 h-3.5 text-slate-500" />
+                <Icon className="w-3 sm:w-3.5 h-3 sm:h-3.5 text-slate-500" />
                 <span>{label}</span>
               </button>
             ))}

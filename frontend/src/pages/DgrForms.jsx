@@ -438,7 +438,7 @@ function AirlineGroup({ airline, participants, forms, onNew, onEdit, onDelete, f
         type="button"
         onClick={toggleOpen}
         className={`w-full flex items-center gap-3 px-5 py-4 text-left flex-shrink-0 transition-colors ${
-          isOpen ? 'bg-slate-50/80 border-b border-slate-100' : 'hover:bg-slate-50/60 bg-white'
+          isOpen ? 'bg-slate-100/90 border-b border-slate-200/80' : 'hover:bg-slate-50 bg-white'
         }`}
       >
         <HiOutlineChevronDown
@@ -446,12 +446,29 @@ function AirlineGroup({ airline, participants, forms, onNew, onEdit, onDelete, f
             isOpen ? 'rotate-180 text-slate-800' : 'rotate-0'
           }`}
         />
-        {/* Airline logo */}
-        <div className="w-8 h-8 rounded-xl overflow-hidden flex-shrink-0 bg-slate-900 flex items-center justify-center border border-slate-200 shadow-2xs">
-          {airline.logo_url ? (
-            <img src={airline.logo_url} alt={airline.airlineName} className="w-full h-full object-contain p-0.5 bg-white" />
-          ) : (
-            <span className="text-white text-[10px] font-bold">{mkInitials(airline.airlineName)}</span>
+        {/* Airline logo — zoom hover popout, matches Airlines.jsx */}
+        <div className="relative flex-shrink-0 group/logo">
+          <div className="w-8 h-8 rounded-xl overflow-hidden bg-slate-900 flex items-center justify-center border border-slate-200 shadow-2xs transition-transform duration-200 group-hover/logo:scale-105">
+            {airline.logo_url ? (
+              <img src={airline.logo_url} alt={airline.airlineName} className="w-full h-full object-contain p-0.5 bg-white" />
+            ) : (
+              <span className="text-white text-[10px] font-bold">{mkInitials(airline.airlineName)}</span>
+            )}
+          </div>
+          {airline.logo_url && (
+            <div
+              className="pointer-events-none absolute z-[999] left-1/2 -translate-x-1/2
+                opacity-0 scale-50 group-hover/logo:opacity-100 group-hover/logo:scale-100
+                transition-all duration-200 ease-out origin-bottom"
+              style={{ bottom: 'calc(100% + 8px)' }}
+            >
+              <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-3 w-28 h-28 flex items-center justify-center">
+                <img src={airline.logo_url} alt={airline.airlineName} className="w-full h-full object-contain" />
+              </div>
+              <div className="absolute bottom-0 left-1/2 translate-y-full -translate-x-1/2 pt-0.5">
+                <div className="w-3 h-3 bg-white border-r border-b border-slate-200 rotate-45" />
+              </div>
+            </div>
           )}
         </div>
         <div className="flex-1 min-w-0">
@@ -745,23 +762,23 @@ export default function DgrForms() {
       });
 
     return (
-      <div className="p-4 sm:p-6 lg:p-8 space-y-6">
-        {/* Page Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">DGR CBTA</h1>
-            <p className="text-xs sm:text-sm text-slate-500 mt-0.5">Dangerous Goods training forms assigned to students</p>
+      <div className="w-full space-y-0">
+        {/* Page Header (Full Width Edge-to-Edge) */}
+        <div className="w-full bg-white border-b border-slate-200/80 px-4 sm:px-6 lg:px-8 py-3.5 shadow-2xs flex flex-row items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-base sm:text-xl font-bold text-slate-900 tracking-tight truncate">DGR CBTA</h1>
+            <p className="text-xs text-slate-500 hidden sm:block mt-0.5">Dangerous Goods training forms assigned to students</p>
           </div>
           {!loading && (
-            <span className="self-start sm:self-auto text-xs font-semibold text-slate-600 bg-slate-100 px-3 py-1 rounded-full border border-slate-200/80">
+            <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-3 py-1 rounded-full border border-slate-200/80 flex-shrink-0">
               {forms.length} form{forms.length !== 1 ? 's' : ''}
             </span>
           )}
         </div>
 
-        {/* Controls Bar */}
+        {/* Controls Bar (Sticky Top) */}
         {!loading && (
-          <div className="sticky top-0 z-20 bg-slate-50/95 backdrop-blur-md py-3 -mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 border-b border-slate-200/60 transition-all">
+          <div className="sticky top-0 z-20 bg-slate-50/95 backdrop-blur-md px-4 sm:px-6 lg:px-8 py-2.5 border-b border-slate-200/60 shadow-2xs transition-all">
             <div className="flex flex-col sm:flex-row items-center gap-2.5">
               <div className="relative flex-1 w-full">
                 <HiOutlineSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
@@ -814,40 +831,43 @@ export default function DgrForms() {
           </div>
         )}
 
-        {loading ? (
-          <div className="flex items-center justify-center py-20 gap-2 text-slate-400">
-            <Spin /><span className="text-sm font-medium">Loading DGR forms…</span>
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-slate-200/80 p-12 text-center text-sm font-medium text-slate-400 shadow-2xs">
-            {forms.length === 0 ? 'No DGR forms assigned to you yet.' : 'No forms match your search.'}
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {filtered.map(f => (
-              <div key={f._id} ref={el => { formCardRefs.current[f._id] = el; }}>
-                <AirlineFormCard form={f} />
-              </div>
-            ))}
-          </div>
-        )}
+        {/* Page Content Body */}
+        <div className="px-4 sm:px-6 lg:px-8 py-4 space-y-4">
+          {loading ? (
+            <div className="flex items-center justify-center py-20 gap-2 text-slate-400">
+              <Spin /><span className="text-sm font-medium">Loading DGR forms…</span>
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-slate-200/80 p-12 text-center text-sm font-medium text-slate-400 shadow-2xs">
+              {forms.length === 0 ? 'No DGR forms assigned to you yet.' : 'No forms match your search.'}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filtered.map(f => (
+                <div key={f._id} ref={el => { formCardRefs.current[f._id] = el; }}>
+                  <AirlineFormCard form={f} />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     );
   }
 
   /* ── Admin view ────────────────────────────────────────────────────────── */
   return (
-    <div className="p-4 sm:p-6 lg:p-8 space-y-6">
-      {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">DGR CBTA</h1>
-          <p className="text-xs sm:text-sm text-slate-500 mt-0.5">Create Dangerous Goods training forms for students</p>
+    <div className="w-full space-y-0">
+      {/* Page Header (Full Width Edge-to-Edge) */}
+      <div className="w-full bg-white border-b border-slate-200/80 px-4 sm:px-6 lg:px-8 py-3.5 shadow-2xs flex flex-row items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-base sm:text-xl font-bold text-slate-900 tracking-tight truncate">DGR CBTA</h1>
+          <p className="text-xs text-slate-500 hidden sm:block mt-0.5">Create Dangerous Goods training forms for students</p>
         </div>
       </div>
 
       {!loading && (
-        <div className="sticky top-0 z-20 bg-slate-50/95 backdrop-blur-md py-3 -mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 border-b border-slate-200/60 transition-all">
+        <div className="sticky top-0 z-20 bg-slate-50/95 backdrop-blur-md px-4 sm:px-6 lg:px-8 py-2.5 border-b border-slate-200/60 shadow-2xs transition-all">
           <div className="flex flex-col sm:flex-row items-center gap-2.5">
             <div className="relative flex-1 w-full">
               <HiOutlineSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
@@ -899,6 +919,8 @@ export default function DgrForms() {
           </div>
         </div>
       )}
+
+      <div className="px-4 sm:px-6 lg:px-8 py-4 space-y-4 pb-6">
 
         {loading ? (
           <div className="flex items-center justify-center py-20 gap-2 text-primary-400 mt-4">
@@ -956,6 +978,7 @@ export default function DgrForms() {
         onSave={handleSave}
       />
       {ConfirmDialog}
+      </div>
     </div>
   );
 }

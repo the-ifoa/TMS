@@ -69,7 +69,10 @@ function NumericPlayer({ response, onChange }) {
 
 function SequencePlayer({ q, response, onChange }) {
   // response: array of original _idx values in student-chosen order.
-  const order = useMemo(() => response && response.length ? response : (q.sequence_items || []).map((it) => it._idx), [q, response]);
+  const order = useMemo(
+    () => (response && response.length ? response : shuffle((q.sequence_items || []).map((it) => it._idx))),
+    [q, response]
+  );
   const itemByIdx = useMemo(() => Object.fromEntries((q.sequence_items || []).map((it) => [it._idx, it])), [q]);
 
   const move = (pos, dir) => {

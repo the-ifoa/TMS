@@ -223,6 +223,18 @@ export default function ExamTake() {
   const q = questions[index];
   const totalSeconds = exam.duration_minutes * 60;
 
+  // Group questions by the admin-defined section label, in exam order, for
+  // the sidebar navigator. No sections defined anywhere → render flat, same
+  // as before.
+  const hasSections = questions.some((qq) => qq.section);
+  const sectionGroups = [];
+  questions.forEach((qq, i) => {
+    const sec = qq.section || '';
+    const last = sectionGroups[sectionGroups.length - 1];
+    if (!last || last.section !== sec) sectionGroups.push({ section: sec, items: [] });
+    sectionGroups[sectionGroups.length - 1].items.push({ ...qq, _index: i });
+  });
+
   const setResponse = (response) => {
     setAnswers((prev) => ({ ...prev, [q._id]: response }));
     saveExamAnswer(attemptId, q._id, response).catch(() => {});
@@ -339,15 +351,49 @@ export default function ExamTake() {
         <div className="grid grid-cols-1 md:grid-cols-12 gap-4 sm:gap-6 flex-1 h-full min-h-0 md:overflow-hidden">
           
           {/* Mobile Question Horizontal Quick Navigator (Only shown < md) */}
-          <div className="md:hidden bg-white border border-slate-200/80 rounded-xl p-3 shadow-2xs flex flex-col gap-2 flex-shrink-0">
+          <div className="md:hidden bg-white border border-slate-200/80 rounded-xl p-3 shadow-2xs flex flex-col gap-2.5 flex-shrink-0">
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">QUESTIONS ({index + 1}/{questions.length})</span>
               <span className="text-[10px] font-extrabold text-blue-700 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-full">
                 {Math.round((answeredCount / questions.length) * 100)}% Completed
               </span>
             </div>
+
+            {/* Mobile Section Pills */}
+            {hasSections && (
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1.5 scrollbar-none border-b border-slate-100">
+                {sectionGroups.map((group, gi) => {
+                  const secName = group.section || 'Ungrouped';
+                  const secQuestions = group.items;
+                  const answeredInSec = secQuestions.filter(qq => answers[qq._id] !== undefined && answers[qq._id] !== null && answers[qq._id] !== '').length;
+                  const isCurrentSection = group.items.some(qq => qq._index === index);
+
+                  return (
+                    <button
+                      key={gi}
+                      onClick={() => setIndex(group.items[0]._index)}
+                      className={`flex-shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all border flex items-center gap-1.5 ${
+                        isCurrentSection
+                          ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
+                          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      <span>{secName}</span>
+                      <span className={`text-[9px] px-1.5 py-0.2 rounded-md font-semibold ${isCurrentSection ? 'bg-blue-700 text-white' : 'bg-slate-200/80 text-slate-600'}`}>
+                        {answeredInSec}/{secQuestions.length}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
             <div className="flex items-center gap-1.5 overflow-x-auto py-1 scrollbar-none">
-              {questions.map((qq, i) => {
+              {(hasSections
+                ? (sectionGroups.find(g => g.items.some(qq => qq._index === index))?.items || questions.map((qq, i) => ({ ...qq, _index: i })))
+                : questions.map((qq, i) => ({ ...qq, _index: i }))
+              ).map((qq) => {
+                const i = qq._index;
                 const isCurrent = i === index;
                 const isAnswered = answers[qq._id] !== undefined && answers[qq._id] !== null && answers[qq._id] !== '';
                 const isMarked = marked.has(qq._id);
@@ -374,8 +420,8 @@ export default function ExamTake() {
             </div>
           </div>
 
-          {/* Desktop Left Column: QUESTIONS Sidebar Panel (Hidden < md) */}
-          <aside className="hidden md:flex md:col-span-3 lg:col-span-3 bg-white border border-slate-200/80 rounded-2xl p-5 shadow-2xs flex-col justify-between space-y-6 h-full min-h-0 flex-shrink-0 overflow-y-auto">
+          {/* Desktop Left Column: QUESTIONS Sidebar Panel (Hidden < md) - Expanded to 4 cols */}
+          <aside className="hidden md:flex md:col-span-4 lg:col-span-4 bg-white border border-slate-200/80 rounded-2xl p-5 shadow-2xs flex-col justify-between space-y-6 h-full min-h-0 flex-shrink-0 overflow-y-auto">
             <div className="space-y-4">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <span className="text-xs font-extrabold text-slate-500 uppercase tracking-wider">QUESTIONS</span>
@@ -384,32 +430,82 @@ export default function ExamTake() {
                 </span>
               </div>
 
-              {/* Questions Grid Bubbles */}
-              <div className="grid grid-cols-5 gap-2">
-                {questions.map((qq, i) => {
-                  const isCurrent = i === index;
-                  const isAnswered = answers[qq._id] !== undefined && answers[qq._id] !== null && answers[qq._id] !== '';
-                  const isMarked = marked.has(qq._id);
+              {/* Sections Navigation inside Left Panel */}
+              {hasSections && (
+                <div className="space-y-2 border-b border-slate-100 pb-3">
+                  <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">
+                    SECTIONS
+                  </span>
+                  <div className="flex flex-col gap-1.5">
+                    {sectionGroups.map((group, gi) => {
+                      const secName = group.section || 'Ungrouped';
+                      const secQuestions = group.items;
+                      const answeredInSec = secQuestions.filter(qq => answers[qq._id] !== undefined && answers[qq._id] !== null && answers[qq._id] !== '').length;
+                      const isCurrentSection = group.items.some(qq => qq._index === index);
 
-                  let btnCls = 'bg-slate-100 text-slate-600 hover:bg-slate-200';
-                  if (isCurrent) {
-                    btnCls = 'bg-blue-600 text-white font-bold shadow-2xs ring-2 ring-blue-600/30';
-                  } else if (isMarked) {
-                    btnCls = 'bg-amber-500 text-white font-bold shadow-2xs';
-                  } else if (isAnswered) {
-                    btnCls = 'bg-emerald-500 text-white font-bold shadow-2xs';
-                  }
+                      return (
+                        <button
+                          key={gi}
+                          type="button"
+                          onClick={() => setIndex(group.items[0]._index)}
+                          className={`w-full px-3 py-2 rounded-xl text-xs font-bold transition-all border flex items-center justify-between ${
+                            isCurrentSection
+                              ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
+                              : 'bg-slate-50 text-slate-700 border-slate-200/80 hover:bg-slate-100'
+                          }`}
+                        >
+                          <span className="truncate">{secName}</span>
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${isCurrentSection ? 'bg-blue-700 text-white' : 'bg-slate-200/70 text-slate-600'}`}>
+                            {answeredInSec}/{secQuestions.length}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
-                  return (
-                    <button
-                      key={qq._id}
-                      onClick={() => setIndex(i)}
-                      className={`w-9 h-9 rounded-full text-xs font-bold transition-all flex items-center justify-center ${btnCls}`}
-                    >
-                      {i + 1}
-                    </button>
-                  );
-                })}
+              {/* Questions Grid Bubbles — ONLY show questions for the active selected section */}
+              <div className="space-y-4">
+                {(hasSections
+                  ? sectionGroups.filter((group) => group.items.some((qq) => qq._index === index))
+                  : sectionGroups
+                ).map((group, gi) => (
+                  <div key={gi} className="space-y-2">
+                    {hasSections && (
+                      <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">
+                        {group.section || 'Ungrouped'} Questions
+                      </span>
+                    )}
+                    <div className="grid grid-cols-6 gap-2">
+                      {group.items.map((qq) => {
+                        const i = qq._index;
+                        const isCurrent = i === index;
+                        const isAnswered = answers[qq._id] !== undefined && answers[qq._id] !== null && answers[qq._id] !== '';
+                        const isMarked = marked.has(qq._id);
+
+                        let btnCls = 'bg-slate-100 text-slate-600 hover:bg-slate-200';
+                        if (isCurrent) {
+                          btnCls = 'bg-blue-600 text-white font-bold shadow-2xs ring-2 ring-blue-600/30';
+                        } else if (isMarked) {
+                          btnCls = 'bg-amber-500 text-white font-bold shadow-2xs';
+                        } else if (isAnswered) {
+                          btnCls = 'bg-emerald-500 text-white font-bold shadow-2xs';
+                        }
+
+                        return (
+                          <button
+                            key={qq._id}
+                            onClick={() => setIndex(i)}
+                            className={`w-9 h-9 rounded-full text-xs font-bold transition-all flex items-center justify-center ${btnCls}`}
+                          >
+                            {i + 1}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
 
@@ -431,15 +527,20 @@ export default function ExamTake() {
           </aside>
 
           {/* Main Column: MAIN QUESTION DISPLAY */}
-          <section className="md:col-span-9 lg:col-span-9 bg-white border border-slate-200/80 rounded-2xl shadow-2xs flex flex-col h-full overflow-hidden min-h-0">
+          <section className="md:col-span-8 lg:col-span-8 bg-white border border-slate-200/80 rounded-2xl shadow-2xs flex flex-col h-full overflow-hidden min-h-0">
             
             {/* Question Header Row */}
-            <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100 flex items-center justify-between flex-shrink-0 bg-white rounded-t-2xl z-10">
-              <div>
-                <span className="text-[11px] sm:text-xs font-extrabold text-slate-400 uppercase tracking-wider block">
-                  QUESTION {index + 1} OF {questions.length}
+            <div className="px-4 sm:px-6 py-2.5 sm:py-3 border-b border-slate-100 flex items-center justify-between flex-shrink-0 bg-white rounded-t-2xl z-10">
+              <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                {q.section && (
+                  <span className="text-[10px] sm:text-[11px] font-extrabold text-blue-600 bg-blue-50 border border-blue-100 px-2.5 py-0.5 rounded-full">
+                    {q.section}
+                  </span>
+                )}
+                <span className="text-xs sm:text-xs font-extrabold text-slate-700 uppercase tracking-wider">
+                  QUESTION {index + 1} <span className="text-slate-400 font-semibold">OF {questions.length}</span>
                 </span>
-                <span className="text-[10px] sm:text-xs font-semibold text-slate-500 mt-0.5 block">
+                <span className="text-[10px] sm:text-xs font-semibold text-slate-400 border-l border-slate-200 pl-2 sm:pl-3">
                   1 mark
                 </span>
               </div>
@@ -460,7 +561,7 @@ export default function ExamTake() {
             </div>
 
             {/* Inner Question Scroll Body */}
-            <div className="p-4 sm:p-8 flex-1 overflow-y-auto space-y-6 min-h-0">
+            <div className="p-4 sm:p-6 flex-1 overflow-y-auto space-y-4 min-h-0">
               <QuestionPlayer question={q} response={answers[q._id]} onChange={setResponse} />
             </div>
 

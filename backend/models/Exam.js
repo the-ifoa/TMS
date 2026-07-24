@@ -32,6 +32,10 @@ const questionSchema = new mongoose.Schema(
     points:          { type: Number, default: 1 },
     order:           { type: Number, default: 0 },
     explanation:     { type: String, default: '' },
+    // Free-text section/group label — questions sharing the same name render
+    // grouped together (in exam.questions array order) for both the admin
+    // builder and the candidate-facing exam. Empty string = ungrouped.
+    section:         { type: String, default: '' },
 
     // mcq / multi_response / true_false / select_list
     options: [optionSchema],
@@ -119,6 +123,12 @@ const examSchema = new mongoose.Schema(
     // tolerated before the attempt is auto-submitted. 0 disables lockdown mode.
     lockdown_enabled: { type: Boolean, default: true },
     max_violations:   { type: Number, default: 4 },
+
+    // Ordered list of section names (e.g. "Aptitude", "Logical", "Practical").
+    // Admin-managed independently of questions, so a section can exist before
+    // any question is assigned to it. Each question's `section` field (see
+    // questionSchema) names which of these it belongs to; '' = ungrouped.
+    sections: [{ type: String }],
 
     questions: [questionSchema],
 

@@ -490,21 +490,21 @@ export default function Header({ sidebarOpen, setSidebarOpen }) {
 
             {/* Menu Items */}
             <DropdownMenuItem
-              onClick={() => navigate(isAdmin ? '/admin/profile' : '/airline/profile')}
-              className="px-5 py-3.5 cursor-pointer text-slate-700 font-semibold text-sm flex items-center gap-3 hover:bg-slate-50 focus:bg-slate-50 focus:outline-none"
-            >
-              <HiOutlineUserCircle className="w-5 h-5 text-slate-600 flex-shrink-0" />
-              <span>My Profile</span>
-            </DropdownMenuItem>
-
-            <div className="border-t border-slate-100" />
-
-            <DropdownMenuItem
               onClick={() => navigate(isAdmin ? '/admin' : '/airline')}
               className="px-5 py-3.5 cursor-pointer text-slate-700 font-semibold text-sm flex items-center gap-3 hover:bg-slate-50 focus:bg-slate-50 focus:outline-none"
             >
               <HiOutlineCog className="w-5 h-5 text-slate-600 flex-shrink-0" />
               <span>Dashboard</span>
+            </DropdownMenuItem>
+
+            <div className="border-t border-slate-100" />
+
+            <DropdownMenuItem
+              onClick={() => navigate(isAdmin ? '/admin/profile' : '/airline/profile')}
+              className="px-5 py-3.5 cursor-pointer text-slate-700 font-semibold text-sm flex items-center gap-3 hover:bg-slate-50 focus:bg-slate-50 focus:outline-none"
+            >
+              <HiOutlineUserCircle className="w-5 h-5 text-slate-600 flex-shrink-0" />
+              <span>My Profile</span>
             </DropdownMenuItem>
 
             <div className="border-t border-slate-100" />

@@ -586,6 +586,11 @@ export default function ExamResultView() {
                         </div>
 
                         <div className="space-y-1">
+                          {q.section && (
+                            <span className="inline-block text-[10px] font-extrabold text-blue-600 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-full">
+                              {q.section}
+                            </span>
+                          )}
                           <h3 className="text-sm sm:text-base font-bold text-slate-900 leading-snug">
                             {q.prompt}
                           </h3>

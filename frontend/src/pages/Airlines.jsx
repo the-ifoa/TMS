@@ -445,7 +445,7 @@ function ParticipantCard({ p, checked, onCheck, onPreview, onDownload, onEdit, o
                 value={currentVal}
                 onChange={e => setNdgScores(prev => ({ ...prev, [pid]: { value: e.target.value, saving: false, saved: false } }))}
                 onKeyDown={e => { if (e.key === 'Enter') onNdgScoreSave(pid); }}
-                className="w-12 px-1 py-0 text-[11px] bg-transparent border-none outline-none text-blue-800 font-semibold placeholder-blue-300 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                className="w-[4.5rem] pl-1.5 pr-4 py-0 text-[11px] bg-transparent border-none outline-none text-blue-800 font-semibold placeholder-blue-300"
                 disabled={saving}
               />
               <span className="text-[10px] text-blue-500">%</span>
@@ -483,7 +483,7 @@ function ParticipantCard({ p, checked, onCheck, onPreview, onDownload, onEdit, o
                     value={currentVal}
                     onChange={e => setFdrHours(prev => ({ ...prev, [pid]: { enabled: true, value: e.target.value, saving: false, saved: false } }))}
                     onKeyDown={e => { if (e.key === 'Enter') onFdrHoursSave(pid); }}
-                    className="w-14 px-1 py-0 text-[11px] bg-transparent border-none outline-none text-blue-800 font-semibold placeholder-blue-300"
+                    className="w-[4.5rem] pl-1.5 pr-4 py-0 text-[11px] bg-transparent border-none outline-none text-blue-800 font-semibold placeholder-blue-300"
                     disabled={saving}
                   />
                   <span className="text-[10px] text-blue-500">hrs</span>
@@ -2098,7 +2098,7 @@ export default function Airlines() {
                                             value={currentVal}
                                             onChange={e => setNdgScores(prev => ({ ...prev, [pid]: { value: e.target.value, saving: false, saved: false } }))}
                                             onKeyDown={e => { if (e.key === 'Enter') handleNdgScoreSave(pid); }}
-                                            className="w-12 px-1 py-0 text-[11px] bg-transparent border-none outline-none text-blue-800 font-semibold placeholder-blue-300 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                            className="w-[4.5rem] pl-1.5 pr-4 py-0 text-[11px] bg-transparent border-none outline-none text-blue-800 font-semibold placeholder-blue-300"
                                             disabled={saving}
                                           />
                                           <span className="text-[10px] text-blue-500">%</span>
@@ -2135,7 +2135,7 @@ export default function Airlines() {
                                                 value={currentVal}
                                                 onChange={e => setFdrHours(prev => ({ ...prev, [pid]: { enabled: true, value: e.target.value, saving: false, saved: false } }))}
                                                 onKeyDown={e => { if (e.key === 'Enter') handleFdrHoursSave(pid); }}
-                                                className="w-14 px-1 py-0 text-[11px] bg-transparent border-none outline-none text-blue-800 font-semibold placeholder-blue-300"
+                                                className="w-[4.5rem] pl-1.5 pr-4 py-0 text-[11px] bg-transparent border-none outline-none text-blue-800 font-semibold placeholder-blue-300"
                                                 disabled={saving}
                                               />
                                               <span className="text-[10px] text-blue-500">hrs</span>

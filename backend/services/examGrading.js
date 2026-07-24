@@ -146,7 +146,7 @@ function sanitizeQuestionForTaking(question) {
   const q = question.toObject ? question.toObject() : { ...question };
   const clean = {
     _id: q._id, type: q.type, prompt: q.prompt, image_url: q.image_url,
-    points: q.points, order: q.order,
+    points: q.points, order: q.order, section: q.section,
   };
   switch (q.type) {
     case 'mcq':

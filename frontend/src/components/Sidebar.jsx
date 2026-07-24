@@ -5,7 +5,6 @@ import {
   HiOutlineUsers,
   HiOutlineUserCircle,
   HiOutlinePlusCircle,
-  HiOutlineOfficeBuilding,
   HiOutlineChevronLeft,
   HiOutlineChevronRight,
   HiOutlineClipboardList,
@@ -15,12 +14,13 @@ import {
   HiOutlineAcademicCap,
   HiOutlineLogout,
 } from 'react-icons/hi';
+import { FaPlaneDeparture } from 'react-icons/fa';
 import { useAuth } from '../context/AuthContext';
 import { SimpleTooltip } from '@/components/ui/tooltip';
 
 const adminNavigation = [
   { name: 'Dashboard',    href: '/admin',                  icon: HiOutlineHome },
-  { name: 'Airlines',     href: '/admin/airlines',         icon: HiOutlineOfficeBuilding },
+  { name: 'Airlines',     href: '/admin/airlines',         icon: FaPlaneDeparture },
   { name: 'Contracts',    href: '/admin/contracts',        icon: HiOutlineDocumentText },
   { name: 'Attendance',   href: '/admin/attendance',       icon: HiOutlineClipboardCheck },
   { name: 'Exam Results', href: '/admin/exam-results',     icon: HiOutlineClipboardList },

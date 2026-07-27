@@ -15,6 +15,10 @@ backend/data/
 *.db
 *.sqlite
 
+# ── Mongo backup/migration dumps — contain real PII + password hashes,
+# ── never commit these ─────────────────────────────────────────
+backend/scripts/backups/
+
 # ── Logs ──────────────────────────────────────────────────────
 *.log
 npm-debug.log*

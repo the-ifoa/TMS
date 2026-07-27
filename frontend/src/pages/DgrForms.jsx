@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import LogoAvatar from '../components/LogoAvatar';
 import toast from 'react-hot-toast';
 import {
   HiOutlineShieldExclamation,
@@ -446,31 +447,8 @@ function AirlineGroup({ airline, participants, forms, onNew, onEdit, onDelete, f
             isOpen ? 'rotate-180 text-slate-800' : 'rotate-0'
           }`}
         />
-        {/* Airline logo — zoom hover popout, matches Airlines.jsx */}
-        <div className="relative flex-shrink-0 group/logo">
-          <div className="w-8 h-8 rounded-xl overflow-hidden bg-slate-900 flex items-center justify-center border border-slate-200 shadow-2xs transition-transform duration-200 group-hover/logo:scale-105">
-            {airline.logo_url ? (
-              <img src={airline.logo_url} alt={airline.airlineName} className="w-full h-full object-contain p-0.5 bg-white" />
-            ) : (
-              <span className="text-white text-[10px] font-bold">{mkInitials(airline.airlineName)}</span>
-            )}
-          </div>
-          {airline.logo_url && (
-            <div
-              className="pointer-events-none absolute z-[999] left-1/2 -translate-x-1/2
-                opacity-0 scale-50 group-hover/logo:opacity-100 group-hover/logo:scale-100
-                transition-all duration-200 ease-out origin-bottom"
-              style={{ bottom: 'calc(100% + 8px)' }}
-            >
-              <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-3 w-28 h-28 flex items-center justify-center">
-                <img src={airline.logo_url} alt={airline.airlineName} className="w-full h-full object-contain" />
-              </div>
-              <div className="absolute bottom-0 left-1/2 translate-y-full -translate-x-1/2 pt-0.5">
-                <div className="w-3 h-3 bg-white border-r border-b border-slate-200 rotate-45" />
-              </div>
-            </div>
-          )}
-        </div>
+        {/* Airline logo — zoom hover popout (portal-based — escapes this card's overflow-hidden) */}
+        <LogoAvatar logoUrl={airline.logo_url} name={airline.airlineName} initials={mkInitials(airline.airlineName)} size="w-8 h-8" textSize="text-[10px]" />
         <div className="flex-1 min-w-0">
           <p className="text-sm font-bold text-slate-900 truncate tracking-tight">{airline.airlineName}</p>
           <p className="text-[11px] font-medium text-slate-400 mt-0.5">

@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Clock, CheckCircle2 } from 'lucide-react';
+import LogoAvatar from '../components/LogoAvatar';
 import {
   HiOutlineOfficeBuilding,
   HiOutlineUsers,
@@ -542,6 +543,428 @@ const DHL_BAHRAIN_NAMES = ['dhl bahrain', 'dhl air (bahrain)'];
 const isDhlBahrainAirline = (name) => DHL_BAHRAIN_NAMES.includes(String(name || '').trim().toLowerCase());
 const eligibleForDhlExtra = (p) => p.training_type === 'FDR' && isDhlBahrainAirline(p.airline_name);
 
+const airlineKey = (airline) => {
+  if (!airline) return null;
+  const id = airline.id || airline._id;
+  if (!id) return null;
+  return String(id);
+};
+
+// ─── Individual Airline Accordion Card Component ─────────────────────────────
+const AirlineCardGroup = React.memo(function AirlineCardGroup({
+  airline,
+  participants,
+  aKey,
+  checkedAirlines,
+  toggleAirline,
+  openEditAirline,
+  checked,
+  toggleOne,
+  setRowPreview,
+  handleDownloadIssued,
+  handleDelete,
+  downloadingId,
+  certEdits,
+  startCertEdit,
+  cancelCertEdit,
+  saveCertEdit,
+  setCertEdits,
+  ndgScores,
+  setNdgScores,
+  handleNdgScoreSave,
+  fdrHours,
+  setFdrHours,
+  handleFdrHoursSave,
+  handleFdrHoursToggle,
+  updateValidity,
+  fetchData,
+  eligibleForDhlExtra,
+  setDhlRowPreview,
+  handleDownloadDhlIssued,
+  downloadingDhlId,
+  filterKey,
+  initialOpen,
+  airlineCardRefs,
+  participantRowRefs,
+}) {
+  const isFilterActive = Boolean(filterKey && filterKey !== '__');
+  const [open, setOpen] = useState(() => initialOpen);
+
+  const prevFilterKey = useRef(filterKey);
+  useEffect(() => {
+    if (filterKey !== prevFilterKey.current) {
+      setOpen(false);
+      prevFilterKey.current = filterKey;
+    }
+  }, [filterKey]);
+
+  const isCardOpen = open;
+
+  const INITIAL_LIMIT = 15;
+  const [displayLimit, setDisplayLimit] = useState(() => (initialOpen ? participants.length : INITIAL_LIMIT));
+
+  useEffect(() => {
+    if (isCardOpen) {
+      if (displayLimit < participants.length) {
+        const timer = setTimeout(() => {
+          setDisplayLimit(participants.length);
+        }, 280);
+        return () => clearTimeout(timer);
+      }
+    } else {
+      setDisplayLimit(INITIAL_LIMIT);
+    }
+  }, [isCardOpen, participants.length, displayLimit]);
+
+  const visibleParticipants = isCardOpen
+    ? (displayLimit < participants.length ? participants.slice(0, displayLimit) : participants)
+    : [];
+
+  const toggle = () => {
+    setOpen(prev => {
+      const next = !prev;
+      try {
+        const stored = JSON.parse(sessionStorage.getItem('airlines_expanded') || '{}');
+        stored[aKey] = next;
+        sessionStorage.setItem('airlines_expanded', JSON.stringify(stored));
+      } catch {}
+      return next;
+    });
+  };
+
+  return (
+    <div
+      ref={el => { if (airlineCardRefs.current) airlineCardRefs.current[aKey] = el; }}
+      className={`bg-white rounded-2xl border border-slate-200/80 shadow-2xs transition-all duration-300 mb-3.5 overflow-hidden ${
+        isCardOpen ? 'shadow-md border-slate-300' : 'hover:border-slate-300'
+      }`}
+    >
+      {/* ── Airline header ── */}
+      <div className={`flex items-center gap-2 px-3.5 sm:px-6 py-3.5 sm:py-4 flex-wrap overflow-visible transition-colors ${isCardOpen ? 'bg-slate-100/90 border-b border-slate-200/80' : 'bg-white hover:bg-slate-50'}`}>
+        {/* Airline checkbox */}
+        <div onClick={e => { e.stopPropagation(); toggleAirline(aKey); }}
+          className={`w-5 h-5 rounded-lg border-2 flex items-center justify-center cursor-pointer flex-shrink-0 transition-colors ${checkedAirlines.has(aKey) ? 'bg-red-600 border-red-600' : 'border-slate-300 hover:border-red-400'}`}>
+          {checkedAirlines.has(aKey) && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+        </div>
+
+        {/* Airline info — clickable to expand */}
+        <button type="button" onClick={toggle} className="flex items-center gap-3 flex-1 text-left min-w-0">
+          <LogoAvatar logoUrl={airline.logo_url} name={airline.airlineName} initials={mkInitials(airline.airlineName)} />
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="text-sm sm:text-base font-bold text-slate-900 truncate tracking-tight">{airline.airlineName}</p>
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200/80">
+                <HiOutlineUsers className="w-3 h-3 text-slate-400" />{participants.length}
+              </span>
+            </div>
+            {airline.email && (
+              <div className="flex items-center gap-1 mt-0.5">
+                <HiOutlineMail className="w-3 h-3 text-slate-400" />
+                <p className="text-[11px] font-medium text-slate-500 truncate">{airline.email}</p>
+              </div>
+            )}
+          </div>
+        </button>
+
+        {/* Airline action buttons */}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button type="button" onClick={() => openEditAirline(airline)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 hover:border-slate-300 transition-all shadow-2xs">
+            <HiOutlinePencil className="w-3.5 h-3.5 text-slate-500" /> Edit
+          </button>
+          <button type="button" onClick={toggle} className="p-1.5 rounded-xl hover:bg-slate-100 transition-all">
+            <HiOutlineChevronDown className={`w-5 h-5 text-slate-400 transition-transform duration-300 ease-out ${isCardOpen ? 'rotate-180 text-slate-800' : 'rotate-0'}`} />
+          </button>
+        </div>
+      </div>
+
+      {/* ── Participants ── */}
+      <AnimatePresence initial={false}>
+        {isCardOpen && participants.length > 0 && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ height: { duration: 0.35, ease: [0.25, 1, 0.5, 1] }, opacity: { duration: 0.25 } }}
+            className="overflow-hidden bg-white"
+          >
+            <div
+              className="border-t border-slate-100 max-h-[460px] overflow-y-auto overflow-x-hidden"
+              onWheel={e => {
+                const el = e.currentTarget;
+                const atTop    = el.scrollTop === 0;
+                const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 1;
+                if (!(atTop && e.deltaY < 0) && !(atBottom && e.deltaY > 0)) {
+                  e.stopPropagation();
+                }
+              }}
+            >
+              {/* Mobile: cards */}
+              <div className="sm:hidden p-3 space-y-2">
+                {visibleParticipants.map(p => (
+                  <div key={p.id || p._id} ref={el => { if (participantRowRefs.current) participantRowRefs.current[String(p.id || p._id)] = el; }}>
+                    <ParticipantCard p={p} checked={checked} onCheck={toggleOne}
+                      onPreview={setRowPreview} onDownload={handleDownloadIssued} onEdit={() => {}}
+                      onDelete={handleDelete} downloadingId={downloadingId}
+                      certEdits={certEdits} onStartEdit={startCertEdit}
+                      onCancelEdit={cancelCertEdit} onSaveEdit={saveCertEdit}
+                      setCertEdits={setCertEdits}
+                      ndgScores={ndgScores} setNdgScores={setNdgScores} onNdgScoreSave={handleNdgScoreSave}
+                      fdrHours={fdrHours} setFdrHours={setFdrHours} onFdrHoursSave={handleFdrHoursSave} onFdrHoursToggle={handleFdrHoursToggle} />
+                  </div>
+                ))}
+              </div>
+
+              {/* Desktop: table */}
+              <div className="hidden sm:block">
+                <table className="w-full min-w-[850px] border-collapse">
+                  <colgroup>
+                    <col className="w-10" />
+                    <col className="w-[24%]" />
+                    <col className="w-[12%]" />
+                    <col className="w-[16%]" />
+                    <col className="w-[10%]" />
+                    <col className="w-[10%]" />
+                    <col className="w-[28%]" />
+                  </colgroup>
+                  <thead>
+                    <tr className="bg-primary-50/60 border-b border-primary-100">
+                      <th className="px-3 py-2.5 text-center" />
+                      <th className="text-left text-[10px] font-bold text-primary-500 uppercase tracking-wider px-3 py-2.5">Participant</th>
+                      <th className="text-left text-[10px] font-bold text-primary-500 uppercase tracking-wider px-3 py-2.5">Dept</th>
+                      <th className="text-left text-[10px] font-bold text-primary-500 uppercase tracking-wider px-3 py-2.5">Training</th>
+                      <th className="text-left text-[10px] font-bold text-primary-500 uppercase tracking-wider px-3 py-2.5">Start</th>
+                      <th className="text-left text-[10px] font-bold text-primary-500 uppercase tracking-wider px-3 py-2.5">End</th>
+                      <th className="text-center text-[10px] font-bold text-primary-500 uppercase tracking-wider px-3 py-2.5">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visibleParticipants.map(p => {
+                      const pid      = p.id || p._id;
+                      const fullName = p.participant_name || `${p.first_name || ''} ${p.last_name || ''}`.trim();
+                      const isCk     = checked.has(pid);
+                      const edit     = certEdits[pid];
+                      const displayYear = p.cert_year_override || (() => { const d = p.end_date || p.training_date || ''; return d ? new Date(d.slice(0, 10)).getFullYear() : ''; })();
+
+                      return (
+                        <tr key={pid} ref={el => { if (participantRowRefs.current) participantRowRefs.current[String(pid)] = el; }} className={`border-t border-primary-100 transition-colors ${isCk ? 'bg-blue-50/40' : 'hover:bg-primary-50/40'}`}>
+                          <td className="px-3 py-3.5 align-middle w-10">
+                            <div onClick={() => toggleOne(pid)}
+                              className={`w-5 h-5 rounded border-2 flex items-center justify-center cursor-pointer transition-colors ${isCk ? 'bg-primary-800 border-primary-800' : 'border-primary-300 hover:border-primary-600'}`}>
+                              {isCk && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                            </div>
+                          </td>
+                          <td className="px-3 py-3.5 align-middle">
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-8 h-8 rounded-full bg-primary-200 flex items-center justify-center flex-shrink-0">
+                                <span className="text-[10px] font-bold text-primary-600">{mkInitials(fullName)}</span>
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-sm font-semibold text-primary-800">{fullName}</p>
+                                {p.cert_sequence && (
+                                  <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                                    <span className={`inline-block text-[9px] font-bold px-1.5 py-0.5 rounded border ${p.templateVariant === 'india' ? 'text-orange-600 bg-orange-50 border-orange-200' : 'text-emerald-600 bg-emerald-50 border-emerald-200'}`}>
+                                      {p.templateVariant === 'india' ? 'IFOA INDIA' : 'IFOA'}
+                                    </span>
+                                    <span className={`inline-block text-[9px] font-bold px-1.5 py-0.5 rounded border ${
+                                      p.cert_released
+                                        ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                                        : 'text-amber-600 bg-amber-50 border-amber-200'
+                                    }`}>
+                                      {p.cert_released ? <><HiOutlineCheckCircle className="inline w-2.5 h-2.5 mr-0.5" />Released</> : <><HiOutlineClock className="inline w-2.5 h-2.5 mr-0.5" />Not Released</>}
+                                    </span>
+                                    <select
+                                      value={p.cert_validity || '36'}
+                                      onChange={async e => {
+                                        const v = e.target.value;
+                                        try {
+                                          await updateValidity(pid, v);
+                                          toast.success('Validity updated');
+                                          fetchData({ silent: true });
+                                        } catch { toast.error('Failed to update validity'); }
+                                      }}
+                                      onClick={e => e.stopPropagation()}
+                                      className="text-[9px] font-semibold border border-primary-200 rounded px-1.5 py-0.5 text-primary-600 bg-white cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary-400"
+                                    >
+                                      {VALIDITY_OPTIONS.map(o => <option key={o.val} value={o.val}>{o.label}</option>)}
+                                    </select>
+                                  </div>
+                                )}
+                                {p.cert_sequence && (
+                                  edit?.editing ? (
+                                    <div className="mt-0.5 space-y-1">
+                                      <div className="flex items-center gap-1 flex-wrap">
+                                        <span className="text-[10px] text-primary-400">{p.training_type}-</span>
+                                        <input type="number" min="1" value={edit.seq}
+                                          onChange={e => setCertEdits(prev => ({ ...prev, [pid]: { ...prev[pid], seq: e.target.value, error: null } }))}
+                                          onKeyDown={e => { if (e.key === 'Enter') saveCertEdit(pid); if (e.key === 'Escape') cancelCertEdit(pid); }}
+                                          className="w-16 px-1.5 py-0.5 text-[11px] border border-primary-300 rounded focus:outline-none focus:ring-1 focus:ring-accent-400"
+                                          disabled={edit.saving} autoFocus />
+                                        <span className="text-[10px] text-primary-400">-</span>
+                                        <input type="number" min="2000" max="2100" value={edit.year}
+                                          onChange={e => setCertEdits(prev => ({ ...prev, [pid]: { ...prev[pid], year: e.target.value, error: null } }))}
+                                          onKeyDown={e => { if (e.key === 'Enter') saveCertEdit(pid); if (e.key === 'Escape') cancelCertEdit(pid); }}
+                                          className="w-14 px-1.5 py-0.5 text-[11px] border border-primary-300 rounded focus:outline-none focus:ring-1 focus:ring-accent-400"
+                                          disabled={edit.saving} />
+                                        <button onClick={() => saveCertEdit(pid)} disabled={edit.saving} className="text-[10px] px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded hover:bg-emerald-200 disabled:opacity-60">{edit.saving ? '…' : 'save'}</button>
+                                        <button onClick={() => cancelCertEdit(pid)} className="text-[10px] px-1.5 py-0.5 bg-primary-100 text-primary-500 rounded hover:bg-primary-200">cancel</button>
+                                      </div>
+                                      {edit.error && <p className="text-[10px] text-red-500 font-medium">! {edit.error}</p>}
+                                    </div>
+                                  ) : (
+                                    <button onClick={() => startCertEdit(pid, p)} className="flex items-center gap-1 mt-0.5 group">
+                                      <span className="text-[10px] font-mono text-primary-700 bg-primary-50 border border-primary-200 px-1.5 py-0.5 rounded group-hover:bg-primary-100">
+                                        {p.training_type}-{String(p.cert_sequence).padStart(5, '0')}-{displayYear}
+                                      </span>
+                                      <HiOutlinePencil className="w-2.5 h-2.5 text-primary-300 group-hover:text-primary-500" />
+                                    </button>
+                                  )
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-3 py-3.5 align-middle text-xs font-medium text-primary-700 leading-snug whitespace-normal break-words">{p.department || '—'}</td>
+                          <td className="px-3 py-3.5 align-middle">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold" style={badgeStyle()}>{p.training_type}</span>
+                            <p className="text-[10px] mt-0.5 text-primary-400">{TRAINING_LABELS[p.training_type] || p.training_type}</p>
+                            {p.training_type === 'NDG' && (() => {
+                              const scoreEntry = ndgScores[pid];
+                              const currentVal = scoreEntry !== undefined ? scoreEntry.value : (p.ndg_score != null ? String(p.ndg_score) : '');
+                              const saving     = scoreEntry?.saving || false;
+                              const saved      = scoreEntry?.saved  || false;
+                              return (
+                                <div className="mt-1.5 flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                                  <div className="flex items-center gap-1 bg-blue-50 border border-blue-200 rounded-lg px-1.5 py-1">
+                                    <span className="text-[9px] font-bold text-blue-600 uppercase tracking-wide">Score</span>
+                                    <input
+                                      type="number" min="0" max="100"
+                                      placeholder="0-100"
+                                      value={currentVal}
+                                      onChange={e => setNdgScores(prev => ({ ...prev, [pid]: { value: e.target.value, saving: false, saved: false } }))}
+                                      onKeyDown={e => { if (e.key === 'Enter') handleNdgScoreSave(pid); }}
+                                      className="w-[4.5rem] pl-1.5 pr-4 py-0 text-[11px] bg-transparent border-none outline-none text-blue-800 font-semibold placeholder-blue-300"
+                                      disabled={saving}
+                                    />
+                                    <span className="text-[10px] text-blue-500">%</span>
+                                  </div>
+                                  <button
+                                    onClick={() => handleNdgScoreSave(pid)}
+                                    disabled={saving || !currentVal}
+                                    className="flex items-center gap-0.5 px-1.5 py-1 rounded-lg text-[10px] font-semibold bg-[#0000ff] hover:bg-blue-700 text-white disabled:opacity-50 transition-colors"
+                                  >
+                                    {saving ? <Spin cls="w-3 h-3 border-2 border-white/40 border-t-white" /> : saved ? '✓' : 'Save'}
+                                  </button>
+                                </div>
+                              );
+                            })()}
+                            {p.training_type === 'FDR' && (() => {
+                              const entry      = fdrHours[pid];
+                              const enabled    = entry?.enabled ?? (p.fdr_hours != null);
+                              const currentVal = entry !== undefined ? entry.value : (p.fdr_hours != null ? String(p.fdr_hours) : '');
+                              const saving     = entry?.saving || false;
+                              const saved      = entry?.saved  || false;
+                              return (
+                                <div className="mt-1.5" onClick={e => e.stopPropagation()}>
+                                  <label className="flex items-center gap-1 text-[10px] font-semibold text-primary-500 cursor-pointer w-fit">
+                                    <Checkbox checked={enabled} onCheckedChange={c => handleFdrHoursToggle(pid, !!c)} className="h-3 w-3" />
+                                    Add Hours
+                                  </label>
+                                  {enabled && (
+                                    <div className="mt-1 flex items-center gap-1">
+                                      <div className="flex items-center gap-1 bg-blue-50 border border-blue-200 rounded-lg px-1.5 py-1">
+                                        <input
+                                          type="number" min="0" step="0.5"
+                                          placeholder="e.g. 40"
+                                          value={currentVal}
+                                          onChange={e => setFdrHours(prev => ({ ...prev, [pid]: { enabled: true, value: e.target.value, saving: false, saved: false } }))}
+                                          onKeyDown={e => { if (e.key === 'Enter') handleFdrHoursSave(pid); }}
+                                          className="w-[4.5rem] pl-1.5 pr-4 py-0 text-[11px] bg-transparent border-none outline-none text-blue-800 font-semibold placeholder-blue-300"
+                                          disabled={saving}
+                                        />
+                                        <span className="text-[10px] text-blue-500">hrs</span>
+                                      </div>
+                                      <button
+                                        onClick={() => handleFdrHoursSave(pid)}
+                                        disabled={saving || !currentVal}
+                                        className="flex items-center gap-0.5 px-1.5 py-1 rounded-lg text-[10px] font-semibold bg-[#0000ff] hover:bg-blue-700 text-white disabled:opacity-50 transition-colors"
+                                      >
+                                        {saving ? <Spin cls="w-3 h-3 border-2 border-white/40 border-t-white" /> : saved ? '✓' : 'Save'}
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })()}
+                          </td>
+                          <td className="px-3 py-3.5 align-middle text-xs font-medium text-primary-600 whitespace-nowrap">{fmtDate(p.training_date)}</td>
+                          <td className="px-3 py-3.5 align-middle text-xs font-medium text-primary-600 whitespace-nowrap">{fmtDate(p.end_date)}</td>
+                          <td className="px-3 py-3.5 align-middle">
+                            <div className="flex items-center justify-end gap-1.5 flex-nowrap whitespace-nowrap">
+                              {!p.cert_sequence ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-medium bg-amber-50 text-amber-600 border border-amber-200"><HiOutlineClock className="w-3 h-3" /> Pending</span>
+                              ) : !p.cert_released ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-medium bg-blue-50 text-blue-600 border border-blue-200">
+                                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                                  Generated — Pending Release
+                                </span>
+                              ) : (
+                                <>
+                                  <button onClick={() => setRowPreview(p)} className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-medium"
+                                    style={{ background: '#eff6ff', borderColor: '#bfdbfe', color: '#0000ff' }}
+                                    onMouseEnter={e => e.currentTarget.style.background = '#dbeafe'}
+                                    onMouseLeave={e => e.currentTarget.style.background = '#eff6ff'}>
+                                    <HiOutlineEye className="w-3.5 h-3.5" /> Preview
+                                  </button>
+                                  <button onClick={() => handleDownloadIssued(p)} disabled={downloadingId === pid}
+                                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-emerald-200 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-60">
+                                    {downloadingId === pid ? <Spin cls="w-3.5 h-3.5 border-2 border-emerald-300 border-t-emerald-600" /> : <HiOutlineDocumentDownload className="w-3.5 h-3.5" />}
+                                    PDF
+                                  </button>
+                                </>
+                              )}
+                              {eligibleForDhlExtra(p) && p.dhl_cert_released && (
+                                <>
+                                  <button onClick={() => setDhlRowPreview(p)}
+                                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-violet-200 text-xs font-medium text-violet-700 bg-violet-50 hover:bg-violet-100">
+                                    <HiOutlineEye className="w-3.5 h-3.5" /> DHL ST-{String(p.dhl_cert_sequence).padStart(3, '0')}
+                                  </button>
+                                  <button onClick={() => handleDownloadDhlIssued(p)} disabled={downloadingDhlId === pid}
+                                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-violet-200 text-xs font-medium text-violet-700 bg-violet-50 hover:bg-violet-100 disabled:opacity-60">
+                                    {downloadingDhlId === pid ? <Spin cls="w-3.5 h-3.5 border-2 border-violet-300 border-t-violet-600" /> : <HiOutlineDocumentDownload className="w-3.5 h-3.5" />}
+                                    PDF
+                                  </button>
+                                </>
+                              )}
+                              <Link to={`/admin/participants/edit/${pid}`}
+                                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-primary-200 text-xs font-medium text-primary-600 hover:bg-primary-100">
+                                <HiOutlinePencil className="w-3.5 h-3.5" /> Edit
+                              </Link>
+                              <button onClick={() => handleDelete(pid, fullName)}
+                                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-red-200 text-xs font-medium text-red-500 hover:bg-red-50">
+                                <HiOutlineTrash className="w-3.5 h-3.5" /> Delete
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {isCardOpen && participants.length === 0 && (
+        <div className="border-t border-primary-100 px-5 py-6 text-center text-sm text-primary-400">
+          No participants submitted by this airline yet.
+        </div>
+      )}
+    </div>
+  );
+});
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function Airlines() {
   const [searchParams] = useSearchParams();
@@ -557,6 +980,10 @@ export default function Airlines() {
   // Persist which airline cards are open across navigation (e.g. Edit → Back)
   // so the accordion doesn't collapse when the page remounts.
   const [expanded, setExpanded]     = useState(() => {
+    try { return JSON.parse(sessionStorage.getItem('airlines_expanded') || '{}'); }
+    catch { return {}; }
+  });
+  const [openedCards, setOpenedCards] = useState(() => {
     try { return JSON.parse(sessionStorage.getItem('airlines_expanded') || '{}'); }
     catch { return {}; }
   });
@@ -986,47 +1413,24 @@ export default function Airlines() {
       return n;
     });
   };
-  const toggle = (key) => {
-    const isOpening = !expanded[key];
-    setExpanded(prev => ({ ...prev, [key]: !prev[key] }));
-    if (isOpening) {
-      // Wait for framer-motion animation to complete (~350ms) then smart-scroll
-      setTimeout(() => {
-        const card = airlineCardRefs.current[key];
-        if (!card) return;
-
-        // Walk up the DOM to find the actual scrollable <main> container
-        let scrollEl = card.parentElement;
-        while (scrollEl && scrollEl !== document.body) {
-          const overflow = getComputedStyle(scrollEl).overflowY;
-          if (overflow === 'auto' || overflow === 'scroll') break;
-          scrollEl = scrollEl.parentElement;
-        }
-        if (!scrollEl || scrollEl === document.body) return;
-
-        const HEADER_H = 110; // sticky filter bar height offset
-        const GAP      = 12; // breathing room above the card
-
-        // offsetTop of card relative to the scroll container
-        let offsetFromTop = 0;
-        let el = card;
-        while (el && el !== scrollEl) {
-          offsetFromTop += el.offsetTop;
-          el = el.offsetParent;
-        }
-
-        const targetScrollTop = offsetFromTop - HEADER_H - GAP;
-
-        // Only scroll down (don't jump back up if already visible above)
-        const cardBottomInView = offsetFromTop + card.offsetHeight - scrollEl.scrollTop;
-        const viewportH = scrollEl.clientHeight;
-
-        if (targetScrollTop < scrollEl.scrollTop || cardBottomInView > viewportH) {
-          scrollEl.scrollTo({ top: targetScrollTop, behavior: 'smooth' });
-        }
-      }, 380);
-    }
-  };
+  const toggle = useCallback((key) => {
+    setExpanded(prev => {
+      const isOpening = !prev[key];
+      if (isOpening) {
+        setOpenedCards(o => ({ ...o, [key]: true }));
+        requestAnimationFrame(() => {
+          const card = airlineCardRefs.current[key];
+          if (!card) return;
+          const rect = card.getBoundingClientRect();
+          const STICKY_TOP = 120;
+          if (rect.top < STICKY_TOP) {
+            card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          }
+        });
+      }
+      return { ...prev, [key]: !prev[key] };
+    });
+  }, []);
 
   // ── Delete helpers ───────────────────────────────────────────────────────────
   const handleDelete = async (id, name) => {
@@ -1355,32 +1759,34 @@ export default function Airlines() {
   };
 
   // ── Derived ──────────────────────────────────────────────────────────────────
-  const filtered = data.map(({ airline, participants }) => {
-    // Search also matches the airline / organization name + address, so admins can
-    // find an airline directly. When the airline name matches, keep all its rows.
-    const q = search.toLowerCase();
-    const airlineMatch = !!search && [airline.airlineName, airline.address, airline.email]
-      .some(s => (s || '').toLowerCase().includes(q));
-    return {
-    airline,
-    participants: participants.filter(p => {
-      const nm = !search || airlineMatch || [p.participant_name, p.first_name, p.last_name, p.department].some(s => (s || '').toLowerCase().includes(search.toLowerCase()));
-      const typeMatch   = !filterType || p.training_type === filterType;
-      const statusMatch = !filterCertStatus
-        || (filterCertStatus === 'pending'   && !p.cert_released)
-        || (filterCertStatus === 'generated' &&  p.cert_released);
-      return nm && typeMatch && statusMatch;
-    }),
-    };
-  }).filter(({ participants }) => participants.length > 0).sort((a, b) => {
-    switch (sortKey) {
-      case 'name_asc':   return (a.airline.airlineName || '').localeCompare(b.airline.airlineName || '');
-      case 'name_desc':  return (b.airline.airlineName || '').localeCompare(a.airline.airlineName || '');
-      case 'count_desc': return b.participants.length - a.participants.length;
-      case 'count_asc':  return a.participants.length - b.participants.length;
-      default:           return 0;
-    }
-  });
+  const filtered = useMemo(() => {
+    return data.map(({ airline, participants }) => {
+      // Search also matches the airline / organization name + address, so admins can
+      // find an airline directly. When the airline name matches, keep all its rows.
+      const q = search.toLowerCase();
+      const airlineMatch = !!search && [airline.airlineName, airline.address, airline.email]
+        .some(s => (s || '').toLowerCase().includes(q));
+      return {
+        airline,
+        participants: participants.filter(p => {
+          const nm = !search || airlineMatch || [p.participant_name, p.first_name, p.last_name, p.department].some(s => (s || '').toLowerCase().includes(search.toLowerCase()));
+          const typeMatch   = !filterType || p.training_type === filterType;
+          const statusMatch = !filterCertStatus
+            || (filterCertStatus === 'pending'   && !p.cert_released)
+            || (filterCertStatus === 'generated' &&  p.cert_released);
+          return nm && typeMatch && statusMatch;
+        }),
+      };
+    }).filter(({ participants }) => participants.length > 0).sort((a, b) => {
+      switch (sortKey) {
+        case 'name_asc':   return (a.airline.airlineName || '').localeCompare(b.airline.airlineName || '');
+        case 'name_desc':  return (b.airline.airlineName || '').localeCompare(a.airline.airlineName || '');
+        case 'count_desc': return b.participants.length - a.participants.length;
+        case 'count_asc':  return a.participants.length - b.participants.length;
+        default:           return 0;
+      }
+    });
+  }, [data, search, filterType, filterCertStatus, sortKey]);
 
   const totalParticipants = allParticipants.length;
   const totalAirlines     = data.length;
@@ -1855,382 +2261,50 @@ export default function Airlines() {
       )}
 
       {/* ── Airline Groups ── */}
+      {/* ── Airline Groups ── */}
       {!loading && filtered.filter(({ airline }) => airlineKey(airline) !== null).map(({ airline, participants }) => {
-        const aKey     = airlineKey(airline);
-        const groupIds   = participants.map(p => p.id || p._id);
-        const groupAllCk = groupIds.length > 0 && groupIds.every(id => checked.has(id));
-        const groupSome  = groupIds.some(id => checked.has(id));
-
-        const isForceOpen = Boolean(search.trim() || filterType || filterCertStatus);
-        const isCardOpen = isForceOpen || Boolean(expanded[aKey]);
+        const aKey = airlineKey(airline);
+        const filterKey = `${search.trim()}_${filterType}_${filterCertStatus}`;
+        const initialOpen = Boolean(expanded[aKey]);
 
         return (
-          <div key={aKey} ref={el => { airlineCardRefs.current[aKey] = el; }} className={`bg-white rounded-2xl border border-slate-200/80 shadow-2xs transition-all duration-300 mb-3.5 overflow-hidden ${isCardOpen ? 'shadow-md border-slate-300' : 'hover:border-slate-300'}`}>
-
-            {/* ── Airline header ── */}
-            <div className={`flex items-center gap-2 px-3.5 sm:px-6 py-3.5 sm:py-4 flex-wrap overflow-visible transition-colors ${isCardOpen ? 'bg-slate-100/90 border-b border-slate-200/80' : 'bg-white hover:bg-slate-50'}`}>
-              {/* Airline checkbox */}
-              <div onClick={e => { e.stopPropagation(); toggleAirline(aKey); }}
-                className={`w-5 h-5 rounded-lg border-2 flex items-center justify-center cursor-pointer flex-shrink-0 transition-colors ${checkedAirlines.has(aKey) ? 'bg-red-600 border-red-600' : 'border-slate-300 hover:border-red-400'}`}>
-                {checkedAirlines.has(aKey) && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
-              </div>
-
-              {/* Airline info — clickable to expand */}
-              <button onClick={() => toggle(aKey)} className="flex items-center gap-3 flex-1 text-left min-w-0">
-                {/* Avatar: logo with zoom hover effect */}
-                <div className="relative flex-shrink-0 group/logo">
-                  {/* Main avatar */}
-                  <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-slate-900 text-white font-bold flex items-center justify-center overflow-hidden transition-transform duration-200 group-hover/logo:scale-105 shadow-2xs">
-                    {airline.logo_url
-                      ? <img src={airline.logo_url} alt={airline.airlineName}
-                          className="w-full h-full object-contain p-1 bg-white" />
-                      : <span className="text-white text-xs sm:text-sm font-bold">{mkInitials(airline.airlineName)}</span>
-                    }
-                  </div>
-                  {/* Zoomed popup — appears above the avatar on hover */}
-                  {airline.logo_url && (
-                    <div
-                      className="pointer-events-none absolute z-[999] left-1/2 -translate-x-1/2
-                        opacity-0 scale-50 group-hover/logo:opacity-100 group-hover/logo:scale-100
-                        transition-all duration-200 ease-out origin-bottom"
-                      style={{ bottom: 'calc(100% + 8px)' }}
-                    >
-                      {/* Popup box */}
-                      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-3 w-28 h-28 flex items-center justify-center">
-                        <img src={airline.logo_url} alt={airline.airlineName}
-                          className="w-full h-full object-contain" />
-                      </div>
-                      {/* Caret — centered under the box */}
-                      <div className="absolute bottom-0 left-1/2 translate-y-full -translate-x-1/2 pt-0.5">
-                        <div className="w-3 h-3 bg-white border-r border-b border-slate-200 rotate-45" />
-                      </div>
-                    </div>
-                  )}
-                </div>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <p className="text-sm sm:text-base font-bold text-slate-900 truncate tracking-tight">{airline.airlineName}</p>
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200/80">
-                      <HiOutlineUsers className="w-3 h-3 text-slate-400" />{participants.length}
-                    </span>
-                  </div>
-                  {/* Always show email */}
-                  {airline.email && (
-                    <div className="flex items-center gap-1 mt-0.5">
-                      <HiOutlineMail className="w-3 h-3 text-slate-400" />
-                      <p className="text-[11px] font-medium text-slate-500 truncate">{airline.email}</p>
-                    </div>
-                  )}
-                </div>
-              </button>
-
-              {/* Airline action buttons */}
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <button onClick={() => openEditAirline(airline)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 hover:border-slate-300 transition-all shadow-2xs">
-                  <HiOutlinePencil className="w-3.5 h-3.5 text-slate-500" /> Edit
-                </button>
-                <button onClick={() => toggle(aKey)} className="p-1.5 rounded-xl hover:bg-slate-100 transition-all">
-                  <HiOutlineChevronDown className={`w-5 h-5 text-slate-400 transition-transform duration-300 ease-out ${isCardOpen ? 'rotate-180 text-slate-800' : 'rotate-0'}`} />
-                </button>
-              </div>
-            </div>
-
-            {/* ── Participants ── */}
-            {participants.length > 0 && (
-                <motion.div
-                  animate={{ height: isCardOpen ? 'auto' : 0, opacity: isCardOpen ? 1 : 0 }}
-                  transition={{ height: { duration: 0.35, ease: [0.25, 1, 0.5, 1] }, opacity: { duration: 0.25 } }}
-                  className="overflow-hidden"
-                >
-
-                  <div
-                    className="border-t border-slate-100 max-h-[460px] overflow-y-auto overflow-x-hidden"
-                    onWheel={e => {
-                      const el = e.currentTarget;
-                      const atTop    = el.scrollTop === 0;
-                      const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 1;
-                      // Only stop propagation when the inner div can still scroll in that direction
-                      if (!(atTop && e.deltaY < 0) && !(atBottom && e.deltaY > 0)) {
-                        e.stopPropagation();
-                      }
-                    }}
-                  >
-
-                    {/* Mobile: cards */}
-                    <div className="sm:hidden p-3 space-y-2">
-                      {participants.map(p => (
-                        <div key={p.id || p._id} ref={el => { participantRowRefs.current[String(p.id || p._id)] = el; }}>
-                          <ParticipantCard p={p} checked={checked} onCheck={toggleOne}
-                            onPreview={setRowPreview} onDownload={handleDownloadIssued} onEdit={() => {}}
-                            onDelete={handleDelete} downloadingId={downloadingId}
-                            certEdits={certEdits} onStartEdit={startCertEdit}
-                            onCancelEdit={cancelCertEdit} onSaveEdit={saveCertEdit}
-                            setCertEdits={setCertEdits}
-                            ndgScores={ndgScores} setNdgScores={setNdgScores} onNdgScoreSave={handleNdgScoreSave}
-                            fdrHours={fdrHours} setFdrHours={setFdrHours} onFdrHoursSave={handleFdrHoursSave} onFdrHoursToggle={handleFdrHoursToggle} />
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Desktop: table */}
-                    <div className="hidden sm:block">
-                      <table className="w-full min-w-[850px] border-collapse">
-                        <colgroup>
-                          <col className="w-10" />
-                          <col className="w-[24%]" />
-                          <col className="w-[12%]" />
-                          <col className="w-[16%]" />
-                          <col className="w-[10%]" />
-                          <col className="w-[10%]" />
-                          <col className="w-[28%]" />
-                        </colgroup>
-                        <thead>
-                          <tr className="bg-primary-50/60 border-b border-primary-100">
-                            <th className="px-3 py-2.5 text-center" />
-                            <th className="text-left text-[10px] font-bold text-primary-500 uppercase tracking-wider px-3 py-2.5">Participant</th>
-                            <th className="text-left text-[10px] font-bold text-primary-500 uppercase tracking-wider px-3 py-2.5">Dept</th>
-                            <th className="text-left text-[10px] font-bold text-primary-500 uppercase tracking-wider px-3 py-2.5">Training</th>
-                            <th className="text-left text-[10px] font-bold text-primary-500 uppercase tracking-wider px-3 py-2.5">Start</th>
-                            <th className="text-left text-[10px] font-bold text-primary-500 uppercase tracking-wider px-3 py-2.5">End</th>
-                            <th className="text-center text-[10px] font-bold text-primary-500 uppercase tracking-wider px-3 py-2.5">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {participants.map(p => {
-                            const pid      = p.id || p._id;
-                            const fullName = p.participant_name || `${p.first_name || ''} ${p.last_name || ''}`.trim();
-                            const isCk     = checked.has(pid);
-                            const edit     = certEdits[pid];
-                            const displayYear = p.cert_year_override || (() => { const d = p.end_date || p.training_date || ''; return d ? new Date(d.slice(0, 10)).getFullYear() : ''; })();
-
-                            return (
-                              <tr key={pid} ref={el => { participantRowRefs.current[String(pid)] = el; }} className={`border-t border-primary-100 transition-colors ${isCk ? 'bg-blue-50/40' : 'hover:bg-primary-50/40'}`}>
-                                <td className="px-3 py-3.5 align-middle w-10">
-                                  <div onClick={() => toggleOne(pid)}
-                                    className={`w-5 h-5 rounded border-2 flex items-center justify-center cursor-pointer transition-colors ${isCk ? 'bg-primary-800 border-primary-800' : 'border-primary-300 hover:border-primary-600'}`}>
-                                    {isCk && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
-                                  </div>
-                                </td>
-                                <td className="px-3 py-3.5 align-middle">
-                                  <div className="flex items-center gap-2.5">
-                                    <div className="w-8 h-8 rounded-full bg-primary-200 flex items-center justify-center flex-shrink-0">
-                                      <span className="text-[10px] font-bold text-primary-600">{mkInitials(fullName)}</span>
-                                    </div>
-                                    <div className="min-w-0">
-                                      <p className="text-sm font-semibold text-primary-800">{fullName}</p>
-                                      {p.cert_sequence && (
-                                        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                                          <span className={`inline-block text-[9px] font-bold px-1.5 py-0.5 rounded border ${p.templateVariant === 'india' ? 'text-orange-600 bg-orange-50 border-orange-200' : 'text-emerald-600 bg-emerald-50 border-emerald-200'}`}>
-                                            {p.templateVariant === 'india' ? 'IFOA INDIA' : 'IFOA'}
-                                          </span>
-                                          {/* cert_released indicator — shows what the airline sees */}
-                                          <span className={`inline-block text-[9px] font-bold px-1.5 py-0.5 rounded border ${
-                                            p.cert_released
-                                              ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
-                                              : 'text-amber-600 bg-amber-50 border-amber-200'
-                                          }`}>
-                                            {p.cert_released ? <><HiOutlineCheckCircle className="inline w-2.5 h-2.5 mr-0.5" />Released</> : <><HiOutlineClock className="inline w-2.5 h-2.5 mr-0.5" />Not Released</>}
-                                          </span>
-                                          {/* Per-row validity dropdown */}
-                                          <Select
-                                            value={p.cert_validity || '36'}
-                                            onValueChange={async v => {
-                                              try {
-                                                await updateValidity(pid, v);
-                                                toast.success('Validity updated');
-                                                fetchData({ silent: true });
-                                              } catch { toast.error('Failed to update validity'); }
-                                            }}
-                                          >
-                                            <SelectTrigger
-                                              onClick={e => e.stopPropagation()}
-                                              className="h-auto text-[9px] font-semibold border-primary-200 rounded px-1 py-0.5 text-primary-600 w-auto gap-1"
-                                            >
-                                              <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent onClick={e => e.stopPropagation()}>
-                                              {VALIDITY_OPTIONS.map(o => <SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>)}
-                                            </SelectContent>
-                                          </Select>
-                                        </div>
-                                      )}
-                                      {p.cert_sequence && (
-                                        edit?.editing ? (
-                                          <div className="mt-0.5 space-y-1">
-                                            <div className="flex items-center gap-1 flex-wrap">
-                                              <span className="text-[10px] text-primary-400">{p.training_type}-</span>
-                                              <input type="number" min="1" value={edit.seq}
-                                                onChange={e => setCertEdits(prev => ({ ...prev, [pid]: { ...prev[pid], seq: e.target.value, error: null } }))}
-                                                onKeyDown={e => { if (e.key === 'Enter') saveCertEdit(pid); if (e.key === 'Escape') cancelCertEdit(pid); }}
-                                                className="w-16 px-1.5 py-0.5 text-[11px] border border-primary-300 rounded focus:outline-none focus:ring-1 focus:ring-accent-400"
-                                                disabled={edit.saving} autoFocus />
-                                              <span className="text-[10px] text-primary-400">-</span>
-                                              <input type="number" min="2000" max="2100" value={edit.year}
-                                                onChange={e => setCertEdits(prev => ({ ...prev, [pid]: { ...prev[pid], year: e.target.value, error: null } }))}
-                                                onKeyDown={e => { if (e.key === 'Enter') saveCertEdit(pid); if (e.key === 'Escape') cancelCertEdit(pid); }}
-                                                className="w-14 px-1.5 py-0.5 text-[11px] border border-primary-300 rounded focus:outline-none focus:ring-1 focus:ring-accent-400"
-                                                disabled={edit.saving} />
-                                              <button onClick={() => saveCertEdit(pid)} disabled={edit.saving} className="text-[10px] px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded hover:bg-emerald-200 disabled:opacity-60">{edit.saving ? '…' : 'save'}</button>
-                                              <button onClick={() => cancelCertEdit(pid)} className="text-[10px] px-1.5 py-0.5 bg-primary-100 text-primary-500 rounded hover:bg-primary-200">cancel</button>
-                                            </div>
-                                            {edit.error && <p className="text-[10px] text-red-500 font-medium">! {edit.error}</p>}
-                                          </div>
-                                        ) : (
-                                          <button onClick={() => startCertEdit(pid, p)} className="flex items-center gap-1 mt-0.5 group">
-                                            <span className="text-[10px] font-mono text-primary-700 bg-primary-50 border border-primary-200 px-1.5 py-0.5 rounded group-hover:bg-primary-100">
-                                              {p.training_type}-{String(p.cert_sequence).padStart(5, '0')}-{displayYear}
-                                            </span>
-                                            <HiOutlinePencil className="w-2.5 h-2.5 text-primary-300 group-hover:text-primary-500" />
-                                          </button>
-                                        )
-                                      )}
-                                    </div>
-                                  </div>
-                                </td>
-                                <td className="px-3 py-3.5 align-middle text-xs font-medium text-primary-700 leading-snug whitespace-normal break-words">{p.department || '—'}</td>
-                                <td className="px-3 py-3.5 align-middle">
-                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold" style={badgeStyle()}>{p.training_type}</span>
-                                  <p className="text-[10px] mt-0.5 text-primary-400">{TRAINING_LABELS[p.training_type] || p.training_type}</p>
-                                  {/* NDG score input — admin only, shown inline for NDG participants */}
-                                  {p.training_type === 'NDG' && (() => {
-                                    const scoreEntry = ndgScores[pid];
-                                    const currentVal = scoreEntry !== undefined ? scoreEntry.value : (p.ndg_score != null ? String(p.ndg_score) : '');
-                                    const saving     = scoreEntry?.saving || false;
-                                    const saved      = scoreEntry?.saved  || false;
-                                    return (
-                                      <div className="mt-1.5 flex items-center gap-1" onClick={e => e.stopPropagation()}>
-                                        <div className="flex items-center gap-1 bg-blue-50 border border-blue-200 rounded-lg px-1.5 py-1">
-                                          <span className="text-[9px] font-bold text-blue-600 uppercase tracking-wide">Score</span>
-                                          <input
-                                            type="number" min="0" max="100"
-                                            placeholder="0-100"
-                                            value={currentVal}
-                                            onChange={e => setNdgScores(prev => ({ ...prev, [pid]: { value: e.target.value, saving: false, saved: false } }))}
-                                            onKeyDown={e => { if (e.key === 'Enter') handleNdgScoreSave(pid); }}
-                                            className="w-[4.5rem] pl-1.5 pr-4 py-0 text-[11px] bg-transparent border-none outline-none text-blue-800 font-semibold placeholder-blue-300"
-                                            disabled={saving}
-                                          />
-                                          <span className="text-[10px] text-blue-500">%</span>
-                                        </div>
-                                        <button
-                                          onClick={() => handleNdgScoreSave(pid)}
-                                          disabled={saving || !currentVal}
-                                          className="flex items-center gap-0.5 px-1.5 py-1 rounded-lg text-[10px] font-semibold bg-[#0000ff] hover:bg-blue-700 text-white disabled:opacity-50 transition-colors"
-                                        >
-                                          {saving ? <Spin cls="w-3 h-3 border-2 border-white/40 border-t-white" /> : saved ? '✓' : 'Save'}
-                                        </button>
-                                      </div>
-                                    );
-                                  })()}
-                                  {/* FDR hours toggle — admin only, shown inline for FDR participants */}
-                                  {p.training_type === 'FDR' && (() => {
-                                    const entry      = fdrHours[pid];
-                                    const enabled    = entry?.enabled ?? (p.fdr_hours != null);
-                                    const currentVal = entry !== undefined ? entry.value : (p.fdr_hours != null ? String(p.fdr_hours) : '');
-                                    const saving     = entry?.saving || false;
-                                    const saved      = entry?.saved  || false;
-                                    return (
-                                      <div className="mt-1.5" onClick={e => e.stopPropagation()}>
-                                        <label className="flex items-center gap-1 text-[10px] font-semibold text-primary-500 cursor-pointer w-fit">
-                                          <Checkbox checked={enabled} onCheckedChange={c => handleFdrHoursToggle(pid, !!c)} className="h-3 w-3" />
-                                          Add Hours
-                                        </label>
-                                        {enabled && (
-                                          <div className="mt-1 flex items-center gap-1">
-                                            <div className="flex items-center gap-1 bg-blue-50 border border-blue-200 rounded-lg px-1.5 py-1">
-                                              <input
-                                                type="number" min="0" step="0.5"
-                                                placeholder="e.g. 40"
-                                                value={currentVal}
-                                                onChange={e => setFdrHours(prev => ({ ...prev, [pid]: { enabled: true, value: e.target.value, saving: false, saved: false } }))}
-                                                onKeyDown={e => { if (e.key === 'Enter') handleFdrHoursSave(pid); }}
-                                                className="w-[4.5rem] pl-1.5 pr-4 py-0 text-[11px] bg-transparent border-none outline-none text-blue-800 font-semibold placeholder-blue-300"
-                                                disabled={saving}
-                                              />
-                                              <span className="text-[10px] text-blue-500">hrs</span>
-                                            </div>
-                                            <button
-                                              onClick={() => handleFdrHoursSave(pid)}
-                                              disabled={saving || !currentVal}
-                                              className="flex items-center gap-0.5 px-1.5 py-1 rounded-lg text-[10px] font-semibold bg-[#0000ff] hover:bg-blue-700 text-white disabled:opacity-50 transition-colors"
-                                            >
-                                              {saving ? <Spin cls="w-3 h-3 border-2 border-white/40 border-t-white" /> : saved ? '✓' : 'Save'}
-                                            </button>
-                                          </div>
-                                        )}
-                                      </div>
-                                    );
-                                  })()}
-                                </td>
-                                <td className="px-3 py-3.5 align-middle text-xs font-medium text-primary-600 whitespace-nowrap">{fmtDate(p.training_date)}</td>
-                                <td className="px-3 py-3.5 align-middle text-xs font-medium text-primary-600 whitespace-nowrap">{fmtDate(p.end_date)}</td>
-                                <td className="px-3 py-3.5 align-middle">
-                                  <div className="flex items-center justify-end gap-1.5 flex-nowrap whitespace-nowrap">
-                                    {!p.cert_sequence ? (
-                                      /* Never generated — admin hasn't run generate yet */
-                                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-medium bg-amber-50 text-amber-600 border border-amber-200"><HiOutlineClock className="w-3 h-3" /> Pending</span>
-                                    ) : !p.cert_released ? (
-                                      /* Generated by admin but not yet released to airline */
-                                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-medium bg-blue-50 text-blue-600 border border-blue-200">
-                                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
-                                        Generated — Pending Release
-                                      </span>
-                                    ) : (
-                                      /* Generated AND released — show preview + download */
-                                      <>
-                                        <button onClick={() => setRowPreview(p)} className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-medium"
-                                          style={{ background: '#eff6ff', borderColor: '#bfdbfe', color: '#0000ff' }}
-                                          onMouseEnter={e => e.currentTarget.style.background = '#dbeafe'}
-                                          onMouseLeave={e => e.currentTarget.style.background = '#eff6ff'}>
-                                          <HiOutlineEye className="w-3.5 h-3.5" /> Preview
-                                        </button>
-                                        <button onClick={() => handleDownloadIssued(p)} disabled={downloadingId === pid}
-                                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-emerald-200 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-60">
-                                          {downloadingId === pid ? <Spin cls="w-3.5 h-3.5 border-2 border-emerald-300 border-t-emerald-600" /> : <HiOutlineDocumentDownload className="w-3.5 h-3.5" />}
-                                          PDF
-                                        </button>
-                                      </>
-                                    )}
-                                    {eligibleForDhlExtra(p) && p.dhl_cert_released && (
-                                      <>
-                                        <button onClick={() => setDhlRowPreview(p)}
-                                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-violet-200 text-xs font-medium text-violet-700 bg-violet-50 hover:bg-violet-100">
-                                          <HiOutlineEye className="w-3.5 h-3.5" /> DHL ST-{String(p.dhl_cert_sequence).padStart(3, '0')}
-                                        </button>
-                                        <button onClick={() => handleDownloadDhlIssued(p)} disabled={downloadingDhlId === pid}
-                                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-violet-200 text-xs font-medium text-violet-700 bg-violet-50 hover:bg-violet-100 disabled:opacity-60">
-                                          {downloadingDhlId === pid ? <Spin cls="w-3.5 h-3.5 border-2 border-violet-300 border-t-violet-600" /> : <HiOutlineDocumentDownload className="w-3.5 h-3.5" />}
-                                          PDF
-                                        </button>
-                                      </>
-                                    )}
-                                    <Link to={`/admin/participants/edit/${pid}`}
-                                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-primary-200 text-xs font-medium text-primary-600 hover:bg-primary-100">
-                                      <HiOutlinePencil className="w-3.5 h-3.5" /> Edit
-                                    </Link>
-                                    <button onClick={() => handleDelete(pid, fullName)}
-                                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-red-200 text-xs font-medium text-red-500 hover:bg-red-50">
-                                      <HiOutlineTrash className="w-3.5 h-3.5" /> Delete
-                                    </button>
-                                  </div>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </motion.div>
-            )}
-
-            {isCardOpen && participants.length === 0 && (
-              <div className="border-t border-primary-100 px-5 py-6 text-center text-sm text-primary-400">
-                No participants submitted by this airline yet.
-              </div>
-            )}
-          </div>
+          <AirlineCardGroup
+            key={aKey}
+            airline={airline}
+            participants={participants}
+            aKey={aKey}
+            checkedAirlines={checkedAirlines}
+            toggleAirline={toggleAirline}
+            openEditAirline={openEditAirline}
+            checked={checked}
+            toggleOne={toggleOne}
+            setRowPreview={setRowPreview}
+            handleDownloadIssued={handleDownloadIssued}
+            handleDelete={handleDelete}
+            downloadingId={downloadingId}
+            certEdits={certEdits}
+            startCertEdit={startCertEdit}
+            cancelCertEdit={cancelCertEdit}
+            saveCertEdit={saveCertEdit}
+            setCertEdits={setCertEdits}
+            ndgScores={ndgScores}
+            setNdgScores={setNdgScores}
+            handleNdgScoreSave={handleNdgScoreSave}
+            fdrHours={fdrHours}
+            setFdrHours={setFdrHours}
+            handleFdrHoursSave={handleFdrHoursSave}
+            handleFdrHoursToggle={handleFdrHoursToggle}
+            updateValidity={updateValidity}
+            fetchData={fetchData}
+            eligibleForDhlExtra={eligibleForDhlExtra}
+            setDhlRowPreview={setDhlRowPreview}
+            handleDownloadDhlIssued={handleDownloadDhlIssued}
+            downloadingDhlId={downloadingDhlId}
+            filterKey={filterKey}
+            initialOpen={initialOpen}
+            airlineCardRefs={airlineCardRefs}
+            participantRowRefs={participantRowRefs}
+          />
         );
       })}
 

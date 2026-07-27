@@ -1,0 +1,62 @@
+[
+  {
+    "_id": {
+      "$oid": "69c1201e4e89a51c6c5797e2"
+    },
+    "name": "arjun",
+    "email": "arjunsn@gmail.com",
+    "password": "$2b$12$buK.oJnmbQeUTIAzbjuNne2AeiiTR/YgeQdIRK49Z5yW5GdnEA2v2",
+    "role": "Administrator",
+    "organization": "IFOA - International Flight Operations Academy",
+    "lastLogin": {
+      "$date": "2026-07-20T06:14:41.761Z"
+    },
+    "createdAt": {
+      "$date": "2026-03-23T11:12:30.775Z"
+    },
+    "updatedAt": {
+      "$date": "2026-07-20T06:14:41.766Z"
+    },
+    "__v": 0
+  },
+  {
+    "_id": {
+      "$oid": "69c50ee2be01132bcdf6284b"
+    },
+    "name": "Vincent Incammicia",
+    "email": "vincent@theifoa.com",
+    "password": "$2b$12$wbx8nMRsUmAVujqRxnSstusx0WO8AQtd6krcn0pMfBD.2bRbNkkhO",
+    "role": "Administrator",
+    "organization": "IFOA - International Flight Operations Academy",
+    "lastLogin": {
+      "$date": "2026-07-18T07:30:13.678Z"
+    },
+    "createdAt": {
+      "$date": "2026-03-26T10:48:02.013Z"
+    },
+    "updatedAt": {
+      "$date": "2026-07-18T07:30:13.679Z"
+    },
+    "__v": 0
+  },
+  {
+    "_id": {
+      "$oid": "69e8bf17840bd85f531bcef8"
+    },
+    "name": "Kenneth",
+    "email": "kenneth@theifoa.com",
+    "password": "$2b$12$azNE/s8gyA74.FGG.5u3keCL.3iL5aUHNSDnt3XvnPc4eCyw8VWKy",
+    "role": "Administrator",
+    "organization": "IFOA - International Flight Operations Academy",
+    "lastLogin": {
+      "$date": "2026-04-22T12:29:11.481Z"
+    },
+    "createdAt": {
+      "$date": "2026-04-22T12:29:11.482Z"
+    },
+    "updatedAt": {
+      "$date": "2026-04-22T12:29:11.482Z"
+    },
+    "__v": 0
+  }
+]

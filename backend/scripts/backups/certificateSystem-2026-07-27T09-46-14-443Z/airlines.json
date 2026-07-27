@@ -1,0 +1,689 @@
+[
+  {
+    "_id": {
+      "$oid": "69c5081dbe01132bcdf627be"
+    },
+    "name": "Celine Goetz",
+    "airlineName": "Jetfly",
+    "email": "flight.crew.licensing@jetfly.com",
+    "password": "$2b$12$7ThuaGBVaesXQaqdkKCLC.vRaPGFYgqNQWd7HCo7FOpQ9Hdi7DGz2",
+    "role": "airline",
+    "logo_url": "https://res.cloudinary.com/dasrxzdy8/image/upload/v1774520348/IFOA_LOGO/u80erbsd0whhz9bvx5dr.png",
+    "resetPasswordToken": null,
+    "resetPasswordExpiry": null,
+    "emailVerified": true,
+    "otpCode": null,
+    "otpExpiry": null,
+    "otpAttempts": 0,
+    "lastLogin": {
+      "$date": "2026-07-14T09:32:15.163Z"
+    },
+    "createdAt": {
+      "$date": "2026-03-26T10:19:09.893Z"
+    },
+    "updatedAt": {
+      "$date": "2026-07-14T09:32:15.163Z"
+    },
+    "__v": 0,
+    "address": ""
+  },
+  {
+    "_id": {
+      "$oid": "69e8bc5adf599a1ae24a71f2"
+    },
+    "name": "IFOA",
+    "airlineName": "IFOA AIRLINE",
+    "email": "kenneth@theifoa.com",
+    "password": "$2b$12$f4Yk02gELDCZ2wWJOgOYgOyYogyz99TdiDyjUVHE/0M2dkC/gICQ6",
+    "role": "airline",
+    "logo_url": null,
+    "resetPasswordToken": null,
+    "resetPasswordExpiry": null,
+    "emailVerified": true,
+    "otpCode": null,
+    "otpExpiry": null,
+    "otpAttempts": 0,
+    "lastLogin": {
+      "$date": "2026-05-07T12:26:51.618Z"
+    },
+    "createdAt": {
+      "$date": "2026-04-22T12:17:30.025Z"
+    },
+    "updatedAt": {
+      "$date": "2026-05-07T12:26:51.621Z"
+    },
+    "__v": 0
+  },
+  {
+    "_id": {
+      "$oid": "69e8bd29df599a1ae24a71ff"
+    },
+    "name": "IFOA INDIA",
+    "airlineName": "IFOA INDIA",
+    "email": "ifoaindia@gmail.com",
+    "password": "$2b$12$w5J/QwIf6obcp7Yczlu6.OzcIV1VGQbeBF1TQEGA9qph.U80QUfXi",
+    "role": "airline",
+    "logo_url": null,
+    "resetPasswordToken": null,
+    "resetPasswordExpiry": null,
+    "emailVerified": true,
+    "otpCode": null,
+    "otpExpiry": null,
+    "otpAttempts": 0,
+    "lastLogin": {
+      "$date": "2026-04-22T12:20:57.326Z"
+    },
+    "createdAt": {
+      "$date": "2026-04-22T12:20:57.326Z"
+    },
+    "updatedAt": {
+      "$date": "2026-04-22T12:21:26.714Z"
+    },
+    "__v": 0
+  },
+  {
+    "_id": {
+      "$oid": "69f232f1840bd85f531bd53a"
+    },
+    "name": "Hema Pandey",
+    "airlineName": "IFOA India",
+    "email": "hema@theifoa.com",
+    "password": "$2b$12$VPUE1fIMQ1LAsILX34EWHOK4u42w.l6u7nSHzy0LEBR1pcrZsdJsC",
+    "role": "airline",
+    "logo_url": "https://res.cloudinary.com/dasrxzdy8/image/upload/v1777480431/IFOA_LOGO/lnkepyoxggijquafz1k6.png",
+    "resetPasswordToken": null,
+    "resetPasswordExpiry": null,
+    "emailVerified": true,
+    "otpCode": null,
+    "otpExpiry": null,
+    "otpAttempts": 0,
+    "lastLogin": {
+      "$date": "2026-04-30T10:29:11.588Z"
+    },
+    "createdAt": {
+      "$date": "2026-04-29T16:33:53.407Z"
+    },
+    "updatedAt": {
+      "$date": "2026-04-30T10:29:11.590Z"
+    },
+    "__v": 0
+  },
+  {
+    "_id": {
+      "$oid": "69f60ef26179b31cac381bc3"
+    },
+    "name": "Hana Treslova",
+    "airlineName": "Evo Jet",
+    "email": "hanat@flyevo.com",
+    "password": "$2b$12$EKjdQNjKMQ2W.N82RKSqCOcCLruLRTr6xtUe410bfX5Hs.LEhWNkK",
+    "role": "airline",
+    "logo_url": "https://res.cloudinary.com/dasrxzdy8/image/upload/v1777733359/IFOA_LOGO/nhzwdhgjdn9zqj6q1wck.png",
+    "resetPasswordToken": null,
+    "resetPasswordExpiry": null,
+    "emailVerified": true,
+    "otpCode": null,
+    "otpExpiry": null,
+    "otpAttempts": 0,
+    "lastLogin": {
+      "$date": "2026-06-01T17:33:00.277Z"
+    },
+    "createdAt": {
+      "$date": "2026-05-02T14:49:22.649Z"
+    },
+    "updatedAt": {
+      "$date": "2026-06-01T17:33:00.278Z"
+    },
+    "__v": 0
+  },
+  {
+    "_id": {
+      "$oid": "69f610c16179b31cac381bcc"
+    },
+    "name": "Peter Teichfischer",
+    "airlineName": "European Air Transport Leipzig",
+    "email": "peter.teichfischer@dhl.com",
+    "password": "$2b$12$0ORrzQatiG9DS5ETDC0ERuQWNe0j6/dZItftGOIkoXCVcaPKRfpE.",
+    "role": "airline",
+    "logo_url": "https://res.cloudinary.com/dasrxzdy8/image/upload/v1777733823/IFOA_LOGO/t6nsrs8quxll9ybowp0q.png",
+    "resetPasswordToken": null,
+    "resetPasswordExpiry": null,
+    "emailVerified": true,
+    "otpCode": null,
+    "otpExpiry": null,
+    "otpAttempts": 0,
+    "lastLogin": {
+      "$date": "2026-07-01T14:11:16.962Z"
+    },
+    "createdAt": {
+      "$date": "2026-05-02T14:57:05.925Z"
+    },
+    "updatedAt": {
+      "$date": "2026-07-01T14:11:16.963Z"
+    },
+    "__v": 0,
+    "address": ""
+  },
+  {
+    "_id": {
+      "$oid": "69f611616179b31cac381bd1"
+    },
+    "name": "Kuutti Piia",
+    "airlineName": "Finnair",
+    "email": "piia.kuutti@finnair.com",
+    "password": "$2b$12$H/idwzq/6jVfXDcJyhqah.zwUYs4kfKiOtlssbuATS04zP7b8LOCC",
+    "role": "airline",
+    "logo_url": "https://res.cloudinary.com/dasrxzdy8/image/upload/v1777733980/IFOA_LOGO/pwn9zsl9fmkyklnqabxl.png",
+    "resetPasswordToken": null,
+    "resetPasswordExpiry": null,
+    "emailVerified": true,
+    "otpCode": null,
+    "otpExpiry": null,
+    "otpAttempts": 0,
+    "lastLogin": {
+      "$date": "2026-05-02T14:59:45.748Z"
+    },
+    "createdAt": {
+      "$date": "2026-05-02T14:59:45.748Z"
+    },
+    "updatedAt": {
+      "$date": "2026-05-02T14:59:45.748Z"
+    },
+    "__v": 0
+  },
+  {
+    "_id": {
+      "$oid": "69f611f26179b31cac381bd6"
+    },
+    "name": "Frank Van De Peppel",
+    "airlineName": "Challenge Airlines",
+    "email": "frank.vandepeppel@challenge-group.com",
+    "password": "$2b$12$Lh6MUXnBxJFNzzLYFPzQ3.C6bCmlYH7v1t.6.aGd/8ztNuyjF3cV2",
+    "role": "airline",
+    "logo_url": "https://res.cloudinary.com/dasrxzdy8/image/upload/v1777734128/IFOA_LOGO/ljidrjuhkudusmoybpjb.jpg",
+    "resetPasswordToken": null,
+    "resetPasswordExpiry": null,
+    "emailVerified": true,
+    "otpCode": null,
+    "otpExpiry": null,
+    "otpAttempts": 0,
+    "lastLogin": {
+      "$date": "2026-06-26T08:23:49.637Z"
+    },
+    "createdAt": {
+      "$date": "2026-05-02T15:02:10.492Z"
+    },
+    "updatedAt": {
+      "$date": "2026-06-26T08:23:49.640Z"
+    },
+    "__v": 0,
+    "address": ""
+  },
+  {
+    "_id": {
+      "$oid": "69f612716179b31cac381bdb"
+    },
+    "name": "Alfred Ebbers",
+    "airlineName": "Global Jet",
+    "email": "alfred.ebbers@globaljet.ch",
+    "password": "$2b$12$Le1YIv2mNb0x8/HAbOzTLeMSfdb4kmLBf7KcTB5I.vvIPPhaTnrGi",
+    "role": "airline",
+    "logo_url": "https://res.cloudinary.com/dasrxzdy8/image/upload/v1777734254/IFOA_LOGO/pgdq1auhqsyglhorori4.png",
+    "resetPasswordToken": null,
+    "resetPasswordExpiry": null,
+    "emailVerified": true,
+    "otpCode": null,
+    "otpExpiry": null,
+    "otpAttempts": 0,
+    "lastLogin": {
+      "$date": "2026-07-05T14:55:36.653Z"
+    },
+    "createdAt": {
+      "$date": "2026-05-02T15:04:17.382Z"
+    },
+    "updatedAt": {
+      "$date": "2026-07-05T14:55:36.654Z"
+    },
+    "__v": 0,
+    "address": ""
+  },
+  {
+    "_id": {
+      "$oid": "69f613036179b31cac381be1"
+    },
+    "name": "Mike Franz",
+    "airlineName": "K5 Aviation",
+    "email": "m.franz@k5-group.com",
+    "password": "$2b$12$jDisC.wzPfA6tmjYT4Lb6O.svLAbkv7U.SdhSxsQ2V/9zc4QM1lT2",
+    "role": "airline",
+    "logo_url": "https://res.cloudinary.com/dasrxzdy8/image/upload/v1777734400/IFOA_LOGO/bx3ao45wm0cscull8h8o.jpg",
+    "resetPasswordToken": null,
+    "resetPasswordExpiry": null,
+    "emailVerified": true,
+    "otpCode": null,
+    "otpExpiry": null,
+    "otpAttempts": 0,
+    "lastLogin": {
+      "$date": "2026-05-25T07:40:04.734Z"
+    },
+    "createdAt": {
+      "$date": "2026-05-02T15:06:43.431Z"
+    },
+    "updatedAt": {
+      "$date": "2026-05-25T07:40:04.734Z"
+    },
+    "__v": 0
+  },
+  {
+    "_id": {
+      "$oid": "69f613cc6179b31cac381be6"
+    },
+    "name": "Andreas Stegemann",
+    "airlineName": "DC Aviation",
+    "email": "andreas.stegemann@dc-aviation.com",
+    "password": "$2b$12$R8lWyg70B0YhWAvTqAumIuMNtsxy9EvtyfA4kIUfDVibRKleE2iJ.",
+    "role": "airline",
+    "logo_url": "https://res.cloudinary.com/dasrxzdy8/image/upload/v1777734601/IFOA_LOGO/t0cdsr4elvgcruhynbzl.png",
+    "resetPasswordToken": null,
+    "resetPasswordExpiry": null,
+    "emailVerified": true,
+    "otpCode": null,
+    "otpExpiry": null,
+    "otpAttempts": 0,
+    "lastLogin": {
+      "$date": "2026-05-22T07:06:26.613Z"
+    },
+    "createdAt": {
+      "$date": "2026-05-02T15:10:04.483Z"
+    },
+    "updatedAt": {
+      "$date": "2026-05-22T07:06:26.614Z"
+    },
+    "__v": 0
+  },
+  {
+    "_id": {
+      "$oid": "69f6144c6179b31cac381beb"
+    },
+    "name": "Chehan Bandaranayake",
+    "airlineName": "Hahn Air",
+    "email": "c.bandaranayake@hahnair.com",
+    "password": "$2b$12$JzjOdNGDA03RpTXZvaUiKewPoNxtzF.2luLGjP5AfiWwU1p2Yoe1C",
+    "role": "airline",
+    "logo_url": "https://res.cloudinary.com/dasrxzdy8/image/upload/v1780306406/IFOA_LOGO/ggxzjrcbxputpxpnpomr.jpg",
+    "resetPasswordToken": null,
+    "resetPasswordExpiry": null,
+    "emailVerified": true,
+    "otpCode": null,
+    "otpExpiry": null,
+    "otpAttempts": 0,
+    "lastLogin": {
+      "$date": "2026-06-01T10:01:26.902Z"
+    },
+    "createdAt": {
+      "$date": "2026-05-02T15:12:12.449Z"
+    },
+    "updatedAt": {
+      "$date": "2026-06-01T10:01:26.903Z"
+    },
+    "__v": 0
+  },
+  {
+    "_id": {
+      "$oid": "69f614b86179b31cac381bf0"
+    },
+    "name": "Syed Ahmed Zahid",
+    "airlineName": "Comlux",
+    "email": "syed.zahid@comlux.com",
+    "password": "$2b$12$YZip/LjExgC.YZreh.9afOIWGSP/tKj8I6ZBLbUnPo1KX.S5B/89e",
+    "role": "airline",
+    "logo_url": "https://res.cloudinary.com/dasrxzdy8/image/upload/v1777734837/IFOA_LOGO/rkqscgoabov57rzuj9tw.png",
+    "resetPasswordToken": null,
+    "resetPasswordExpiry": null,
+    "emailVerified": true,
+    "otpCode": null,
+    "otpExpiry": null,
+    "otpAttempts": 0,
+    "lastLogin": {
+      "$date": "2026-07-15T13:38:59.924Z"
+    },
+    "createdAt": {
+      "$date": "2026-05-02T15:14:00.305Z"
+    },
+    "updatedAt": {
+      "$date": "2026-07-15T13:38:59.924Z"
+    },
+    "__v": 0,
+    "address": ""
+  },
+  {
+    "_id": {
+      "$oid": "69f615286179b31cac381bf5"
+    },
+    "name": "Filipe Tomas Sanches",
+    "airlineName": "DHL Austria",
+    "email": "filipetomas.sanches@dhl.com",
+    "password": "$2b$12$UC0MbAJrR5jO035ZzovHjunMA65lYpGRmSb6Zo/D1uW0wBfex4COG",
+    "role": "airline",
+    "logo_url": "https://res.cloudinary.com/dasrxzdy8/image/upload/v1777734949/IFOA_LOGO/ju4hs3azzqxskef94msp.png",
+    "resetPasswordToken": null,
+    "resetPasswordExpiry": null,
+    "emailVerified": true,
+    "otpCode": null,
+    "otpExpiry": null,
+    "otpAttempts": 0,
+    "lastLogin": {
+      "$date": "2026-06-24T13:27:09.547Z"
+    },
+    "createdAt": {
+      "$date": "2026-05-02T15:15:52.908Z"
+    },
+    "updatedAt": {
+      "$date": "2026-06-24T13:27:09.548Z"
+    },
+    "__v": 0,
+    "address": ""
+  },
+  {
+    "_id": {
+      "$oid": "69f615c56179b31cac381bfa"
+    },
+    "name": "Nikolay Karev",
+    "airlineName": "SilkWay West",
+    "email": "nikolay.karev@silkwaywest.com",
+    "password": "$2b$12$l6smJxlVFxV0OQDQv3beB.XFjNxLHv8Kx0T0ypIUAUHTJbARWJwLq",
+    "role": "airline",
+    "logo_url": "https://res.cloudinary.com/dasrxzdy8/image/upload/v1777735107/IFOA_LOGO/vpsjmvickkybnxf7znim.png",
+    "resetPasswordToken": null,
+    "resetPasswordExpiry": null,
+    "emailVerified": true,
+    "otpCode": null,
+    "otpExpiry": null,
+    "otpAttempts": 0,
+    "lastLogin": {
+      "$date": "2026-05-02T15:18:29.964Z"
+    },
+    "createdAt": {
+      "$date": "2026-05-02T15:18:29.964Z"
+    },
+    "updatedAt": {
+      "$date": "2026-05-02T15:18:29.964Z"
+    },
+    "__v": 0
+  },
+  {
+    "_id": {
+      "$oid": "69f6167f6179b31cac381c00"
+    },
+    "name": "Bahadir Giden",
+    "airlineName": "Azerbaijan Airlines",
+    "email": "bahadir.giden@azal.az",
+    "password": "$2b$12$01V7cUnSxPj6x9wEoXNVzuuB5mmyoa.n0p.MYG0IwZVb2b6rs/NNO",
+    "role": "airline",
+    "logo_url": "https://res.cloudinary.com/dasrxzdy8/image/upload/v1777735293/IFOA_LOGO/omsgwgq8yzvpoijrystm.png",
+    "resetPasswordToken": null,
+    "resetPasswordExpiry": null,
+    "emailVerified": true,
+    "otpCode": null,
+    "otpExpiry": null,
+    "otpAttempts": 0,
+    "lastLogin": {
+      "$date": "2026-06-29T08:35:43.019Z"
+    },
+    "createdAt": {
+      "$date": "2026-05-02T15:21:35.832Z"
+    },
+    "updatedAt": {
+      "$date": "2026-06-29T08:35:43.020Z"
+    },
+    "__v": 0,
+    "address": ""
+  },
+  {
+    "_id": {
+      "$oid": "69f6172a6179b31cac381c06"
+    },
+    "name": "Stinna Esther Petersen",
+    "airlineName": "Air Alsie",
+    "email": "est@alsie.com",
+    "password": "$2b$12$0PsqcO6NOrfsj/.2mzccgObstOwlciF1Vy6HWXFrfZ1kKhiwHtoRe",
+    "role": "airline",
+    "logo_url": "https://res.cloudinary.com/dasrxzdy8/image/upload/v1777735462/IFOA_LOGO/kjbdioj6b7ceca4jzsbo.png",
+    "resetPasswordToken": null,
+    "resetPasswordExpiry": null,
+    "emailVerified": true,
+    "otpCode": null,
+    "otpExpiry": null,
+    "otpAttempts": 0,
+    "lastLogin": {
+      "$date": "2026-05-22T05:13:26.123Z"
+    },
+    "createdAt": {
+      "$date": "2026-05-02T15:24:26.338Z"
+    },
+    "updatedAt": {
+      "$date": "2026-05-22T05:13:26.124Z"
+    },
+    "__v": 0
+  },
+  {
+    "_id": {
+      "$oid": "69f617b36179b31cac381c0b"
+    },
+    "name": "Ossi Antikainen",
+    "airlineName": "Norra",
+    "email": "ossi.antikainen@flynorra.com",
+    "password": "$2b$12$w8GBVvjsStss.fbyAhbXs.PiAScXByhz/8wu3PokTV4CfY3Mv2Lja",
+    "role": "airline",
+    "logo_url": "https://res.cloudinary.com/dasrxzdy8/image/upload/v1777735600/IFOA_LOGO/rkttp0zd4aprizep39io.png",
+    "resetPasswordToken": null,
+    "resetPasswordExpiry": null,
+    "emailVerified": true,
+    "otpCode": null,
+    "otpExpiry": null,
+    "otpAttempts": 0,
+    "lastLogin": {
+      "$date": "2026-05-22T04:15:49.445Z"
+    },
+    "createdAt": {
+      "$date": "2026-05-02T15:26:43.499Z"
+    },
+    "updatedAt": {
+      "$date": "2026-05-22T04:15:49.446Z"
+    },
+    "__v": 0
+  },
+  {
+    "_id": {
+      "$oid": "69f635fb6179b31cac381f26"
+    },
+    "name": "Piia Nylander",
+    "airlineName": "Valo Aviation",
+    "email": "piia.nylander@valo.aero",
+    "password": "$2b$12$huxsg9pI7uvP4C.N9fnOGOtKOf6Qsax7C2jFn46JZb4kKLFQu8/nm",
+    "role": "airline",
+    "logo_url": "https://res.cloudinary.com/dasrxzdy8/image/upload/v1777743351/IFOA_LOGO/gch0g9ciwdhtqcov8gro.png",
+    "resetPasswordToken": null,
+    "resetPasswordExpiry": null,
+    "emailVerified": true,
+    "otpCode": null,
+    "otpExpiry": null,
+    "otpAttempts": 0,
+    "lastLogin": {
+      "$date": "2026-05-25T10:33:20.116Z"
+    },
+    "createdAt": {
+      "$date": "2026-05-02T17:35:55.519Z"
+    },
+    "updatedAt": {
+      "$date": "2026-05-25T10:33:20.116Z"
+    },
+    "__v": 0
+  },
+  {
+    "_id": {
+      "$oid": "6a107c266179b31cac384697"
+    },
+    "name": "Michal Krecichwost",
+    "airlineName": "Jet Care",
+    "email": "mike@jetcare.aero",
+    "password": "$2b$12$ozr6HDG75l.mVK9/Nk9dzu7s1I6A76F14k2ga2A97QYpDva3UIZ6i",
+    "role": "airline",
+    "logo_url": "https://res.cloudinary.com/dasrxzdy8/image/upload/v1779465253/IFOA_LOGO/bezwwgsxh2pi2rkhsotq.png",
+    "resetPasswordToken": null,
+    "resetPasswordExpiry": null,
+    "emailVerified": true,
+    "otpCode": null,
+    "otpExpiry": null,
+    "otpAttempts": 0,
+    "lastLogin": {
+      "$date": "2026-06-01T12:08:07.879Z"
+    },
+    "createdAt": {
+      "$date": "2026-05-22T15:54:14.385Z"
+    },
+    "updatedAt": {
+      "$date": "2026-06-01T12:08:07.881Z"
+    },
+    "__v": 0
+  },
+  {
+    "_id": {
+      "$oid": "6a2ed9b07ef0fe010101dd69"
+    },
+    "name": "Thomas Gieschen",
+    "airlineName": "Nomad Aviation AG",
+    "address": "Lindenstrasse 23\nCH-8302 Kloten\nSwitzerland",
+    "email": "thomas.gieschen@nomadjet.eu",
+    "password": "$2b$12$8m5f9EWvaGX0qsBnEIaxuee7vlo6vw.QXm4TDYPTKm.7nKlaO3JiW",
+    "role": "airline",
+    "logo_url": "https://res.cloudinary.com/dasrxzdy8/image/upload/v1781455278/IFOA_LOGO/rzfzuzno396uhhuiojdp.png",
+    "resetPasswordToken": null,
+    "resetPasswordExpiry": null,
+    "emailVerified": true,
+    "otpCode": null,
+    "otpExpiry": null,
+    "otpAttempts": 0,
+    "lastLogin": {
+      "$date": "2026-06-17T14:27:43.636Z"
+    },
+    "createdAt": {
+      "$date": "2026-06-14T16:41:20.195Z"
+    },
+    "updatedAt": {
+      "$date": "2026-06-17T14:27:43.637Z"
+    },
+    "__v": 0
+  },
+  {
+    "_id": {
+      "$oid": "6a2fc8007ef0fe010101e008"
+    },
+    "name": "Tina Boeckx",
+    "airlineName": "JetHouse",
+    "address": "",
+    "email": "training@jethouse.aero",
+    "password": "$2b$12$H.K4E9YpZO2WbD0p9bt85OWGcE./NvQljBp4ZOQia0b4IwETL.6E.",
+    "role": "airline",
+    "logo_url": "https://res.cloudinary.com/dasrxzdy8/image/upload/v1781516287/IFOA_LOGO/byp2bqkjt7t7sztwyqt2.png",
+    "resetPasswordToken": null,
+    "resetPasswordExpiry": null,
+    "emailVerified": true,
+    "otpCode": null,
+    "otpExpiry": null,
+    "otpAttempts": 0,
+    "lastLogin": {
+      "$date": "2026-06-15T12:58:57.820Z"
+    },
+    "createdAt": {
+      "$date": "2026-06-15T09:38:08.989Z"
+    },
+    "updatedAt": {
+      "$date": "2026-06-15T12:58:57.821Z"
+    },
+    "__v": 0
+  },
+  {
+    "_id": {
+      "$oid": "6a37f8637ef0fe010101ecba"
+    },
+    "name": "Samantha Sahiram",
+    "airlineName": "G-OPS",
+    "address": "",
+    "email": "ssa@g-ops.com",
+    "password": "$2b$12$dfhnYk7QgT0NTr0GK4CRxOd4cQuH.56Ln10Cgeluu4bsTLGLl5kgO",
+    "role": "airline",
+    "logo_url": "https://res.cloudinary.com/dasrxzdy8/image/upload/v1782052961/IFOA_LOGO/uo7ouqj3ednfbmd2aitl.png",
+    "resetPasswordToken": null,
+    "resetPasswordExpiry": null,
+    "emailVerified": true,
+    "otpCode": null,
+    "otpExpiry": null,
+    "otpAttempts": 0,
+    "lastLogin": {
+      "$date": "2026-06-21T14:42:43.791Z"
+    },
+    "createdAt": {
+      "$date": "2026-06-21T14:42:43.792Z"
+    },
+    "updatedAt": {
+      "$date": "2026-06-21T14:42:43.792Z"
+    },
+    "__v": 0
+  },
+  {
+    "_id": {
+      "$oid": "6a5b2ae3e4e1283980488ded"
+    },
+    "name": "Vincent Incammicia",
+    "airlineName": "International Flight Operations Academy",
+    "address": "",
+    "email": "vincent@theifoa.com",
+    "password": "$2b$12$twLWlZUVd2ea15Q77ZrTEei5oM3VYMgTh/swOO..FaITQ/L4Twv4u",
+    "role": "airline",
+    "logo_url": "https://res.cloudinary.com/dasrxzdy8/image/upload/v1784359649/IFOA_LOGO/sthzmxskus3xnaujnwwf.png",
+    "resetPasswordToken": null,
+    "resetPasswordExpiry": null,
+    "emailVerified": true,
+    "otpCode": null,
+    "otpExpiry": null,
+    "otpAttempts": 0,
+    "lastLogin": {
+      "$date": "2026-07-18T07:27:31.046Z"
+    },
+    "createdAt": {
+      "$date": "2026-07-18T07:27:31.047Z"
+    },
+    "updatedAt": {
+      "$date": "2026-07-18T07:27:31.047Z"
+    },
+    "__v": 0
+  },
+  {
+    "_id": {
+      "$oid": "6a5f1e93fe1150f9b817a80f"
+    },
+    "name": "Jyothis Pushpara",
+    "airlineName": "DHL Bahrain",
+    "address": "",
+    "email": "jyothis.pushparaj@dhl.com",
+    "password": "$2b$12$nLLYOhlHcOYO8kr.wP3/5eJdVelSuJ.OrGkNW.oaTli2VNE/KL552",
+    "role": "airline",
+    "logo_url": "https://res.cloudinary.com/dasrxzdy8/image/upload/v1784618642/IFOA_LOGO/z7ne3nj8m1ie2nnuadwt.jpg",
+    "resetPasswordToken": null,
+    "resetPasswordExpiry": null,
+    "emailVerified": true,
+    "otpCode": null,
+    "otpExpiry": null,
+    "otpAttempts": 0,
+    "lastLogin": {
+      "$date": "2026-07-21T07:24:03.336Z"
+    },
+    "createdAt": {
+      "$date": "2026-07-21T07:24:03.339Z"
+    },
+    "updatedAt": {
+      "$date": "2026-07-21T07:24:03.339Z"
+    },
+    "__v": 0
+  }
+]

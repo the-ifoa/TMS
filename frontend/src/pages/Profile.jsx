@@ -187,9 +187,9 @@ export default function Profile() {
         {/* Profile Card */}
         <div className="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-6 shadow-2xs">
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6">
-            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-white border border-slate-200 flex items-center justify-center overflow-hidden flex-shrink-0 shadow-2xs">
+            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl flex items-center justify-center overflow-hidden flex-shrink-0">
               {!isAdmin && admin?.logo_url
-                ? <img src={admin.logo_url} alt={admin.airlineName} className="w-full h-full object-contain p-1" />
+                ? <img src={admin.logo_url} alt={admin.airlineName} className="w-full h-full object-contain" />
                 : <img src={logoImg} alt="IFOA" className="w-12 h-12 sm:w-16 sm:h-16 object-contain" />
               }
             </div>
@@ -383,7 +383,7 @@ export default function Profile() {
             {admin?.logo_url && !logoFile && (
               <div className="flex items-center gap-4 p-3.5 bg-slate-50 rounded-2xl border border-slate-100 mb-3">
                 <img src={admin.logo_url} alt="Current logo"
-                  className="w-12 h-12 sm:w-14 sm:h-14 object-contain rounded-xl border border-slate-200 bg-white flex-shrink-0" />
+                  className="w-12 h-12 sm:w-14 sm:h-14 object-contain rounded-xl flex-shrink-0" />
                 <div className="min-w-0">
                   <p className="text-sm font-bold text-slate-800">Current logo</p>
                   <p className="text-xs font-medium text-slate-400 mt-0.5">Shown in your profile and admin airline list</p>
@@ -394,7 +394,7 @@ export default function Profile() {
               <div className="space-y-3">
                 <div className="flex items-center gap-3 sm:gap-4 p-3.5 bg-slate-50 rounded-2xl border border-slate-100">
                   <img src={logoPreview} alt="New logo"
-                    className="w-12 h-12 sm:w-14 sm:h-14 object-contain rounded-xl border border-slate-200 bg-white flex-shrink-0" />
+                    className="w-12 h-12 sm:w-14 sm:h-14 object-contain rounded-xl flex-shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-slate-800 truncate">{logoFile.name}</p>
                     <p className="text-xs font-medium text-slate-400 mt-0.5">{(logoFile.size / 1024).toFixed(0)} KB</p>

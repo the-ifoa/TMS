@@ -11,7 +11,6 @@ import {
   HiOutlineAcademicCap,
   HiOutlineUsers,
   HiOutlineClipboardCheck,
-  HiOutlineEye,
   HiOutlinePencilAlt,
   HiOutlineX,
 } from 'react-icons/hi';
@@ -244,9 +243,9 @@ function GradeModal({ attemptId, onClose, onGraded }) {
           </div>
         ) : (
           <>
-            {/* Sticky Executive Modal Header */}
-            <div className="flex-shrink-0 px-4 sm:px-6 py-3 border-b border-slate-200/80 bg-slate-50/60 backdrop-blur-md sticky top-0 z-10 space-y-2.5">
-              {/* Row 1: Candidate Profile & Executive Stats */}
+            {/* Sticky Modern Clean Modal Header */}
+            <div className="flex-shrink-0 px-4 sm:px-6 py-3 border-b border-slate-200/80 bg-white sticky top-0 z-10 space-y-2.5">
+              {/* Row 1: Candidate Profile & Clean Score Card */}
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3 min-w-0">
                   <Avatar className="w-9 h-9 border border-slate-200 shadow-2xs flex-shrink-0">
@@ -265,31 +264,33 @@ function GradeModal({ attemptId, onClose, onGraded }) {
                 </div>
 
                 <div className="flex items-center gap-2.5 flex-shrink-0">
-                  {/* Clean Executive Score Badge */}
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-900 text-white shadow-2xs">
+                  {/* Refined Modern Score Badge (Light/Slate theme) */}
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200/80 shadow-2xs">
                     <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wide">Score</span>
-                    <input
-                      type="number" min="0" max={maxTotal}
-                      value={liveTotal}
-                      onChange={(e) => setTotalOverride(Math.max(0, Math.min(maxTotal, Number(e.target.value))))}
-                      title="Directly edit final score"
-                      className="w-9 py-0.5 text-xs font-extrabold text-white bg-slate-800/90 border border-slate-700/80 rounded text-center outline-none focus:ring-1 focus:ring-blue-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                    />
-                    <span className="text-xs font-extrabold text-slate-300">/ {maxTotal}</span>
-                    <span className="ml-0.5 px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[11px] font-black border border-emerald-500/30">
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number" min="0" max={maxTotal}
+                        value={liveTotal}
+                        onChange={(e) => setTotalOverride(Math.max(0, Math.min(maxTotal, Number(e.target.value))))}
+                        title="Directly edit final score"
+                        className="w-9 py-0.5 text-xs font-extrabold text-slate-900 bg-white border border-slate-200 rounded-md text-center outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none transition-all"
+                      />
+                      <span className="text-xs font-bold text-slate-600">/ {maxTotal}</span>
+                    </div>
+                    <span className="ml-1 px-1.5 py-0.5 rounded-md bg-slate-900 text-white text-[11px] font-extrabold shadow-2xs">
                       {livePct}%
                     </span>
                     {totalOverride != null && (
                       <button type="button" onClick={() => setTotalOverride(null)} title="Reset to auto-calculated score"
-                        className="ml-1 text-[10px] font-bold text-blue-300 hover:text-white underline">
+                        className="ml-1 text-[10px] font-bold text-blue-600 hover:text-blue-800 underline">
                         reset
                       </button>
                     )}
                   </div>
 
-                  {/* Status Pill Badge with Dot */}
+                  {/* Refined Status Pill Badge */}
                   <span
-                    className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold border capitalize shadow-2xs ${
+                    className={`inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-bold border capitalize shadow-2xs ${
                       attempt.status === 'graded' || attempt.status === 'submitted'
                         ? 'bg-emerald-50 text-emerald-700 border-emerald-200/80'
                         : attempt.status === 'pending_review'
@@ -297,19 +298,12 @@ function GradeModal({ attemptId, onClose, onGraded }) {
                         : 'bg-amber-50 text-amber-700 border-amber-200/80'
                     }`}
                   >
-                    <span className={`w-1.5 h-1.5 rounded-full ${
-                      attempt.status === 'graded' || attempt.status === 'submitted'
-                        ? 'bg-emerald-500'
-                        : attempt.status === 'pending_review'
-                        ? 'bg-blue-500'
-                        : 'bg-amber-500'
-                    }`} />
                     {attempt.status.replace('_', ' ')}
                   </span>
                 </div>
               </div>
 
-              {/* Row 2: Segmented Control Filter Tabs & Bulk Award Action */}
+              {/* Row 2: Filter Tabs & Bulk Action */}
               {(() => {
                 const correctCount = attempt.answers.filter((a) => a.is_correct === true).length;
                 const incorrectCount = attempt.answers.filter((a) => a.is_correct === false).length;
@@ -320,23 +314,23 @@ function GradeModal({ attemptId, onClose, onGraded }) {
                   { id: 'incorrect', label: 'Incorrect', count: incorrectCount },
                 ];
                 return (
-                  <div className="flex items-center justify-between gap-3 pt-2 border-t border-slate-200/60 flex-wrap sm:flex-nowrap">
-                    {/* Segmented Control */}
-                    <div className="inline-flex items-center p-1 rounded-xl bg-slate-200/70 border border-slate-200/80 text-xs overflow-x-auto">
+                  <div className="flex items-center justify-between gap-3 pt-2 border-t border-slate-100 flex-wrap sm:flex-nowrap">
+                    {/* Clean Minimal Segmented Tabs */}
+                    <div className="inline-flex items-center p-1 rounded-xl bg-slate-100/90 border border-slate-200/70 text-xs overflow-x-auto">
                       {tabs.map((t) => (
                         <button
                           key={t.id}
                           type="button"
                           onClick={() => setFilter(t.id)}
-                          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs transition-all cursor-pointer whitespace-nowrap ${
                             filter === t.id
-                              ? 'bg-white text-slate-900 shadow-2xs border border-slate-200/80 font-black'
-                              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/60 font-semibold'
+                              ? 'bg-white text-slate-900 shadow-2xs border border-slate-200/80 font-bold'
+                              : 'text-slate-500 hover:text-slate-900 font-semibold hover:bg-slate-200/50'
                           }`}
                         >
                           <span>{t.label}</span>
                           <span
-                            className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                            className={`px-1.5 py-0.2 rounded-md text-[10px] font-bold ${
                               filter === t.id
                                 ? 'bg-slate-100 text-slate-800'
                                 : t.highlight
@@ -355,7 +349,7 @@ function GradeModal({ attemptId, onClose, onGraded }) {
                       <button
                         type="button"
                         onClick={awardMaxToAllPending}
-                        className="inline-flex items-center gap-1.5 h-8 px-3 rounded-xl bg-amber-500 hover:bg-amber-600 active:scale-[0.98] text-white text-xs font-bold shadow-2xs transition-all whitespace-nowrap ml-auto cursor-pointer"
+                        className="inline-flex items-center gap-1.5 h-8 px-3.5 rounded-xl bg-amber-500 hover:bg-amber-600 active:scale-[0.98] text-white text-xs font-bold shadow-2xs transition-all whitespace-nowrap ml-auto cursor-pointer"
                       >
                         <HiOutlineCheckCircle className="w-4 h-4" />
                         <span>Award Max to All Pending ({pendingCount})</span>
@@ -770,20 +764,11 @@ export default function ExamAttempts() {
                       className={`rounded-xl text-xs font-bold shadow-2xs ${
                         a.status === 'pending_review'
                           ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                          : 'bg-slate-900 hover:bg-slate-800 text-white'
+                          : 'bg-white border border-slate-200 hover:bg-slate-50 text-slate-700'
                       }`}
                     >
-                      {a.status === 'pending_review' ? (
-                        <>
-                          <HiOutlinePencilAlt className="w-3.5 h-3.5" />
-                          Grade
-                        </>
-                      ) : (
-                        <>
-                          <HiOutlineEye className="w-3.5 h-3.5" />
-                          View
-                        </>
-                      )}
+                      <HiOutlinePencilAlt className="w-3.5 h-3.5" />
+                      {a.status === 'pending_review' ? 'Grade' : 'Edit Grade'}
                     </Button>
                   )}
                 </div>

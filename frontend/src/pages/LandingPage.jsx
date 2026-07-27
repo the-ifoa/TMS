@@ -150,7 +150,7 @@ export default function LandingPage() {
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <button className="flex items-center gap-2.5 text-left rounded-full hover:opacity-90 transition-all outline-none focus:outline-none cursor-pointer">
-                      <Avatar className="w-9 h-9 border border-slate-200 shadow-2xs">
+                      <Avatar className="w-9 h-9">
                         {!isAdmin && admin?.logo_url && <AvatarImage src={admin.logo_url} alt={admin.airlineName} />}
                         <AvatarFallback className="bg-[#0B132B] text-white font-bold text-xs">
                           {!isAdmin && admin?.airlineName ? admin.airlineName.charAt(0).toUpperCase() : initials}
@@ -314,10 +314,10 @@ export default function LandingPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.65, delay: 0.72, ease: [0.215, 0.61, 0.355, 1] }}
-              className="mt-6 text-base sm:text-lg md:text-xl text-slate-600 max-w-2xl mx-auto leading-relaxed font-normal"
+              className="mt-6 text-base sm:text-lg md:text-xl text-slate-600 font-medium max-w-2xl mx-auto leading-relaxed tracking-tight text-center"
             >
-              A centralised platform to plan, manage and track all aviation training activities.
-              Keep your team compliant, organised and audit-ready at every stage.
+              <span className="block">A centralised platform to plan, manage, and track all aviation training activities.</span>
+              <span className="block mt-1.5 text-slate-500 font-normal">Keep your team compliant, organised, and audit-ready at every stage.</span>
             </motion.p>
 
             {/* CTA */}

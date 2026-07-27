@@ -447,7 +447,7 @@ export default function Header({ sidebarOpen, setSidebarOpen }) {
         <DropdownMenu open={profileOpen} onOpenChange={(open) => { setProfileOpen(open); if (open) setNotifOpen(false); }}>
           <DropdownMenuTrigger asChild>
             <button className="flex items-center gap-2.5 p-1 rounded-full hover:opacity-90 transition-all outline-none focus:outline-none cursor-pointer">
-              <Avatar className="w-9 h-9 border border-slate-200 shadow-2xs">
+              <Avatar className="w-9 h-9">
                 {!isAdmin && admin?.logo_url && <AvatarImage src={admin.logo_url} alt={admin.airlineName} />}
                 <AvatarFallback className="bg-[#0B132B] text-white font-bold text-xs">
                   {!isAdmin && admin?.airlineName ? admin.airlineName.charAt(0).toUpperCase() : initials}

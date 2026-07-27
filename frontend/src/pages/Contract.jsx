@@ -22,6 +22,7 @@ import {
   HiOutlineChevronRight,
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
+import LogoAvatar from '../components/LogoAvatar';
 import {
   getContractDefaults,
   getContractDefaultsForAirline,
@@ -628,12 +629,7 @@ function AirlinesList({ airlines, onCreateContract, onViewContract, loading }) {
 
             {/* Top row on mobile: icon + info + status badge */}
             <div className="flex items-center gap-3 flex-1 min-w-0">
-              <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-slate-100 border border-slate-200/80 flex items-center justify-center overflow-hidden">
-                {airline.logoUrl
-                  ? <img src={airline.logoUrl} alt={airline.airlineName} className="w-full h-full object-contain p-1" />
-                  : <HiOutlineOfficeBuilding className="w-5 h-5 text-slate-600" />
-                }
-              </div>
+              <LogoAvatar logoUrl={airline.logoUrl} name={airline.airlineName} initials={airline.airlineName ? airline.airlineName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() : 'AL'} />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-bold text-slate-900 truncate leading-tight">{airline.airlineName}</p>
                 <p className="text-xs text-slate-500 truncate mt-0.5">{airline.email}</p>

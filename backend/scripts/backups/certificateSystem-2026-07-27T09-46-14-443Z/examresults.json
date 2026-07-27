@@ -1,0 +1,1046 @@
+[
+  {
+    "_id": {
+      "$oid": "69df1657e612b970d88dff0b"
+    },
+    "first_name": "Sparsh",
+    "last_name": "Gupta",
+    "participant_name": "Sparsh Gupta",
+    "batch_name": "NOV/DEC-2024",
+    "course_name": "Flight Dispatch Initial Training / Promotion NOV/DEC 2024",
+    "result_header_text": "4-Weeks Flight Dispatch Initial Course Promotion NOV-DEC 2024 / 04 November - 06 December 2024",
+    "course_type": "FDI",
+    "training_mode": "HYBRID",
+    "start_date": "2024-11-03",
+    "end_date": "2024-12-05",
+    "company": "",
+    "lead_instructor": "Richard Yeates",
+    "instructors": [
+      "Michael West",
+      "Karin Friberg",
+      "Kenneth Kroborg"
+    ],
+    "subjects": [
+      {
+        "abbr": "LAW",
+        "name": "AIR LAW",
+        "max_marks": 100,
+        "marks_obtained": 75,
+        "grade": "PASS"
+      },
+      {
+        "abbr": "SYS",
+        "name": "AIRCRAFT GENERAL KNOWLEDGE & SYSTEMS",
+        "max_marks": 100,
+        "marks_obtained": 90,
+        "grade": "DISTINCTION"
+      },
+      {
+        "abbr": "MON",
+        "name": "FLIGHT MONITORING",
+        "max_marks": 100,
+        "marks_obtained": 85,
+        "grade": "MERIT"
+      },
+      {
+        "abbr": "M&B",
+        "name": "MASS & BALANCE",
+        "max_marks": 100,
+        "marks_obtained": 90,
+        "grade": "DISTINCTION"
+      },
+      {
+        "abbr": "ATM",
+        "name": "AIR TRAFFIC MANAGEMENT",
+        "max_marks": 100,
+        "marks_obtained": 90,
+        "grade": "DISTINCTION"
+      },
+      {
+        "abbr": "COM",
+        "name": "COMMUNICATION",
+        "max_marks": 100,
+        "marks_obtained": 90,
+        "grade": "DISTINCTION"
+      },
+      {
+        "abbr": "NAV",
+        "name": "NAVIGATION",
+        "max_marks": 100,
+        "marks_obtained": 100,
+        "grade": "OUTSTANDING"
+      },
+      {
+        "abbr": "PER",
+        "name": "Principles of Flight & Performance",
+        "max_marks": 100,
+        "marks_obtained": 90,
+        "grade": "DISTINCTION"
+      },
+      {
+        "abbr": "DRM",
+        "name": "Dangerous Goods",
+        "max_marks": 100,
+        "marks_obtained": 100,
+        "grade": "OUTSTANDING"
+      },
+      {
+        "abbr": "MET",
+        "name": "METEOROLOGY",
+        "max_marks": 100,
+        "marks_obtained": 100,
+        "grade": "OUTSTANDING"
+      },
+      {
+        "abbr": "FPL",
+        "name": "FLIGHT PLANNING",
+        "max_marks": 100,
+        "marks_obtained": 100,
+        "grade": "OUTSTANDING"
+      }
+    ],
+    "final_exam_score": 92,
+    "final_marks": 91.833,
+    "overall_grade": "DISTINCTION",
+    "sheet_issued": false,
+    "sheet_date": "2024-12-05",
+    "created_by": {
+      "$oid": "69c1201e4e89a51c6c5797e2"
+    },
+    "created_at": {
+      "$date": "2026-04-15T04:38:47.912Z"
+    },
+    "updated_at": {
+      "$date": "2026-04-15T04:38:47.912Z"
+    },
+    "__v": 0
+  },
+  {
+    "_id": {
+      "$oid": "69df1657e612b970d88dff0d"
+    },
+    "first_name": "Sarthak R",
+    "last_name": "Jaiswal",
+    "participant_name": "Sarthak R Jaiswal",
+    "batch_name": "NOV/DEC-2024",
+    "course_name": "Flight Dispatch Initial Training / Promotion NOV/DEC 2024",
+    "result_header_text": "4-Weeks Flight Dispatch Initial Course Promotion NOV-DEC 2024 / 04 November - 06 December 2024",
+    "course_type": "FDI",
+    "training_mode": "HYBRID",
+    "start_date": "2024-11-03",
+    "end_date": "2024-12-05",
+    "company": "",
+    "lead_instructor": "Richard Yeates",
+    "instructors": [
+      "Michael West",
+      "Karin Friberg",
+      "Kenneth Kroborg"
+    ],
+    "subjects": [
+      {
+        "abbr": "LAW",
+        "name": "AIR LAW",
+        "max_marks": 100,
+        "marks_obtained": 95,
+        "grade": "DISTINCTION"
+      },
+      {
+        "abbr": "SYS",
+        "name": "AIRCRAFT GENERAL KNOWLEDGE & SYSTEMS",
+        "max_marks": 100,
+        "marks_obtained": 100,
+        "grade": "OUTSTANDING"
+      },
+      {
+        "abbr": "MON",
+        "name": "FLIGHT MONITORING",
+        "max_marks": 100,
+        "marks_obtained": 85,
+        "grade": "MERIT"
+      },
+      {
+        "abbr": "M&B",
+        "name": "MASS & BALANCE",
+        "max_marks": 100,
+        "marks_obtained": 100,
+        "grade": "OUTSTANDING"
+      },
+      {
+        "abbr": "ATM",
+        "name": "AIR TRAFFIC MANAGEMENT",
+        "max_marks": 100,
+        "marks_obtained": 80,
+        "grade": "MERIT"
+      },
+      {
+        "abbr": "COM",
+        "name": "COMMUNICATION",
+        "max_marks": 100,
+        "marks_obtained": 90,
+        "grade": "DISTINCTION"
+      },
+      {
+        "abbr": "NAV",
+        "name": "NAVIGATION",
+        "max_marks": 100,
+        "marks_obtained": 95,
+        "grade": "DISTINCTION"
+      },
+      {
+        "abbr": "PER",
+        "name": "Principles of Flight & Performance",
+        "max_marks": 100,
+        "marks_obtained": 100,
+        "grade": "OUTSTANDING"
+      },
+      {
+        "abbr": "DRM",
+        "name": "Dangerous Goods",
+        "max_marks": 100,
+        "marks_obtained": 100,
+        "grade": "OUTSTANDING"
+      },
+      {
+        "abbr": "MET",
+        "name": "METEOROLOGY",
+        "max_marks": 100,
+        "marks_obtained": 100,
+        "grade": "OUTSTANDING"
+      },
+      {
+        "abbr": "FPL",
+        "name": "FLIGHT PLANNING",
+        "max_marks": 100,
+        "marks_obtained": 100,
+        "grade": "OUTSTANDING"
+      }
+    ],
+    "final_exam_score": 100,
+    "final_marks": 95.417,
+    "overall_grade": "OUTSTANDING",
+    "sheet_issued": false,
+    "sheet_date": "2024-12-05",
+    "created_by": {
+      "$oid": "69c1201e4e89a51c6c5797e2"
+    },
+    "created_at": {
+      "$date": "2026-04-15T04:38:47.955Z"
+    },
+    "updated_at": {
+      "$date": "2026-04-15T04:38:47.955Z"
+    },
+    "__v": 0
+  },
+  {
+    "_id": {
+      "$oid": "69df1657e612b970d88dff0f"
+    },
+    "first_name": "Harshita",
+    "last_name": "Jangir",
+    "participant_name": "Harshita Jangir",
+    "batch_name": "NOV/DEC-2024",
+    "course_name": "Flight Dispatch Initial Training / Promotion NOV/DEC 2024",
+    "result_header_text": "4-Weeks Flight Dispatch Initial Course Promotion NOV-DEC 2024 / 04 November - 06 December 2024",
+    "course_type": "FDI",
+    "training_mode": "HYBRID",
+    "start_date": "2024-11-03",
+    "end_date": "2024-12-05",
+    "company": "",
+    "lead_instructor": "Richard Yeates",
+    "instructors": [
+      "Michael West",
+      "Karin Friberg",
+      "Kenneth Kroborg"
+    ],
+    "subjects": [
+      {
+        "abbr": "LAW",
+        "name": "AIR LAW",
+        "max_marks": 100,
+        "marks_obtained": 95,
+        "grade": "DISTINCTION"
+      },
+      {
+        "abbr": "SYS",
+        "name": "AIRCRAFT GENERAL KNOWLEDGE & SYSTEMS",
+        "max_marks": 100,
+        "marks_obtained": 75,
+        "grade": "PASS"
+      },
+      {
+        "abbr": "MON",
+        "name": "FLIGHT MONITORING",
+        "max_marks": 100,
+        "marks_obtained": 100,
+        "grade": "OUTSTANDING"
+      },
+      {
+        "abbr": "M&B",
+        "name": "MASS & BALANCE",
+        "max_marks": 100,
+        "marks_obtained": 90,
+        "grade": "DISTINCTION"
+      },
+      {
+        "abbr": "ATM",
+        "name": "AIR TRAFFIC MANAGEMENT",
+        "max_marks": 100,
+        "marks_obtained": 90,
+        "grade": "DISTINCTION"
+      },
+      {
+        "abbr": "COM",
+        "name": "COMMUNICATION",
+        "max_marks": 100,
+        "marks_obtained": 90,
+        "grade": "DISTINCTION"
+      },
+      {
+        "abbr": "NAV",
+        "name": "NAVIGATION",
+        "max_marks": 100,
+        "marks_obtained": 90,
+        "grade": "DISTINCTION"
+      },
+      {
+        "abbr": "PER",
+        "name": "Principles of Flight & Performance",
+        "max_marks": 100,
+        "marks_obtained": 100,
+        "grade": "OUTSTANDING"
+      },
+      {
+        "abbr": "DRM",
+        "name": "Dangerous Goods",
+        "max_marks": 100,
+        "marks_obtained": 100,
+        "grade": "OUTSTANDING"
+      },
+      {
+        "abbr": "MET",
+        "name": "METEOROLOGY",
+        "max_marks": 100,
+        "marks_obtained": 95,
+        "grade": "DISTINCTION"
+      },
+      {
+        "abbr": "FPL",
+        "name": "FLIGHT PLANNING",
+        "max_marks": 100,
+        "marks_obtained": 100,
+        "grade": "OUTSTANDING"
+      }
+    ],
+    "final_exam_score": 100,
+    "final_marks": 93.75,
+    "overall_grade": "DISTINCTION",
+    "sheet_issued": false,
+    "sheet_date": "2024-12-05",
+    "created_by": {
+      "$oid": "69c1201e4e89a51c6c5797e2"
+    },
+    "created_at": {
+      "$date": "2026-04-15T04:38:47.988Z"
+    },
+    "updated_at": {
+      "$date": "2026-04-15T04:38:47.988Z"
+    },
+    "__v": 0
+  },
+  {
+    "_id": {
+      "$oid": "69df1658e612b970d88dff11"
+    },
+    "first_name": "Roopdarshan",
+    "last_name": "Pandey",
+    "participant_name": "Roopdarshan Pandey",
+    "batch_name": "NOV/DEC-2024",
+    "course_name": "Flight Dispatch Initial Training / Promotion NOV/DEC 2024",
+    "result_header_text": "4-Weeks Flight Dispatch Initial Course Promotion NOV-DEC 2024 / 04 November - 06 December 2024",
+    "course_type": "FDI",
+    "training_mode": "HYBRID",
+    "start_date": "2024-11-03",
+    "end_date": "2024-12-05",
+    "company": "",
+    "lead_instructor": "Richard Yeates",
+    "instructors": [
+      "Michael West",
+      "Karin Friberg",
+      "Kenneth Kroborg"
+    ],
+    "subjects": [
+      {
+        "abbr": "LAW",
+        "name": "AIR LAW",
+        "max_marks": 100,
+        "marks_obtained": 100,
+        "grade": "OUTSTANDING"
+      },
+      {
+        "abbr": "SYS",
+        "name": "AIRCRAFT GENERAL KNOWLEDGE & SYSTEMS",
+        "max_marks": 100,
+        "marks_obtained": 90,
+        "grade": "DISTINCTION"
+      },
+      {
+        "abbr": "MON",
+        "name": "FLIGHT MONITORING",
+        "max_marks": 100,
+        "marks_obtained": 100,
+        "grade": "OUTSTANDING"
+      },
+      {
+        "abbr": "M&B",
+        "name": "MASS & BALANCE",
+        "max_marks": 100,
+        "marks_obtained": 100,
+        "grade": "OUTSTANDING"
+      },
+      {
+        "abbr": "ATM",
+        "name": "AIR TRAFFIC MANAGEMENT",
+        "max_marks": 100,
+        "marks_obtained": 100,
+        "grade": "OUTSTANDING"
+      },
+      {
+        "abbr": "COM",
+        "name": "COMMUNICATION",
+        "max_marks": 100,
+        "marks_obtained": 100,
+        "grade": "OUTSTANDING"
+      },
+      {
+        "abbr": "NAV",
+        "name": "NAVIGATION",
+        "max_marks": 100,
+        "marks_obtained": 95,
+        "grade": "DISTINCTION"
+      },
+      {
+        "abbr": "PER",
+        "name": "Principles of Flight & Performance",
+        "max_marks": 100,
+        "marks_obtained": 95,
+        "grade": "DISTINCTION"
+      },
+      {
+        "abbr": "DRM",
+        "name": "Dangerous Goods",
+        "max_marks": 100,
+        "marks_obtained": 100,
+        "grade": "OUTSTANDING"
+      },
+      {
+        "abbr": "MET",
+        "name": "METEOROLOGY",
+        "max_marks": 100,
+        "marks_obtained": 100,
+        "grade": "OUTSTANDING"
+      },
+      {
+        "abbr": "FPL",
+        "name": "FLIGHT PLANNING",
+        "max_marks": 100,
+        "marks_obtained": 100,
+        "grade": "OUTSTANDING"
+      }
+    ],
+    "final_exam_score": 98,
+    "final_marks": 98.167,
+    "overall_grade": "OUTSTANDING",
+    "sheet_issued": false,
+    "sheet_date": "2024-12-05",
+    "created_by": {
+      "$oid": "69c1201e4e89a51c6c5797e2"
+    },
+    "created_at": {
+      "$date": "2026-04-15T04:38:48.021Z"
+    },
+    "updated_at": {
+      "$date": "2026-04-15T04:38:48.021Z"
+    },
+    "__v": 0
+  },
+  {
+    "_id": {
+      "$oid": "69df1658e612b970d88dff13"
+    },
+    "first_name": "Dheeraj",
+    "last_name": "Raj",
+    "participant_name": "Dheeraj Raj",
+    "batch_name": "NOV/DEC-2024",
+    "course_name": "Flight Dispatch Initial Training / Promotion NOV/DEC 2024",
+    "result_header_text": "4-Weeks Flight Dispatch Initial Course Promotion NOV-DEC 2024 / 04 November - 06 December 2024",
+    "course_type": "FDI",
+    "training_mode": "HYBRID",
+    "start_date": "2024-11-03",
+    "end_date": "2024-12-05",
+    "company": "",
+    "lead_instructor": "Richard Yeates",
+    "instructors": [
+      "Michael West",
+      "Karin Friberg",
+      "Kenneth Kroborg"
+    ],
+    "subjects": [
+      {
+        "abbr": "LAW",
+        "name": "AIR LAW",
+        "max_marks": 100,
+        "marks_obtained": 85,
+        "grade": "MERIT"
+      },
+      {
+        "abbr": "SYS",
+        "name": "AIRCRAFT GENERAL KNOWLEDGE & SYSTEMS",
+        "max_marks": 100,
+        "marks_obtained": 80,
+        "grade": "MERIT"
+      },
+      {
+        "abbr": "MON",
+        "name": "FLIGHT MONITORING",
+        "max_marks": 100,
+        "marks_obtained": 80,
+        "grade": "MERIT"
+      },
+      {
+        "abbr": "M&B",
+        "name": "MASS & BALANCE",
+        "max_marks": 100,
+        "marks_obtained": 90,
+        "grade": "DISTINCTION"
+      },
+      {
+        "abbr": "ATM",
+        "name": "AIR TRAFFIC MANAGEMENT",
+        "max_marks": 100,
+        "marks_obtained": 90,
+        "grade": "DISTINCTION"
+      },
+      {
+        "abbr": "COM",
+        "name": "COMMUNICATION",
+        "max_marks": 100,
+        "marks_obtained": 100,
+        "grade": "OUTSTANDING"
+      },
+      {
+        "abbr": "NAV",
+        "name": "NAVIGATION",
+        "max_marks": 100,
+        "marks_obtained": 95,
+        "grade": "DISTINCTION"
+      },
+      {
+        "abbr": "PER",
+        "name": "Principles of Flight & Performance",
+        "max_marks": 100,
+        "marks_obtained": 85,
+        "grade": "MERIT"
+      },
+      {
+        "abbr": "DRM",
+        "name": "Dangerous Goods",
+        "max_marks": 100,
+        "marks_obtained": 90,
+        "grade": "DISTINCTION"
+      },
+      {
+        "abbr": "MET",
+        "name": "METEOROLOGY",
+        "max_marks": 100,
+        "marks_obtained": 90,
+        "grade": "DISTINCTION"
+      },
+      {
+        "abbr": "FPL",
+        "name": "FLIGHT PLANNING",
+        "max_marks": 100,
+        "marks_obtained": 100,
+        "grade": "OUTSTANDING"
+      }
+    ],
+    "final_exam_score": 88,
+    "final_marks": 89.417,
+    "overall_grade": "MERIT",
+    "sheet_issued": false,
+    "sheet_date": "2024-12-05",
+    "created_by": {
+      "$oid": "69c1201e4e89a51c6c5797e2"
+    },
+    "created_at": {
+      "$date": "2026-04-15T04:38:48.054Z"
+    },
+    "updated_at": {
+      "$date": "2026-04-15T04:38:48.054Z"
+    },
+    "__v": 0
+  },
+  {
+    "_id": {
+      "$oid": "69df1658e612b970d88dff15"
+    },
+    "first_name": "Suresh",
+    "last_name": "Kumar T",
+    "participant_name": "Suresh Kumar T",
+    "batch_name": "NOV/DEC-2024",
+    "course_name": "Flight Dispatch Initial Training / Promotion NOV/DEC 2024",
+    "result_header_text": "4-Weeks Flight Dispatch Initial Course Promotion NOV-DEC 2024 / 04 November - 06 December 2024",
+    "course_type": "FDI",
+    "training_mode": "HYBRID",
+    "start_date": "2024-11-03",
+    "end_date": "2024-12-05",
+    "company": "",
+    "lead_instructor": "Richard Yeates",
+    "instructors": [
+      "Michael West",
+      "Karin Friberg",
+      "Kenneth Kroborg"
+    ],
+    "subjects": [
+      {
+        "abbr": "LAW",
+        "name": "AIR LAW",
+        "max_marks": 100,
+        "marks_obtained": 100,
+        "grade": "OUTSTANDING"
+      },
+      {
+        "abbr": "SYS",
+        "name": "AIRCRAFT GENERAL KNOWLEDGE & SYSTEMS",
+        "max_marks": 100,
+        "marks_obtained": 95,
+        "grade": "DISTINCTION"
+      },
+      {
+        "abbr": "MON",
+        "name": "FLIGHT MONITORING",
+        "max_marks": 100,
+        "marks_obtained": 100,
+        "grade": "OUTSTANDING"
+      },
+      {
+        "abbr": "M&B",
+        "name": "MASS & BALANCE",
+        "max_marks": 100,
+        "marks_obtained": 90,
+        "grade": "DISTINCTION"
+      },
+      {
+        "abbr": "ATM",
+        "name": "AIR TRAFFIC MANAGEMENT",
+        "max_marks": 100,
+        "marks_obtained": 100,
+        "grade": "OUTSTANDING"
+      },
+      {
+        "abbr": "COM",
+        "name": "COMMUNICATION",
+        "max_marks": 100,
+        "marks_obtained": 90,
+        "grade": "DISTINCTION"
+      },
+      {
+        "abbr": "NAV",
+        "name": "NAVIGATION",
+        "max_marks": 100,
+        "marks_obtained": 90,
+        "grade": "DISTINCTION"
+      },
+      {
+        "abbr": "PER",
+        "name": "Principles of Flight & Performance",
+        "max_marks": 100,
+        "marks_obtained": 95,
+        "grade": "DISTINCTION"
+      },
+      {
+        "abbr": "DRM",
+        "name": "Dangerous Goods",
+        "max_marks": 100,
+        "marks_obtained": 100,
+        "grade": "OUTSTANDING"
+      },
+      {
+        "abbr": "MET",
+        "name": "METEOROLOGY",
+        "max_marks": 100,
+        "marks_obtained": 100,
+        "grade": "OUTSTANDING"
+      },
+      {
+        "abbr": "FPL",
+        "name": "FLIGHT PLANNING",
+        "max_marks": 100,
+        "marks_obtained": 100,
+        "grade": "OUTSTANDING"
+      }
+    ],
+    "final_exam_score": 96,
+    "final_marks": 96.333,
+    "overall_grade": "OUTSTANDING",
+    "sheet_issued": false,
+    "sheet_date": null,
+    "created_by": {
+      "$oid": "69c1201e4e89a51c6c5797e2"
+    },
+    "created_at": {
+      "$date": "2026-04-15T04:38:48.087Z"
+    },
+    "updated_at": {
+      "$date": "2026-04-15T05:16:21.351Z"
+    },
+    "__v": 0
+  },
+  {
+    "_id": {
+      "$oid": "69df1658e612b970d88dff17"
+    },
+    "first_name": "Pramod",
+    "last_name": "Kumar",
+    "participant_name": "Pramod Kumar",
+    "batch_name": "NOV/DEC-2024",
+    "course_name": "Flight Dispatch Initial Training / Promotion NOV/DEC 2024",
+    "result_header_text": "5-Weeks Flight Dispatch Initial Course Promotion 01-2023 / 20 February 2023 - 31 March 2023",
+    "course_type": "FDI",
+    "training_mode": "HYBRID",
+    "start_date": "2024-11-03",
+    "end_date": "2024-12-05",
+    "company": "",
+    "lead_instructor": "Richard Yeates",
+    "instructors": [
+      "Michael West",
+      "Karin Friberg",
+      "Kenneth Kroborg"
+    ],
+    "subjects": [
+      {
+        "abbr": "LAW",
+        "name": "AIR LAW",
+        "max_marks": 100,
+        "marks_obtained": 75,
+        "grade": "PASS"
+      },
+      {
+        "abbr": "SYS",
+        "name": "AIRCRAFT GENERAL KNOWLEDGE & SYSTEMS",
+        "max_marks": 100,
+        "marks_obtained": 75,
+        "grade": "PASS"
+      },
+      {
+        "abbr": "MON",
+        "name": "FLIGHT MONITORING",
+        "max_marks": 100,
+        "marks_obtained": 75,
+        "grade": "PASS"
+      },
+      {
+        "abbr": "M&B",
+        "name": "MASS & BALANCE",
+        "max_marks": 100,
+        "marks_obtained": 75,
+        "grade": "PASS"
+      },
+      {
+        "abbr": "ATM",
+        "name": "AIR TRAFFIC MANAGEMENT",
+        "max_marks": 100,
+        "marks_obtained": 100,
+        "grade": "OUTSTANDING"
+      },
+      {
+        "abbr": "COM",
+        "name": "COMMUNICATION",
+        "max_marks": 100,
+        "marks_obtained": 75,
+        "grade": "PASS"
+      },
+      {
+        "abbr": "NAV",
+        "name": "NAVIGATION",
+        "max_marks": 100,
+        "marks_obtained": 90,
+        "grade": "DISTINCTION"
+      },
+      {
+        "abbr": "PER",
+        "name": "Principles of Flight & Performance",
+        "max_marks": 100,
+        "marks_obtained": 90,
+        "grade": "DISTINCTION"
+      },
+      {
+        "abbr": "DRM",
+        "name": "Dangerous Goods",
+        "max_marks": 100,
+        "marks_obtained": 90,
+        "grade": "DISTINCTION"
+      },
+      {
+        "abbr": "MET",
+        "name": "METEOROLOGY",
+        "max_marks": 100,
+        "marks_obtained": 75,
+        "grade": "PASS"
+      },
+      {
+        "abbr": "FPL",
+        "name": "FLIGHT PLANNING",
+        "max_marks": 100,
+        "marks_obtained": 100,
+        "grade": "OUTSTANDING"
+      }
+    ],
+    "final_exam_score": 75,
+    "final_marks": 82.917,
+    "overall_grade": "MERIT",
+    "sheet_issued": false,
+    "sheet_date": null,
+    "created_by": {
+      "$oid": "69c1201e4e89a51c6c5797e2"
+    },
+    "created_at": {
+      "$date": "2026-04-15T04:38:48.117Z"
+    },
+    "updated_at": {
+      "$date": "2026-04-15T05:25:24.870Z"
+    },
+    "__v": 0
+  },
+  {
+    "_id": {
+      "$oid": "69df1658e612b970d88dff19"
+    },
+    "first_name": "Pradip Kumar",
+    "last_name": "Sen",
+    "participant_name": "Pradip Kumar Sen",
+    "batch_name": "NOV/DEC-2024",
+    "course_name": "Flight Dispatch Initial Training / Promotion NOV/DEC 2024",
+    "result_header_text": "5-Weeks Flight Dispatch Initial Course Promotion 01-2023 / 20 February 2023 - 31 March 2023",
+    "course_type": "FDI",
+    "training_mode": "HYBRID",
+    "start_date": "2024-11-03",
+    "end_date": "2024-12-05",
+    "company": "",
+    "lead_instructor": "Richard Yeates",
+    "instructors": [
+      "Michael West",
+      "Karin Friberg",
+      "Kenneth Kroborg"
+    ],
+    "subjects": [
+      {
+        "abbr": "LAW",
+        "name": "AIR LAW",
+        "max_marks": 100,
+        "marks_obtained": 95,
+        "grade": "DISTINCTION"
+      },
+      {
+        "abbr": "SYS",
+        "name": "AIRCRAFT GENERAL KNOWLEDGE & SYSTEMS",
+        "max_marks": 100,
+        "marks_obtained": 95,
+        "grade": "DISTINCTION"
+      },
+      {
+        "abbr": "MON",
+        "name": "FLIGHT MONITORING",
+        "max_marks": 100,
+        "marks_obtained": 95,
+        "grade": "DISTINCTION"
+      },
+      {
+        "abbr": "M&B",
+        "name": "MASS & BALANCE",
+        "max_marks": 100,
+        "marks_obtained": 100,
+        "grade": "OUTSTANDING"
+      },
+      {
+        "abbr": "ATM",
+        "name": "AIR TRAFFIC MANAGEMENT",
+        "max_marks": 100,
+        "marks_obtained": 100,
+        "grade": "OUTSTANDING"
+      },
+      {
+        "abbr": "COM",
+        "name": "COMMUNICATION",
+        "max_marks": 100,
+        "marks_obtained": 100,
+        "grade": "OUTSTANDING"
+      },
+      {
+        "abbr": "NAV",
+        "name": "NAVIGATION",
+        "max_marks": 100,
+        "marks_obtained": 100,
+        "grade": "OUTSTANDING"
+      },
+      {
+        "abbr": "PER",
+        "name": "Principles of Flight & Performance",
+        "max_marks": 100,
+        "marks_obtained": 90,
+        "grade": "DISTINCTION"
+      },
+      {
+        "abbr": "DRM",
+        "name": "Dangerous Goods",
+        "max_marks": 100,
+        "marks_obtained": 100,
+        "grade": "OUTSTANDING"
+      },
+      {
+        "abbr": "MET",
+        "name": "METEOROLOGY",
+        "max_marks": 100,
+        "marks_obtained": 95,
+        "grade": "DISTINCTION"
+      },
+      {
+        "abbr": "FPL",
+        "name": "FLIGHT PLANNING",
+        "max_marks": 100,
+        "marks_obtained": 100,
+        "grade": "OUTSTANDING"
+      }
+    ],
+    "final_exam_score": 94,
+    "final_marks": 97,
+    "overall_grade": "OUTSTANDING",
+    "sheet_issued": false,
+    "sheet_date": "2024-12-05",
+    "created_by": {
+      "$oid": "69c1201e4e89a51c6c5797e2"
+    },
+    "created_at": {
+      "$date": "2026-04-15T04:38:48.150Z"
+    },
+    "updated_at": {
+      "$date": "2026-04-15T04:38:48.150Z"
+    },
+    "__v": 0
+  },
+  {
+    "_id": {
+      "$oid": "69df1658e612b970d88dff1b"
+    },
+    "first_name": "Ambika",
+    "last_name": "Pandey",
+    "participant_name": "Ambika Pandey",
+    "batch_name": "NOV/DEC-2024",
+    "course_name": "Flight Dispatch Initial Training / Promotion NOV/DEC 2024",
+    "result_header_text": "5-Weeks Flight Dispatch Initial Course Promotion 01-2023 / 20 February 2023 - 31 March 2023",
+    "course_type": "FDI",
+    "training_mode": "HYBRID",
+    "start_date": "2024-11-03",
+    "end_date": "2024-12-05",
+    "company": "",
+    "lead_instructor": "Richard Yeates",
+    "instructors": [
+      "Michael West",
+      "Karin Friberg",
+      "Kenneth Kroborg"
+    ],
+    "subjects": [
+      {
+        "abbr": "LAW",
+        "name": "AIR LAW",
+        "max_marks": 100,
+        "marks_obtained": 80,
+        "grade": "MERIT"
+      },
+      {
+        "abbr": "SYS",
+        "name": "AIRCRAFT GENERAL KNOWLEDGE & SYSTEMS",
+        "max_marks": 100,
+        "marks_obtained": 90,
+        "grade": "DISTINCTION"
+      },
+      {
+        "abbr": "MON",
+        "name": "FLIGHT MONITORING",
+        "max_marks": 100,
+        "marks_obtained": 95,
+        "grade": "DISTINCTION"
+      },
+      {
+        "abbr": "M&B",
+        "name": "MASS & BALANCE",
+        "max_marks": 100,
+        "marks_obtained": 100,
+        "grade": "OUTSTANDING"
+      },
+      {
+        "abbr": "ATM",
+        "name": "AIR TRAFFIC MANAGEMENT",
+        "max_marks": 100,
+        "marks_obtained": 100,
+        "grade": "OUTSTANDING"
+      },
+      {
+        "abbr": "COM",
+        "name": "COMMUNICATION",
+        "max_marks": 100,
+        "marks_obtained": 100,
+        "grade": "OUTSTANDING"
+      },
+      {
+        "abbr": "NAV",
+        "name": "NAVIGATION",
+        "max_marks": 100,
+        "marks_obtained": 90,
+        "grade": "DISTINCTION"
+      },
+      {
+        "abbr": "PER",
+        "name": "Principles of Flight & Performance",
+        "max_marks": 100,
+        "marks_obtained": 95,
+        "grade": "DISTINCTION"
+      },
+      {
+        "abbr": "DRM",
+        "name": "Dangerous Goods",
+        "max_marks": 100,
+        "marks_obtained": 100,
+        "grade": "OUTSTANDING"
+      },
+      {
+        "abbr": "MET",
+        "name": "METEOROLOGY",
+        "max_marks": 100,
+        "marks_obtained": 100,
+        "grade": "OUTSTANDING"
+      },
+      {
+        "abbr": "FPL",
+        "name": "FLIGHT PLANNING",
+        "max_marks": 100,
+        "marks_obtained": 100,
+        "grade": "OUTSTANDING"
+      }
+    ],
+    "final_exam_score": 98,
+    "final_marks": 95.667,
+    "overall_grade": "OUTSTANDING",
+    "sheet_issued": false,
+    "sheet_date": null,
+    "created_by": {
+      "$oid": "69c1201e4e89a51c6c5797e2"
+    },
+    "created_at": {
+      "$date": "2026-04-15T04:38:48.182Z"
+    },
+    "updated_at": {
+      "$date": "2026-04-22T15:29:04.033Z"
+    },
+    "__v": 0
+  }
+]

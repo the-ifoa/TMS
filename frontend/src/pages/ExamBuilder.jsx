@@ -223,9 +223,9 @@ export default function ExamBuilder() {
   }
 
   return (
-    <div className="w-full min-h-full pb-20 flex flex-col">
-      {/* ── Flush Full-Width Sticky Top Action Header ── */}
-      <div className="sticky top-0 z-30 w-full bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-4 sm:px-6 lg:px-8 py-2.5 shadow-2xs">
+    <div className="w-full h-[calc(100vh-4rem)] flex flex-col overflow-hidden bg-gray-50">
+      {/* ── Flush Full-Width Top Action Header ── */}
+      <div className="flex-shrink-0 w-full bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-4 sm:px-6 lg:px-8 py-2.5 shadow-2xs z-30">
         <div className="w-full max-w-7xl mx-auto flex items-center justify-between gap-3">
           {/* Left: Back button */}
           <div className="flex items-center flex-shrink-0">
@@ -242,11 +242,10 @@ export default function ExamBuilder() {
                   key={name}
                   type="button"
                   onClick={() => setActiveSectionFilter(name)}
-                  className={`flex-shrink-0 px-3.5 py-1 rounded-full text-xs font-bold border transition-colors ${
-                    (activeSectionFilter === name || (activeSectionFilter === null && name === orderedSectionNames[0]))
-                      ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
-                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                  }`}
+                  className={`flex-shrink-0 px-3.5 py-1 rounded-full text-xs font-bold border transition-colors ${(activeSectionFilter === name || (activeSectionFilter === null && name === orderedSectionNames[0]))
+                    ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
+                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                    }`}
                 >
                   {name} ({groupFor(name).length})
                 </button>
@@ -255,11 +254,10 @@ export default function ExamBuilder() {
                 <button
                   type="button"
                   onClick={() => setActiveSectionFilter('')}
-                  className={`flex-shrink-0 px-3.5 py-1 rounded-full text-xs font-bold border transition-colors ${
-                    activeSectionFilter === ''
-                      ? 'bg-slate-800 text-white border-slate-800'
-                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                  }`}
+                  className={`flex-shrink-0 px-3.5 py-1 rounded-full text-xs font-bold border transition-colors ${activeSectionFilter === ''
+                    ? 'bg-slate-800 text-white border-slate-800'
+                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                    }`}
                 >
                   Ungrouped ({ungroupedItems.length})
                 </button>
@@ -280,11 +278,11 @@ export default function ExamBuilder() {
       </div>
 
       {/* ── 2-Column Split Workspace Container ── */}
-      <div className="w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 space-y-6 flex-1">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          
+      <div className="w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 flex-1 min-h-0 overflow-hidden">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-full min-h-0 items-start">
+
           {/* EXAM SETTINGS PANEL (Right column on desktop, 4 cols width) */}
-          <div className="order-1 lg:order-2 lg:col-span-4 lg:sticky lg:top-20 max-h-[calc(100vh-6rem)] overflow-y-auto pr-1 space-y-4 scrollbar-none">
+          <div className="order-1 lg:order-2 lg:col-span-4 h-full overflow-y-auto p-1 space-y-4 scrollbar-thin">
             <Card className="p-4 sm:p-5 space-y-4 rounded-2xl border border-slate-200/80 shadow-2xs bg-white">
               <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
                 <h3 className="text-sm font-black text-slate-900 tracking-tight">Exam Settings</h3>
@@ -501,8 +499,8 @@ export default function ExamBuilder() {
             </Card>
           </div>
 
-          {/* QUESTIONS LIST (Left column on desktop, 8 cols width) */}
-          <div className="order-2 lg:order-1 lg:col-span-8 space-y-4">
+          {/* QUESTIONS LIST (Left column on desktop, 8 cols width - independent scrolling) */}
+          <div className="order-2 lg:order-1 lg:col-span-8 h-full overflow-y-auto pr-3 space-y-4 scrollbar-thin">
             <div className="flex items-center justify-between px-1 pb-1">
               <h2 className="text-sm font-extrabold text-slate-900 uppercase tracking-wider">
                 Exam Questions ({exam.questions.length})
@@ -626,6 +624,6 @@ export default function ExamBuilder() {
         </div>
       </div>
       {ConfirmDialog}
-  </div>
-);
+    </div>
+  );
 }

@@ -1,0 +1,17 @@
+[
+  {
+    "v": 2,
+    "key": {
+      "_id": 1
+    },
+    "name": "_id_"
+  },
+  {
+    "v": 2,
+    "key": {
+      "training_type": 1
+    },
+    "name": "training_type_1",
+    "unique": true
+  }
+]

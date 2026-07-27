@@ -1,0 +1,30 @@
+[
+  {
+    "v": 2,
+    "key": {
+      "_id": 1
+    },
+    "name": "_id_"
+  },
+  {
+    "v": 2,
+    "key": {
+      "participant": 1
+    },
+    "name": "participant_1",
+    "unique": true
+  },
+  {
+    "v": 2,
+    "key": {
+      "sequence": 1
+    },
+    "name": "unique_dhl_cert_sequence",
+    "unique": true,
+    "partialFilterExpression": {
+      "sequence": {
+        "$type": "number"
+      }
+    }
+  }
+]

@@ -1,0 +1,1209 @@
+[
+  {
+    "_id": {
+      "$oid": "6a3cc9a5e4e128398048661a"
+    },
+    "airline_id": {
+      "$oid": "69f614b86179b31cac381bf0"
+    },
+    "airline_name": "Comlux",
+    "created_by": {
+      "$oid": "69c50ee2be01132bcdf6284b"
+    },
+    "page_ref": "Appendix A-13",
+    "doc_date": "01-11-2024",
+    "iss_rev": "5 / 8",
+    "ato_name_number": "INTERNATIONAL FLIGHT OPERATIONS ACADEMY",
+    "dg_training_type": "Initial",
+    "training_date": "24.04.2026",
+    "initials": {
+      "item0": "V.I",
+      "item0_1": "V.I",
+      "item0_2": "V.I",
+      "item0_3": "V.I",
+      "item0_4": "V.I",
+      "item0_5": "V.I",
+      "item0_6": "V.I",
+      "item5": "V.I",
+      "item6": "V.I",
+      "item7": "V.I"
+    },
+    "job_function": "FD",
+    "show_item5": false,
+    "show_item7": false,
+    "knowledge_score": 90,
+    "skills": {
+      "input_response": 4,
+      "response_time": 4,
+      "number_of_errors": 4,
+      "repeated_attempts": 5
+    },
+    "attitude": {
+      "shows_interest": 5,
+      "participation": 4,
+      "input": 4,
+      "co_operation": 5,
+      "asks_relevant_questions": 4
+    },
+    "final_score": null,
+    "instructor_name": "Vincent Incammicia",
+    "instructor_signature": "",
+    "assignments": [
+      {
+        "participant_id": {
+          "$oid": "69f643346179b31cac38235c"
+        },
+        "participant_name": "Syed Ahmed Zahid",
+        "assigned_at": {
+          "$date": "2026-06-25T06:24:37.293Z"
+        },
+        "_id": {
+          "$oid": "6a3cc9a5e4e128398048661b"
+        }
+      }
+    ],
+    "created_at": {
+      "$date": "2026-06-25T06:24:37.296Z"
+    },
+    "updated_at": {
+      "$date": "2026-07-05T16:26:29.251Z"
+    },
+    "__v": 1
+  },
+  {
+    "_id": {
+      "$oid": "6a4a80e9e4e128398048848f"
+    },
+    "airline_id": {
+      "$oid": "69f614b86179b31cac381bf0"
+    },
+    "airline_name": "Comlux",
+    "created_by": {
+      "$oid": "69c50ee2be01132bcdf6284b"
+    },
+    "page_ref": "Appendix A-13",
+    "doc_date": "01-11-2024",
+    "iss_rev": "5 / 8",
+    "ato_name_number": "INTERNATIONAL FLIGHT OPERATIONS ACADEMY",
+    "dg_training_type": "Initial",
+    "training_date": "20.04.2026",
+    "initials": {
+      "item0": "V.I",
+      "item0_1": "V.I",
+      "item0_2": "V.I",
+      "item0_3": "V.I",
+      "item0_4": "V.I",
+      "item0_5": "V.I",
+      "item0_6": "V.I",
+      "item5": "V.I",
+      "item6": "V.I",
+      "item7": "V.I"
+    },
+    "job_function": "FD",
+    "show_item5": false,
+    "show_item7": false,
+    "knowledge_score": 95,
+    "skills": {
+      "input_response": 4,
+      "response_time": 4,
+      "number_of_errors": 4,
+      "repeated_attempts": 5
+    },
+    "attitude": {
+      "shows_interest": 5,
+      "participation": 5,
+      "input": 4,
+      "co_operation": 5,
+      "asks_relevant_questions": 4
+    },
+    "final_score": null,
+    "instructor_name": "Vincent Incammicia",
+    "instructor_signature": "",
+    "assignments": [
+      {
+        "participant_id": {
+          "$oid": "69f642796179b31cac382337"
+        },
+        "participant_name": "Valerio Roccoli",
+        "assigned_at": {
+          "$date": "2026-07-05T16:06:01.234Z"
+        },
+        "_id": {
+          "$oid": "6a4a80e9e4e1283980488490"
+        }
+      }
+    ],
+    "created_at": {
+      "$date": "2026-07-05T16:06:01.236Z"
+    },
+    "updated_at": {
+      "$date": "2026-07-05T16:09:45.818Z"
+    },
+    "__v": 1
+  },
+  {
+    "_id": {
+      "$oid": "6a4a8388e4e12839804884ca"
+    },
+    "airline_id": {
+      "$oid": "69f614b86179b31cac381bf0"
+    },
+    "airline_name": "Comlux",
+    "created_by": {
+      "$oid": "69c50ee2be01132bcdf6284b"
+    },
+    "page_ref": "Appendix A-13",
+    "doc_date": "01-11-2024",
+    "iss_rev": "5 / 8",
+    "ato_name_number": "INTERNATIONAL FLIGHT OPERATIONS ACADEMY",
+    "dg_training_type": "Initial",
+    "training_date": "24.04.2026",
+    "initials": {
+      "item0": "V.I",
+      "item0_1": "V.I",
+      "item0_2": "V.I",
+      "item0_3": "V.I",
+      "item0_4": "V.I",
+      "item0_5": "V.I",
+      "item0_6": "V.I",
+      "item5": "V.I",
+      "item6": "V.I",
+      "item7": "V.I"
+    },
+    "job_function": "FD",
+    "show_item5": false,
+    "show_item7": false,
+    "knowledge_score": 80,
+    "skills": {
+      "input_response": 3,
+      "response_time": 4,
+      "number_of_errors": 5,
+      "repeated_attempts": 5
+    },
+    "attitude": {
+      "shows_interest": 4,
+      "participation": 4,
+      "input": 4,
+      "co_operation": 4,
+      "asks_relevant_questions": 3
+    },
+    "final_score": null,
+    "instructor_name": "Vincent Incammicia",
+    "instructor_signature": "",
+    "assignments": [
+      {
+        "participant_id": {
+          "$oid": "69f643306179b31cac382356"
+        },
+        "participant_name": "Alejandro Melero",
+        "assigned_at": {
+          "$date": "2026-07-05T16:17:12.777Z"
+        },
+        "_id": {
+          "$oid": "6a4a8388e4e12839804884cb"
+        }
+      }
+    ],
+    "created_at": {
+      "$date": "2026-07-05T16:17:12.778Z"
+    },
+    "updated_at": {
+      "$date": "2026-07-05T16:25:55.969Z"
+    },
+    "__v": 1
+  },
+  {
+    "_id": {
+      "$oid": "6a4a83f7e4e12839804884d6"
+    },
+    "airline_id": {
+      "$oid": "69f614b86179b31cac381bf0"
+    },
+    "airline_name": "Comlux",
+    "created_by": {
+      "$oid": "69c50ee2be01132bcdf6284b"
+    },
+    "page_ref": "Appendix A-13",
+    "doc_date": "01-11-2024",
+    "iss_rev": "5 / 8",
+    "ato_name_number": "INTERNATIONAL FLIGHT OPERATIONS ACADEMY",
+    "dg_training_type": "Initial",
+    "training_date": "24.04.2026",
+    "initials": {
+      "item0": "V.I",
+      "item0_1": "V.I",
+      "item0_2": "V.I",
+      "item0_3": "V.I",
+      "item0_4": "V.I",
+      "item0_5": "V.I",
+      "item0_6": "V.I",
+      "item5": "V.I",
+      "item6": "V.I",
+      "item7": "V.I"
+    },
+    "job_function": "FD",
+    "show_item5": false,
+    "show_item7": false,
+    "knowledge_score": 90,
+    "skills": {
+      "input_response": 4,
+      "response_time": 3,
+      "number_of_errors": 4,
+      "repeated_attempts": 5
+    },
+    "attitude": {
+      "shows_interest": 4,
+      "participation": 4,
+      "input": 4,
+      "co_operation": 4,
+      "asks_relevant_questions": 3
+    },
+    "final_score": null,
+    "instructor_name": "Vincent Incammicia",
+    "instructor_signature": "",
+    "assignments": [
+      {
+        "participant_id": {
+          "$oid": "69f6432e6179b31cac382352"
+        },
+        "participant_name": "Thejitha Gunasekara",
+        "assigned_at": {
+          "$date": "2026-07-05T16:19:03.531Z"
+        },
+        "_id": {
+          "$oid": "6a4a83f7e4e12839804884d7"
+        }
+      }
+    ],
+    "created_at": {
+      "$date": "2026-07-05T16:19:03.531Z"
+    },
+    "updated_at": {
+      "$date": "2026-07-05T16:25:24.437Z"
+    },
+    "__v": 1
+  },
+  {
+    "_id": {
+      "$oid": "6a4a8449e4e12839804884e0"
+    },
+    "airline_id": {
+      "$oid": "69f614b86179b31cac381bf0"
+    },
+    "airline_name": "Comlux",
+    "created_by": {
+      "$oid": "69c50ee2be01132bcdf6284b"
+    },
+    "page_ref": "Appendix A-13",
+    "doc_date": "01-11-2024",
+    "iss_rev": "5 / 8",
+    "ato_name_number": "INTERNATIONAL FLIGHT OPERATIONS ACADEMY",
+    "dg_training_type": "Initial",
+    "training_date": "20.04.2026",
+    "initials": {
+      "item0": "V.I",
+      "item0_1": "V.I",
+      "item0_2": "V.I",
+      "item0_3": "V.I",
+      "item0_4": "V.I",
+      "item0_5": "V.I",
+      "item0_6": "V.I",
+      "item5": "V.I",
+      "item6": "V.I",
+      "item7": "V.I"
+    },
+    "job_function": "FD",
+    "show_item5": false,
+    "show_item7": false,
+    "knowledge_score": 90,
+    "skills": {
+      "input_response": 5,
+      "response_time": 4,
+      "number_of_errors": 4,
+      "repeated_attempts": 5
+    },
+    "attitude": {
+      "shows_interest": 4,
+      "participation": 4,
+      "input": 4,
+      "co_operation": 5,
+      "asks_relevant_questions": 4
+    },
+    "final_score": null,
+    "instructor_name": "Vincent Incammicia",
+    "instructor_signature": "",
+    "assignments": [
+      {
+        "participant_id": {
+          "$oid": "69f6432f6179b31cac382354"
+        },
+        "participant_name": "Martina Gatt",
+        "assigned_at": {
+          "$date": "2026-07-05T16:20:25.319Z"
+        },
+        "_id": {
+          "$oid": "6a4a8449e4e12839804884e1"
+        }
+      }
+    ],
+    "created_at": {
+      "$date": "2026-07-05T16:20:25.320Z"
+    },
+    "updated_at": {
+      "$date": "2026-07-05T16:25:39.805Z"
+    },
+    "__v": 1
+  },
+  {
+    "_id": {
+      "$oid": "6a4a846be4e12839804884e4"
+    },
+    "airline_id": {
+      "$oid": "69f614b86179b31cac381bf0"
+    },
+    "airline_name": "Comlux",
+    "created_by": {
+      "$oid": "69c50ee2be01132bcdf6284b"
+    },
+    "page_ref": "Appendix A-13",
+    "doc_date": "01-11-2024",
+    "iss_rev": "5 / 8",
+    "ato_name_number": "INTERNATIONAL FLIGHT OPERATIONS ACADEMY",
+    "dg_training_type": "Initial",
+    "training_date": "24.04.2026",
+    "initials": {
+      "item0": "V.I",
+      "item0_1": "V.I",
+      "item0_2": "V.I",
+      "item0_3": "V.I",
+      "item0_4": "V.I",
+      "item0_5": "V.I",
+      "item0_6": "V.I",
+      "item5": "V.I",
+      "item6": "V.I",
+      "item7": "V.I"
+    },
+    "job_function": "FD",
+    "show_item5": false,
+    "show_item7": false,
+    "knowledge_score": 75,
+    "skills": {
+      "input_response": 4,
+      "response_time": 4,
+      "number_of_errors": 3,
+      "repeated_attempts": 4
+    },
+    "attitude": {
+      "shows_interest": 4,
+      "participation": 4,
+      "input": 3,
+      "co_operation": 4,
+      "asks_relevant_questions": 4
+    },
+    "final_score": null,
+    "instructor_name": "Vincent Incammicia",
+    "instructor_signature": "",
+    "assignments": [
+      {
+        "participant_id": {
+          "$oid": "69f643326179b31cac382358"
+        },
+        "participant_name": "Kimberly Mifsud",
+        "assigned_at": {
+          "$date": "2026-07-05T16:20:59.826Z"
+        },
+        "_id": {
+          "$oid": "6a4a846be4e12839804884e5"
+        }
+      }
+    ],
+    "created_at": {
+      "$date": "2026-07-05T16:20:59.826Z"
+    },
+    "updated_at": {
+      "$date": "2026-07-05T16:26:14.306Z"
+    },
+    "__v": 1
+  },
+  {
+    "_id": {
+      "$oid": "6a4a8557e4e12839804884fc"
+    },
+    "airline_id": {
+      "$oid": "69f614b86179b31cac381bf0"
+    },
+    "airline_name": "Comlux",
+    "created_by": {
+      "$oid": "69c50ee2be01132bcdf6284b"
+    },
+    "page_ref": "Appendix A-13",
+    "doc_date": "01-11-2024",
+    "iss_rev": "5 / 8",
+    "ato_name_number": "INTERNATIONAL FLIGHT OPERATIONS ACADEMY",
+    "dg_training_type": "Initial",
+    "training_date": "20.04.2026",
+    "initials": {
+      "item0": "V.I",
+      "item0_1": "V.I",
+      "item0_2": "V.I",
+      "item0_3": "V.I",
+      "item0_4": "V.I",
+      "item0_5": "V.I",
+      "item0_6": "V.I",
+      "item5": "V.I",
+      "item6": "V.I",
+      "item7": "V.I"
+    },
+    "job_function": "FD",
+    "show_item5": false,
+    "show_item7": false,
+    "knowledge_score": 100,
+    "skills": {
+      "input_response": 4,
+      "response_time": 4,
+      "number_of_errors": 5,
+      "repeated_attempts": 5
+    },
+    "attitude": {
+      "shows_interest": 4,
+      "participation": 3,
+      "input": 4,
+      "co_operation": 4,
+      "asks_relevant_questions": 4
+    },
+    "final_score": null,
+    "instructor_name": "Vincent Incammicia",
+    "instructor_signature": "",
+    "assignments": [
+      {
+        "participant_id": {
+          "$oid": "69f6427e6179b31cac38233f"
+        },
+        "participant_name": "Antonio Melis",
+        "_id": {
+          "$oid": "6a4a8557e4e12839804884fd"
+        },
+        "assigned_at": {
+          "$date": "2026-07-05T16:24:55.615Z"
+        }
+      }
+    ],
+    "created_at": {
+      "$date": "2026-07-05T16:24:55.616Z"
+    },
+    "updated_at": {
+      "$date": "2026-07-05T16:24:55.616Z"
+    },
+    "__v": 0
+  },
+  {
+    "_id": {
+      "$oid": "6a4a85fce4e1283980488520"
+    },
+    "airline_id": {
+      "$oid": "69f614b86179b31cac381bf0"
+    },
+    "airline_name": "Comlux",
+    "created_by": {
+      "$oid": "69c50ee2be01132bcdf6284b"
+    },
+    "page_ref": "Appendix A-13",
+    "doc_date": "01-11-2024",
+    "iss_rev": "5 / 8",
+    "ato_name_number": "INTERNATIONAL FLIGHT OPERATIONS ACADEMY",
+    "dg_training_type": "Initial",
+    "training_date": "24.04.2026",
+    "initials": {
+      "item0": "V.I",
+      "item0_1": "V.I",
+      "item0_2": "V.I",
+      "item0_3": "V.I",
+      "item0_4": "V.I",
+      "item0_5": "V.I",
+      "item0_6": "V.I",
+      "item5": "V.I",
+      "item6": "V.I",
+      "item7": "V.I"
+    },
+    "job_function": "FD",
+    "show_item5": false,
+    "show_item7": false,
+    "knowledge_score": 90,
+    "skills": {
+      "input_response": 4,
+      "response_time": 4,
+      "number_of_errors": 4,
+      "repeated_attempts": 5
+    },
+    "attitude": {
+      "shows_interest": 3,
+      "participation": 3,
+      "input": 3,
+      "co_operation": 3,
+      "asks_relevant_questions": 3
+    },
+    "final_score": null,
+    "instructor_name": "Vincent Incammicia",
+    "instructor_signature": "",
+    "assignments": [
+      {
+        "participant_id": {
+          "$oid": "69f643336179b31cac38235a"
+        },
+        "participant_name": "Margaret Tabone",
+        "_id": {
+          "$oid": "6a4a85fce4e1283980488521"
+        },
+        "assigned_at": {
+          "$date": "2026-07-05T16:27:40.585Z"
+        }
+      }
+    ],
+    "created_at": {
+      "$date": "2026-07-05T16:27:40.585Z"
+    },
+    "updated_at": {
+      "$date": "2026-07-05T16:27:40.585Z"
+    },
+    "__v": 0
+  },
+  {
+    "_id": {
+      "$oid": "6a4a8683e4e128398048852c"
+    },
+    "airline_id": {
+      "$oid": "69f614b86179b31cac381bf0"
+    },
+    "airline_name": "Comlux",
+    "created_by": {
+      "$oid": "69c50ee2be01132bcdf6284b"
+    },
+    "page_ref": "Appendix A-13",
+    "doc_date": "01-11-2024",
+    "iss_rev": "5 / 8",
+    "ato_name_number": "INTERNATIONAL FLIGHT OPERATIONS ACADEMY",
+    "dg_training_type": "Initial",
+    "training_date": "20.04.2026",
+    "initials": {
+      "item0": "V.I",
+      "item0_1": "V.I",
+      "item0_2": "V.I",
+      "item0_3": "V.I",
+      "item0_4": "V.I",
+      "item0_5": "V.I",
+      "item0_6": "V.I",
+      "item5": "V.I",
+      "item6": "V.I",
+      "item7": "V.I"
+    },
+    "job_function": "FD",
+    "show_item5": false,
+    "show_item7": false,
+    "knowledge_score": 80,
+    "skills": {
+      "input_response": 4,
+      "response_time": 4,
+      "number_of_errors": 4,
+      "repeated_attempts": 5
+    },
+    "attitude": {
+      "shows_interest": 4,
+      "participation": 3,
+      "input": 3,
+      "co_operation": 4,
+      "asks_relevant_questions": 3
+    },
+    "final_score": null,
+    "instructor_name": "Vincent Incammicia",
+    "instructor_signature": "",
+    "assignments": [
+      {
+        "participant_id": {
+          "$oid": "6a415304e4e1283980486667"
+        },
+        "participant_name": "Ghazi Meddeb",
+        "_id": {
+          "$oid": "6a4a8683e4e128398048852d"
+        },
+        "assigned_at": {
+          "$date": "2026-07-05T16:29:55.344Z"
+        }
+      }
+    ],
+    "created_at": {
+      "$date": "2026-07-05T16:29:55.345Z"
+    },
+    "updated_at": {
+      "$date": "2026-07-05T16:29:55.345Z"
+    },
+    "__v": 0
+  },
+  {
+    "_id": {
+      "$oid": "6a4a86e1e4e1283980488538"
+    },
+    "airline_id": {
+      "$oid": "69f614b86179b31cac381bf0"
+    },
+    "airline_name": "Comlux",
+    "created_by": {
+      "$oid": "69c50ee2be01132bcdf6284b"
+    },
+    "page_ref": "Appendix A-13",
+    "doc_date": "01-11-2024",
+    "iss_rev": "5 / 8",
+    "ato_name_number": "INTERNATIONAL FLIGHT OPERATIONS ACADEMY",
+    "dg_training_type": "Initial",
+    "training_date": "24.04.2026",
+    "initials": {
+      "item0": "V.I",
+      "item0_1": "V.I",
+      "item0_2": "V.I",
+      "item0_3": "V.I",
+      "item0_4": "V.I",
+      "item0_5": "V.I",
+      "item0_6": "V.I",
+      "item5": "V.I",
+      "item6": "V.I",
+      "item7": "V.I"
+    },
+    "job_function": "FD",
+    "show_item5": false,
+    "show_item7": false,
+    "knowledge_score": 80,
+    "skills": {
+      "input_response": 3,
+      "response_time": 3,
+      "number_of_errors": 4,
+      "repeated_attempts": 5
+    },
+    "attitude": {
+      "shows_interest": 4,
+      "participation": 3,
+      "input": 3,
+      "co_operation": 4,
+      "asks_relevant_questions": 3
+    },
+    "final_score": null,
+    "instructor_name": "Vincent Incammicia",
+    "instructor_signature": "",
+    "assignments": [
+      {
+        "participant_id": {
+          "$oid": "6a415304e4e1283980486663"
+        },
+        "participant_name": "Alexandr Cheshkov",
+        "_id": {
+          "$oid": "6a4a86e1e4e1283980488539"
+        },
+        "assigned_at": {
+          "$date": "2026-07-05T16:31:29.656Z"
+        }
+      }
+    ],
+    "created_at": {
+      "$date": "2026-07-05T16:31:29.657Z"
+    },
+    "updated_at": {
+      "$date": "2026-07-05T16:31:29.657Z"
+    },
+    "__v": 0
+  },
+  {
+    "_id": {
+      "$oid": "6a4a8730e4e1283980488540"
+    },
+    "airline_id": {
+      "$oid": "69f614b86179b31cac381bf0"
+    },
+    "airline_name": "Comlux",
+    "created_by": {
+      "$oid": "69c50ee2be01132bcdf6284b"
+    },
+    "page_ref": "Appendix A-13",
+    "doc_date": "01-11-2024",
+    "iss_rev": "5 / 8",
+    "ato_name_number": "INTERNATIONAL FLIGHT OPERATIONS ACADEMY",
+    "dg_training_type": "Initial",
+    "training_date": "20.04.2026",
+    "initials": {
+      "item0": "V.I",
+      "item0_1": "V.I",
+      "item0_2": "V.I",
+      "item0_3": "V.I",
+      "item0_4": "V.I",
+      "item0_5": "V.I",
+      "item0_6": "V.I",
+      "item5": "V.I",
+      "item6": "V.I",
+      "item7": "V.I"
+    },
+    "job_function": "FD",
+    "show_item5": false,
+    "show_item7": false,
+    "knowledge_score": 100,
+    "skills": {
+      "input_response": 4,
+      "response_time": 4,
+      "number_of_errors": 5,
+      "repeated_attempts": 5
+    },
+    "attitude": {
+      "shows_interest": 4,
+      "participation": 4,
+      "input": 4,
+      "co_operation": 4,
+      "asks_relevant_questions": 4
+    },
+    "final_score": null,
+    "instructor_name": "Vincent Incammicia",
+    "instructor_signature": "",
+    "assignments": [
+      {
+        "participant_id": {
+          "$oid": "69f642816179b31cac382343"
+        },
+        "participant_name": "Umanga Rathnamalala",
+        "_id": {
+          "$oid": "6a4a8730e4e1283980488541"
+        },
+        "assigned_at": {
+          "$date": "2026-07-05T16:32:48.364Z"
+        }
+      }
+    ],
+    "created_at": {
+      "$date": "2026-07-05T16:32:48.364Z"
+    },
+    "updated_at": {
+      "$date": "2026-07-05T16:32:48.364Z"
+    },
+    "__v": 0
+  },
+  {
+    "_id": {
+      "$oid": "6a4a876be4e1283980488548"
+    },
+    "airline_id": {
+      "$oid": "69f614b86179b31cac381bf0"
+    },
+    "airline_name": "Comlux",
+    "created_by": {
+      "$oid": "69c50ee2be01132bcdf6284b"
+    },
+    "page_ref": "Appendix A-13",
+    "doc_date": "01-11-2024",
+    "iss_rev": "5 / 8",
+    "ato_name_number": "INTERNATIONAL FLIGHT OPERATIONS ACADEMY",
+    "dg_training_type": "Initial",
+    "training_date": "20.04.2026",
+    "initials": {
+      "item0": "V.I",
+      "item0_1": "V.I",
+      "item0_2": "V.I",
+      "item0_3": "V.I",
+      "item0_4": "V.I",
+      "item0_5": "V.I",
+      "item0_6": "V.I",
+      "item5": "V.I",
+      "item6": "V.I",
+      "item7": "V.I"
+    },
+    "job_function": "FD",
+    "show_item5": false,
+    "show_item7": false,
+    "knowledge_score": 90,
+    "skills": {
+      "input_response": 4,
+      "response_time": 4,
+      "number_of_errors": 4,
+      "repeated_attempts": 5
+    },
+    "attitude": {
+      "shows_interest": 4,
+      "participation": 4,
+      "input": 4,
+      "co_operation": 4,
+      "asks_relevant_questions": 4
+    },
+    "final_score": null,
+    "instructor_name": "Vincent Incammicia",
+    "instructor_signature": "",
+    "assignments": [
+      {
+        "participant_id": {
+          "$oid": "69f642786179b31cac382335"
+        },
+        "participant_name": "Zvonka Kalanj",
+        "_id": {
+          "$oid": "6a4a876be4e1283980488549"
+        },
+        "assigned_at": {
+          "$date": "2026-07-05T16:33:47.530Z"
+        }
+      }
+    ],
+    "created_at": {
+      "$date": "2026-07-05T16:33:47.531Z"
+    },
+    "updated_at": {
+      "$date": "2026-07-05T16:33:47.531Z"
+    },
+    "__v": 0
+  },
+  {
+    "_id": {
+      "$oid": "6a4a87c2e4e1283980488552"
+    },
+    "airline_id": {
+      "$oid": "69f614b86179b31cac381bf0"
+    },
+    "airline_name": "Comlux",
+    "created_by": {
+      "$oid": "69c50ee2be01132bcdf6284b"
+    },
+    "page_ref": "Appendix A-13",
+    "doc_date": "01-11-2024",
+    "iss_rev": "5 / 8",
+    "ato_name_number": "INTERNATIONAL FLIGHT OPERATIONS ACADEMY",
+    "dg_training_type": "Initial",
+    "training_date": "20.04.2026",
+    "initials": {
+      "item0": "V.I",
+      "item0_1": "V.I",
+      "item0_2": "V.I",
+      "item0_3": "V.I",
+      "item0_4": "V.I",
+      "item0_5": "V.I",
+      "item0_6": "V.I",
+      "item5": "V.I",
+      "item6": "V.I",
+      "item7": "V.I"
+    },
+    "job_function": "FD",
+    "show_item5": false,
+    "show_item7": false,
+    "knowledge_score": 95,
+    "skills": {
+      "input_response": 4,
+      "response_time": 4,
+      "number_of_errors": 4,
+      "repeated_attempts": 5
+    },
+    "attitude": {
+      "shows_interest": 3,
+      "participation": 3,
+      "input": 3,
+      "co_operation": 3,
+      "asks_relevant_questions": 3
+    },
+    "final_score": null,
+    "instructor_name": "Vincent Incammicia",
+    "instructor_signature": "",
+    "assignments": [
+      {
+        "participant_id": {
+          "$oid": "69f642806179b31cac382341"
+        },
+        "participant_name": "Diana Michescu",
+        "_id": {
+          "$oid": "6a4a87c2e4e1283980488553"
+        },
+        "assigned_at": {
+          "$date": "2026-07-05T16:35:14.063Z"
+        }
+      }
+    ],
+    "created_at": {
+      "$date": "2026-07-05T16:35:14.064Z"
+    },
+    "updated_at": {
+      "$date": "2026-07-05T16:35:14.064Z"
+    },
+    "__v": 0
+  },
+  {
+    "_id": {
+      "$oid": "6a4a8814e4e128398048855c"
+    },
+    "airline_id": {
+      "$oid": "69f614b86179b31cac381bf0"
+    },
+    "airline_name": "Comlux",
+    "created_by": {
+      "$oid": "69c50ee2be01132bcdf6284b"
+    },
+    "page_ref": "Appendix A-13",
+    "doc_date": "01-11-2024",
+    "iss_rev": "5 / 8",
+    "ato_name_number": "INTERNATIONAL FLIGHT OPERATIONS ACADEMY",
+    "dg_training_type": "Initial",
+    "training_date": "24.04.2026",
+    "initials": {
+      "item0": "V.I",
+      "item0_1": "V.I",
+      "item0_2": "V.I",
+      "item0_3": "V.I",
+      "item0_4": "V.I",
+      "item0_5": "V.I",
+      "item0_6": "V.I",
+      "item5": "V.I",
+      "item6": "V.I",
+      "item7": "V.I"
+    },
+    "job_function": "FD",
+    "show_item5": false,
+    "show_item7": false,
+    "knowledge_score": 95,
+    "skills": {
+      "input_response": 5,
+      "response_time": 5,
+      "number_of_errors": 5,
+      "repeated_attempts": 5
+    },
+    "attitude": {
+      "shows_interest": 5,
+      "participation": 5,
+      "input": 5,
+      "co_operation": 4,
+      "asks_relevant_questions": 3
+    },
+    "final_score": null,
+    "instructor_name": "Vincent Incammicia",
+    "instructor_signature": "",
+    "assignments": [
+      {
+        "participant_id": {
+          "$oid": "69f6432c6179b31cac38234e"
+        },
+        "participant_name": "Oleksandr Lukyanets",
+        "_id": {
+          "$oid": "6a4a8814e4e128398048855d"
+        },
+        "assigned_at": {
+          "$date": "2026-07-05T16:36:36.684Z"
+        }
+      }
+    ],
+    "created_at": {
+      "$date": "2026-07-05T16:36:36.685Z"
+    },
+    "updated_at": {
+      "$date": "2026-07-05T16:36:36.685Z"
+    },
+    "__v": 0
+  },
+  {
+    "_id": {
+      "$oid": "6a4a886de4e1283980488566"
+    },
+    "airline_id": {
+      "$oid": "69f614b86179b31cac381bf0"
+    },
+    "airline_name": "Comlux",
+    "created_by": {
+      "$oid": "69c50ee2be01132bcdf6284b"
+    },
+    "page_ref": "Appendix A-13",
+    "doc_date": "01-11-2024",
+    "iss_rev": "5 / 8",
+    "ato_name_number": "INTERNATIONAL FLIGHT OPERATIONS ACADEMY",
+    "dg_training_type": "Initial",
+    "training_date": "20.04.2026",
+    "initials": {
+      "item0": "V.I",
+      "item0_1": "V.I",
+      "item0_2": "V.I",
+      "item0_3": "V.I",
+      "item0_4": "V.I",
+      "item0_5": "V.I",
+      "item0_6": "V.I",
+      "item5": "V.I",
+      "item6": "V.I",
+      "item7": "V.I"
+    },
+    "job_function": "FD",
+    "show_item5": false,
+    "show_item7": false,
+    "knowledge_score": 80,
+    "skills": {
+      "input_response": 4,
+      "response_time": 4,
+      "number_of_errors": 4,
+      "repeated_attempts": 4
+    },
+    "attitude": {
+      "shows_interest": 3,
+      "participation": 3,
+      "input": 3,
+      "co_operation": 4,
+      "asks_relevant_questions": 3
+    },
+    "final_score": null,
+    "instructor_name": "Vincent Incammicia",
+    "instructor_signature": "",
+    "assignments": [
+      {
+        "participant_id": {
+          "$oid": "6a415303e4e1283980486661"
+        },
+        "participant_name": "Mohamed Chaabane",
+        "_id": {
+          "$oid": "6a4a886de4e1283980488567"
+        },
+        "assigned_at": {
+          "$date": "2026-07-05T16:38:05.459Z"
+        }
+      }
+    ],
+    "created_at": {
+      "$date": "2026-07-05T16:38:05.459Z"
+    },
+    "updated_at": {
+      "$date": "2026-07-05T16:38:05.459Z"
+    },
+    "__v": 0
+  },
+  {
+    "_id": {
+      "$oid": "6a4a88b5e4e128398048856e"
+    },
+    "airline_id": {
+      "$oid": "69f614b86179b31cac381bf0"
+    },
+    "airline_name": "Comlux",
+    "created_by": {
+      "$oid": "69c50ee2be01132bcdf6284b"
+    },
+    "page_ref": "Appendix A-13",
+    "doc_date": "01-11-2024",
+    "iss_rev": "5 / 8",
+    "ato_name_number": "INTERNATIONAL FLIGHT OPERATIONS ACADEMY",
+    "dg_training_type": "Initial",
+    "training_date": "20.04.2026",
+    "initials": {
+      "item0": "V.I",
+      "item0_1": "V.I",
+      "item0_2": "V.I",
+      "item0_3": "V.I",
+      "item0_4": "V.I",
+      "item0_5": "V.I",
+      "item0_6": "V.I",
+      "item5": "V.I",
+      "item6": "V.I",
+      "item7": "V.I"
+    },
+    "job_function": "FD",
+    "show_item5": false,
+    "show_item7": false,
+    "knowledge_score": 80,
+    "skills": {
+      "input_response": 4,
+      "response_time": 4,
+      "number_of_errors": 4,
+      "repeated_attempts": 5
+    },
+    "attitude": {
+      "shows_interest": 3,
+      "participation": 3,
+      "input": 3,
+      "co_operation": 3,
+      "asks_relevant_questions": 3
+    },
+    "final_score": null,
+    "instructor_name": "Vincent Incammicia",
+    "instructor_signature": "",
+    "assignments": [
+      {
+        "participant_id": {
+          "$oid": "69f6427a6179b31cac382339"
+        },
+        "participant_name": "Slim Zbidi",
+        "_id": {
+          "$oid": "6a4a88b5e4e128398048856f"
+        },
+        "assigned_at": {
+          "$date": "2026-07-05T16:39:17.461Z"
+        }
+      }
+    ],
+    "created_at": {
+      "$date": "2026-07-05T16:39:17.461Z"
+    },
+    "updated_at": {
+      "$date": "2026-07-05T16:39:17.461Z"
+    },
+    "__v": 0
+  },
+  {
+    "_id": {
+      "$oid": "6a4a892ae4e128398048857a"
+    },
+    "airline_id": {
+      "$oid": "69f614b86179b31cac381bf0"
+    },
+    "airline_name": "Comlux",
+    "created_by": {
+      "$oid": "69c50ee2be01132bcdf6284b"
+    },
+    "page_ref": "Appendix A-13",
+    "doc_date": "01-11-2024",
+    "iss_rev": "5 / 8",
+    "ato_name_number": "INTERNATIONAL FLIGHT OPERATIONS ACADEMY",
+    "dg_training_type": "Initial",
+    "training_date": "20.04.2026",
+    "initials": {
+      "item0": "V.I",
+      "item0_1": "V.I",
+      "item0_2": "V.I",
+      "item0_3": "V.I",
+      "item0_4": "V.I",
+      "item0_5": "V.I",
+      "item0_6": "V.I",
+      "item5": "V.I",
+      "item6": "V.I",
+      "item7": "V.I"
+    },
+    "job_function": "FD",
+    "show_item5": false,
+    "show_item7": false,
+    "knowledge_score": 80,
+    "skills": {
+      "input_response": 4,
+      "response_time": 4,
+      "number_of_errors": 3,
+      "repeated_attempts": 5
+    },
+    "attitude": {
+      "shows_interest": 4,
+      "participation": 3,
+      "input": 3,
+      "co_operation": 3,
+      "asks_relevant_questions": 3
+    },
+    "final_score": null,
+    "instructor_name": "Vincent Incammicia",
+    "instructor_signature": "",
+    "assignments": [
+      {
+        "participant_id": {
+          "$oid": "69f6427c6179b31cac38233d"
+        },
+        "participant_name": "Ghazi Meddeb",
+        "assigned_at": {
+          "$date": "2026-07-05T16:41:14.213Z"
+        },
+        "_id": {
+          "$oid": "6a4a892ae4e128398048857b"
+        }
+      }
+    ],
+    "created_at": {
+      "$date": "2026-07-05T16:41:14.213Z"
+    },
+    "updated_at": {
+      "$date": "2026-07-05T16:41:34.615Z"
+    },
+    "__v": 1
+  }
+]

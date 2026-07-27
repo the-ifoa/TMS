@@ -177,28 +177,7 @@ function AirlineGroup({ airlineName, logoUrl, sheets, onEdit, onPreview, preview
         onClick={() => setCollapsed(c => !c)}
         className={`w-full flex items-center gap-3 px-5 py-4 transition-colors text-left ${isOpen ? 'bg-slate-100/90 border-b border-slate-200/80' : 'bg-white hover:bg-slate-50'}`}
       >
-        <div className="relative flex-shrink-0 group/logo">
-          <div className="w-9 h-9 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center overflow-hidden shadow-2xs transition-transform duration-200 group-hover/logo:scale-105">
-            {logoUrl
-              ? <img src={logoUrl} alt={airlineName} className="w-full h-full object-contain p-0.5 bg-white" />
-              : <span className="text-white text-xs font-bold">{airlineInitials(airlineName)}</span>}
-          </div>
-          {logoUrl && (
-            <div
-              className="pointer-events-none absolute z-[999] left-1/2 -translate-x-1/2
-                opacity-0 scale-50 group-hover/logo:opacity-100 group-hover/logo:scale-100
-                transition-all duration-200 ease-out origin-bottom"
-              style={{ bottom: 'calc(100% + 8px)' }}
-            >
-              <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-3 w-28 h-28 flex items-center justify-center">
-                <img src={logoUrl} alt={airlineName} className="w-full h-full object-contain" />
-              </div>
-              <div className="absolute bottom-0 left-1/2 translate-y-full -translate-x-1/2 pt-0.5">
-                <div className="w-3 h-3 bg-white border-r border-b border-slate-200 rotate-45" />
-              </div>
-            </div>
-          )}
-        </div>
+        <LogoAvatar logoUrl={logoUrl} name={airlineName} initials={airlineInitials(airlineName)} size="w-9 h-9" textSize="text-xs" />
 
         <div className="flex-1 min-w-0">
           <p className="text-sm font-bold text-slate-900 truncate">{airlineName}</p>

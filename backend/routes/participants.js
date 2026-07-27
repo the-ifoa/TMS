@@ -339,6 +339,29 @@ router.post('/send-confirmation', async (req, res) => {
   }
 });
 
+// ─── PATCH participant email — airline (owner) or admin ──────────────────────
+// The only field an airline may change on an otherwise-locked record, so they
+// can add/fix a candidate's email for exam invitations.
+router.patch('/:id/email', async (req, res) => {
+  try {
+    const doc = await Participant.findById(req.params.id);
+    if (!doc) return res.status(404).json({ error: 'Participant not found' });
+
+    const isOwnerAirline = req.admin.role === 'airline'
+      && doc.submitted_by && String(doc.submitted_by) === String(req.admin.id);
+    if (req.admin.role !== 'admin' && req.admin.role !== 'Administrator' && !isOwnerAirline) {
+      return res.status(403).json({ error: 'Not allowed to edit this record.' });
+    }
+
+    doc.email = (req.body.email || '').trim().toLowerCase();
+    await doc.save();
+    res.json(doc);
+  } catch (err) {
+    console.error('PATCH /participants/:id/email error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── UPDATE participant (admin only) ─────────────────────────────────────────
 router.put('/:id', async (req, res) => {
   try {

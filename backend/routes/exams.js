@@ -278,11 +278,13 @@ router.put('/attempts/:attemptId/grade', async (req, res) => {
     if (!isAdmin(req)) return res.status(403).json({ error: 'Admin access required.' });
     const attempt = await ExamAttempt.findById(req.params.attemptId);
     if (!attempt) return res.status(404).json({ error: 'Attempt not found.' });
-    if (attempt.status !== 'pending_review' && attempt.status !== 'graded') {
-      return res.status(400).json({ error: 'Attempt is not awaiting review.' });
+    // Admin can grade a pending attempt AND override points on an already
+    // scored one (submitted/graded) — never touch an in-progress attempt.
+    if (attempt.status === 'in_progress') {
+      return res.status(400).json({ error: 'Attempt has not been submitted yet.' });
     }
 
-    const { answers = [] } = req.body; // [{ question_id, points_awarded, feedback }]
+    const { answers = [], total_override } = req.body; // [{ question_id, points_awarded, feedback }]
     answers.forEach(({ question_id, points_awarded, feedback }) => {
       const entry = attempt.answers.find((a) => String(a.question_id) === String(question_id));
       if (!entry) return;
@@ -299,7 +301,14 @@ router.put('/attempts/:attemptId/grade', async (req, res) => {
       return res.status(400).json({ error: 'Not all manually-graded questions have a score yet.' });
     }
 
-    const score = attempt.answers.reduce((sum, a) => sum + (a.points_awarded || 0), 0);
+    // Normally the total is the sum of every question's points_awarded. An
+    // admin can instead directly override the total (e.g. a blanket
+    // adjustment) — the per-question points above are still saved for the
+    // record, but the final score/percentage use the override value.
+    const summedScore = attempt.answers.reduce((sum, a) => sum + (a.points_awarded || 0), 0);
+    const score = total_override != null
+      ? Math.max(0, Math.min(Number(total_override) || 0, attempt.max_score || summedScore))
+      : summedScore;
     const exam = await Exam.findById(attempt.exam_id).select('pass_percentage');
 
     attempt.score = score;
@@ -470,6 +479,8 @@ router.post('/:id/send-invites', async (req, res) => {
 
     const sent = [];
     const skipped = [];
+    // One batch per send action — every invite dispatched in this call shares it.
+    const batchId = crypto.randomBytes(8).toString('hex');
 
     for (const p of participants) {
       if (!p.email) { skipped.push({ id: String(p._id), name: p.participant_name, reason: 'no email' }); continue; }
@@ -489,6 +500,7 @@ router.post('/:id/send-invites', async (req, res) => {
           participant_email: p.email,
           airline_id: p.submitted_by,
           airline_name: airlineName(p.submitted_by),
+          batch_id: batchId,
         });
       } else {
         invite.participant_email = p.email;
@@ -496,6 +508,7 @@ router.post('/:id/send-invites', async (req, res) => {
         invite.exam_title_snapshot = exam.title;
         invite.sent_at = new Date();
         invite.sent_count = (invite.sent_count || 1) + 1;
+        invite.batch_id = batchId; // re-sending moves it into the new batch
       }
       await invite.save();
 

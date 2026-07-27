@@ -158,6 +158,8 @@ export const listExamAttempts     = (params = {})              => api.get('/exam
 export const getExamAttemptResult = (attemptId)                => api.get(`/exams/attempts/${attemptId}/result`);
 export const gradeExamAttempt     = (attemptId, data)           => api.put(`/exams/attempts/${attemptId}/grade`, data);
 
+export const updateParticipantEmail = (id, email) => api.patch(`/participants/${id}/email`, { email });
+
 // ── Exam invites (email a passwordless take-link to participants) ─────────────
 export const sendExamInvites       = (examId, participantIds) => api.post(`/exams/${examId}/send-invites`, { participant_ids: participantIds });
 export const getExamInvites        = (examId)                 => api.get(`/exams/${examId}/invites`);

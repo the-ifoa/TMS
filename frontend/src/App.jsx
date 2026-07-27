@@ -11,6 +11,7 @@ import AdminLogin from './pages/AdminLogin';
 import AdminSignup from './pages/AdminSignup';
 import Dashboard from './pages/Dashboard';
 import Participants from './pages/Participants';
+import AirlineParticipants from './pages/AirlineParticipants';
 import AddParticipant from './pages/AddParticipant';
 import EditParticipant from './pages/EditParticipant';
 import Airlines from './pages/Airlines';
@@ -23,7 +24,6 @@ import ExamSystem from './pages/ExamSystem';
 import ExamBuilder from './pages/ExamBuilder';
 import ExamAttempts from './pages/ExamAttempts';
 import AirlineExams from './pages/AirlineExams';
-import ExamTake from './pages/ExamTake';
 import ExamResultView from './pages/ExamResultView';
 import PublicExam from './pages/PublicExam';
 
@@ -108,15 +108,13 @@ function App() {
         <Route path="/airline" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
           <Route index element={<Dashboard />} />
           <Route path="submissions" element={<Participants />} />
+          <Route path="participants" element={<AirlineParticipants />} />
           <Route path="enrollment/new" element={<AddParticipant />} />
           <Route path="dgr" element={<DgrForms />} />
           <Route path="exams" element={<AirlineExams />} />
           <Route path="exams/:examId/result/:attemptId" element={<ExamResultView />} />
           <Route path="profile" element={<Profile />} />
         </Route>
-
-        {/* Exam taking — full-screen, no sidebar/header chrome */}
-        <Route path="/airline/exams/:examId/take/:attemptId" element={<ProtectedRoute><ExamTake /></ProtectedRoute>} />
       </Routes>
     </TooltipProvider>
   );

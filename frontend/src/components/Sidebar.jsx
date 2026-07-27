@@ -31,7 +31,8 @@ const adminNavigation = [
 
 const airlineNavigation = [
   { name: 'Dashboard',      href: '/airline',               icon: HiOutlineHome },
-  { name: 'My Submissions', href: '/airline/submissions',   icon: HiOutlineUsers },
+  { name: 'My Submissions', href: '/airline/submissions',   icon: HiOutlineClipboardList },
+  { name: 'Participants',   href: '/airline/participants',  icon: HiOutlineUsers },
   { name: 'New Enrollment', href: '/airline/enrollment/new', icon: HiOutlinePlusCircle },
   { name: 'DGR CBTA',       href: '/airline/dgr',           icon: HiOutlineShieldExclamation },
   { name: 'Exam System',    href: '/airline/exams',         icon: HiOutlineAcademicCap },

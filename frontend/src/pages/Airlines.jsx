@@ -554,7 +554,12 @@ export default function Airlines() {
   const [loading, setLoading]       = useState(true);
   const [search, setSearch]         = useState('');
   const [filterType, setFilterType] = useState('');
-  const [expanded, setExpanded]     = useState({});
+  // Persist which airline cards are open across navigation (e.g. Edit → Back)
+  // so the accordion doesn't collapse when the page remounts.
+  const [expanded, setExpanded]     = useState(() => {
+    try { return JSON.parse(sessionStorage.getItem('airlines_expanded') || '{}'); }
+    catch { return {}; }
+  });
   const [checked, setChecked]       = useState(new Set());
   const [generating, setGenerating] = useState(false);
   const [certResults, setCertResults]   = useState(null);
@@ -644,6 +649,11 @@ export default function Airlines() {
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Keep the open-cards state in sessionStorage so it survives page remounts.
+  useEffect(() => {
+    try { sessionStorage.setItem('airlines_expanded', JSON.stringify(expanded)); } catch { /* ignore */ }
+  }, [expanded]);
 
   const hasProcessedFocus = useRef(false);
   useEffect(() => {

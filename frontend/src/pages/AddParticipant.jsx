@@ -845,17 +845,25 @@ function BulkForm({ isAdmin, airlineName, airlineOptions, onSuccess }) {
         </div>
 
         {/* Column header */}
-        <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4">
-          <span className="w-6" />
-          <span className="flex-1 text-[10px] font-semibold text-primary-400 uppercase tracking-wider">First Name</span>
-          <span className="flex-1 text-[10px] font-semibold text-primary-400 uppercase tracking-wider">Last Name</span>
-          {shared.department_mode === 'manual' && (
-            <span className="w-40 sm:w-44 text-[10px] font-semibold text-primary-400 uppercase tracking-wider">Department</span>
+        <div className="hidden sm:flex items-center gap-2.5 sm:gap-3 px-3 sm:px-4">
+          <div className="flex items-center gap-2 w-full sm:flex-1">
+            <span className="w-6 text-center text-xs font-semibold text-transparent flex-shrink-0">#</span>
+            <span className="flex-1 text-[10px] font-semibold text-primary-400 uppercase tracking-wider">First Name</span>
+            <span className="flex-1 text-[10px] font-semibold text-primary-400 uppercase tracking-wider">Last Name</span>
+            <span className="flex-1 text-[10px] font-semibold text-primary-400 uppercase tracking-wider">Email (Optional)</span>
+          </div>
+
+          {(shared.department_mode === 'manual' || shared.training_type === 'NDG') && (
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              {shared.department_mode === 'manual' && (
+                <span className="w-40 sm:w-44 text-[10px] font-semibold text-primary-400 uppercase tracking-wider">Department</span>
+              )}
+              {shared.training_type === 'NDG' && (
+                <span className="flex items-center justify-center w-[84px] text-[10px] font-semibold text-primary-400 uppercase tracking-wider">NDG Type</span>
+              )}
+            </div>
           )}
-          {shared.training_type === 'NDG' && (
-            <span className="flex items-center justify-center w-[84px] text-[10px] font-semibold text-primary-400 uppercase tracking-wider">NDG Type</span>
-          )}
-          <span className="w-8" />
+          <span className="w-8 flex-shrink-0" />
         </div>
 
         <div className="overflow-y-auto max-h-72 space-y-2 pr-1">

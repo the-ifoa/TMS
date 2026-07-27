@@ -147,15 +147,16 @@ function GradeModal({ attemptId, onClose, onGraded }) {
   const [attempt, setAttempt] = useState(null);
   const [scores, setScores] = useState({});
   const [saving, setSaving] = useState(false);
+  const [filter, setFilter] = useState('all'); // all | manual | correct | incorrect
+  const [totalOverride, setTotalOverride] = useState(null); // manual override of the final total, null = auto-computed
 
   useEffect(() => {
     getExamAttemptResult(attemptId)
       .then((res) => {
         setAttempt(res.data);
+        // Seed every answer's score so the admin can override any question.
         const initial = {};
-        (res.data.answers || []).forEach((a) => {
-          if (a.needs_manual_grading) initial[a.question_id] = a.points_awarded ?? 0;
-        });
+        (res.data.answers || []).forEach((a) => { initial[a.question_id] = a.points_awarded ?? 0; });
         setScores(initial);
       })
       .catch(() => toast.error('Failed to load attempt.'));
@@ -165,12 +166,18 @@ function GradeModal({ attemptId, onClose, onGraded }) {
     (attempt?.questions_snapshot || []).map((q) => [String(q._id), q])
   );
 
-  const awardMax = (questionId, maxPoints) => {
-    setScores((prev) => ({ ...prev, [questionId]: maxPoints }));
+  // Any per-question edit invalidates a standing total override — the two
+  // shouldn't silently disagree.
+  const setQuestionScore = (questionId, value) => {
+    setTotalOverride(null);
+    setScores((prev) => ({ ...prev, [questionId]: value }));
   };
+
+  const awardMax = (questionId, maxPoints) => setQuestionScore(questionId, maxPoints);
 
   const awardMaxToAllPending = () => {
     if (!attempt) return;
+    setTotalOverride(null);
     setScores((prev) => {
       const next = { ...prev };
       attempt.answers.forEach((a) => {
@@ -185,17 +192,37 @@ function GradeModal({ attemptId, onClose, onGraded }) {
 
   const pendingCount = attempt ? attempt.answers.filter((a) => a.needs_manual_grading).length : 0;
 
+  // Live running total from every question's current (possibly edited) points —
+  // updates as the admin adjusts ANY question, not just manual-review ones.
+  const summedTotal = attempt
+    ? attempt.answers.reduce((sum, a) => {
+        const q = questionById[String(a.question_id)];
+        const cap = q ? q.points : Infinity;
+        const val = scores[a.question_id] ?? a.points_awarded ?? 0;
+        return sum + Math.min(cap, Math.max(0, Number(val)));
+      }, 0)
+    : 0;
+  const maxTotal = attempt
+    ? (attempt.max_score ?? attempt.answers.reduce((sum, a) => {
+        const q = questionById[String(a.question_id)];
+        return sum + (q ? q.points : 0);
+      }, 0))
+    : 0;
+  // The header total is directly editable — if the admin has typed an
+  // override, that wins over the per-question sum until they reset it.
+  const liveTotal = totalOverride != null ? totalOverride : summedTotal;
+  const livePct = maxTotal > 0 ? Math.round((liveTotal / maxTotal) * 1000) / 10 : 0;
+
   const submit = async () => {
-    const answers = attempt.answers
-      .filter((a) => a.needs_manual_grading)
-      .map((a) => ({
-        question_id: a.question_id,
-        points_awarded: scores[a.question_id] ?? 0,
-        feedback: '',
-      }));
+    // Send every answer so the admin can override auto-graded points too.
+    const answers = attempt.answers.map((a) => ({
+      question_id: a.question_id,
+      points_awarded: scores[a.question_id] ?? a.points_awarded ?? 0,
+      feedback: '',
+    }));
     setSaving(true);
     try {
-      await gradeExamAttempt(attemptId, { answers });
+      await gradeExamAttempt(attemptId, { answers, total_override: totalOverride });
       toast.success('Attempt graded successfully.');
       onGraded();
     } catch (err) {
@@ -207,7 +234,7 @@ function GradeModal({ attemptId, onClose, onGraded }) {
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-5xl sm:w-[92vw] max-h-[90vh] flex flex-col p-0 overflow-hidden rounded-3xl border border-slate-200/80 shadow-2xl bg-white">
+      <DialogContent className="max-w-4xl w-full max-h-[88vh] flex flex-col p-0 overflow-hidden rounded-2xl border border-slate-200/80 shadow-2xl bg-white">
         {!attempt ? (
           <div className="p-8 space-y-4">
             <Skeleton className="h-8 w-64 rounded-xl" />
@@ -217,87 +244,154 @@ function GradeModal({ attemptId, onClose, onGraded }) {
           </div>
         ) : (
           <>
-            {/* Sticky Modal Header */}
-            <div className="flex-shrink-0 px-6 sm:pr-14 py-5 border-b border-slate-200/80 bg-white sticky top-0 z-10 space-y-3.5">
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3.5 min-w-0">
-                  <Avatar className="w-11 h-11 border border-slate-200 shadow-2xs flex-shrink-0">
-                    <AvatarFallback className="bg-slate-900 text-white text-sm font-bold">
+            {/* Sticky Executive Modal Header */}
+            <div className="flex-shrink-0 px-4 sm:px-6 py-3 border-b border-slate-200/80 bg-slate-50/60 backdrop-blur-md sticky top-0 z-10 space-y-2.5">
+              {/* Row 1: Candidate Profile & Executive Stats */}
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <Avatar className="w-9 h-9 border border-slate-200 shadow-2xs flex-shrink-0">
+                    <AvatarFallback className="bg-slate-900 text-white text-xs font-bold">
                       {attempt.participant_name ? attempt.participant_name.charAt(0).toUpperCase() : 'S'}
                     </AvatarFallback>
                   </Avatar>
                   <div className="min-w-0">
-                    <DialogTitle className="text-base sm:text-xl font-bold text-slate-900 tracking-tight break-words leading-snug">
+                    <DialogTitle className="text-base font-extrabold text-slate-900 tracking-tight leading-snug truncate">
                       {attempt.participant_name}
                     </DialogTitle>
-                    <p className="text-xs text-slate-500 font-medium break-words leading-relaxed">
-                      {attempt.exam_title_snapshot} · Attempt #{attempt.attempt_number}
+                    <p className="text-xs text-slate-500 font-medium truncate">
+                      {attempt.exam_title_snapshot} · <span className="text-slate-400">Attempt #{attempt.attempt_number}</span>
                     </p>
                   </div>
                 </div>
 
-                <span
-                  className={`inline-flex items-center px-3.5 py-1 rounded-xl text-xs font-bold border flex-shrink-0 capitalize ${
-                    attempt.status === 'graded' || attempt.status === 'submitted'
-                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                      : attempt.status === 'pending_review'
-                      ? 'bg-blue-50 text-blue-700 border-blue-200'
-                      : 'bg-amber-50 text-amber-700 border-amber-200'
-                  }`}
-                >
-                  {attempt.status.replace('_', ' ')}
-                </span>
-              </div>
+                <div className="flex items-center gap-2.5 flex-shrink-0">
+                  {/* Clean Executive Score Badge */}
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-900 text-white shadow-2xs">
+                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wide">Score</span>
+                    <input
+                      type="number" min="0" max={maxTotal}
+                      value={liveTotal}
+                      onChange={(e) => setTotalOverride(Math.max(0, Math.min(maxTotal, Number(e.target.value))))}
+                      title="Directly edit final score"
+                      className="w-9 py-0.5 text-xs font-extrabold text-white bg-slate-800/90 border border-slate-700/80 rounded text-center outline-none focus:ring-1 focus:ring-blue-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    />
+                    <span className="text-xs font-extrabold text-slate-300">/ {maxTotal}</span>
+                    <span className="ml-0.5 px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[11px] font-black border border-emerald-500/30">
+                      {livePct}%
+                    </span>
+                    {totalOverride != null && (
+                      <button type="button" onClick={() => setTotalOverride(null)} title="Reset to auto-calculated score"
+                        className="ml-1 text-[10px] font-bold text-blue-300 hover:text-white underline">
+                        reset
+                      </button>
+                    )}
+                  </div>
 
-              {/* Status Chips */}
-              <div className="flex flex-wrap items-center gap-2 pt-0.5">
-                {attempt.percentage != null && (
+                  {/* Status Pill Badge with Dot */}
                   <span
-                    className={`inline-flex items-center gap-1 px-3 py-1 rounded-xl text-xs font-extrabold border ${
-                      attempt.passed
-                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                        : 'bg-rose-50 text-rose-700 border-rose-200'
+                    className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold border capitalize shadow-2xs ${
+                      attempt.status === 'graded' || attempt.status === 'submitted'
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200/80'
+                        : attempt.status === 'pending_review'
+                        ? 'bg-blue-50 text-blue-700 border-blue-200/80'
+                        : 'bg-amber-50 text-amber-700 border-amber-200/80'
                     }`}
                   >
-                    Total Score: {attempt.percentage}% ({attempt.score ?? 0} / {attempt.max_score ?? '?'} pts)
+                    <span className={`w-1.5 h-1.5 rounded-full ${
+                      attempt.status === 'graded' || attempt.status === 'submitted'
+                        ? 'bg-emerald-500'
+                        : attempt.status === 'pending_review'
+                        ? 'bg-blue-500'
+                        : 'bg-amber-500'
+                    }`} />
+                    {attempt.status.replace('_', ' ')}
                   </span>
-                )}
-                <span className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-slate-100 border border-slate-200/80 text-xs font-semibold text-slate-700">
-                  {attempt.answers.length} Questions Submitted
-                </span>
-                {pendingCount > 0 && (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={awardMaxToAllPending}
-                    className="rounded-xl border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 text-xs font-bold ml-auto"
-                  >
-                    Award Max to All Pending ({pendingCount})
-                  </Button>
-                )}
+                </div>
               </div>
+
+              {/* Row 2: Segmented Control Filter Tabs & Bulk Award Action */}
+              {(() => {
+                const correctCount = attempt.answers.filter((a) => a.is_correct === true).length;
+                const incorrectCount = attempt.answers.filter((a) => a.is_correct === false).length;
+                const tabs = [
+                  { id: 'all', label: 'All', count: attempt.answers.length },
+                  { id: 'manual', label: 'Needs Grading', count: pendingCount, highlight: pendingCount > 0 },
+                  { id: 'correct', label: 'Correct', count: correctCount },
+                  { id: 'incorrect', label: 'Incorrect', count: incorrectCount },
+                ];
+                return (
+                  <div className="flex items-center justify-between gap-3 pt-2 border-t border-slate-200/60 flex-wrap sm:flex-nowrap">
+                    {/* Segmented Control */}
+                    <div className="inline-flex items-center p-1 rounded-xl bg-slate-200/70 border border-slate-200/80 text-xs overflow-x-auto">
+                      {tabs.map((t) => (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onClick={() => setFilter(t.id)}
+                          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                            filter === t.id
+                              ? 'bg-white text-slate-900 shadow-2xs border border-slate-200/80 font-black'
+                              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/60 font-semibold'
+                          }`}
+                        >
+                          <span>{t.label}</span>
+                          <span
+                            className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                              filter === t.id
+                                ? 'bg-slate-100 text-slate-800'
+                                : t.highlight
+                                ? 'bg-amber-100 text-amber-800'
+                                : 'bg-slate-200/80 text-slate-600'
+                            }`}
+                          >
+                            {t.count}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Bulk Award Action */}
+                    {pendingCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={awardMaxToAllPending}
+                        className="inline-flex items-center gap-1.5 h-8 px-3 rounded-xl bg-amber-500 hover:bg-amber-600 active:scale-[0.98] text-white text-xs font-bold shadow-2xs transition-all whitespace-nowrap ml-auto cursor-pointer"
+                      >
+                        <HiOutlineCheckCircle className="w-4 h-4" />
+                        <span>Award Max to All Pending ({pendingCount})</span>
+                      </button>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Scrollable Questions Body */}
             <div className="flex-1 overflow-y-auto min-h-0 p-6 bg-slate-50/60 space-y-4">
-              {attempt.answers.map((a, idx) => {
+              {attempt.answers.filter((a) => {
+                if (filter === 'manual') return a.needs_manual_grading;
+                if (filter === 'correct') return a.is_correct === true;
+                if (filter === 'incorrect') return a.is_correct === false;
+                return true;
+              }).map((a) => {
                 const q = questionById[String(a.question_id)];
                 if (!q) return null;
 
+                // Real position in the full attempt (stable regardless of filter).
+                const realIdx = attempt.answers.findIndex((x) => String(x.question_id) === String(a.question_id));
                 const isCorrect = a.is_correct;
                 const isManual = a.needs_manual_grading;
 
                 return (
                   <div
-                    key={idx}
+                    key={a.question_id}
                     className="p-5 sm:p-6 rounded-2xl bg-white border border-slate-200/80 shadow-2xs space-y-4"
                   >
                     {/* Question Header & Prompt */}
                     <div className="space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                          Question {idx + 1}
+                          Question {realIdx + 1}
                         </span>
                         <span className="text-xs font-bold px-2.5 py-1 rounded-xl bg-slate-100 text-slate-700">
                           {q.points} pt{q.points !== 1 ? 's' : ''}
@@ -410,65 +504,47 @@ function GradeModal({ attemptId, onClose, onGraded }) {
                       </div>
                     )}
 
-                    {/* Score / Grading Bar */}
-                    <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-3">
-                      {isManual ? (
-                        <div className="flex flex-col sm:flex-row sm:items-center gap-3 w-full justify-between bg-amber-50/80 border border-amber-200 p-3.5 rounded-2xl">
-                          <span className="text-xs font-bold text-amber-900 flex items-center gap-2">
-                            <HiOutlineExclamationCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
-                            Manual Instructor Review (Max {q.points} pts)
+                    {/* Score / Grading Bar — points editable on EVERY question */}
+                    <div className={`pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${isManual ? '' : ''}`}>
+                      {/* Status indicator */}
+                      <div className="flex items-center gap-2">
+                        {isManual ? (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-amber-50 text-amber-800 border border-amber-200 text-xs font-bold">
+                            <HiOutlineExclamationCircle className="w-4 h-4 text-amber-600" /> Manual Review
                           </span>
-                          <div className="flex items-center gap-2.5 flex-shrink-0 self-end sm:self-auto">
-                            <span className="text-xs font-bold text-slate-800">Points Awarded:</span>
-                            <input
-                              type="number"
-                              min="0"
-                              max={q.points}
-                              value={scores[a.question_id] ?? ''}
-                              onChange={(e) =>
-                                setScores((prev) => ({
-                                  ...prev,
-                                  [a.question_id]: Number(e.target.value),
-                                }))
-                              }
-                              className="w-24 px-3 py-1.5 text-xs font-bold bg-white border border-amber-300 rounded-xl outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-600 shadow-2xs"
-                              placeholder={`0 - ${q.points}`}
-                            />
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              onClick={() => awardMax(a.question_id, q.points)}
-                              className="rounded-xl border-amber-300 bg-white text-amber-800 hover:bg-amber-100 text-xs font-bold px-3 py-1.5 h-auto"
-                            >
-                              Max ({q.points})
-                            </Button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex items-center justify-between w-full">
-                          <div className="flex items-center gap-2">
-                            {isCorrect ? (
-                              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold">
-                                <HiOutlineCheckCircle className="w-4 h-4 text-emerald-600" />
-                                Correct
-                              </span>
-                            ) : isCorrect === false ? (
-                              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-rose-50 text-rose-700 border border-rose-200 text-xs font-bold">
-                                <HiOutlineXCircle className="w-4 h-4 text-rose-600" />
-                                Incorrect
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-100 text-slate-600 text-xs font-semibold">
-                                Not Scored
-                              </span>
-                            )}
-                          </div>
-                          <span className="text-xs font-extrabold text-slate-800">
-                            {a.points_awarded ?? 0} / {q.points} pts
+                        ) : isCorrect ? (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold">
+                            <HiOutlineCheckCircle className="w-4 h-4 text-emerald-600" /> Correct
                           </span>
-                        </div>
-                      )}
+                        ) : isCorrect === false ? (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-rose-50 text-rose-700 border border-rose-200 text-xs font-bold">
+                            <HiOutlineXCircle className="w-4 h-4 text-rose-600" /> Incorrect
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-100 text-slate-600 text-xs font-semibold">Not Scored</span>
+                        )}
+                      </div>
+
+                      {/* Points editor — assign or deduct on any question */}
+                      <div className="flex items-center gap-2.5 flex-shrink-0 self-end sm:self-auto">
+                        <span className="text-xs font-bold text-slate-800">Points:</span>
+                        <input
+                          type="number" min="0" max={q.points}
+                          value={scores[a.question_id] ?? ''}
+                          onChange={(e) => setQuestionScore(a.question_id, Number(e.target.value))}
+                          className="w-20 px-3 py-1.5 text-xs font-bold bg-white border border-slate-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 shadow-2xs"
+                          placeholder={`0 - ${q.points}`}
+                        />
+                        <span className="text-xs font-semibold text-slate-400">/ {q.points}</span>
+                        <Button type="button" size="sm" variant="outline" onClick={() => awardMax(a.question_id, q.points)}
+                          className="rounded-xl border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-xs font-bold px-3 py-1.5 h-auto">
+                          Max
+                        </Button>
+                        <Button type="button" size="sm" variant="outline" onClick={() => awardMax(a.question_id, 0)}
+                          className="rounded-xl border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-xs font-bold px-3 py-1.5 h-auto">
+                          Zero
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 );
@@ -485,14 +561,14 @@ function GradeModal({ attemptId, onClose, onGraded }) {
               >
                 Close
               </Button>
-              {attempt.status === 'pending_review' && (
+              {attempt.status !== 'in_progress' && (
                 <Button
                   type="button"
                   onClick={submit}
                   disabled={saving}
                   className="rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-2xs px-6 py-2.5"
                 >
-                  {saving ? 'Saving…' : 'Submit Grades'}
+                  {saving ? 'Saving…' : attempt.status === 'pending_review' ? 'Submit Grades' : 'Save Grades'}
                 </Button>
               )}
             </div>
@@ -536,86 +612,94 @@ export default function ExamAttempts() {
 
   return (
     <div className="w-full min-h-full pb-20 flex flex-col">
-      {/* Sticky Top Header Bar */}
-      <div className="sticky top-0 z-20 w-full bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-3.5 sm:px-6 lg:px-8 py-3 shadow-2xs">
-        <div className="w-full max-w-7xl mx-auto flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 min-w-0">
-            <Button
-              variant="outline"
-              size="sm"
-              className="rounded-xl border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-1.5"
-              onClick={() => navigate('/admin/exams')}
-            >
-              <HiOutlineArrowLeft className="w-4 h-4" /> Back to Exams
-            </Button>
-            <div className="min-w-0 border-l border-slate-200 pl-3">
-              <h1 className="text-base sm:text-lg font-black text-slate-900 tracking-tight break-words leading-tight">
-                {exam?.title || 'Exam'} — Results
-              </h1>
-              <p className="text-xs text-slate-400 font-medium break-words leading-normal">
-                Student examination attempts & grading reviews
-              </p>
+      {/* Integrated Sticky Top Header & Search/Filter Bar */}
+      <div className="sticky top-0 z-20 w-full bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-2xs">
+        <div className="w-full max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8 py-2.5 space-y-2">
+          {/* Top Row: Navigation, Title & Attempts Counter */}
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 px-2.5 rounded-lg border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-1.5 flex-shrink-0 shadow-2xs"
+                onClick={() => navigate('/admin/exams')}
+                title="Back to Exams"
+              >
+                <HiOutlineArrowLeft className="w-3.5 h-3.5 text-slate-500" />
+                <span className="hidden sm:inline">Back to Exams</span>
+                <span className="sm:hidden">Back</span>
+              </Button>
+
+              <div className="flex items-center gap-2 min-w-0 truncate border-l border-slate-200 pl-2.5">
+                <h1 className="text-sm sm:text-base font-extrabold text-slate-900 tracking-tight truncate" title={exam?.title}>
+                  {exam?.title || 'Exam'}
+                </h1>
+                <span className="hidden sm:inline-block text-[11px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md flex-shrink-0">
+                  Results
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900 text-white text-xs font-bold shadow-2xs">
+                <HiOutlineUsers className="w-3.5 h-3.5 text-slate-300" />
+                <span>{attempts.length} <span className="hidden sm:inline">Attempts</span></span>
+              </span>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 text-white text-xs font-bold shadow-2xs">
-              <HiOutlineUsers className="w-3.5 h-3.5" />
-              <span>{attempts.length} Attempts</span>
-            </span>
-          </div>
+          {/* Bottom Row: Search Input & Filter Tabs (Sticky inside top bar) */}
+          {!loading && attempts.length > 0 && (
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 pt-2 border-t border-slate-100">
+              <div className="relative flex-1 min-w-0">
+                <HiOutlineSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="Search candidate by name…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full pl-9 pr-8 py-1.5 bg-slate-50 border border-slate-200/80 rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900 transition-all"
+                />
+                {search && (
+                  <button
+                    type="button"
+                    onClick={() => setSearch('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded-lg text-slate-400 hover:text-slate-600"
+                  >
+                    <HiOutlineX className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {/* Status Filter Tabs */}
+              <div className="flex items-center gap-1 overflow-x-auto pb-0.5 sm:pb-0 flex-shrink-0">
+                {[
+                  { id: 'all', label: 'All' },
+                  { id: 'pending_review', label: 'Pending Review' },
+                  { id: 'graded', label: 'Graded' },
+                  { id: 'in_progress', label: 'In Progress' },
+                ].map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setStatusFilter(tab.id)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all border whitespace-nowrap cursor-pointer ${
+                      statusFilter === tab.id
+                        ? 'bg-slate-900 text-white border-slate-900 shadow-2xs'
+                        : 'bg-white text-slate-600 border-slate-200/90 hover:bg-slate-50'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Main Content Area */}
-      <div className="w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 space-y-5 flex-1">
-        {/* Search & Filter Bar */}
-        {!loading && attempts.length > 0 && (
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs">
-            <div className="relative flex-1 min-w-0">
-              <HiOutlineSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-              <input
-                type="text"
-                placeholder="Search candidate by name…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-10 pr-8 py-2 bg-slate-50 border border-slate-200/80 rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900 transition-all"
-              />
-              {search && (
-                <button
-                  type="button"
-                  onClick={() => setSearch('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded-lg text-slate-400 hover:text-slate-600"
-                >
-                  <HiOutlineX className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-
-            {/* Filter Tabs */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 flex-shrink-0">
-              {[
-                { id: 'all', label: 'All' },
-                { id: 'pending_review', label: 'Pending Review' },
-                { id: 'graded', label: 'Graded' },
-                { id: 'in_progress', label: 'In Progress' },
-              ].map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setStatusFilter(tab.id)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border whitespace-nowrap cursor-pointer ${
-                    statusFilter === tab.id
-                      ? 'bg-slate-900 text-white border-slate-900 shadow-2xs'
-                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+      <div className="w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 space-y-4 flex-1">
 
         {/* Attempts Card List */}
         {loading ? (

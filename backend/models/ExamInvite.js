@@ -33,6 +33,11 @@ const examInviteSchema = new mongoose.Schema(
 
     attempt_id:  { type: mongoose.Schema.Types.ObjectId, ref: 'ExamAttempt', default: null },
 
+    // A "batch" is one admin send action — every invite dispatched together in
+    // a single Send Links click shares this id, so the airline can view its
+    // students grouped by the batch they were sent in.
+    batch_id:    { type: String, default: '' },
+
     sent_at:      { type: Date, default: Date.now },
     sent_count:   { type: Number, default: 1 },
     opened_at:    { type: Date, default: null },

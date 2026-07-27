@@ -21,9 +21,11 @@ import {
   HiOutlineClock,
   HiOutlineSelector,
   HiOutlineLockClosed,
+  HiOutlineMail,
+  HiOutlineCheck,
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
-import { getParticipants, deleteParticipant, downloadIssuedCertificate, downloadDhlCertificate, listAttendanceSheets, getAttendanceSheet, API_BASE } from '../api';
+import { getParticipants, deleteParticipant, downloadIssuedCertificate, downloadDhlCertificate, listAttendanceSheets, getAttendanceSheet, updateParticipantEmail, API_BASE } from '../api';
 import AttendanceChecklistModal from '../components/AttendanceChecklistModal';
 import { buildAttendanceMap, generateAttendancePdf } from '../utils/generateAttendancePdf';
 import { useConfirm } from '@/hooks/use-confirm';
@@ -135,7 +137,66 @@ function SelectDropdown({ icon: Icon, value, options, onChange, placeholder, min
 
 // ─── Collapsible group used in airline view ───────────────────────────────────
 
-function SubmissionGroup({ groupKey, records, open, onToggle, focusId, attendanceSheets = [], onViewSheet }) {
+// Inline add/edit for a participant's exam-invite email (airline-allowed).
+function EmailInlineEditor({ rec }) {
+  const [email, setEmail] = useState(rec.email || '');
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(rec.email || '');
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    const val = draft.trim();
+    setSaving(true);
+    try {
+      await updateParticipantEmail(rec.id || rec._id, val);
+      setEmail(val);
+      rec.email = val; // keep the shared record in sync for the send flow
+      setEditing(false);
+      toast.success(val ? 'Email saved' : 'Email cleared');
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to save email');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (editing) {
+    return (
+      <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+        <input
+          autoFocus type="email" value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') save(); if (e.key === 'Escape') { setDraft(email); setEditing(false); } }}
+          placeholder="candidate@email.com"
+          className="w-44 px-2 py-1 text-[11px] border border-blue-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/25"
+        />
+        <button onClick={save} disabled={saving} className="p-1 rounded-lg text-emerald-600 hover:bg-emerald-50 disabled:opacity-50">
+          <HiOutlineCheck className="w-3.5 h-3.5" />
+        </button>
+        <button onClick={() => { setDraft(email); setEditing(false); }} className="p-1 rounded-lg text-slate-400 hover:bg-slate-100">
+          <HiOutlineX className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      onClick={(e) => { e.stopPropagation(); setDraft(email); setEditing(true); }}
+      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-semibold transition-all border ${
+        email
+          ? 'bg-blue-50/80 border-blue-200/80 text-blue-700 hover:bg-blue-100/80'
+          : 'bg-slate-50 border-dashed border-slate-300 text-slate-500 hover:bg-slate-100'
+      }`}
+      title={email ? 'Edit email' : 'Add email for exam invitations'}
+    >
+      <HiOutlineMail className="w-3.5 h-3.5" />
+      <span className="max-w-[160px] truncate">{email || 'Add email'}</span>
+    </button>
+  );
+}
+
+function SubmissionGroup({ groupKey, records, open, onToggle, focusId, attendanceSheets = [], onViewSheet, bulkEmail = false, emailDrafts = {}, onEmailDraft }) {
   const [downloading, setDownloading] = useState(null);
   const [preview, setPreview]       = useState(null);
   const [downloadingDhl, setDownloadingDhl] = useState(null);
@@ -376,6 +437,17 @@ function SubmissionGroup({ groupKey, records, open, onToggle, focusId, attendanc
 
                   {/* Actions buttons row - sleek compact inline layout for mobile & desktop */}
                   <div className="flex items-center gap-1.5 flex-wrap md:flex-nowrap pl-7 md:pl-0 pt-1 md:pt-0" onClick={e => e.stopPropagation()}>
+                    {bulkEmail ? (
+                      <input
+                        type="email"
+                        value={emailDrafts[rec.id || rec._id] ?? (rec.email || '')}
+                        onChange={(e) => onEmailDraft(rec.id || rec._id, e.target.value)}
+                        placeholder="candidate@email.com"
+                        className="w-48 px-2.5 py-1 text-[11px] border border-blue-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/25 bg-blue-50/30"
+                      />
+                    ) : (
+                      <EmailInlineEditor rec={rec} />
+                    )}
                     {rec.cert_released ? (
                       <div className="flex items-center gap-1">
                         <button
@@ -664,6 +736,38 @@ export default function Participants() {
   const [activeTab, setActiveTab] = useState('participants'); // 'participants' | 'attendance'
   const [attSearch, setAttSearch] = useState('');
   const [attFilterType, setAttFilterType] = useState('');
+  // Bulk email entry (airline): edit every candidate's exam-invite email inline, save all at once.
+  const [bulkEmail, setBulkEmail] = useState(false);
+  const [emailDrafts, setEmailDrafts] = useState({});
+  const [savingEmails, setSavingEmails] = useState(false);
+
+  const enterBulkEmail = () => {
+    const d = {};
+    records.forEach((r) => { d[r.id || r._id] = r.email || ''; });
+    setEmailDrafts(d);
+    setBulkEmail(true);
+  };
+  const setEmailDraft = (id, val) => setEmailDrafts((p) => ({ ...p, [id]: val }));
+
+  const saveAllEmails = async () => {
+    const changed = records.filter((r) => {
+      const id = r.id || r._id;
+      return emailDrafts[id] !== undefined && (emailDrafts[id].trim() || '') !== (r.email || '');
+    });
+    if (changed.length === 0) { setBulkEmail(false); toast('No email changes to save.', { icon: 'ℹ️' }); return; }
+    setSavingEmails(true);
+    let ok = 0, fail = 0;
+    for (const r of changed) {
+      const id = r.id || r._id;
+      try { await updateParticipantEmail(id, emailDrafts[id].trim()); r.email = emailDrafts[id].trim(); ok++; }
+      catch { fail++; }
+    }
+    setSavingEmails(false);
+    setBulkEmail(false);
+    fetchRecords({ silent: true });
+    if (fail === 0) toast.success(`${ok} email${ok !== 1 ? 's' : ''} saved.`);
+    else toast.error(`${ok} saved, ${fail} failed.`);
+  };
 
   const fetchRecords = async ({ silent = false } = {}) => {
     try {
@@ -844,6 +948,40 @@ export default function Participants() {
                 ] },
               ]}
             />
+
+            {/* Bulk email manager — airline only */}
+            {!isAdmin && (
+              bulkEmail ? (
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <button
+                    type="button"
+                    onClick={saveAllEmails}
+                    disabled={savingEmails}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-2xs transition-all disabled:opacity-60 whitespace-nowrap"
+                  >
+                    <HiOutlineCheck className="w-4 h-4" />
+                    {savingEmails ? 'Saving…' : 'Save All Emails'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBulkEmail(false)}
+                    disabled={savingEmails}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-xs font-bold transition-all whitespace-nowrap"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={enterBulkEmail}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-xs font-bold shadow-2xs transition-all whitespace-nowrap flex-shrink-0"
+                >
+                  <HiOutlineMail className="w-4 h-4 text-slate-500" />
+                  Manage Emails
+                </button>
+              )
+            )}
           </div>
 
           {/* Active Filters Summary Bar */}
@@ -910,11 +1048,14 @@ export default function Participants() {
                   key={key}
                   groupKey={key}
                   records={recs}
-                  open={openGroups[key] ?? false}
+                  open={bulkEmail ? true : (openGroups[key] ?? false)}
                   onToggle={() => setOpenGroups(prev => ({ ...prev, [key]: !prev[key] }))}
                   focusId={focusId}
                   attendanceSheets={groupSheets}
                   onViewSheet={sheet => setActiveSheet({ ...sheet, readOnly: true })}
+                  bulkEmail={bulkEmail}
+                  emailDrafts={emailDrafts}
+                  onEmailDraft={setEmailDraft}
                 />
               );
             })}

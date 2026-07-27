@@ -32,6 +32,7 @@ export default function EditParticipant() {
   const [form, setForm] = useState({
     first_name: '',
     last_name: '',
+    email: '',
     company: '',
     department: '',
     training_type: '',
@@ -60,6 +61,7 @@ export default function EditParticipant() {
         setForm({
           first_name:         fName,
           last_name:          lName,
+          email:              data.email         || '',
           company:            data.company       || '',
           department:         data.department    || '',
           training_type:      data.training_type || '',
@@ -159,6 +161,13 @@ export default function EditParticipant() {
             <input name="last_name" value={form.last_name} onChange={handleChange}
               className="input-field" placeholder="Last name" />
           </div>
+        </div>
+
+        {/* Email — used to send the participant their exam link */}
+        <div>
+          <label className="label">Email <span className="text-primary-400 font-normal normal-case">(for exam invitations)</span></label>
+          <input type="email" name="email" value={form.email} onChange={handleChange}
+            className="input-field" placeholder="e.g. candidate@example.com" />
         </div>
 
         {/* Airline + Department */}

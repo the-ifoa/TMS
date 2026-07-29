@@ -26,6 +26,8 @@ import ExamAttempts from './pages/ExamAttempts';
 import AirlineExams from './pages/AirlineExams';
 import ExamResultView from './pages/ExamResultView';
 import PublicExam from './pages/PublicExam';
+import ParticipantExamPerformance from './pages/ParticipantExamPerformance';
+import QuestionBank, { QuestionBankDetail } from './pages/QuestionBank';
 
 // Requires any authenticated user (admin or airline)
 function ProtectedRoute({ children }) {
@@ -89,6 +91,7 @@ function App() {
           <Route index element={<Dashboard />} />
           <Route path="participants" element={<Participants />} />
           <Route path="participants/add" element={<AddParticipant />} />
+          <Route path="participants/:participantId/performance" element={<ParticipantExamPerformance />} />
           <Route path="profile" element={<Profile />} />
 
           {/* Admin-only routes */}
@@ -102,6 +105,8 @@ function App() {
           <Route path="exams/new"       element={<AdminRoute><ExamBuilder /></AdminRoute>} />
           <Route path="exams/:id/edit"  element={<AdminRoute><ExamBuilder /></AdminRoute>} />
           <Route path="exams/:id/attempts" element={<AdminRoute><ExamAttempts /></AdminRoute>} />
+          <Route path="question-bank" element={<AdminRoute><QuestionBank /></AdminRoute>} />
+          <Route path="question-bank/:bankId" element={<AdminRoute><QuestionBankDetail /></AdminRoute>} />
         </Route>
 
         {/* Airline-friendly URL aliases — same pages, nicer URLs for airline users */}
@@ -109,6 +114,7 @@ function App() {
           <Route index element={<Dashboard />} />
           <Route path="submissions" element={<Participants />} />
           <Route path="participants" element={<AirlineParticipants />} />
+          <Route path="participants/:participantId/performance" element={<ParticipantExamPerformance />} />
           <Route path="enrollment/new" element={<AddParticipant />} />
           <Route path="dgr" element={<DgrForms />} />
           <Route path="exams" element={<AirlineExams />} />

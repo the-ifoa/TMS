@@ -17,6 +17,7 @@ import AttendanceChecklistModal from '../components/AttendanceChecklistModal';
 import { buildAttendanceMap, generateAttendancePdf } from '../utils/generateAttendancePdf';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { airlineInitials } from '../components/AirlineLogo';
+import LogoAvatar from '../components/LogoAvatar';
 
 const TRAINING_TYPES = [
   { value: 'FDI', label: 'Flight Dispatch Initial',    color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },

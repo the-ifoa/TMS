@@ -10,7 +10,7 @@ router.get('/', async (req, res) => {
   try {
     const filter = {};
     if (req.admin.role === 'airline') filter.submitted_by = req.admin.id;
-    if (req.query.company)       filter.company       = req.query.company;
+    if (req.query.company) filter.company = req.query.company;
     if (req.query.training_type) filter.training_type = req.query.training_type;
 
     const sheets = await AttendanceSheet.find(filter)
@@ -49,9 +49,9 @@ router.post('/', async (req, res) => {
       company,
       training_type: training_type || null,
       start_date,
-      end_date:     end_date || null,
+      end_date: end_date || null,
       participants: participants || [],
-      records:      records || [],
+      records: records || [],
       submitted_by: req.admin.role === 'airline' ? req.admin.id : null,
     });
 
@@ -72,12 +72,12 @@ router.put('/:id', async (req, res) => {
     }
 
     const { company, training_type, start_date, end_date, participants, records } = req.body;
-    if (company)       sheet.company       = company;
+    if (company) sheet.company = company;
     if (training_type) sheet.training_type = training_type;
-    if (start_date)    sheet.start_date    = start_date;
-    sheet.end_date     = end_date || null;
-    if (participants)  sheet.participants  = participants;
-    if (records)       sheet.records       = records;
+    if (start_date) sheet.start_date = start_date;
+    sheet.end_date = end_date || null;
+    if (participants) sheet.participants = participants;
+    if (records) sheet.records = records;
 
     await sheet.save();
     res.json(sheet);

@@ -85,12 +85,9 @@ function ChoicePlayer({ q, response, onChange, multi, onImageClick }) {
   };
 
   const options = q.options || [];
-  const isShortOptions = useMemo(() => {
-    return options.length <= 4 && options.every((opt) => (opt.text || '').length < 35 && !opt.image_url);
-  }, [options]);
 
   return (
-    <div className={isShortOptions ? 'grid grid-cols-1 sm:grid-cols-2 gap-2.5' : 'space-y-2.5'}>
+    <div className="space-y-3 w-full">
       {options.map((opt, idx) => {
         const checked = multi ? (response || []).includes(opt._id) : response === opt._id;
         const letter = String.fromCharCode(65 + idx);
@@ -98,15 +95,17 @@ function ChoicePlayer({ q, response, onChange, multi, onImageClick }) {
           <div
             key={opt._id}
             onClick={() => toggle(opt._id)}
-            className={`flex items-center gap-3.5 p-3.5 sm:p-4 rounded-xl border cursor-pointer select-none transition-all duration-150 group ${
+            className={`flex items-center gap-4 p-4 rounded-2xl border cursor-pointer select-none transition-all duration-200 group ${
               checked
-                ? 'bg-blue-50/90 border-2 border-blue-600 shadow-2xs text-blue-950 font-semibold'
-                : 'bg-white border-slate-200/90 hover:bg-slate-50/80 hover:border-slate-300 text-slate-800 shadow-2xs'
+                ? 'bg-blue-50/90 border-2 border-blue-600 shadow-2xs text-blue-950 font-semibold ring-1 ring-blue-500/20'
+                : 'bg-white border-slate-200/90 hover:bg-slate-50 hover:border-slate-300 text-slate-800 shadow-2xs'
             }`}
           >
             <span
-              className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0 transition-all ${
-                checked ? 'bg-blue-600 text-white shadow-2xs scale-105' : 'bg-slate-100 text-slate-600 group-hover:bg-slate-200/80'
+              className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs sm:text-sm flex-shrink-0 transition-all ${
+                checked
+                  ? 'bg-blue-600 text-white shadow-md scale-105 font-black'
+                  : 'bg-slate-100 text-slate-600 border border-slate-200/80 group-hover:bg-slate-200/80 group-hover:text-slate-900'
               }`}
             >
               {letter}
@@ -122,14 +121,16 @@ function ChoicePlayer({ q, response, onChange, multi, onImageClick }) {
                 <img
                   src={opt.image_url}
                   alt=""
-                  className="h-10 w-auto rounded-lg border border-slate-200 object-contain hover:opacity-90"
+                  className="h-12 w-auto rounded-xl border border-slate-200 object-contain hover:opacity-90 transition-opacity"
                 />
-                <span className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover/img:opacity-100 rounded-lg transition-opacity flex items-center justify-center text-white text-xs">
-                  <HiOutlineZoomIn className="w-3.5 h-3.5" />
+                <span className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover/img:opacity-100 rounded-xl transition-opacity flex items-center justify-center text-white text-xs">
+                  <HiOutlineZoomIn className="w-4 h-4" />
                 </span>
               </div>
             )}
-            <span className="text-xs sm:text-sm leading-snug flex-1 font-medium">{opt.text}</span>
+            <span className="text-sm sm:text-base leading-relaxed flex-1 font-semibold text-slate-800">
+              {opt.text}
+            </span>
           </div>
         );
       })}
@@ -366,14 +367,16 @@ function HotspotPlayer({ q, response, onChange }) {
     onChange({ x: ((e.clientX - rect.left) / rect.width) * 100, y: ((e.clientY - rect.top) / rect.height) * 100 });
   };
   return (
-    <div className="relative inline-block max-w-full cursor-crosshair rounded-2xl overflow-hidden border border-slate-200 shadow-2xs bg-slate-50" onClick={handleClick}>
-      <img src={q.image_url} alt="" className="max-w-full max-h-72 rounded-2xl border border-primary-200 select-none object-contain" />
-      {response && (
-        <div
-          className="absolute w-4 h-4 -ml-2 -mt-2 rounded-full bg-rose-500 border-2 border-white shadow-md animate-pulse"
-          style={{ left: `${response.x}%`, top: `${response.y}%` }}
-        />
-      )}
+    <div className="flex justify-center">
+      <div className="relative inline-block max-w-full cursor-crosshair rounded-2xl overflow-hidden border border-slate-200 shadow-2xs bg-slate-50" onClick={handleClick}>
+        <img src={q.image_url} alt="" className="max-w-full max-h-72 rounded-2xl border border-primary-200 select-none object-contain" />
+        {response && (
+          <div
+            className="absolute w-4 h-4 -ml-2 -mt-2 rounded-full bg-rose-500 border-2 border-white shadow-md animate-pulse"
+            style={{ left: `${response.x}%`, top: `${response.y}%` }}
+          />
+        )}
+      </div>
     </div>
   );
 }
@@ -397,27 +400,29 @@ function DragDropPlayer({ q, response, onChange }) {
   return (
     <div className="space-y-4">
       {q.image_url && (
-        <div className="relative inline-block max-w-full rounded-2xl overflow-hidden border border-slate-200 shadow-2xs bg-slate-900/5">
-          <img src={q.image_url} alt="" className="max-w-full max-h-[320px] object-contain mx-auto select-none rounded-2xl" />
-          {targets.map((t, idx) => (
-            <div
-              key={idx}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => {
-                e.preventDefault();
-                place(e.dataTransfer.getData('text/plain'), idx);
-              }}
-              onClick={() => selectedItem && place(selectedItem, idx)}
-              className="absolute border-2 border-dashed border-blue-500 bg-blue-600/20 backdrop-blur-2xs rounded-xl flex items-center justify-center text-xs font-bold text-blue-950 text-center px-1 shadow-2xs transition-all hover:bg-blue-600/30 cursor-pointer"
-              style={{ left: `${t.x}%`, top: `${t.y}%`, width: `${t.width}%`, height: `${t.height}%` }}
-            >
-              {placedAt(idx) ? (
-                <span className="bg-blue-600 text-white px-2 py-0.5 rounded-lg text-xs font-extrabold shadow-2xs">{placedAt(idx)}</span>
-              ) : (
-                <span className="text-slate-900 font-extrabold text-[10px] drop-shadow-xs">{t.label}</span>
-              )}
-            </div>
-          ))}
+        <div className="flex justify-center">
+          <div className="relative inline-block max-w-full rounded-2xl overflow-hidden border border-slate-200 shadow-2xs bg-slate-900/5">
+            <img src={q.image_url} alt="" className="max-w-full max-h-[320px] object-contain mx-auto select-none rounded-2xl" />
+            {targets.map((t, idx) => (
+              <div
+                key={idx}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  place(e.dataTransfer.getData('text/plain'), idx);
+                }}
+                onClick={() => selectedItem && place(selectedItem, idx)}
+                className="absolute border-2 border-dashed border-blue-500 bg-blue-600/20 backdrop-blur-2xs rounded-xl flex items-center justify-center text-xs font-bold text-blue-950 text-center px-1 shadow-2xs transition-all hover:bg-blue-600/30 cursor-pointer"
+                style={{ left: `${t.x}%`, top: `${t.y}%`, width: `${t.width}%`, height: `${t.height}%` }}
+              >
+                {placedAt(idx) ? (
+                  <span className="bg-blue-600 text-white px-2 py-0.5 rounded-lg text-xs font-extrabold shadow-2xs">{placedAt(idx)}</span>
+                ) : (
+                  <span className="text-slate-900 font-extrabold text-[10px] drop-shadow-xs">{t.label}</span>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -501,33 +506,50 @@ export default function QuestionPlayer({ question: q, response, onChange }) {
   const [lightboxSrc, setLightboxSrc] = useState(null);
 
   return (
-    <div className="space-y-4">
+    <div className="w-full space-y-4">
       {/* Question Prompt Card */}
       {q.prompt && (
-        <div className="text-sm sm:text-base font-bold text-slate-900 leading-relaxed whitespace-pre-wrap tracking-tight bg-slate-50/50 p-4 rounded-2xl border border-slate-200/70 shadow-2xs">
+        <div className="text-base sm:text-lg font-bold text-slate-900 leading-relaxed whitespace-pre-wrap tracking-tight bg-slate-50/70 p-5 sm:p-6 rounded-2xl border border-slate-200/90 shadow-2xs">
           {q.prompt}
         </div>
       )}
 
-      {/* Question Image (Below Prompt, Above Options) */}
-      {q.image_url && q.type !== 'hotspot' && q.type !== 'drag_drop' && (
-        <div className="flex justify-start">
-          <button
-            type="button"
-            onClick={() => setLightboxSrc(q.image_url)}
-            className="group relative rounded-2xl border border-slate-200/80 p-1 bg-slate-50/70 inline-flex items-center justify-center max-w-full cursor-zoom-in hover:border-blue-400 transition-all shadow-2xs overflow-hidden"
-          >
-            <img src={q.image_url} alt="" className="max-w-full max-h-40 sm:max-h-48 rounded-xl object-contain" />
-            <span className="absolute bottom-2 left-1/2 -translate-x-1/2 px-2.5 py-1 rounded-lg bg-slate-900/80 hover:bg-slate-900 text-white text-[11px] font-bold backdrop-blur-2xs flex items-center gap-1.5 shadow-md transition-transform group-hover:scale-105 whitespace-nowrap">
-              <HiOutlineZoomIn className="w-3.5 h-3.5 text-blue-400" />
-              Click to expand
-            </span>
-          </button>
-        </div>
-      )}
+      {/* Question Image(s) (Below Prompt, Above Options) */}
+      {q.type !== 'hotspot' && q.type !== 'drag_drop' && (() => {
+        const gallery = q.images && q.images.length > 0 ? q.images : (q.image_url ? [{ url: q.image_url }] : []);
+        if (gallery.length === 0) return null;
+        const multi = gallery.length > 1;
+        return (
+          <div className={multi ? 'flex gap-3 justify-center overflow-x-auto pb-2 -mx-1 px-1 snap-x snap-mandatory scrollbar-thin' : 'flex justify-center'}>
+            {gallery.map((img, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => setLightboxSrc(img.url)}
+                className={`group relative rounded-2xl border border-slate-200/80 p-1.5 bg-slate-50/70 inline-flex items-center justify-center cursor-zoom-in hover:border-blue-400 transition-all shadow-2xs overflow-hidden ${multi ? 'flex-shrink-0 snap-start' : 'max-w-full'}`}
+              >
+                {multi && (
+                  <span className="absolute top-2 left-2 z-10 w-5 h-5 rounded-full bg-slate-900/80 text-white text-[10px] font-extrabold flex items-center justify-center">
+                    {idx + 1}
+                  </span>
+                )}
+                <img
+                  src={img.url}
+                  alt=""
+                  className={multi ? 'h-40 sm:h-48 w-auto max-w-[85vw] sm:max-w-xs rounded-xl object-contain' : 'max-w-full max-h-40 sm:max-h-48 rounded-xl object-contain'}
+                />
+                <span className="absolute bottom-2.5 left-1/2 -translate-x-1/2 px-3 py-1 rounded-xl bg-slate-900/80 hover:bg-slate-900 text-white text-xs font-bold backdrop-blur-2xs flex items-center gap-1.5 shadow-md transition-transform group-hover:scale-105 whitespace-nowrap">
+                  <HiOutlineZoomIn className="w-3.5 h-3.5 text-blue-400" />
+                  Click to expand
+                </span>
+              </button>
+            ))}
+          </div>
+        );
+      })()}
 
       {/* Answer Options (Below Image) */}
-      <div className="space-y-4">
+      <div className="w-full space-y-3">
         {(q.type === 'mcq' || q.type === 'true_false' || q.type === 'select_list') && (
           <ChoicePlayer q={q} response={response} onChange={onChange} onImageClick={setLightboxSrc} />
         )}

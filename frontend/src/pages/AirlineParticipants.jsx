@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   HiOutlineUsers, HiOutlineSearch, HiOutlineMail, HiOutlineCheck, HiOutlineX,
-  HiOutlineFilter, HiOutlineCheckCircle, HiOutlineClock,
+  HiOutlineFilter, HiOutlineCheckCircle, HiOutlineClock, HiOutlineChartBar,
 } from 'react-icons/hi';
 import { getParticipants, updateParticipantEmail } from '../api';
 import { Card } from '@/components/ui/card';
@@ -247,6 +248,10 @@ export default function AirlineParticipants() {
                       <HiOutlineClock className="w-3.5 h-3.5" /> Pending
                     </span>
                   )}
+                  <Link to={`/airline/participants/${r.id || r._id}/performance`}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-50 border border-slate-200 hover:border-blue-300 hover:bg-blue-50 text-slate-600 hover:text-blue-600 transition-all">
+                    <HiOutlineChartBar className="w-3.5 h-3.5" /> Performance
+                  </Link>
                 </div>
               </div>
             ))}

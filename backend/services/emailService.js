@@ -62,7 +62,7 @@ function fmtDate(d) {
 // ─── IFOA Logo — dynamically read from disk and encoded as base64 ──────────
 function getLogoBase64() {
   try {
-    const logoPath = path.join(__dirname, '..', 'assets', 'logo.png');
+    const logoPath = path.join(__dirname, '..', 'assets', 'logo-email.png');
     return fs.readFileSync(logoPath).toString('base64');
   } catch (err) {
     console.warn('[email] Could not read logo file:', err.message);
@@ -121,7 +121,7 @@ function buildConfirmationHtml({ airlineName, contactName, participants, trainin
           <!-- Logo — full available width -->
           <table width="100%" cellpadding="0" cellspacing="0">
             <tr>
-              <td align="center" bgcolor="#ffffff" style="background:#ffffff;border-radius:12px;padding:16px 20px;margin-bottom:16px">
+              <td align="center" style="padding:16px 20px;margin-bottom:16px">
                 <img src="cid:ifoa_logo" width="460" alt="IFOA" style="display:block;border:0;width:460px;max-width:100%;height:auto"/>
               </td>
             </tr>
@@ -348,7 +348,7 @@ async function sendPasswordResetEmail({ toEmail, airlineName, resetUrl }) {
         <td bgcolor="#0c1a2e" style="background:#0c1a2e;padding:28px 40px 24px;text-align:center">
           <table width="100%" cellpadding="0" cellspacing="0">
             <tr>
-              <td align="center" bgcolor="#ffffff" style="background:#ffffff;border-radius:12px;padding:16px 20px">
+              <td align="center" style="padding:16px 20px">
                 <img src="cid:ifoa_logo" width="460" alt="IFOA" style="display:block;border:0;width:460px;max-width:100%;height:auto"/>
               </td>
             </tr>
@@ -472,7 +472,7 @@ async function sendOtpEmail({ toEmail, airlineName, otp }) {
         <td bgcolor="#0c1a2e" style="background:#0c1a2e;padding:28px 40px 24px;text-align:center">
           <table width="100%" cellpadding="0" cellspacing="0">
             <tr>
-              <td align="center" bgcolor="#ffffff" style="background:#ffffff;border-radius:12px;padding:16px 20px">
+              <td align="center" style="padding:16px 20px">
                 <img src="cid:ifoa_logo" width="460" alt="IFOA" style="display:block;border:0;width:460px;max-width:100%;height:auto"/>
               </td>
             </tr>
@@ -576,7 +576,7 @@ async function sendContractEmail({ toEmail, clientName, pdfBuffer, message }) {
     <td bgcolor="#0c1a2e" style="background:#0c1a2e;padding:30px 44px 26px;text-align:center">
       <table width="100%" cellpadding="0" cellspacing="0">
         <tr>
-          <td align="center" bgcolor="#ffffff" style="background:#ffffff;border-radius:12px;padding:16px 20px">
+          <td align="center" style="padding:16px 20px">
             <img src="cid:ifoa_logo" width="460" alt="International Flight Operations Academy" style="display:block;border:0;width:460px;max-width:100%;height:auto"/>
           </td>
         </tr>
@@ -806,7 +806,7 @@ async function sendExamInviteEmail({ toEmail, participantName, examTitle, durati
         <td bgcolor="#0c1a2e" style="background:#0c1a2e;padding:28px 40px 24px;text-align:center">
           <table width="100%" cellpadding="0" cellspacing="0">
             <tr>
-              <td align="center" bgcolor="#ffffff" style="background:#ffffff;border-radius:12px;padding:16px 20px">
+              <td align="center" style="padding:16px 20px">
                 <img src="cid:ifoa_logo" width="460" alt="IFOA" style="display:block;border:0;width:460px;max-width:100%;height:auto"/>
               </td>
             </tr>
@@ -822,7 +822,7 @@ async function sendExamInviteEmail({ toEmail, participantName, examTitle, durati
         <td style="padding:36px 40px 0">
           <p style="margin:0 0 8px;font-size:16px;font-weight:700;color:#111827">Dear ${name},</p>
           <p style="margin:0 0 24px;font-size:14px;color:#4b5563;line-height:1.7">
-            You have been invited to complete the assessment below. Click the button to begin — no login is required, the link is personal to you.
+            You have been invited to complete the assessment below. No login is required, and the link below is personal to you.
           </p>
 
           <!-- Exam summary card -->
@@ -859,7 +859,7 @@ async function sendExamInviteEmail({ toEmail, participantName, examTitle, durati
           <table width="100%" cellpadding="0" cellspacing="0" style="background:#fef9c3;border:1px solid #fde047;border-radius:10px;margin-bottom:8px">
             <tr><td style="padding:14px 18px">
               <p style="margin:0;font-size:13px;color:#854d0e;line-height:1.6">
-                ⚠️ &nbsp;This link is personal to you — do not share it. Make sure you have a stable internet connection before you begin.
+                ⚠️ &nbsp;This link is personal to you. Do not share it, and make sure you have a stable internet connection before you begin.
               </p>
             </td></tr>
           </table>
@@ -877,7 +877,7 @@ async function sendExamInviteEmail({ toEmail, participantName, examTitle, durati
       <tr>
         <td bgcolor="#0c1a2e" style="background:#0c1a2e;padding:16px 40px">
           <p style="margin:0;font-size:11px;color:#64748b;text-align:center">
-            This is an automated email — please do not reply. &nbsp;|&nbsp;
+            This is an automated email. Please do not reply. &nbsp;|&nbsp;
             &copy; ${new Date().getFullYear()} International Flight Operations Academy
           </p>
         </td>

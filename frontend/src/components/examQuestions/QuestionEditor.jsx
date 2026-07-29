@@ -28,7 +28,7 @@ const uid = () => `new-${Math.random().toString(36).slice(2, 10)}`;
 
 export function createEmptyQuestion(type) {
   return {
-    _id: uid(), type, prompt: '', image_url: '', image_public_id: '', points: 1, order: 0, explanation: '', section: '',
+    _id: uid(), type, prompt: '', image_url: '', image_public_id: '', images: [], points: 1, order: 0, explanation: '', section: '',
     options: ['mcq', 'multi_response', 'select_list'].includes(type)
       ? [{ _id: uid(), text: '', is_correct: false }, { _id: uid(), text: '', is_correct: false }]
       : type === 'true_false'
@@ -110,6 +110,72 @@ function ImageField({ url, publicId, onChange, label = 'Image' }) {
   );
 }
 
+// ── Multi-image gallery — question stem can carry any number of images ────────
+function ImageGalleryField({ images, onChange, label = 'Add question image' }) {
+  const inputRef = useRef(null);
+  const [busy, setBusy] = useState(false);
+  const [lightboxSrc, setLightboxSrc] = useState(null);
+
+  const handleFiles = async (e) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (files.length === 0) return;
+    setBusy(true);
+    try {
+      const uploaded = await Promise.all(files.map((file) => uploadExamImage(file)));
+      onChange([...images, ...uploaded.map((res) => ({ url: res.data.url, public_id: res.data.public_id }))]);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Image upload failed.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleRemove = (idx) => {
+    const img = images[idx];
+    if (img.public_id) deleteExamImage(img.public_id).catch(() => {});
+    onChange(images.filter((_, i) => i !== idx));
+  };
+
+  return (
+    <div className="space-y-2">
+      {images.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          {images.map((img, idx) => (
+            <div key={img.public_id || idx} className="relative group">
+              <img
+                src={img.url}
+                alt=""
+                onClick={() => setLightboxSrc(img.url)}
+                className="h-16 w-16 rounded-xl border border-slate-200 object-cover shadow-2xs cursor-zoom-in hover:opacity-80 transition-opacity"
+              />
+              <button
+                type="button"
+                onClick={() => handleRemove(idx)}
+                className="absolute -top-1.5 -right-1.5 bg-white rounded-full border border-slate-200 p-1 shadow-sm hover:bg-rose-50 text-slate-500 hover:text-rose-600 transition-colors"
+                title="Remove image"
+              >
+                <HiOutlineX className="w-3 h-3" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => inputRef.current?.click()}
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 bg-white transition-all shadow-2xs"
+      >
+        <HiOutlinePhotograph className="w-4 h-4 text-slate-400" />
+        <span>{busy ? 'Uploading…' : images.length > 0 ? 'Add another image' : label}</span>
+      </button>
+      <input ref={inputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFiles} />
+      {lightboxSrc && <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />}
+    </div>
+  );
+}
+
 const inputCls = 'w-full px-3.5 py-2 text-sm font-medium text-slate-800 bg-slate-50/40 border border-slate-200/90 rounded-xl outline-none focus:bg-white focus:border-slate-400 focus:ring-2 focus:ring-slate-900/10 transition-all placeholder:text-slate-400';
 const smallBtn = 'inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200/80 rounded-xl transition-colors';
 
@@ -126,52 +192,90 @@ function ChoiceOptionsEditor({ q, set, multi = false, locked = false }) {
     }));
   };
 
+  const getOptionLetter = (idx) => String.fromCharCode(65 + idx);
+
   return (
-    <div className="space-y-2.5">
-      <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500">
-        Answer Options ({multi ? 'Check all correct options' : 'Select correct answer'})
-      </label>
-      {options.map((opt, idx) => (
-        <div key={opt._id || idx} className="flex items-center gap-2.5">
-          <input
-            type={multi ? 'checkbox' : 'radio'}
-            checked={!!opt.is_correct}
-            onChange={() => toggleCorrect(idx)}
-            title="Mark correct option"
-            className="w-4 h-4 text-blue-600 accent-blue-600 rounded cursor-pointer flex-shrink-0"
-          />
-          <input
-            value={opt.text}
-            disabled={locked}
-            onChange={(e) => setOptions(options.map((o, i) => (i === idx ? { ...o, text: e.target.value } : o)))}
-            placeholder={`Option ${idx + 1}`}
-            className={inputCls + (locked ? ' bg-slate-100 text-slate-500 cursor-not-allowed' : '')}
-          />
-          <ImageField
-            url={opt.image_url}
-            publicId={opt.image_public_id}
-            onChange={({ url, publicId }) => setOptions(options.map((o, i) => (i === idx ? { ...o, image_url: url, image_public_id: publicId } : o)))}
-          />
-          {!locked && options.length > 2 && (
-            <button
-              type="button"
-              onClick={() => setOptions(options.filter((_, i) => i !== idx))}
-              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors flex-shrink-0"
-              title="Remove option"
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500">
+          Answer Options ({multi ? 'Select all correct choices' : 'Select single correct choice'})
+        </label>
+        <span className="text-[11px] font-medium text-slate-400">
+          {options.filter((o) => o.is_correct).length} correct
+        </span>
+      </div>
+
+      <div className="space-y-2">
+        {options.map((opt, idx) => {
+          const letter = getOptionLetter(idx);
+          const isCorrect = !!opt.is_correct;
+          return (
+            <div
+              key={opt._id || idx}
+              className={`flex items-center gap-2.5 p-2 rounded-xl border transition-all ${
+                isCorrect
+                  ? 'bg-emerald-50/40 border-emerald-300/80 shadow-2xs'
+                  : 'bg-white border-slate-200/80 hover:border-slate-300'
+              }`}
             >
-              <HiOutlineTrash className="w-4 h-4" />
-            </button>
-          )}
-        </div>
-      ))}
+              <button
+                type="button"
+                onClick={() => toggleCorrect(idx)}
+                className={`w-6 h-6 rounded-lg text-xs font-black flex items-center justify-center flex-shrink-0 transition-all ${
+                  isCorrect
+                    ? 'bg-emerald-600 text-white shadow-2xs'
+                    : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                }`}
+                title={isCorrect ? 'Correct Option' : 'Mark as Correct'}
+              >
+                {letter}
+              </button>
+
+              <input
+                type={multi ? 'checkbox' : 'radio'}
+                checked={isCorrect}
+                onChange={() => toggleCorrect(idx)}
+                title="Mark correct option"
+                className="w-4 h-4 text-emerald-600 accent-emerald-600 rounded cursor-pointer flex-shrink-0"
+              />
+
+              <input
+                value={opt.text}
+                disabled={locked}
+                onChange={(e) => setOptions(options.map((o, i) => (i === idx ? { ...o, text: e.target.value } : o)))}
+                placeholder={`Option ${letter}`}
+                className={inputCls + (locked ? ' bg-slate-100 text-slate-500 cursor-not-allowed' : '')}
+              />
+
+              <ImageField
+                url={opt.image_url}
+                publicId={opt.image_public_id}
+                onChange={({ url, publicId }) => setOptions(options.map((o, i) => (i === idx ? { ...o, image_url: url, image_public_id: publicId } : o)))}
+              />
+
+              {!locked && options.length > 2 && (
+                <button
+                  type="button"
+                  onClick={() => setOptions(options.filter((_, i) => i !== idx))}
+                  className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors flex-shrink-0"
+                  title="Remove option"
+                >
+                  <HiOutlineTrash className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
       {!locked && (
         <button
           type="button"
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200/80 rounded-xl transition-colors mt-1"
+          className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100/80 border border-blue-200/80 rounded-xl transition-all shadow-2xs mt-1"
           onClick={() => setOptions([...options, { _id: uid(), text: '', is_correct: false }])}
         >
           <HiOutlinePlusCircle className="w-4 h-4" />
-          <span>Add option</span>
+          <span>Add Option</span>
         </button>
       )}
     </div>
@@ -618,12 +722,21 @@ export default function QuestionEditor({ question: q, index, onChange, onDelete,
           />
         </div>
 
-        <ImageField
-          url={q.image_url}
-          publicId={q.image_public_id}
-          label="Add question image"
-          onChange={({ url, publicId }) => onChange({ ...q, image_url: url, image_public_id: publicId })}
-        />
+        {q.type === 'hotspot' || q.type === 'drag_drop' ? (
+          // These types need exactly ONE image — regions/drop-zones are
+          // defined as coordinates against it, so multi-image doesn't apply.
+          <ImageField
+            url={q.image_url}
+            publicId={q.image_public_id}
+            label="Add question image"
+            onChange={({ url, publicId }) => onChange({ ...q, image_url: url, image_public_id: publicId })}
+          />
+        ) : (
+          <ImageGalleryField
+            images={q.images || []}
+            onChange={(next) => onChange({ ...q, images: next })}
+          />
+        )}
 
         <div className="pt-1">
           {q.type === 'mcq' && <ChoiceOptionsEditor q={q} set={set} />}

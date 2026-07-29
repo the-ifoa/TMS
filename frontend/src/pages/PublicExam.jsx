@@ -86,7 +86,7 @@ function Centered({ children }) {
 
 // ─── Landing card ─────────────────────────────────────────────────────────────
 function Landing({ info, onBegin, starting, onViewResult }) {
-  const { exam, participant_name, attempts_left, active_attempt_id, status, last_attempt_id } = info;
+  const { exam, participant_name, attempts_left, active_attempt_id, status, last_attempt_id, scheduling_error } = info;
   const noAttemptsLeft = attempts_left <= 0 && !active_attempt_id;
 
   return (
@@ -129,6 +129,10 @@ function Landing({ info, onBegin, starting, onViewResult }) {
                   View My Result
                 </button>
               )}
+            </div>
+          ) : scheduling_error ? (
+            <div className="rounded-2xl bg-blue-50 border border-blue-200/80 p-4 text-sm font-semibold text-blue-800 flex items-center gap-2">
+              <HiOutlineClock className="w-5 h-5 flex-shrink-0" /> {scheduling_error}
             </div>
           ) : (
             <button onClick={onBegin} disabled={starting}

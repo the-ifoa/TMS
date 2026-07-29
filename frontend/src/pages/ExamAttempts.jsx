@@ -13,8 +13,12 @@ import {
   HiOutlineClipboardCheck,
   HiOutlinePencilAlt,
   HiOutlineX,
+  HiOutlineShieldExclamation,
+  HiOutlineChartBar,
+  HiOutlineChevronDown,
+  HiOutlineChevronUp,
 } from 'react-icons/hi';
-import { listExamAttempts, getExam, getExamAttemptResult, gradeExamAttempt } from '../api';
+import { listExamAttempts, getExam, getExamAttemptResult, gradeExamAttempt, getExamAnalytics } from '../api';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
@@ -141,6 +145,21 @@ const STATUS_VARIANT = {
   pending_review: 'blue',
   graded: 'emerald',
 };
+
+const VIOLATION_LABELS = {
+  fullscreen_exit: 'Exited fullscreen',
+  tab_switch: 'Switched tab/window',
+  devtools_suspected: 'Suspicious activity detected',
+};
+
+function StatTile({ label, value }) {
+  return (
+    <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/80 text-center">
+      <p className="text-lg font-black text-slate-900">{value}</p>
+      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">{label}</p>
+    </div>
+  );
+}
 
 function GradeModal({ attemptId, onClose, onGraded }) {
   const [attempt, setAttempt] = useState(null);
@@ -396,16 +415,30 @@ function GradeModal({ attemptId, onClose, onGraded }) {
                       </p>
                     </div>
 
-                    {/* Question Image if present */}
-                    {q.image_url && (
-                      <div className="rounded-2xl overflow-hidden border border-slate-200/80 bg-slate-50 p-3">
-                        <img
-                          src={q.image_url}
-                          alt="Question asset"
-                          className="max-h-72 rounded-xl object-contain mx-auto"
-                        />
-                      </div>
-                    )}
+                    {/* Question Image(s) if present */}
+                    {(() => {
+                      const gallery = q.images && q.images.length > 0 ? q.images : (q.image_url ? [{ url: q.image_url }] : []);
+                      if (gallery.length === 0) return null;
+                      const multi = gallery.length > 1;
+                      return (
+                        <div className={multi ? 'flex gap-3 overflow-x-auto pb-2 -mx-1 px-1 snap-x snap-mandatory scrollbar-thin' : 'flex'}>
+                          {gallery.map((img, gi) => (
+                            <div key={gi} className={`relative rounded-2xl overflow-hidden border border-slate-200/80 bg-slate-50 p-3 ${multi ? 'flex-shrink-0 snap-start' : 'mx-auto'}`}>
+                              {multi && (
+                                <span className="absolute top-2 left-2 z-10 w-5 h-5 rounded-full bg-slate-900/80 text-white text-[10px] font-extrabold flex items-center justify-center">
+                                  {gi + 1}
+                                </span>
+                              )}
+                              <img
+                                src={img.url}
+                                alt="Question asset"
+                                className={multi ? 'h-56 w-auto max-w-xs rounded-xl object-contain' : 'max-h-72 rounded-xl object-contain mx-auto'}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
 
                     {/* Grading reference note — authored by the admin when the question
                         was created; otherwise only ever surfaced to the student after
@@ -582,12 +615,24 @@ export default function ExamAttempts() {
   const [gradingId, setGradingId] = useState(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [analytics, setAnalytics] = useState(null);
+  const [showAnalytics, setShowAnalytics] = useState(false);
+  const [expandedViolations, setExpandedViolations] = useState(() => new Set());
+
+  const toggleViolations = (attemptId) => {
+    setExpandedViolations((prev) => {
+      const next = new Set(prev);
+      next.has(attemptId) ? next.delete(attemptId) : next.add(attemptId);
+      return next;
+    });
+  };
 
   const load = () => {
-    Promise.all([getExam(id), listExamAttempts({ exam_id: id })])
-      .then(([examRes, attemptsRes]) => {
+    Promise.all([getExam(id), listExamAttempts({ exam_id: id }), getExamAnalytics(id)])
+      .then(([examRes, attemptsRes, analyticsRes]) => {
         setExam(examRes.data);
         setAttempts(attemptsRes.data);
+        setAnalytics(analyticsRes.data);
       })
       .catch(() => toast.error('Failed to load results.'))
       .finally(() => setLoading(false));
@@ -635,6 +680,16 @@ export default function ExamAttempts() {
             </div>
 
             <div className="flex items-center gap-2 flex-shrink-0">
+              {analytics && (
+                <button
+                  type="button"
+                  onClick={() => setShowAnalytics((s) => !s)}
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold shadow-2xs border transition-all ${showAnalytics ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'}`}
+                >
+                  <HiOutlineChartBar className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Analytics</span>
+                </button>
+              )}
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900 text-white text-xs font-bold shadow-2xs">
                 <HiOutlineUsers className="w-3.5 h-3.5 text-slate-300" />
                 <span>{attempts.length} <span className="hidden sm:inline">Attempts</span></span>
@@ -695,6 +750,64 @@ export default function ExamAttempts() {
       {/* Main Content Area */}
       <div className="w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 space-y-4 flex-1">
 
+        {/* Analytics Panel */}
+        {showAnalytics && analytics && (
+          <Card className="p-5 rounded-3xl border border-slate-200/90 shadow-2xs space-y-5">
+            <h2 className="text-sm font-extrabold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+              <HiOutlineChartBar className="w-4 h-4 text-slate-400" /> Analytics
+            </h2>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <StatTile label="Finished" value={analytics.overall.finished_attempts} />
+              <StatTile label="Passed" value={analytics.overall.passed} />
+              <StatTile label="Avg Score" value={analytics.overall.avg_percentage != null ? `${analytics.overall.avg_percentage}%` : '—'} />
+              <StatTile label="Total Attempts" value={analytics.overall.total_attempts} />
+            </div>
+
+            {analytics.pass_rate_over_time.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Pass Rate Over Time</p>
+                <div className="space-y-1.5">
+                  {analytics.pass_rate_over_time.map((d) => (
+                    <div key={d.date} className="flex items-center gap-2.5">
+                      <span className="text-[10px] font-semibold text-slate-500 w-20 flex-shrink-0">{d.date}</span>
+                      <div className="flex-1 h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                        <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${d.pass_rate}%` }} />
+                      </div>
+                      <span className="text-[10px] font-bold text-slate-700 w-24 text-right flex-shrink-0">{d.pass_rate}% ({d.passed}/{d.total})</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {analytics.per_question.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Per-Question Miss Rate</p>
+                <div className="max-h-64 overflow-y-auto space-y-1.5 pr-1 scrollbar-thin">
+                  {analytics.per_question.map((q) => (
+                    <div key={q.question_id} className="flex items-center gap-2.5">
+                      <span className="text-xs text-slate-700 font-medium truncate flex-1 min-w-0" title={q.prompt}>
+                        {q.prompt || '(untitled question)'}
+                      </span>
+                      {q.miss_rate != null ? (
+                        <>
+                          <div className="w-24 h-2 bg-slate-100 rounded-full overflow-hidden flex-shrink-0">
+                            <div className="h-full bg-rose-500 rounded-full transition-all" style={{ width: `${q.miss_rate}%` }} />
+                          </div>
+                          <span className="text-[10px] font-bold text-slate-700 w-28 text-right flex-shrink-0">{q.miss_rate}% miss ({q.incorrect}/{q.total})</span>
+                        </>
+                      ) : (
+                        <span className="text-[10px] font-semibold text-slate-400 flex-shrink-0 w-28 text-right">No data yet</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </Card>
+        )}
+
         {/* Attempts Card List */}
         {loading ? (
           <div className="space-y-3">
@@ -709,69 +822,94 @@ export default function ExamAttempts() {
         ) : (
           <div className="space-y-3">
             {filteredAttempts.map((a) => (
-              <div
-                key={a.id}
-                className="flex flex-col sm:flex-row sm:items-center justify-between p-4 sm:p-5 rounded-3xl bg-white border border-slate-200/90 shadow-2xs hover:border-slate-300 transition-all gap-4"
-              >
-                {/* Left: Avatar & Candidate info */}
-                <div className="flex items-center gap-3.5 min-w-0">
-                  <Avatar className="w-10 h-10 border border-slate-200 shadow-2xs flex-shrink-0">
-                    <AvatarFallback className="bg-slate-900 text-white text-xs font-bold">
-                      {a.participant_name ? a.participant_name.charAt(0).toUpperCase() : 'S'}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="min-w-0">
-                    <p className="text-sm font-bold text-slate-900 truncate">
-                      {a.participant_name}
-                    </p>
-                    <p className="text-xs text-slate-400 font-medium truncate">
-                      Attempt #{a.attempt_number} · {new Date(a.created_at).toLocaleDateString()}
-                    </p>
+              <div key={a.id} className="rounded-3xl bg-white border border-slate-200/90 shadow-2xs hover:border-slate-300 transition-all overflow-hidden">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 sm:p-5 gap-4">
+                  {/* Left: Avatar & Candidate info */}
+                  <div className="flex items-center gap-3.5 min-w-0">
+                    <Avatar className="w-10 h-10 border border-slate-200 shadow-2xs flex-shrink-0">
+                      <AvatarFallback className="bg-slate-900 text-white text-xs font-bold">
+                        {a.participant_name ? a.participant_name.charAt(0).toUpperCase() : 'S'}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-slate-900 truncate">
+                        {a.participant_name}
+                      </p>
+                      <p className="text-xs text-slate-400 font-medium truncate">
+                        Attempt #{a.attempt_number} · {new Date(a.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
                   </div>
-                </div>
 
-                {/* Right: Score, Status & Actions */}
-                <div className="flex items-center justify-between sm:justify-end gap-3 flex-shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
-                  <div className="flex items-center gap-2">
-                    {a.percentage != null && (
+                  {/* Right: Score, Status & Actions */}
+                  <div className="flex items-center justify-between sm:justify-end gap-3 flex-shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
+                    <div className="flex items-center gap-2">
+                      {a.percentage != null && (
+                        <span
+                          className={`text-xs font-extrabold px-3 py-1 rounded-xl border ${
+                            a.passed
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : 'bg-rose-50 text-rose-700 border-rose-200'
+                          }`}
+                        >
+                          {a.percentage}%
+                        </span>
+                      )}
                       <span
-                        className={`text-xs font-extrabold px-3 py-1 rounded-xl border ${
-                          a.passed
+                        className={`text-xs font-bold px-3 py-1 rounded-xl border capitalize ${
+                          a.status === 'graded' || a.status === 'submitted'
                             ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                            : 'bg-rose-50 text-rose-700 border-rose-200'
+                            : a.status === 'pending_review'
+                            ? 'bg-blue-50 text-blue-700 border-blue-200'
+                            : 'bg-amber-50 text-amber-700 border-amber-200'
                         }`}
                       >
-                        {a.percentage}%
+                        {a.status.replace('_', ' ')}
                       </span>
-                    )}
-                    <span
-                      className={`text-xs font-bold px-3 py-1 rounded-xl border capitalize ${
-                        a.status === 'graded' || a.status === 'submitted'
-                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                          : a.status === 'pending_review'
-                          ? 'bg-blue-50 text-blue-700 border-blue-200'
-                          : 'bg-amber-50 text-amber-700 border-amber-200'
-                      }`}
-                    >
-                      {a.status.replace('_', ' ')}
-                    </span>
-                  </div>
+                      {a.violation_count > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => toggleViolations(a.id)}
+                          className="inline-flex items-center gap-1 text-xs font-bold px-3 py-1 rounded-xl border bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100 transition-colors"
+                        >
+                          <HiOutlineShieldExclamation className="w-3.5 h-3.5" />
+                          {a.violation_count}
+                          {expandedViolations.has(a.id) ? <HiOutlineChevronUp className="w-3 h-3" /> : <HiOutlineChevronDown className="w-3 h-3" />}
+                        </button>
+                      )}
+                    </div>
 
-                  {a.status !== 'in_progress' && (
-                    <Button
-                      size="sm"
-                      onClick={() => setGradingId(a.id)}
-                      className={`rounded-xl text-xs font-bold shadow-2xs ${
-                        a.status === 'pending_review'
-                          ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                          : 'bg-white border border-slate-200 hover:bg-slate-50 text-slate-700'
-                      }`}
-                    >
-                      <HiOutlinePencilAlt className="w-3.5 h-3.5" />
-                      {a.status === 'pending_review' ? 'Grade' : 'Edit Grade'}
-                    </Button>
-                  )}
+                    {a.status !== 'in_progress' && (
+                      <Button
+                        size="sm"
+                        onClick={() => setGradingId(a.id)}
+                        className={`rounded-xl text-xs font-bold shadow-2xs ${
+                          a.status === 'pending_review'
+                            ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                            : 'bg-white border border-slate-200 hover:bg-slate-50 text-slate-700'
+                        }`}
+                      >
+                        <HiOutlinePencilAlt className="w-3.5 h-3.5" />
+                        {a.status === 'pending_review' ? 'Grade' : 'Edit Grade'}
+                      </Button>
+                    )}
+                  </div>
                 </div>
+
+                {expandedViolations.has(a.id) && a.violation_count > 0 && (
+                  <div className="px-4 sm:px-5 pb-4 pt-1 border-t border-rose-100 bg-rose-50/40 space-y-1.5">
+                    <p className="text-[10px] font-bold text-rose-500 uppercase tracking-wider pt-2">Violation Log</p>
+                    {(a.violations || []).map((v, vi) => (
+                      <div key={vi} className="flex items-center justify-between text-xs">
+                        <span className="font-semibold text-rose-800">{VIOLATION_LABELS[v.type] || v.type}</span>
+                        <span className="text-rose-500 font-medium">{new Date(v.at).toLocaleString()}</span>
+                      </div>
+                    ))}
+                    {a.auto_submitted && (
+                      <p className="text-[11px] font-bold text-rose-600 pt-1">This attempt was auto-submitted after exceeding the violation limit.</p>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </div>

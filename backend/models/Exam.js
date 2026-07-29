@@ -27,8 +27,15 @@ const questionSchema = new mongoose.Schema(
       ],
     },
     prompt:          { type: String, default: '' },
+    // Legacy single-image fields — still the only image storage for
+    // hotspot/drag_drop (their regions are coordinates against ONE image).
     image_url:       { type: String, default: '' },
     image_public_id: { type: String, default: '' },
+    // Every other question type instead uses this gallery — any number of
+    // illustrative images on the question stem.
+    images: [
+      { url: { type: String, default: '' }, public_id: { type: String, default: '' } },
+    ],
     points:          { type: Number, default: 1 },
     order:           { type: Number, default: 0 },
     explanation:     { type: String, default: '' },
@@ -118,6 +125,12 @@ const examSchema = new mongoose.Schema(
     shuffle_questions: { type: Boolean, default: false },
     shuffle_options:   { type: Boolean, default: false },
 
+    // Scheduling window — null means no restriction on that end. Gates new
+    // attempt starts only; an attempt already in progress runs to its own
+    // duration_minutes regardless of closes_at passing mid-attempt.
+    opens_at:  { type: Date, default: null },
+    closes_at: { type: Date, default: null },
+
     // Lockdown mode — fullscreen exam view with violation tracking (tab-switch,
     // exiting fullscreen, etc). max_violations is how many infractions are
     // tolerated before the attempt is auto-submitted. 0 disables lockdown mode.
@@ -129,6 +142,19 @@ const examSchema = new mongoose.Schema(
     // any question is assigned to it. Each question's `section` field (see
     // questionSchema) names which of these it belongs to; '' = ungrouped.
     sections: [{ type: String }],
+
+    // Optional per-section time budget + score weight, keyed by section name
+    // (matching the `sections` list above; '' is the ungrouped bucket). A
+    // section left out of this array has no time limit and, for scoring, is
+    // only weighted if at least one other section used in the exam has an
+    // explicit weight — see computeAttemptScore() in examGrading.js.
+    section_settings: [
+      {
+        name:         { type: String, default: '' },
+        time_minutes: { type: Number, default: null },
+        weight:       { type: Number, default: null },
+      },
+    ],
 
     questions: [questionSchema],
 

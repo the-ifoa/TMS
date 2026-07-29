@@ -23,6 +23,7 @@ import {
   HiOutlineLockClosed,
   HiOutlineMail,
   HiOutlineCheck,
+  HiOutlineChartBar,
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import { getParticipants, deleteParticipant, downloadIssuedCertificate, downloadDhlCertificate, listAttendanceSheets, getAttendanceSheet, updateParticipantEmail, API_BASE } from '../api';
@@ -1335,6 +1336,10 @@ export default function Participants() {
                         <td className="px-5 py-3.5 text-sm text-slate-600 hidden sm:table-cell font-medium">{fmtDate(record.training_date)}</td>
                         <td className="px-5 py-3.5" onClick={e => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-1.5">
+                            <Link to={`/admin/participants/${record.id}/performance`}
+                              className="p-1.5 rounded-lg bg-slate-50 border border-slate-200 hover:border-emerald-300 hover:bg-emerald-50 text-slate-500 hover:text-emerald-600 transition-all" title="Exam Performance">
+                              <HiOutlineChartBar className="w-3.5 h-3.5" />
+                            </Link>
                             <Link to={`/admin/participants/edit/${record.id}`}
                               className="p-1.5 rounded-lg bg-slate-50 border border-slate-200 hover:border-blue-300 hover:bg-blue-50 text-slate-500 hover:text-blue-600 transition-all" title="Edit">
                               <HiOutlinePencil className="w-3.5 h-3.5" />

@@ -13,6 +13,7 @@ import {
   HiOutlineShieldExclamation,
   HiOutlineAcademicCap,
   HiOutlineLogout,
+  HiOutlineCollection,
 } from 'react-icons/hi';
 import { FaPlaneDeparture } from 'react-icons/fa';
 import { useAuth } from '../context/AuthContext';
@@ -25,6 +26,7 @@ const adminNavigation = [
   { name: 'Attendance',   href: '/admin/attendance',       icon: HiOutlineClipboardCheck },
   { name: 'Exam Results', href: '/admin/exam-results',     icon: HiOutlineClipboardList },
   { name: 'Exam System',  href: '/admin/exams',            icon: HiOutlineAcademicCap },
+  { name: 'Question Bank', href: '/admin/question-bank',   icon: HiOutlineCollection },
   { name: 'DGR CBTA',     href: '/admin/dgr',              icon: HiOutlineShieldExclamation },
   { name: 'Profile',      href: '/admin/profile',          icon: HiOutlineUserCircle },
 ];

@@ -157,6 +157,20 @@ export const reportExamViolation  = (attemptId, type)           => api.post(`/ex
 export const listExamAttempts     = (params = {})              => api.get('/exams/attempts', { params });
 export const getExamAttemptResult = (attemptId)                => api.get(`/exams/attempts/${attemptId}/result`);
 export const gradeExamAttempt     = (attemptId, data)           => api.put(`/exams/attempts/${attemptId}/grade`, data);
+export const getExamAnalytics     = (examId)                   => api.get(`/exams/${examId}/analytics`);
+export const getParticipantExamPerformance = (participantId)   => api.get(`/exams/participants/${participantId}/performance`);
+
+// ── Question Bank — named banks of reusable questions, tagged for filtering ───
+export const listQuestionBankGroups   = ()         => api.get('/question-bank/groups');
+export const createQuestionBankGroup  = (data)     => api.post('/question-bank/groups', data);
+export const updateQuestionBankGroup  = (id, data) => api.put(`/question-bank/groups/${id}`, data);
+export const deleteQuestionBankGroup  = (id)       => api.delete(`/question-bank/groups/${id}`);
+
+export const listQuestionBankItems    = (params = {}) => api.get('/question-bank/items', { params });
+export const getQuestionBankTopics    = (bankId)      => api.get('/question-bank/topics', { params: bankId ? { bank_id: bankId } : {} });
+export const createQuestionBankItem   = (data)        => api.post('/question-bank/items', data);
+export const updateQuestionBankItem   = (id, data)    => api.put(`/question-bank/items/${id}`, data);
+export const deleteQuestionBankItem   = (id)          => api.delete(`/question-bank/items/${id}`);
 
 export const updateParticipantEmail = (id, email) => api.patch(`/participants/${id}/email`, { email });
 

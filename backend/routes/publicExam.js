@@ -4,7 +4,7 @@ const Exam = require('../models/Exam');
 const ExamAttempt = require('../models/ExamAttempt');
 const ExamInvite = require('../models/ExamInvite');
 const { sanitizeQuestionForTaking } = require('../services/examGrading');
-const { finalizeAttempt } = require('../services/examAttemptFlow');
+const { finalizeAttempt, schedulingError } = require('../services/examAttemptFlow');
 
 // ─── Public, passwordless exam-taking flow ────────────────────────────────────
 // Auth is the unguessable invite token in the URL — NO authMiddleware here.
@@ -61,12 +61,16 @@ router.get('/:token', loadInvite, async (req, res) => {
         question_count: exam.questions.length,
         lockdown_enabled: exam.lockdown_enabled,
         pass_percentage: exam.pass_percentage,
+        opens_at: exam.opens_at,
+        closes_at: exam.closes_at,
       },
       status: invite.status,
       attempts_used: priorAttempts,
       attempts_left: Math.max(0, exam.max_attempts - priorAttempts),
       active_attempt_id: activeAttempt ? String(activeAttempt._id) : null,
       last_attempt_id: lastFinished ? String(lastFinished._id) : null,
+      // Only blocks starting a NEW attempt — an already-active one may still resume/finish.
+      scheduling_error: activeAttempt ? null : schedulingError(exam),
     });
   } catch (err) {
     console.error('GET /public-exam/:token error:', err.message);
@@ -86,6 +90,9 @@ router.post('/:token/start', loadInvite, async (req, res) => {
     });
 
     if (!attempt) {
+      const schedErr = schedulingError(exam);
+      if (schedErr) return res.status(403).json({ error: schedErr });
+
       const priorAttempts = await ExamAttempt.countDocuments({ exam_id: exam._id, participant_id: invite.participant_id });
       if (priorAttempts >= exam.max_attempts) {
         return res.status(400).json({ error: 'You have used all your attempts for this exam.' });

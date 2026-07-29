@@ -146,6 +146,7 @@ function sanitizeQuestionForTaking(question) {
   const q = question.toObject ? question.toObject() : { ...question };
   const clean = {
     _id: q._id, type: q.type, prompt: q.prompt, image_url: q.image_url,
+    images: (q.images || []).map((img) => ({ url: img.url })),
     points: q.points, order: q.order, section: q.section,
   };
   switch (q.type) {
@@ -203,9 +204,57 @@ function sanitizeQuestionForTaking(question) {
   return clean;
 }
 
+// Computes final score/max_score/percentage for a finished attempt. When the
+// exam defines a weight for every section actually used by its questions
+// (via Exam.section_settings), the percentage is a weighted average of each
+// section's own percentage instead of a flat points-sum — lets a small,
+// high-value section (e.g. "Practical") count for more than its raw point
+// total would otherwise give it. Falls back to a flat points-sum whenever
+// weighting isn't fully configured, so existing exams are unaffected.
+function computeAttemptScore(questionsSnapshot, answers, sectionSettings = []) {
+  const bySection = {}; // section name -> { score, max }
+  const answerByQ = Object.fromEntries((answers || []).map((a) => [String(a.question_id), a]));
+
+  questionsSnapshot.forEach((q) => {
+    if (UNSCORED_TYPES.has(q.type)) return;
+    const name = q.section || '';
+    if (!bySection[name]) bySection[name] = { score: 0, max: 0 };
+    bySection[name].max += q.points;
+    const a = answerByQ[String(q._id)];
+    bySection[name].score += (a && a.points_awarded) || 0;
+  });
+
+  const score = Object.values(bySection).reduce((sum, s) => sum + s.score, 0);
+  const maxScore = Object.values(bySection).reduce((sum, s) => sum + s.max, 0);
+
+  const weightByName = Object.fromEntries(
+    (sectionSettings || []).filter((s) => s.weight != null && s.weight > 0).map((s) => [s.name || '', s.weight])
+  );
+  const sectionNames = Object.keys(bySection);
+  const allWeighted = sectionNames.length > 0 && sectionNames.every((n) => weightByName[n] != null);
+
+  if (!allWeighted) {
+    const percentage = maxScore > 0 ? Math.round((score / maxScore) * 10000) / 100 : 0;
+    return { score, maxScore, percentage };
+  }
+
+  let weightedSum = 0;
+  let totalWeight = 0;
+  sectionNames.forEach((name) => {
+    const { score: s, max: m } = bySection[name];
+    const pct = m > 0 ? (s / m) * 100 : 0;
+    const w = weightByName[name];
+    weightedSum += pct * w;
+    totalWeight += w;
+  });
+  const percentage = totalWeight > 0 ? Math.round((weightedSum / totalWeight) * 100) / 100 : 0;
+  return { score, maxScore, percentage };
+}
+
 module.exports = {
   gradeAnswer,
   sanitizeQuestionForTaking,
+  computeAttemptScore,
   MANUAL_TYPES,
   UNSCORED_TYPES,
 };

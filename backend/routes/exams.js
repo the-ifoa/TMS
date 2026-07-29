@@ -8,8 +8,8 @@ const Airline = require('../models/Airline');
 const Participant = require('../models/Participant');
 const { authMiddleware } = require('./auth');
 const { examImageUpload, deleteCloudinaryImage } = require('../services/upload');
-const { sanitizeQuestionForTaking } = require('../services/examGrading');
-const { finalizeAttempt } = require('../services/examAttemptFlow');
+const { sanitizeQuestionForTaking, computeAttemptScore } = require('../services/examGrading');
+const { finalizeAttempt, schedulingError } = require('../services/examAttemptFlow');
 const { sendExamInviteEmail } = require('../services/emailService');
 
 router.use(authMiddleware);
@@ -22,6 +22,7 @@ async function deleteExamImages(exam) {
   const ids = [];
   exam.questions.forEach((q) => {
     if (q.image_public_id) ids.push(q.image_public_id);
+    (q.images || []).forEach((img) => img.public_id && ids.push(img.public_id));
     (q.options || []).forEach((o) => o.image_public_id && ids.push(o.image_public_id));
   });
   await Promise.all(ids.map((id) => deleteCloudinaryImage(id)));
@@ -43,7 +44,10 @@ router.get('/airlines', async (req, res) => {
             (p.submitted_by && String(p.submitted_by) === String(a._id)) ||
             (!p.submitted_by && (p.company === a.airlineName || p.airline_name === a.airlineName))
         )
-        .map((p) => ({ _id: String(p._id), participant_name: p.participant_name, training_type: p.training_type, email: p.email || '' })),
+        .map((p) => ({
+          _id: String(p._id), participant_name: p.participant_name, training_type: p.training_type, email: p.email || '',
+          cert_sequence: p.cert_sequence ?? null, cert_released: !!p.cert_released,
+        })),
     }));
 
     res.json(result.filter((r) => r.participants.length > 0));
@@ -182,6 +186,71 @@ router.get('/attempts/:attemptId/result', async (req, res) => {
   }
 });
 
+// ─── GET /exams/participants/:participantId/performance — cross-exam profile ────
+// Admin: any participant. Airline: only their own (submitted_by match), same
+// ownership rule used everywhere else a participant record is read.
+router.get('/participants/:participantId/performance', async (req, res) => {
+  try {
+    const participant = await Participant.findById(req.params.participantId);
+    if (!participant) return res.status(404).json({ error: 'Participant not found.' });
+    if (!isAdmin(req) && String(participant.submitted_by) !== String(req.admin.id)) {
+      return res.status(403).json({ error: 'Access denied.' });
+    }
+
+    const attempts = await ExamAttempt.find({
+      participant_id: participant._id,
+      status: { $ne: 'in_progress' },
+    }).sort({ submitted_at: 1 });
+
+    // Aggregate every scored answer across every finished attempt, broken
+    // down by section (where in the syllabus they lag) and by question type
+    // (what kind of question trips them up).
+    const bySection = {};
+    const byType = {};
+    attempts.forEach((a) => {
+      a.answers.forEach((ans) => {
+        if (ans.needs_manual_grading || ans.is_correct == null) return;
+        const q = a.questions_snapshot.id(ans.question_id);
+        const sectionName = q ? (q.section || '') : '';
+
+        if (!bySection[sectionName]) bySection[sectionName] = { section: sectionName, total: 0, correct: 0 };
+        bySection[sectionName].total += 1;
+        if (ans.is_correct) bySection[sectionName].correct += 1;
+
+        if (!byType[ans.type]) byType[ans.type] = { type: ans.type, total: 0, correct: 0 };
+        byType[ans.type].total += 1;
+        if (ans.is_correct) byType[ans.type].correct += 1;
+      });
+    });
+    const withAccuracy = (obj) => Object.values(obj)
+      .map((s) => ({ ...s, accuracy: s.total > 0 ? Math.round((s.correct / s.total) * 10000) / 100 : null }))
+      .sort((a, b) => (a.accuracy ?? 101) - (b.accuracy ?? 101)); // weakest first
+
+    const scored = attempts.filter((a) => a.percentage != null);
+    res.json({
+      participant: { id: String(participant._id), name: participant.participant_name, company: participant.company },
+      overall: {
+        total_exams_taken: attempts.length,
+        avg_percentage: scored.length > 0
+          ? Math.round((scored.reduce((sum, a) => sum + a.percentage, 0) / scored.length) * 100) / 100
+          : null,
+        passed_count: attempts.filter((a) => a.passed === true).length,
+        failed_count: attempts.filter((a) => a.passed === false).length,
+      },
+      attempts: attempts.map((a) => ({
+        id: String(a._id), exam_id: String(a.exam_id), exam_title: a.exam_title_snapshot,
+        attempt_number: a.attempt_number, percentage: a.percentage, passed: a.passed, status: a.status,
+        submitted_at: a.submitted_at, time_taken_seconds: a.time_taken_seconds,
+      })),
+      section_breakdown: withAccuracy(bySection),
+      type_breakdown: withAccuracy(byType),
+    });
+  } catch (err) {
+    console.error('GET /exams/participants/:id/performance error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── PUT /exams/attempts/:attemptId/answer — autosave one answer ────────────────
 router.put('/attempts/:attemptId/answer', async (req, res) => {
   try {
@@ -301,18 +370,29 @@ router.put('/attempts/:attemptId/grade', async (req, res) => {
       return res.status(400).json({ error: 'Not all manually-graded questions have a score yet.' });
     }
 
-    // Normally the total is the sum of every question's points_awarded. An
-    // admin can instead directly override the total (e.g. a blanket
-    // adjustment) — the per-question points above are still saved for the
-    // record, but the final score/percentage use the override value.
+    // Normally the total is the sum of every question's points_awarded (or a
+    // weighted-by-section percentage, if the exam configures section
+    // weights). An admin can instead directly override the total (e.g. a
+    // blanket adjustment) — the per-question points above are still saved
+    // for the record, but the final score/percentage use the override value,
+    // and weighting doesn't apply since a single override can't be
+    // decomposed back into per-section shares.
+    const exam = await Exam.findById(attempt.exam_id).select('pass_percentage section_settings');
     const summedScore = attempt.answers.reduce((sum, a) => sum + (a.points_awarded || 0), 0);
-    const score = total_override != null
-      ? Math.max(0, Math.min(Number(total_override) || 0, attempt.max_score || summedScore))
-      : summedScore;
-    const exam = await Exam.findById(attempt.exam_id).select('pass_percentage');
+
+    let score;
+    let percentage;
+    if (total_override != null) {
+      score = Math.max(0, Math.min(Number(total_override) || 0, attempt.max_score || summedScore));
+      percentage = attempt.max_score > 0 ? Math.round((score / attempt.max_score) * 10000) / 100 : 0;
+    } else {
+      const computed = computeAttemptScore(attempt.questions_snapshot, attempt.answers, exam ? exam.section_settings : []);
+      score = computed.score;
+      percentage = computed.percentage;
+    }
 
     attempt.score = score;
-    attempt.percentage = attempt.max_score > 0 ? Math.round((score / attempt.max_score) * 10000) / 100 : 0;
+    attempt.percentage = percentage;
     attempt.passed = attempt.percentage >= (exam ? exam.pass_percentage : 60);
     attempt.status = 'graded';
     attempt.graded_by = req.admin.id;
@@ -559,12 +639,80 @@ router.get('/:id/invites', async (req, res) => {
   }
 });
 
+// ─── GET /exams/:id/analytics — admin: per-question miss rate + pass-rate over time ──
+router.get('/:id/analytics', async (req, res) => {
+  try {
+    if (!isAdmin(req)) return res.status(403).json({ error: 'Admin access required.' });
+    const exam = await Exam.findById(req.params.id).select('questions title');
+    if (!exam) return res.status(404).json({ error: 'Exam not found.' });
+
+    const attempts = await ExamAttempt.find({ exam_id: exam._id, status: { $ne: 'in_progress' } })
+      .select('answers status passed percentage submitted_at');
+
+    // Per-question stats, seeded from the CURRENT question bank so questions
+    // with zero attempts still show up (with total 0), and ones removed from
+    // the exam since don't clutter the list.
+    const byQuestion = {};
+    exam.questions.forEach((q) => {
+      byQuestion[String(q._id)] = {
+        question_id: String(q._id), prompt: q.prompt, type: q.type, section: q.section || '',
+        total: 0, correct: 0, incorrect: 0, pending: 0,
+      };
+    });
+    attempts.forEach((a) => {
+      a.answers.forEach((ans) => {
+        const stat = byQuestion[String(ans.question_id)];
+        if (!stat) return;
+        if (ans.needs_manual_grading) { stat.pending += 1; return; }
+        if (ans.is_correct == null) return; // unscored (e.g. likert)
+        stat.total += 1;
+        if (ans.is_correct) stat.correct += 1; else stat.incorrect += 1;
+      });
+    });
+    const perQuestion = Object.values(byQuestion)
+      .map((s) => ({ ...s, miss_rate: s.total > 0 ? Math.round((s.incorrect / s.total) * 10000) / 100 : null }))
+      .sort((a, b) => (b.miss_rate ?? -1) - (a.miss_rate ?? -1));
+
+    // Pass-rate over time, bucketed by the day the attempt was submitted.
+    const finished = attempts.filter((a) => a.status !== 'in_progress' && a.submitted_at);
+    const byDate = {};
+    finished.forEach((a) => {
+      const day = a.submitted_at.toISOString().slice(0, 10);
+      if (!byDate[day]) byDate[day] = { date: day, total: 0, passed: 0 };
+      byDate[day].total += 1;
+      if (a.passed) byDate[day].passed += 1;
+    });
+    const passRateOverTime = Object.values(byDate)
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map((d) => ({ ...d, pass_rate: d.total > 0 ? Math.round((d.passed / d.total) * 10000) / 100 : 0 }));
+
+    const gradedOrScored = finished.filter((a) => a.percentage != null);
+    res.json({
+      overall: {
+        total_attempts: attempts.length,
+        finished_attempts: finished.length,
+        passed: finished.filter((a) => a.passed).length,
+        avg_percentage: gradedOrScored.length > 0
+          ? Math.round((gradedOrScored.reduce((sum, a) => sum + a.percentage, 0) / gradedOrScored.length) * 100) / 100
+          : null,
+      },
+      per_question: perQuestion,
+      pass_rate_over_time: passRateOverTime,
+    });
+  } catch (err) {
+    console.error('GET /exams/:id/analytics error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── POST /exams/:id/attempts — start an attempt (airline, on behalf of a participant) ──
 router.post('/:id/attempts', async (req, res) => {
   try {
     const exam = await Exam.findById(req.params.id);
     if (!exam) return res.status(404).json({ error: 'Exam not found.' });
     if (exam.status !== 'published') return res.status(400).json({ error: 'This exam is not published yet.' });
+    const schedErr = schedulingError(exam);
+    if (schedErr) return res.status(403).json({ error: schedErr });
 
     const { participant_id } = req.body;
     if (!participant_id) return res.status(400).json({ error: 'participant_id is required.' });

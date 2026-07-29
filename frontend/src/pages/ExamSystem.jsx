@@ -29,6 +29,7 @@ function AssignModal({ exam, onClose, onAssigned }) {
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
   const [expandedAirlines, setExpandedAirlines] = useState(new Set());
+  const [pendingOnly, setPendingOnly] = useState(false);
 
   useEffect(() => {
     getExamAirlines()
@@ -38,10 +39,12 @@ function AssignModal({ exam, onClose, onAssigned }) {
   }, []);
 
   const alreadyAssigned = new Set((exam.assignments || []).map((a) => String(a.participant_id)));
+  const isCertPending = (p) => p.cert_sequence == null;
 
-  // Calculate all eligible participants across all airlines
+  // Calculate all eligible participants across all airlines (respecting the
+  // "pending certificate only" filter, same as the visible list below)
   const allEligibleParticipants = groups.flatMap((g) =>
-    g.participants.filter((p) => !alreadyAssigned.has(String(p._id)))
+    g.participants.filter((p) => !alreadyAssigned.has(String(p._id)) && (!pendingOnly || isCertPending(p)))
   );
 
   const isAllGlobalSelected =
@@ -73,7 +76,7 @@ function AssignModal({ exam, onClose, onAssigned }) {
   };
 
   const toggleAirline = (participants) => {
-    const eligible = participants.filter((p) => !alreadyAssigned.has(String(p._id)));
+    const eligible = participants.filter((p) => !alreadyAssigned.has(String(p._id)) && (!pendingOnly || isCertPending(p)));
     if (eligible.length === 0) return;
 
     const allSelectedInAirline = eligible.every((p) => selected.has(p._id));
@@ -110,12 +113,14 @@ function AssignModal({ exam, onClose, onAssigned }) {
     }
   };
 
-  // Filter groups based on search
+  // Filter groups based on search + the "pending certificate only" toggle
   const filteredGroups = groups
     .map((g) => {
       const matchesAirline = g.airline.airlineName.toLowerCase().includes(search.toLowerCase());
       const matchingParticipants = g.participants.filter(
-        (p) => matchesAirline || p.participant_name.toLowerCase().includes(search.toLowerCase())
+        (p) =>
+          (matchesAirline || p.participant_name.toLowerCase().includes(search.toLowerCase())) &&
+          (!pendingOnly || isCertPending(p))
       );
       return { ...g, participants: matchingParticipants };
     })
@@ -123,26 +128,28 @@ function AssignModal({ exam, onClose, onAssigned }) {
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-2xl w-[92vw] h-[85vh] max-h-[750px] flex flex-col p-0 overflow-hidden rounded-2xl border border-slate-200/80 shadow-2xl bg-white">
+      <DialogContent className="max-w-3xl w-[94vw] h-[85vh] max-h-[750px] flex flex-col p-0 overflow-hidden rounded-3xl border border-slate-200/80 shadow-2xl bg-white">
         {/* Header */}
-        <DialogHeader className="flex-shrink-0 px-6 py-4 border-b border-slate-100 bg-white sticky top-0 z-10 space-y-1">
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="p-1.5 rounded-lg bg-blue-50 text-blue-600">
-                  <HiOutlineAcademicCap className="w-5 h-5" />
-                </span>
-                <DialogTitle className="text-base sm:text-lg font-bold text-slate-900 truncate">
+        <DialogHeader className="flex-shrink-0 px-6 pt-6 pb-4 border-b border-slate-100 bg-white sticky top-0 z-10">
+          <div className="flex items-start justify-between gap-3 pr-6">
+            <div className="flex items-center gap-3 min-w-0">
+              <span className="w-9 h-9 rounded-xl bg-slate-900 text-white flex items-center justify-center shadow-2xs flex-shrink-0">
+                <HiOutlineAcademicCap className="w-5 h-5" />
+              </span>
+              <div className="min-w-0">
+                <DialogTitle className="text-base sm:text-lg font-black text-slate-900 tracking-tight truncate">
                   Assign &ldquo;{exam.title}&rdquo;
                 </DialogTitle>
+                <p className="text-xs font-medium text-slate-500 mt-0.5">
+                  Click an airline to view students and assign exam access.
+                </p>
               </div>
-              <p className="text-xs text-slate-500 mt-1">Click an airline to view students and assign exam access.</p>
             </div>
           </div>
 
           {/* Search + Global Select Toolbar */}
           {!loading && groups.length > 0 && (
-            <div className="pt-3 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+            <div className="mt-4 pt-3 border-t border-slate-100/80 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
               <div className="relative flex-1 min-w-0">
                 <HiOutlineSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                 <input
@@ -150,7 +157,7 @@ function AssignModal({ exam, onClose, onAssigned }) {
                   placeholder="Search candidate or airline..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="w-full pl-9 pr-8 py-1.5 bg-slate-50 border border-slate-200/90 rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900 transition-all"
+                  className="w-full h-9 pl-9 pr-8 bg-slate-50 border border-slate-200/90 rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900 transition-all"
                 />
                 {search && (
                   <button
@@ -164,11 +171,27 @@ function AssignModal({ exam, onClose, onAssigned }) {
               </div>
 
               <div className="flex items-center gap-2 flex-shrink-0">
+                {/* Pending-certificate-only filter */}
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setPendingOnly((v) => !v)}
+                  title="Only show candidates who don't have a certificate yet"
+                  className={`h-9 px-3 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 cursor-pointer select-none ${
+                    pendingOnly
+                      ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
+                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  <Checkbox checked={pendingOnly} className="w-3.5 h-3.5 pointer-events-none accent-white" />
+                  <span>No Certificate Yet</span>
+                </div>
+
                 {/* Expand / Collapse All toggle */}
                 <button
                   type="button"
                   onClick={toggleAllExpanded}
-                  className="px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all"
+                  className="h-9 px-3 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200/80 transition-all border border-slate-200/60"
                 >
                   {expandedAirlines.size === groups.length ? 'Collapse All' : 'Expand All'}
                 </button>
@@ -178,7 +201,7 @@ function AssignModal({ exam, onClose, onAssigned }) {
                     role="button"
                     tabIndex={0}
                     onClick={toggleAllGlobal}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 cursor-pointer select-none ${
+                    className={`h-9 px-3 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 cursor-pointer select-none ${
                       isAllGlobalSelected
                         ? 'bg-slate-900 text-white border-slate-900 shadow-2xs'
                         : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
@@ -197,7 +220,7 @@ function AssignModal({ exam, onClose, onAssigned }) {
         </DialogHeader>
 
         {/* Content Body */}
-        <div className="flex-1 overflow-y-auto min-h-0 p-5 space-y-3.5 bg-slate-50/50">
+        <div className="flex-1 overflow-y-auto min-h-0 p-5 space-y-3.5 bg-slate-50/60">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-12 gap-2 text-slate-400">
               <div className="w-6 h-6 border-2 border-slate-300 border-t-slate-900 rounded-full animate-spin" />
@@ -219,20 +242,20 @@ function AssignModal({ exam, onClose, onAssigned }) {
               return (
                 <div
                   key={airline._id}
-                  className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden transition-all"
+                  className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden transition-all"
                 >
                   {/* Airline Header Bar (Clickable to toggle collapse/expand) */}
                   <div
                     onClick={() => toggleExpandAirline(airline._id)}
-                    className="px-4 py-3 bg-slate-50/80 hover:bg-slate-100/70 cursor-pointer flex items-center justify-between gap-4 select-none transition-colors"
+                    className="px-4 py-3 bg-slate-50/90 hover:bg-slate-100/80 cursor-pointer flex items-center justify-between gap-4 select-none transition-colors"
                   >
                     {/* Left: Chevron + Icon + Airline Name */}
                     <div className="flex items-center gap-2.5 min-w-0 flex-1 pr-2">
-                      <HiChevronRight className={`w-4 h-4 text-slate-400 flex-shrink-0 transition-transform duration-200 ${isExpanded ? 'rotate-90 text-slate-600' : ''}`} />
+                      <HiChevronRight className={`w-4 h-4 text-slate-400 flex-shrink-0 transition-transform duration-200 ${isExpanded ? 'rotate-90 text-slate-700' : ''}`} />
                       <div className="w-7 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-700 shadow-2xs flex-shrink-0">
                         <HiOutlineOfficeBuilding className="w-4 h-4" />
                       </div>
-                      <span className="text-sm font-bold text-slate-800 truncate">
+                      <span className="text-sm font-bold text-slate-900 truncate">
                         {airline.airlineName}
                       </span>
                     </div>
@@ -248,10 +271,10 @@ function AssignModal({ exam, onClose, onAssigned }) {
                           role="button"
                           tabIndex={0}
                           onClick={() => toggleAirline(participants)}
-                          className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all border flex items-center gap-1.5 select-none cursor-pointer ${
+                          className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all border flex items-center gap-1.5 select-none cursor-pointer ${
                             isGroupAllSelected
                               ? 'bg-slate-900 text-white border-slate-900'
-                              : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                              : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
                           }`}
                         >
                           <Checkbox
@@ -261,19 +284,19 @@ function AssignModal({ exam, onClose, onAssigned }) {
                           <span>
                             {isGroupAllSelected ? 'Selected' : 'Select All'}
                             {selectedCountInGroup > 0 && !isGroupAllSelected && (
-                              <span className="ml-1 px-1 rounded bg-slate-100 text-slate-900 text-[10px] font-bold">
+                              <span className="ml-1 px-1.5 rounded bg-slate-100 text-slate-900 text-[10px] font-extrabold">
                                 {selectedCountInGroup}
                               </span>
                             )}
                           </span>
                         </div>
                       ) : (
-                        <span className="text-[11px] font-semibold text-slate-400">All Assigned</span>
+                        <span className="text-[11px] font-bold text-slate-400">All Assigned</span>
                       )}
                     </div>
                   </div>
 
-                  {/* Animated Student List (Scrollable container inside each accordion) */}
+                  {/* Animated Student List */}
                   <AnimatePresence initial={false}>
                     {isExpanded && (
                       <motion.div
@@ -283,7 +306,7 @@ function AssignModal({ exam, onClose, onAssigned }) {
                         transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
                         className="overflow-hidden border-t border-slate-100 bg-white"
                       >
-                        <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-64 overflow-y-auto pr-1">
+                        <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-64 overflow-y-auto pr-1">
                           {participants.map((p) => {
                             const isAssigned = alreadyAssigned.has(String(p._id));
                             const isChecked = isAssigned || selected.has(p._id);
@@ -299,37 +322,50 @@ function AssignModal({ exam, onClose, onAssigned }) {
                                   e.preventDefault();
                                   toggleParticipant(p._id);
                                 }}
-                                className={`flex items-center justify-between gap-2.5 px-3 py-2 rounded-xl text-xs font-medium transition-all select-none border ${
+                                className={`flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl text-xs font-medium transition-all select-none border min-w-0 ${
                                   isAssigned
                                     ? 'bg-slate-50/70 border-slate-100 text-slate-400 cursor-not-allowed'
                                     : isChecked
-                                    ? 'bg-slate-900/5 border-slate-900/30 text-slate-900 shadow-2xs cursor-pointer'
-                                    : 'bg-white border-slate-100 hover:bg-slate-50 text-slate-700 cursor-pointer'
+                                    ? 'bg-blue-50/50 border-blue-500/40 text-slate-900 shadow-2xs cursor-pointer'
+                                    : 'bg-white border-slate-200/80 hover:bg-slate-50 text-slate-700 cursor-pointer hover:border-slate-300'
                                 }`}
                               >
-                                <div className="flex items-center gap-2.5 min-w-0">
+                                <div className="flex items-center gap-2 min-w-0 flex-1 pr-1">
                                   <Checkbox
                                     disabled={isAssigned}
                                     checked={isChecked}
                                     onCheckedChange={() => !isAssigned && toggleParticipant(p._id)}
                                     className="w-4 h-4 flex-shrink-0"
                                   />
-                                  <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-extrabold text-slate-600 flex-shrink-0">
+                                  <div className="w-6 h-6 rounded-full bg-slate-900/10 text-slate-800 border border-slate-200/60 flex items-center justify-center text-[10px] font-black flex-shrink-0">
                                     {ini}
                                   </div>
-                                  <span className="truncate font-semibold">{p.participant_name}</span>
+                                  <span className="truncate font-semibold text-slate-800">{p.participant_name}</span>
                                 </div>
 
                                 {isAssigned ? (
-                                  <span className="px-1.5 py-0.5 rounded bg-slate-200/60 text-slate-500 text-[10px] font-bold flex-shrink-0">
-                                    Assigned
-                                  </span>
-                                ) : (
-                                  p.training_type && (
-                                    <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 text-[10px] font-medium flex-shrink-0">
-                                      {p.training_type}
+                                  <div className="w-[60px] flex justify-end flex-shrink-0 ml-auto">
+                                    <span className="w-full py-0.5 rounded-md bg-slate-200/60 text-slate-500 text-[10px] font-bold text-center block">
+                                      Assigned
                                     </span>
-                                  )
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-1.5 flex-shrink-0 ml-auto justify-end">
+                                    <div className="w-[44px] flex justify-end flex-shrink-0">
+                                      {p.training_type && (
+                                        <span className="w-full py-0.5 rounded-md bg-slate-100 text-slate-600 border border-slate-200/80 text-[10px] font-bold text-center truncate block">
+                                          {p.training_type}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="w-[58px] flex justify-end flex-shrink-0">
+                                      {isCertPending(p) && (
+                                        <span className="w-full py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-bold text-center block">
+                                          No Cert
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
                                 )}
                               </label>
                             );
@@ -345,7 +381,7 @@ function AssignModal({ exam, onClose, onAssigned }) {
         </div>
 
         {/* Footer */}
-        <DialogFooter className="flex-shrink-0 px-6 py-3.5 border-t border-slate-100 bg-white sticky bottom-0 z-10 flex items-center justify-between">
+        <DialogFooter className="flex-shrink-0 px-6 py-4 border-t border-slate-100 bg-white sticky bottom-0 z-10 flex items-center justify-between">
           <div className="text-xs font-semibold text-slate-500">
             {selected.size > 0 ? (
               <span className="text-slate-900 font-bold">{selected.size} candidate(s) selected</span>
@@ -361,7 +397,7 @@ function AssignModal({ exam, onClose, onAssigned }) {
               variant="primary"
               onClick={save}
               disabled={saving || selected.size === 0}
-              className="bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold px-4 py-2 shadow-2xs"
+              className="bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold px-5 py-2 shadow-2xs"
             >
               {saving ? 'Assigning…' : `Assign (${selected.size})`}
             </Button>

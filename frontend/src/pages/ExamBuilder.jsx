@@ -1,12 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
-  HiOutlineArrowLeft, HiOutlinePlusCircle, HiOutlineSave,
+  HiOutlineArrowLeft, HiOutlinePlusCircle, HiOutlineSave, HiOutlineEye,
   HiOutlinePencilAlt, HiOutlineTrash, HiOutlineCheck, HiOutlineX,
+  HiOutlineCollection, HiOutlineSearch,
 } from 'react-icons/hi';
-import { getExam, createExam, updateExam } from '../api';
+import { getExam, createExam, updateExam, listQuestionBankGroups, listQuestionBankItems, getQuestionBankTopics } from '../api';
 import QuestionEditor, { QUESTION_TYPES, createEmptyQuestion } from '../components/examQuestions/QuestionEditor';
+import { TagBadges, DIFFICULTY_BADGE } from './QuestionBank';
+import QuestionPlayer from '../components/examPlayers/QuestionPlayer';
+import ExamRunner from '../components/ExamRunner';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -14,6 +18,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { useConfirm } from '@/hooks/use-confirm';
 
 // Client-generated placeholder ids (see `uid()` in QuestionEditor.jsx) aren't
@@ -35,7 +40,240 @@ const emptyExam = () => ({
   title: '', description: '', duration_minutes: 30, pass_percentage: 60,
   max_attempts: 1, shuffle_questions: false, shuffle_options: false,
   lockdown_enabled: true, max_violations: 4, questions: [], sections: [],
+  opens_at: null, closes_at: null, section_settings: [],
 });
+
+// datetime-local inputs work in local time with no timezone suffix; Mongo
+// dates round-trip as ISO strings — convert between the two on read/write.
+function toLocalInputValue(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function fromLocalInputValue(value) {
+  return value ? new Date(value).toISOString() : null;
+}
+
+const uid = () => `new-${Math.random().toString(36).slice(2, 10)}`;
+
+// A bank item carries classification tags (difficulty, knowledge/skill,
+// initial/recurrent) an exam question doesn't have — Mongoose would silently
+// drop them anyway (not in questionSchema), but stripping here keeps the
+// client-side exam state clean. Also swaps in a fresh temp _id so importing
+// the same bank question twice doesn't collide.
+function bankItemToQuestion(item, section) {
+  const {
+    id, _id, created_by, created_at, updated_at, __v,
+    difficulty, is_knowledge, is_skill, is_initial, is_recurrent,
+    ...rest
+  } = item;
+  return { ...rest, _id: uid(), section };
+}
+
+const emptyBankFilters = { search: '', difficulty: [], knowledge: false, skill: false, initial: false, recurrent: false, type: '', topic: '' };
+
+function QuestionBankPicker({ open, onClose, sectionNames, onImport }) {
+  const [groups, setGroups] = useState([]);
+  const [bankId, setBankId] = useState('');
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [topics, setTopics] = useState([]);
+  const [filters, setFilters] = useState(emptyBankFilters);
+  const [selected, setSelected] = useState(() => new Set());
+  const [targetSection, setTargetSection] = useState('');
+  const [previewItem, setPreviewItem] = useState(null);
+  const toggleDifficulty = (d) => setFilters((f) => ({
+    ...f, difficulty: f.difficulty.includes(d) ? f.difficulty.filter((x) => x !== d) : [...f.difficulty, d],
+  }));
+
+  useEffect(() => {
+    if (!open) return;
+    listQuestionBankGroups()
+      .then((res) => {
+        setGroups(res.data);
+        setBankId((prev) => prev || res.data[0]?.id || '');
+      })
+      .catch(() => toast.error('Failed to load question banks.'));
+  }, [open]);
+
+  useEffect(() => {
+    if (!open || !bankId) return;
+    getQuestionBankTopics(bankId).then((res) => setTopics(res.data)).catch(() => {});
+  }, [open, bankId]);
+
+  useEffect(() => {
+    if (!open || !bankId) { setItems([]); setLoading(false); return; }
+    const params = { bank_id: bankId };
+    if (filters.search) params.search = filters.search;
+    if (filters.difficulty.length > 0) params.difficulty = filters.difficulty.join(',');
+    if (filters.knowledge) params.knowledge = '1';
+    if (filters.skill) params.skill = '1';
+    if (filters.initial) params.initial = '1';
+    if (filters.recurrent) params.recurrent = '1';
+    if (filters.type) params.type = filters.type;
+    if (filters.topic) params.topic = filters.topic;
+    setLoading(true);
+    const t = setTimeout(() => {
+      listQuestionBankItems(params)
+        .then((res) => setItems(res.data))
+        .catch(() => toast.error('Failed to load questions.'))
+        .finally(() => setLoading(false));
+    }, 250);
+    return () => clearTimeout(t);
+  }, [open, bankId, filters]);
+
+  const toggle = (id) => setSelected((prev) => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
+
+  const selectAllFiltered = () => setSelected(new Set(items.map((it) => it.id)));
+  const clearSelection = () => setSelected(new Set());
+
+  const handleImport = () => {
+    const chosen = items.filter((it) => selected.has(it.id));
+    if (chosen.length === 0) return;
+    onImport(chosen.map((it) => bankItemToQuestion(it, targetSection)));
+    toast.success(`Imported ${chosen.length} question${chosen.length !== 1 ? 's' : ''} from the bank.`);
+    setSelected(new Set());
+    onClose();
+  };
+
+  return (
+    <>
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-3xl w-full max-h-[85vh] flex flex-col p-0 overflow-hidden rounded-2xl border border-slate-200/80 shadow-2xl bg-white">
+        <div className="flex-shrink-0 px-5 py-4 border-b border-slate-200/80 space-y-3">
+          <DialogTitle className="text-sm font-black text-slate-900 flex items-center gap-2">
+            <HiOutlineCollection className="w-4.5 h-4.5 text-slate-400" /> Import from Question Bank
+          </DialogTitle>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Select value={bankId} onValueChange={(v) => { setBankId(v); setSelected(new Set()); }}>
+              <SelectTrigger className="w-48 bg-white rounded-xl text-xs font-bold"><SelectValue placeholder="Choose a bank…" /></SelectTrigger>
+              <SelectContent>
+                {groups.map((g) => <SelectItem key={g.id} value={g.id}>{g.name} ({g.question_count})</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="relative flex-1 min-w-[160px]">
+              <HiOutlineSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Search question text…"
+                value={filters.search}
+                onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
+                className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200/80 rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900"
+              />
+            </div>
+            {topics.length > 0 && (
+              <Select value={filters.topic || 'all'} onValueChange={(v) => setFilters((f) => ({ ...f, topic: v === 'all' ? '' : v }))}>
+                <SelectTrigger className="w-32 bg-white rounded-xl text-xs"><SelectValue placeholder="Topic" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Any topic</SelectItem>
+                  {topics.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            {['easy', 'medium', 'hard'].map((d) => (
+              <label key={d} className={`flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-lg border cursor-pointer capitalize transition-all ${filters.difficulty.includes(d) ? DIFFICULTY_BADGE[d] : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}>
+                <Checkbox checked={filters.difficulty.includes(d)} onCheckedChange={() => toggleDifficulty(d)} />
+                {d}
+              </label>
+            ))}
+            <span className="w-px h-4 bg-slate-200 mx-0.5" />
+            {[['knowledge', 'Knowledge'], ['skill', 'Skill'], ['initial', 'Initial'], ['recurrent', 'Recurrent']].map(([key, label]) => (
+              <label key={key} className={`flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-lg border cursor-pointer transition-all ${filters[key] ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}>
+                <Checkbox checked={filters[key]} onCheckedChange={(c) => setFilters((f) => ({ ...f, [key]: !!c }))} className={filters[key] ? 'border-white' : ''} />
+                {label}
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto min-h-0 px-5 py-3 space-y-1.5">
+          {groups.length === 0 ? (
+            <p className="text-xs text-slate-400 font-medium py-8 text-center">No question banks yet. Create one from the Question Bank page first.</p>
+          ) : loading ? (
+            <div className="space-y-2 pt-2">
+              <Skeleton className="h-12 w-full rounded-xl" />
+              <Skeleton className="h-12 w-full rounded-xl" />
+              <Skeleton className="h-12 w-full rounded-xl" />
+            </div>
+          ) : items.length === 0 ? (
+            <p className="text-xs text-slate-400 font-medium py-8 text-center">No questions match these filters.</p>
+          ) : (
+            items.map((item) => (
+              <label
+                key={item.id}
+                className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${selected.has(item.id) ? 'bg-blue-50/60 border-blue-200' : 'bg-white border-slate-200/80 hover:bg-slate-50'}`}
+              >
+                <Checkbox checked={selected.has(item.id)} onCheckedChange={() => toggle(item.id)} className="flex-shrink-0" />
+                <span className="text-[10px] font-bold text-slate-500 bg-slate-100 border border-slate-200/80 px-2 py-0.5 rounded-lg flex-shrink-0">
+                  {QUESTION_TYPES.find((t) => t.value === item.type)?.label || item.type}
+                </span>
+                <span className="flex-1 min-w-0 text-xs font-semibold text-slate-800 truncate">{item.prompt || '(no prompt)'}</span>
+                <div className="hidden sm:block flex-shrink-0"><TagBadges item={item} /></div>
+                <button
+                  type="button"
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); setPreviewItem(item); }}
+                  title="Preview question"
+                  className="flex-shrink-0 p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                >
+                  <HiOutlineEye className="w-4 h-4" />
+                </button>
+              </label>
+            ))
+          )}
+        </div>
+
+        <div className="flex-shrink-0 px-5 py-3.5 border-t border-slate-200/80 flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={selectAllFiltered} disabled={items.length === 0} className="text-xs font-bold text-blue-600 hover:text-blue-800 disabled:opacity-40">
+              Select all ({items.length})
+            </button>
+            {selected.size > 0 && (
+              <button type="button" onClick={clearSelection} className="text-xs font-bold text-slate-400 hover:text-slate-700">
+                Clear
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <span className="text-xs font-semibold text-slate-500">Add into</span>
+            <Select value={targetSection || '__ungrouped'} onValueChange={(v) => setTargetSection(v === '__ungrouped' ? '' : v)}>
+              <SelectTrigger className="w-36 bg-white rounded-xl text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__ungrouped">Ungrouped</SelectItem>
+                {sectionNames.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Button size="sm" onClick={handleImport} disabled={selected.size === 0} className="rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold">
+              Add {selected.size > 0 ? `${selected.size} ` : ''}Selected
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+      </Dialog>
+      <Dialog open={!!previewItem} onOpenChange={(o) => !o && setPreviewItem(null)}>
+        <DialogContent className="max-w-2xl w-full max-h-[85vh] flex flex-col p-0 overflow-hidden rounded-2xl border border-slate-200/80 shadow-2xl bg-white">
+          <div className="flex-shrink-0 px-5 py-4 border-b border-slate-200/80 flex items-center justify-between gap-3">
+            <DialogTitle className="text-sm font-black text-slate-900 flex items-center gap-2">
+              <HiOutlineEye className="w-4.5 h-4.5 text-slate-400" /> Question Preview
+            </DialogTitle>
+            {previewItem && <TagBadges item={previewItem} />}
+          </div>
+          <div className="flex-1 overflow-y-auto min-h-0 p-5">
+            {previewItem && <QuestionPlayer question={previewItem} response={null} onChange={() => {}} />}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
 
 export default function ExamBuilder() {
   const { id } = useParams();
@@ -46,6 +284,26 @@ export default function ExamBuilder() {
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [newType, setNewType] = useState(QUESTION_TYPES[0].value);
+  const [previewing, setPreviewing] = useState(false);
+  const previewViolations = useRef(0);
+  const [showBankPicker, setShowBankPicker] = useState(false);
+  const importFromBank = (newQuestions) => {
+    setExam((prev) => ({ ...prev, questions: [...prev.questions, ...newQuestions] }));
+  };
+
+  const startPreview = () => {
+    if (exam.questions.length === 0) { toast.error('Add at least one question first.'); return; }
+    previewViolations.current = 0;
+    setPreviewing(true);
+  };
+  const exitPreview = () => { setPreviewing(false); previewViolations.current = 0; };
+  const previewAttempt = {
+    id: 'preview',
+    questions_snapshot: exam.questions,
+    answers: [],
+    started_at: new Date().toISOString(),
+    violation_count: 0,
+  };
   const [newSectionName, setNewSectionName] = useState('');
   const [editingSection, setEditingSection] = useState(null); // section name currently being renamed
   const [editingSectionValue, setEditingSectionValue] = useState('');
@@ -55,7 +313,7 @@ export default function ExamBuilder() {
 
   useEffect(() => {
     if (isNew) return;
-    getExam(id).then((res) => setExam({ sections: [], ...res.data })).catch(() => toast.error('Failed to load exam.')).finally(() => setLoading(false));
+    getExam(id).then((res) => setExam({ sections: [], section_settings: [], ...res.data })).catch(() => toast.error('Failed to load exam.')).finally(() => setLoading(false));
   }, [id, isNew]);
 
   const set = (key, value) => setExam((prev) => ({ ...prev, [key]: value }));
@@ -142,6 +400,22 @@ export default function ExamBuilder() {
     setBulkTargetSection('');
   };
 
+  // Per-section time limit + score weight, keyed by section name (see
+  // Exam.section_settings). Both optional — a section with neither set
+  // behaves exactly as before (no timer, flat points-sum scoring).
+  const getSectionSetting = (name) =>
+    (exam.section_settings || []).find((s) => (s.name || '') === name) || { name, time_minutes: null, weight: null };
+  const setSectionSetting = (name, patch) => {
+    setExam((prev) => {
+      const existing = prev.section_settings || [];
+      const idx = existing.findIndex((s) => (s.name || '') === name);
+      const next = [...existing];
+      if (idx >= 0) next[idx] = { ...next[idx], ...patch };
+      else next.push({ name, time_minutes: null, weight: null, ...patch });
+      return { ...prev, section_settings: next };
+    });
+  };
+
   const addSection = () => {
     const name = newSectionName.trim();
     if (!name) return;
@@ -162,6 +436,7 @@ export default function ExamBuilder() {
       ...prev,
       sections: (prev.sections || []).map((s) => (s === oldName ? newName : s)),
       questions: prev.questions.map((q) => ((q.section || '') === oldName ? { ...q, section: newName } : q)),
+      section_settings: (prev.section_settings || []).map((s) => ((s.name || '') === oldName ? { ...s, name: newName } : s)),
     }));
     setActiveSectionFilter((f) => (f === oldName ? newName : f));
   };
@@ -179,6 +454,7 @@ export default function ExamBuilder() {
       ...prev,
       sections: (prev.sections || []).filter((s) => s !== name),
       questions: prev.questions.map((q) => ((q.section || '') === name ? { ...q, section: '' } : q)),
+      section_settings: (prev.section_settings || []).filter((s) => (s.name || '') !== name),
     }));
     setActiveSectionFilter((f) => (f === name ? null : f));
   };
@@ -270,6 +546,12 @@ export default function ExamBuilder() {
             <span className="text-xs font-semibold text-slate-500 hidden md:inline">
               {exam.questions.length} Question{exam.questions.length !== 1 ? 's' : ''}
             </span>
+            <Button variant="outline" size="sm" onClick={() => setShowBankPicker(true)} className="rounded-xl border-slate-200 text-xs font-bold">
+              <HiOutlineCollection className="w-4 h-4" /> <span className="hidden sm:inline">Import from Bank</span>
+            </Button>
+            <Button variant="outline" size="sm" onClick={startPreview} className="rounded-xl border-slate-200 text-xs font-bold">
+              <HiOutlineEye className="w-4 h-4" /> Preview
+            </Button>
             <Button variant="primary" onClick={save} disabled={saving} className="rounded-xl shadow-2xs text-xs font-bold px-3.5 py-1.5 bg-[#0000ff] hover:bg-blue-700">
               <HiOutlineSave className="w-4 h-4" /> {saving ? 'Saving…' : 'Save Exam'}
             </Button>
@@ -399,6 +681,34 @@ export default function ExamBuilder() {
                   )}
                 </div>
               </div>
+
+              {/* Scheduling window */}
+              <div className="pt-2 border-t border-slate-100 space-y-2">
+                <label className="block text-xs font-bold text-slate-700">
+                  Scheduling Window <span className="font-normal text-slate-400">(optional)</span>
+                </label>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 mb-1">Opens At</label>
+                    <input
+                      type="datetime-local"
+                      value={toLocalInputValue(exam.opens_at)}
+                      onChange={(e) => set('opens_at', fromLocalInputValue(e.target.value))}
+                      className="w-full px-2.5 py-2 text-xs font-semibold text-slate-900 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500 bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 mb-1">Closes At</label>
+                    <input
+                      type="datetime-local"
+                      value={toLocalInputValue(exam.closes_at)}
+                      onChange={(e) => set('closes_at', fromLocalInputValue(e.target.value))}
+                      className="w-full px-2.5 py-2 text-xs font-semibold text-slate-900 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500 bg-white"
+                    />
+                  </div>
+                </div>
+                <p className="text-[10px] text-slate-400 font-semibold">Leave blank for no restriction. Only gates starting a new attempt — one already in progress isn't cut off.</p>
+              </div>
             </Card>
 
             {/* Sections management */}
@@ -412,46 +722,72 @@ export default function ExamBuilder() {
 
               {/* Existing sections list - fixed height container so adding items never expands the card */}
               {orderedSectionNames.length > 0 && (
-                <div className="h-28 overflow-y-auto pr-1 space-y-1.5 scrollbar-thin">
+                <div className="h-48 overflow-y-auto pr-1 space-y-1.5 scrollbar-thin">
                   {orderedSectionNames.map((name) => {
                     const count = groupFor(name).length;
+                    const setting = getSectionSetting(name);
                     return (
-                      <div key={name} className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl bg-slate-50 border border-slate-200/80">
-                        {editingSection === name ? (
-                          <div className="flex items-center gap-1.5 flex-1">
-                            <input
-                              autoFocus
-                              value={editingSectionValue}
-                              onChange={(e) => setEditingSectionValue(e.target.value)}
-                              onKeyDown={(e) => e.key === 'Enter' && commitRenameSection()}
-                              className="flex-1 px-2 py-1 text-xs font-bold text-slate-900 border border-blue-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/25"
-                            />
-                            <button type="button" onClick={commitRenameSection} className="p-1 rounded-lg text-emerald-600 hover:bg-emerald-100">
-                              <HiOutlineCheck className="w-3.5 h-3.5" />
-                            </button>
-                            <button type="button" onClick={() => setEditingSection(null)} className="p-1 rounded-lg text-slate-400 hover:bg-slate-200">
-                              <HiOutlineX className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        ) : (
-                          <>
-                            <span className="text-xs font-bold text-slate-800 truncate">{name}</span>
-                            <div className="flex items-center gap-1 flex-shrink-0">
-                              <span className="text-[10px] font-bold text-slate-400">{count}</span>
-                              <button type="button" onClick={() => startRenameSection(name)} title="Rename" className="p-1 rounded-lg text-slate-500 hover:bg-white hover:text-slate-800">
-                                <HiOutlinePencilAlt className="w-3.5 h-3.5" />
+                      <div key={name} className="px-2.5 py-1.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1.5">
+                        <div className="flex items-center justify-between gap-2">
+                          {editingSection === name ? (
+                            <div className="flex items-center gap-1.5 flex-1">
+                              <input
+                                autoFocus
+                                value={editingSectionValue}
+                                onChange={(e) => setEditingSectionValue(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && commitRenameSection()}
+                                className="flex-1 px-2 py-1 text-xs font-bold text-slate-900 border border-blue-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/25"
+                              />
+                              <button type="button" onClick={commitRenameSection} className="p-1 rounded-lg text-emerald-600 hover:bg-emerald-100">
+                                <HiOutlineCheck className="w-3.5 h-3.5" />
                               </button>
-                              <button type="button" onClick={() => deleteSection(name)} title="Delete" className="p-1 rounded-lg text-rose-500 hover:bg-rose-50">
-                                <HiOutlineTrash className="w-3.5 h-3.5" />
+                              <button type="button" onClick={() => setEditingSection(null)} className="p-1 rounded-lg text-slate-400 hover:bg-slate-200">
+                                <HiOutlineX className="w-3.5 h-3.5" />
                               </button>
                             </div>
-                          </>
+                          ) : (
+                            <>
+                              <span className="text-xs font-bold text-slate-800 truncate">{name}</span>
+                              <div className="flex items-center gap-1 flex-shrink-0">
+                                <span className="text-[10px] font-bold text-slate-400">{count}</span>
+                                <button type="button" onClick={() => startRenameSection(name)} title="Rename" className="p-1 rounded-lg text-slate-500 hover:bg-white hover:text-slate-800">
+                                  <HiOutlinePencilAlt className="w-3.5 h-3.5" />
+                                </button>
+                                <button type="button" onClick={() => deleteSection(name)} title="Delete" className="p-1 rounded-lg text-rose-500 hover:bg-rose-50">
+                                  <HiOutlineTrash className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                        {editingSection !== name && (
+                          <div className="flex items-center gap-1.5 pt-1.5 border-t border-slate-200/60">
+                            <input
+                              type="number" min="0"
+                              placeholder="Time (min)"
+                              title="Section time limit in minutes — blank means no separate limit"
+                              value={setting.time_minutes ?? ''}
+                              onChange={(e) => setSectionSetting(name, { time_minutes: e.target.value === '' ? null : Number(e.target.value) })}
+                              className="w-0 flex-1 px-2 py-1 text-[11px] font-semibold text-slate-700 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white"
+                            />
+                            <input
+                              type="number" min="0"
+                              placeholder="Weight %"
+                              title="Score weight — relative, doesn't need to sum to 100. Blank means flat point-scoring"
+                              value={setting.weight ?? ''}
+                              onChange={(e) => setSectionSetting(name, { weight: e.target.value === '' ? null : Number(e.target.value) })}
+                              className="w-0 flex-1 px-2 py-1 text-[11px] font-semibold text-slate-700 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white"
+                            />
+                          </div>
                         )}
                       </div>
                     );
                   })}
                 </div>
               )}
+              <p className="text-[10px] text-slate-400 font-semibold -mt-1">
+                Weight is relative (doesn't need to total 100). Set it on every section to switch that exam's scoring from flat points to weighted; leave all blank to keep flat scoring.
+              </p>
 
               {/* Add Section */}
               <div className="flex items-center gap-2">
@@ -624,6 +960,26 @@ export default function ExamBuilder() {
         </div>
       </div>
       {ConfirmDialog}
+      <QuestionBankPicker
+        open={showBankPicker}
+        onClose={() => setShowBankPicker(false)}
+        sectionNames={orderedSectionNames}
+        onImport={importFromBank}
+      />
+      {previewing && (
+        <ExamRunner
+          attempt={previewAttempt}
+          exam={exam}
+          onBack={exitPreview}
+          onSaveAnswer={() => {}}
+          onSubmit={async () => { toast.success('Preview finished — nothing was saved.'); }}
+          onReportViolation={async (type) => {
+            previewViolations.current += 1;
+            return { violation_count: previewViolations.current, auto_submitted_now: false };
+          }}
+          onFinished={exitPreview}
+        />
+      )}
     </div>
   );
 }

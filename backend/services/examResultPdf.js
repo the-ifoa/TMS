@@ -15,7 +15,7 @@ const fs   = require('fs');
 const path = require('path');
 
 const ASSETS    = path.join(__dirname, '..', 'assets');
-const LOGO_PATH = path.join(ASSETS, 'Green_logo.png');
+const LOGO_PATH = path.join(ASSETS, 'IFOA_GREEN_white.png');
 
 function findSig(base) {
   for (const ext of ['.png', '.jpg', '.jpeg']) {

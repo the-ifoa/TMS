@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
@@ -188,10 +188,22 @@ function AttemptImageGallery({ gallery }) {
     };
 
     const onWheel = (e) => {
+      const maxScroll = el.scrollWidth - el.clientWidth;
+      if (maxScroll <= 2) {
+        // Single image or no horizontal overflow -> allow normal vertical page scroll!
+        return;
+      }
+
       const delta = e.deltaY !== 0 ? e.deltaY : e.deltaX;
       if (delta !== 0) {
+        const atStart = el.scrollLeft <= 0.5 && delta < 0;
+        const atEnd = el.scrollLeft >= maxScroll - 0.5 && delta > 0;
+        if (atStart || atEnd) {
+          // At gallery boundary -> allow outer vertical page scroll
+          return;
+        }
+
         e.preventDefault();
-        const maxScroll = el.scrollWidth - el.clientWidth;
         const currentBase = animFrame.current ? targetScroll.current : el.scrollLeft;
         targetScroll.current = Math.max(0, Math.min(maxScroll, currentBase + delta * 2.2));
 

@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import ifoaLogoUrl from '../assets/Green_logo.png';
+import ifoaLogoUrl from '../assets/IFOA_GREEN_white.png';
 import sigIncammiciaUrl from '../assets/sig_incammicia.png';
 
 // ─── Score helpers ────────────────────────────────────────────────────────────
@@ -80,7 +80,9 @@ export async function generateDgrPdf({ form = {}, applicantName = '', mode = 'do
   const logoW = 26;
   doc.line(margin + logoW, hBoxTop, margin + logoW, hBoxTop + hBoxH);
 
-  doc.addImage(logoDataUrl, 'PNG', margin + 2, hBoxTop + 2, 20, 18);
+  const logoH = 18;
+  const imgW = Math.round(logoH * 1.1394 * 10) / 10; // ~20.5mm
+  doc.addImage(logoDataUrl, 'PNG', margin + 2, hBoxTop + 2, imgW, logoH);
 
   doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(...ink);
   doc.text(

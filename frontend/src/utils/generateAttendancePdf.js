@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import greenLogo from '../assets/Green_logo.png';
+import greenLogo from '../assets/IFOA_GREEN_white.png';
 
 /**
  * Build attendance boolean map from DB records array.
@@ -63,7 +63,11 @@ export function generateAttendancePdf({
   if (chunks.length === 0) chunks.push([]);
 
   const drawPageHeader = () => {
-    try { doc.addImage(greenLogo, 'PNG', pageW - margin - 40, 3, 38, 16); } catch (_) {}
+    try {
+      const logoH = 20;
+      const logoW = Math.round(logoH * 1.1394 * 10) / 10; // ~22.8mm
+      doc.addImage(greenLogo, 'PNG', pageW - margin - logoW, 4, logoW, logoH);
+    } catch (_) {}
     doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.setTextColor(30, 58, 138);
     doc.text('ATTENDANCE RECORD', margin, 11);
     doc.setFontSize(8.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(90, 90, 90);

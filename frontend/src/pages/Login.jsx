@@ -57,37 +57,33 @@ export default function Login() {
         initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}
         className="w-full max-w-md"
       >
-        {/* Logo */}
-        <div className="text-center mb-8">
-          <Link to="/" className="inline-flex items-center gap-3">
-            <img src={logoImg} alt="IFOA Logo" className="h-12 w-auto object-contain" />
-          </Link>
-        </div>
-
-        <div className="bg-white rounded-2xl border border-primary-100 shadow-xl shadow-primary-800/5 p-5 sm:p-8">
+        <div className="bg-white rounded-3xl border border-slate-200/80 shadow-2xl shadow-slate-900/5 p-6 sm:p-10 backdrop-blur-xl">
+          {/* Header & Logo */}
+          <div className="flex flex-col items-center text-center pb-6 border-b border-slate-100 mb-6">
+            <Link to="/" className="inline-block mb-4 transition-transform hover:scale-105 duration-200">
+              <img src={logoImg} alt="IFOA Logo" className="h-10 sm:h-12 w-auto object-contain mx-auto" />
+            </Link>
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">Airline Portal</h1>
+            <p className="text-sm text-slate-500 mt-1">Sign in to your airline account</p>
+          </div>
 
           {/* ── Forgot Password view ── */}
           {showForgot ? (
             <>
-              <div className="mb-6">
-                <h1 className="text-2xl font-bold text-primary-800">Reset Password</h1>
-                <p className="text-sm text-primary-400 mt-1">Enter your email and we'll send a reset link</p>
-              </div>
-
               {forgotSent ? (
-                <div className="text-center space-y-4">
-                  <div className="w-14 h-14 bg-emerald-100 rounded-full flex items-center justify-center mx-auto">
-                    <svg className="w-7 h-7 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                <div className="text-center space-y-4 py-2">
+                  <div className="w-14 h-14 bg-emerald-100/80 rounded-2xl flex items-center justify-center mx-auto text-emerald-600">
+                    <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                     </svg>
                   </div>
-                  <p className="text-sm text-primary-600 font-medium">Check your inbox!</p>
-                  <p className="text-xs text-primary-400">
-                    If <strong>{forgotEmail}</strong> is registered, a reset link has been sent. Check your spam folder too.
+                  <p className="text-base font-bold text-slate-900">Check your inbox!</p>
+                  <p className="text-xs text-slate-500 max-w-xs mx-auto">
+                    If <strong className="text-slate-800">{forgotEmail}</strong> is registered, a reset link has been sent. Check your spam folder too.
                   </p>
                   <button
                     onClick={() => { setShowForgot(false); setForgotSent(false); setForgotEmail(''); }}
-                    className="text-sm text-[#0000ff] font-semibold hover:text-blue-700"
+                    className="text-xs text-[#0000ff] font-bold uppercase tracking-wider hover:underline"
                   >
                     ← Back to sign in
                   </button>
@@ -95,20 +91,20 @@ export default function Login() {
               ) : (
                 <form onSubmit={handleForgot} className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-primary-700 mb-1.5">Email Address</label>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">Email Address</label>
                     <div className="relative">
-                      <HiOutlineMail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-primary-400" />
+                      <HiOutlineMail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                       <input
                         type="email" value={forgotEmail}
                         onChange={e => setForgotEmail(e.target.value)}
                         placeholder="ops@yourairline.com"
-                        className="w-full pl-10 pr-4 py-2.5 bg-primary-50 border border-primary-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-accent-400 focus:border-transparent transition-all"
+                        className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0000ff]/20 focus:border-[#0000ff] transition-all"
                       />
                     </div>
                   </div>
                   <button
                     type="submit" disabled={forgotSending}
-                    className="w-full py-3 bg-[#0000ff] text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                    className="w-full py-3 bg-gradient-to-r from-[#000021] to-[#0000ff] text-white rounded-xl text-sm font-semibold shadow-lg shadow-blue-900/20 hover:shadow-xl hover:shadow-blue-600/30 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                   >
                     {forgotSending
                       ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -116,7 +112,7 @@ export default function Login() {
                   </button>
                   <button
                     type="button" onClick={() => setShowForgot(false)}
-                    className="w-full text-sm text-primary-400 hover:text-primary-600 transition-colors"
+                    className="w-full text-xs text-slate-400 hover:text-slate-600 font-medium transition-colors"
                   >
                     ← Back to sign in
                   </button>
@@ -126,52 +122,47 @@ export default function Login() {
           ) : (
             /* ── Login view ── */
             <>
-              <div className="mb-6">
-                <h1 className="text-2xl font-bold text-primary-800">Airline Portal</h1>
-                <p className="text-sm text-primary-400 mt-1">Sign in to your airline account</p>
-              </div>
-
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-primary-700 mb-1.5">Email</label>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">Email Address</label>
                   <div className="relative">
-                    <HiOutlineMail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-primary-400" />
+                    <HiOutlineMail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                     <input
                       type="email" value={form.email}
                       onChange={e => setForm({ ...form, email: e.target.value })}
                       placeholder="ops@yourairline.com"
-                      className="w-full pl-10 pr-4 py-2.5 bg-primary-50 border border-primary-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-accent-400 focus:border-transparent transition-all"
+                      className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0000ff]/20 focus:border-[#0000ff] transition-all"
                     />
                   </div>
                 </div>
 
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
-                    <label className="block text-sm font-medium text-primary-700">Password</label>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">Password</label>
                     <button
                       type="button" onClick={() => setShowForgot(true)}
-                      className="text-xs text-[#0000ff] font-medium hover:text-blue-700 transition-colors"
+                      className="text-xs text-[#0000ff] font-semibold hover:underline transition-colors"
                     >
                       Forgot password?
                     </button>
                   </div>
                   <div className="relative">
-                    <HiOutlineLockClosed className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-primary-400" />
+                    <HiOutlineLockClosed className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                     <input
                       type={showPassword ? 'text' : 'password'} value={form.password}
                       onChange={e => setForm({ ...form, password: e.target.value })}
                       placeholder="Enter your password"
-                      className="w-full pl-10 pr-10 py-2.5 bg-primary-50 border border-primary-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-accent-400 focus:border-transparent transition-all"
+                      className="w-full pl-10 pr-9 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0000ff]/20 focus:border-[#0000ff] transition-all"
                     />
                     <button type="button" onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-primary-400 hover:text-primary-600 transition-colors">
-                      {showPassword ? <HiOutlineEyeOff className="w-5 h-5" /> : <HiOutlineEye className="w-5 h-5" />}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors">
+                      {showPassword ? <HiOutlineEyeOff className="w-4 h-4" /> : <HiOutlineEye className="w-4 h-4" />}
                     </button>
                   </div>
                 </div>
 
                 <button type="submit" disabled={loading}
-                  className="w-full py-3 bg-[#0000ff] text-white rounded-xl text-sm font-semibold shadow-lg shadow-blue-500/25 hover:bg-blue-700 hover:shadow-xl transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full mt-2 py-3 bg-gradient-to-r from-[#000021] to-[#0000ff] text-white rounded-xl text-sm font-semibold shadow-lg shadow-blue-900/20 hover:shadow-xl hover:shadow-blue-600/30 transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {loading
                     ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -179,14 +170,14 @@ export default function Login() {
                 </button>
               </form>
 
-              <div className="mt-6 space-y-3">
-                <p className="text-center text-sm text-primary-400">
+              <div className="mt-6 pt-4 border-t border-slate-100 space-y-3">
+                <p className="text-center text-sm text-slate-500">
                   New airline?{' '}
-                  <Link to="/signup" className="text-[#0000ff] font-semibold hover:text-blue-700 transition-colors">
+                  <Link to="/signup" className="text-[#0000ff] font-semibold hover:underline transition-colors">
                     Register your airline
                   </Link>
                 </p>
-                <p className="text-xs text-center text-primary-400 bg-primary-50 rounded-xl p-3">
+                <p className="text-xs text-center text-slate-500 bg-slate-50 border border-slate-100 rounded-xl p-3 leading-relaxed">
                   ℹ Once submitted, enrollment records are locked. Only admins can make changes or issue certificates.
                 </p>
               </div>

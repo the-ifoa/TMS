@@ -117,6 +117,7 @@ const NOTIF_CONFIG = {
   airline:      { icon: HiOutlineOfficeBuilding, color: 'text-violet-500',  bg: 'bg-violet-50'  },
   pending:      { icon: HiOutlineClock,          color: 'text-orange-500',  bg: 'bg-orange-50'  },
   dgr:          { icon: HiOutlineShieldExclamation, color: 'text-red-500',  bg: 'bg-red-50'     },
+  exam:         { icon: HiOutlineAcademicCap,    color: 'text-indigo-500',  bg: 'bg-indigo-50'  },
 };
 
 function timeAgo(ts) {

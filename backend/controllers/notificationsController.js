@@ -1,6 +1,7 @@
 const Participant = require('../models/Participant');
 const Airline = require('../models/Airline');
 const DgrForm = require('../models/DgrForm');
+const ExamAttempt = require('../models/ExamAttempt');
 
 // ─── GET /api/notifications ───────────────────────────────────────────────────
 exports.listNotifications = async (req, res) => {
@@ -149,6 +150,32 @@ exports.listNotifications = async (req, res) => {
         });
       });
     }
+
+    // ── 8. Exam submitted by a candidate (last 14 days) ──────────────────
+    const examAttemptFilter = { status: { $in: ['submitted', 'pending_review', 'graded'] }, submitted_at: { $ne: null } };
+    if (!isAdmin) examAttemptFilter.airline_id = req.admin.id;
+    const examAttempts = await ExamAttempt.find(examAttemptFilter)
+      .sort({ submitted_at: -1 })
+      .limit(30)
+      .lean();
+
+    const fourteenDays = 14 * 24 * 60 * 60 * 1000;
+    examAttempts.forEach(a => {
+      const submitted = new Date(a.submitted_at).getTime();
+      if (now - submitted >= fourteenDays) return;
+      const examTitle = a.exam_title_snapshot || 'Exam';
+      notifications.push({
+        id:       `exam-attempt-${a._id}`,
+        type:     'exam',
+        title:    isAdmin ? 'Exam Submitted' : 'Candidate Finished Exam',
+        message:  isAdmin
+          ? `${a.participant_name || 'A candidate'} submitted "${examTitle}"${a.percentage != null ? ` — scored ${Math.round(a.percentage)}%` : ' — awaiting grading'}`
+          : `${a.participant_name || 'Your candidate'} finished "${examTitle}"${a.percentage != null ? ` and scored ${Math.round(a.percentage)}%` : ' and it is being graded'}`,
+        time:     submitted,
+        priority: 'normal',
+        link:     isAdmin ? `/admin/exams/${a.exam_id}/attempts?focus=${a._id}` : `/airline/exams/${a.exam_id}/result/${a._id}`,
+      });
+    });
 
     // ── Sort, deduplicate, cap at 30 ──────────────────────────────────────
     const seen = new Set();

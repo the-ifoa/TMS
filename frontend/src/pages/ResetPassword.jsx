@@ -50,13 +50,12 @@ export default function ResetPassword() {
         initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}
         className="w-full max-w-md"
       >
-        <div className="text-center mb-8">
-          <Link to="/">
-            <img src={logoImg} alt="IFOA Logo" className="h-12 w-auto object-contain mx-auto" />
-          </Link>
-        </div>
-
         <div className="bg-white rounded-2xl border border-primary-100 shadow-xl shadow-primary-800/5 p-5 sm:p-8">
+          <div className="text-center mb-6">
+            <Link to="/">
+              <img src={logoImg} alt="IFOA Logo" className="h-10 sm:h-12 w-auto object-contain mx-auto" />
+            </Link>
+          </div>
           {done ? (
             <div className="text-center space-y-4">
               <div className="w-14 h-14 bg-emerald-100 rounded-full flex items-center justify-center mx-auto">

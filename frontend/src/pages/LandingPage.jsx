@@ -63,16 +63,17 @@ function WaveText({ text, className = '', colorClass = '', baseDelay = 0, letter
 
 /* ── Animation Variants ── */
 const fadeUp = {
-  hidden: { opacity: 0, y: 24 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.25, 1, 0.5, 1] } },
+  hidden: { opacity: 0, y: 28 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.6, ease: [0.16, 1, 0.3, 1] } },
 };
 
 const scrollFadeUp = {
-  hidden: { opacity: 0, y: 24 },
+  hidden: { opacity: 0, y: 40, scale: 0.98 },
   show: {
     opacity: 1,
     y: 0,
-    transition: { duration: 0.5, ease: [0.25, 1, 0.5, 1] },
+    scale: 1,
+    transition: { duration: 0.7, ease: [0.16, 1, 0.3, 1] },
   },
 };
 
@@ -80,16 +81,17 @@ const containerStagger = {
   hidden: { opacity: 0 },
   show: {
     opacity: 1,
-    transition: { staggerChildren: 0.08 },
+    transition: { staggerChildren: 0.1, delayChildren: 0.05 },
   },
 };
 
 const itemReveal = {
-  hidden: { opacity: 0, y: 20 },
+  hidden: { opacity: 0, y: 30, scale: 0.95 },
   show: {
     opacity: 1,
     y: 0,
-    transition: { duration: 0.45, ease: [0.25, 1, 0.5, 1] },
+    scale: 1,
+    transition: { duration: 0.55, ease: [0.16, 1, 0.3, 1] },
   },
 };
 

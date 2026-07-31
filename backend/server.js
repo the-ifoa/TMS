@@ -119,7 +119,7 @@ initDB()
 const participantsRouter    = require('./routes/participants');
 const certificatesRouter    = require('./routes/certificates');
 const notificationsRouter   = require('./routes/notifications');
-const { router: authRouter } = require('./routes/auth');
+const authRouter            = require('./routes/auth');
 const examResultsRouter     = require('./routes/examResults');
 const attendanceRouter      = require('./routes/attendance');
 const contractsRouter       = require('./routes/contracts');

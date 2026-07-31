@@ -13,6 +13,7 @@ import {
 import { getParticipants } from '../api';
 import { useAuth } from '../context/AuthContext';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
+import { CountUp } from '@/components/ui/count-up';
 
 const container = {
   hidden: { opacity: 0 },
@@ -143,7 +144,7 @@ export default function Dashboard() {
               <div className="min-w-0">
                 <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider leading-tight">{card.label}</p>
                 <p className="text-3xl font-extrabold text-slate-800 mt-2 tracking-tight group-hover:text-slate-950 transition-colors">
-                  {stats[card.key]}
+                  <CountUp value={stats[card.key]} />
                 </p>
               </div>
               <div className={`${style.iconBg} w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 transition-transform duration-300 group-hover:scale-110 shadow-sm`}>

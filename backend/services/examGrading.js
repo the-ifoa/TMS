@@ -147,7 +147,7 @@ function sanitizeQuestionForTaking(question) {
   const clean = {
     _id: q._id, type: q.type, prompt: q.prompt, image_url: q.image_url,
     images: (q.images || []).map((img) => ({ url: img.url })),
-    points: q.points, order: q.order, section: q.section,
+    points: q.points, order: q.order, section: q.section, time_limit_seconds: q.time_limit_seconds,
   };
   switch (q.type) {
     case 'mcq':

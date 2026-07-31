@@ -4,9 +4,10 @@ import toast from 'react-hot-toast';
 import {
   HiOutlineArrowLeft, HiOutlinePlusCircle, HiOutlineSave, HiOutlineEye,
   HiOutlinePencilAlt, HiOutlineTrash, HiOutlineCheck, HiOutlineX,
-  HiOutlineCollection, HiOutlineSearch,
+  HiOutlineCollection, HiOutlineSearch, HiOutlineCalendar, HiOutlineClock,
+  HiOutlineDuplicate,
 } from 'react-icons/hi';
-import { getExam, createExam, updateExam, listQuestionBankGroups, listQuestionBankItems, getQuestionBankTopics } from '../api';
+import { getExam, createExam, updateExam, listQuestionBankGroups, listQuestionBankItems, getQuestionBankTopics, createQuestionBankItem } from '../api';
 import QuestionEditor, { QUESTION_TYPES, createEmptyQuestion } from '../components/examQuestions/QuestionEditor';
 import { TagBadges, DIFFICULTY_BADGE } from './QuestionBank';
 import QuestionPlayer from '../components/examPlayers/QuestionPlayer';
@@ -20,6 +21,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { useConfirm } from '@/hooks/use-confirm';
+import { TimePicker } from '@/components/ui/time-picker';
 
 // Client-generated placeholder ids (see `uid()` in QuestionEditor.jsx) aren't
 // valid Mongo ObjectIds — strip them so Mongoose assigns real ones on save.
@@ -45,14 +47,119 @@ const emptyExam = () => ({
 
 // datetime-local inputs work in local time with no timezone suffix; Mongo
 // dates round-trip as ISO strings — convert between the two on read/write.
-function toLocalInputValue(iso) {
+function getLocalDate(iso) {
   if (!iso) return '';
   const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
   const pad = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
-function fromLocalInputValue(value) {
-  return value ? new Date(value).toISOString() : null;
+
+function getLocalTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function combineDateTimeToIso(dateStr, timeStr, defaultTime = '00:00') {
+  if (!dateStr) return null;
+  const time = timeStr || defaultTime;
+  const d = new Date(`${dateStr}T${time}`);
+  return isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+function formatIsoDisplay(iso) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return null;
+  return d.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+}
+
+export function DateTimeInputCard({ label, isoValue, onChange, defaultTime = '09:00', borderAccent = 'blue' }) {
+  const dateVal = getLocalDate(isoValue);
+  const timeVal = getLocalTime(isoValue);
+  const formattedDisplay = formatIsoDisplay(isoValue);
+
+  const handleDateChange = (e) => {
+    const d = e.target.value;
+    if (!d) {
+      onChange(null);
+    } else {
+      onChange(combineDateTimeToIso(d, timeVal || defaultTime, defaultTime));
+    }
+  };
+
+  const handleTimeChange = (t) => {
+    const d = dateVal || getLocalDate(new Date().toISOString());
+    onChange(combineDateTimeToIso(d, t, defaultTime));
+  };
+
+  return (
+    <div className="bg-slate-50/90 border border-slate-200/90 rounded-xl p-3 space-y-2.5 transition-all hover:border-slate-300 hover:bg-slate-50">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-bold text-slate-800">
+          {label}
+        </span>
+        {isoValue && (
+          <button
+            type="button"
+            onClick={() => onChange(null)}
+            className="text-[10px] font-bold text-rose-500 hover:text-rose-700 hover:bg-rose-50 px-1.5 py-0.5 rounded transition-colors"
+            title="Clear restriction"
+          >
+            Clear
+          </button>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        {/* Date Field */}
+        <div>
+          <label className="block text-[10px] font-extrabold text-blue-600 uppercase tracking-wider mb-1 flex items-center gap-1">
+            <HiOutlineCalendar className="w-3.5 h-3.5 text-blue-600" />
+            Date
+          </label>
+          <input
+            type="date"
+            value={dateVal}
+            onChange={handleDateChange}
+            className="w-full px-2.5 py-1.5 text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500 shadow-2xs transition-all cursor-pointer"
+          />
+        </div>
+
+        {/* Time Field */}
+        <div>
+          <label className={`block text-[10px] font-extrabold uppercase tracking-wider mb-1 flex items-center gap-1 ${dateVal ? 'text-purple-600' : 'text-slate-400'}`}>
+            <HiOutlineClock className={`w-3.5 h-3.5 ${dateVal ? 'text-purple-600' : 'text-slate-400'}`} />
+            Time
+          </label>
+          <TimePicker
+            value={timeVal}
+            onChange={handleTimeChange}
+            disabled={!dateVal}
+          />
+        </div>
+      </div>
+
+      {formattedDisplay && (
+        <div className="pt-1.5 border-t border-slate-200/60 text-[10px] font-medium text-slate-500 flex items-center justify-between gap-1">
+          <span className="text-slate-400 font-semibold flex-shrink-0">Scheduled:</span>
+          <span className="text-slate-800 font-bold bg-white px-2 py-0.5 rounded border border-slate-200/80 shadow-2xs truncate">
+            {formattedDisplay}
+          </span>
+        </div>
+      )}
+    </div>
+  );
 }
 
 const uid = () => `new-${Math.random().toString(36).slice(2, 10)}`;
@@ -73,6 +180,15 @@ function bankItemToQuestion(item, section) {
 
 const emptyBankFilters = { search: '', difficulty: [], knowledge: false, skill: false, initial: false, recurrent: false, type: '', topic: '' };
 
+function shuffled(arr) {
+  const next = [...arr];
+  for (let i = next.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [next[i], next[j]] = [next[j], next[i]];
+  }
+  return next;
+}
+
 function QuestionBankPicker({ open, onClose, sectionNames, onImport }) {
   const [groups, setGroups] = useState([]);
   const [bankId, setBankId] = useState('');
@@ -83,6 +199,14 @@ function QuestionBankPicker({ open, onClose, sectionNames, onImport }) {
   const [selected, setSelected] = useState(() => new Set());
   const [targetSection, setTargetSection] = useState('');
   const [previewItem, setPreviewItem] = useState(null);
+  // Questions the admin explicitly unchecked during this picker session —
+  // Auto Select never re-suggests them, so rejecting a bad pick sticks.
+  const [rejectedIds, setRejectedIds] = useState(() => new Set());
+  // Questions already imported into the exam this session (via a previous
+  // "Add Selected") — also excluded from future auto-select, even if the
+  // admin later deletes that question back out of the exam question list.
+  const [importedIds, setImportedIds] = useState(() => new Set());
+  const [autoCount, setAutoCount] = useState(5);
   const toggleDifficulty = (d) => setFilters((f) => ({
     ...f, difficulty: f.difficulty.includes(d) ? f.difficulty.filter((x) => x !== d) : [...f.difficulty, d],
   }));
@@ -101,6 +225,11 @@ function QuestionBankPicker({ open, onClose, sectionNames, onImport }) {
     if (!open || !bankId) return;
     getQuestionBankTopics(bankId).then((res) => setTopics(res.data)).catch(() => {});
   }, [open, bankId]);
+
+  // Reset rejections/imports when switching banks — they only make sense
+  // against the pool they came from. Both otherwise persist across
+  // close/reopen and across repeated Auto Select clicks within this bank.
+  useEffect(() => { setRejectedIds(new Set()); setImportedIds(new Set()); }, [bankId]);
 
   useEffect(() => {
     if (!open || !bankId) { setItems([]); setLoading(false); return; }
@@ -125,17 +254,43 @@ function QuestionBankPicker({ open, onClose, sectionNames, onImport }) {
 
   const toggle = (id) => setSelected((prev) => {
     const next = new Set(prev);
-    next.has(id) ? next.delete(id) : next.add(id);
+    if (next.has(id)) {
+      next.delete(id);
+      // Unchecking = rejecting — don't suggest it again this session.
+      setRejectedIds((r) => new Set(r).add(id));
+    } else {
+      next.add(id);
+    }
     return next;
   });
 
   const selectAllFiltered = () => setSelected(new Set(items.map((it) => it.id)));
   const clearSelection = () => setSelected(new Set());
 
+  // Randomly picks `autoCount` questions from the current filtered pool,
+  // skipping anything already rejected this session, and replaces whatever
+  // was selected before with the fresh batch — repeated clicks shuffle
+  // differently each time as long as the pool has enough candidates left.
+  const autoSelect = () => {
+    const pool = items.filter((it) => !rejectedIds.has(it.id) && !importedIds.has(it.id));
+    if (pool.length === 0) {
+      toast.error('No unique questions left in this bank matching your filters — you\'ve already added or removed them all.');
+      return;
+    }
+    const picks = shuffled(pool).slice(0, Math.max(1, autoCount));
+    setSelected(new Set(picks.map((p) => p.id)));
+    if (picks.length < autoCount) {
+      toast.error(`Only ${picks.length} unique question${picks.length !== 1 ? 's' : ''} left matching your filters — the rest were already added or removed.`);
+    } else {
+      toast.success(`Auto-selected ${picks.length} question${picks.length !== 1 ? 's' : ''}.`);
+    }
+  };
+
   const handleImport = () => {
     const chosen = items.filter((it) => selected.has(it.id));
     if (chosen.length === 0) return;
     onImport(chosen.map((it) => bankItemToQuestion(it, targetSection)));
+    setImportedIds((prev) => { const next = new Set(prev); chosen.forEach((it) => next.add(it.id)); return next; });
     toast.success(`Imported ${chosen.length} question${chosen.length !== 1 ? 's' : ''} from the bank.`);
     setSelected(new Set());
     onClose();
@@ -144,7 +299,7 @@ function QuestionBankPicker({ open, onClose, sectionNames, onImport }) {
   return (
     <>
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-3xl w-full max-h-[85vh] flex flex-col p-0 overflow-hidden rounded-2xl border border-slate-200/80 shadow-2xl bg-white">
+      <DialogContent className="max-w-4xl w-full h-[85vh] max-h-[850px] min-h-[550px] flex flex-col p-0 overflow-hidden rounded-2xl border border-slate-200/80 shadow-2xl bg-white">
         <div className="flex-shrink-0 px-5 py-4 border-b border-slate-200/80 space-y-3">
           <DialogTitle className="text-sm font-black text-slate-900 flex items-center gap-2">
             <HiOutlineCollection className="w-4.5 h-4.5 text-slate-400" /> Import from Question Bank
@@ -193,9 +348,22 @@ function QuestionBankPicker({ open, onClose, sectionNames, onImport }) {
               </label>
             ))}
           </div>
+          <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
+            <span className="text-xs font-bold text-slate-500">Auto Select</span>
+            <input
+              type="number" min="1"
+              value={autoCount}
+              onChange={(e) => setAutoCount(Math.max(1, Number(e.target.value) || 1))}
+              className="w-16 px-2 py-1 text-xs font-bold text-center border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white"
+            />
+            <span className="text-xs font-medium text-slate-400">questions matching filters, randomly</span>
+            <Button size="sm" variant="outline" onClick={autoSelect} disabled={items.length === 0} className="rounded-xl border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold ml-auto">
+              <HiOutlineCollection className="w-3.5 h-3.5" /> Auto Select
+            </Button>
+          </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto min-h-0 px-5 py-3 space-y-1.5">
+        <div className="flex-1 overflow-y-auto min-h-[350px] px-5 py-3 space-y-2">
           {groups.length === 0 ? (
             <p className="text-xs text-slate-400 font-medium py-8 text-center">No question banks yet. Create one from the Question Bank page first.</p>
           ) : loading ? (
@@ -217,6 +385,11 @@ function QuestionBankPicker({ open, onClose, sectionNames, onImport }) {
                   {QUESTION_TYPES.find((t) => t.value === item.type)?.label || item.type}
                 </span>
                 <span className="flex-1 min-w-0 text-xs font-semibold text-slate-800 truncate">{item.prompt || '(no prompt)'}</span>
+                {importedIds.has(item.id) && (
+                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-lg flex-shrink-0" title="Already imported into this exam this session — skipped by Auto Select">
+                    Added
+                  </span>
+                )}
                 <div className="hidden sm:block flex-shrink-0"><TagBadges item={item} /></div>
                 <button
                   type="button"
@@ -275,6 +448,64 @@ function QuestionBankPicker({ open, onClose, sectionNames, onImport }) {
   );
 }
 
+function SendToBankModal({ question, onClose }) {
+  const [groups, setGroups] = useState([]);
+  const [bankId, setBankId] = useState('');
+  const [sending, setSending] = useState(false);
+
+  useEffect(() => {
+    if (!question) return;
+    listQuestionBankGroups()
+      .then((res) => { setGroups(res.data); setBankId(res.data[0]?.id || ''); })
+      .catch(() => toast.error('Failed to load question banks.'));
+  }, [question]);
+
+  const send = async () => {
+    if (!bankId) return;
+    setSending(true);
+    try {
+      const { _id, id, ...rest } = stripTempIds(question);
+      await createQuestionBankItem({ ...rest, bank_id: bankId });
+      toast.success('Sent to question bank.');
+      onClose();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to send question to bank.');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <Dialog open={!!question} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md w-full rounded-2xl border border-slate-200/80 shadow-2xl bg-white p-5 space-y-4">
+        <DialogTitle className="text-sm font-black text-slate-900 flex items-center gap-2">
+          <HiOutlineCollection className="w-4.5 h-4.5 text-slate-400" /> Send to Question Bank
+        </DialogTitle>
+        <p className="text-xs text-slate-500 font-medium truncate">{question?.prompt || '(no prompt)'}</p>
+        {groups.length === 0 ? (
+          <p className="text-xs text-slate-400 font-medium py-4 text-center">No question banks yet. Create one from the Question Bank page first.</p>
+        ) : (
+          <div className="space-y-1.5">
+            <label className="block text-xs font-bold text-slate-700">Choose a bank</label>
+            <Select value={bankId} onValueChange={setBankId}>
+              <SelectTrigger className="w-full bg-white rounded-xl text-xs"><SelectValue placeholder="Choose a bank…" /></SelectTrigger>
+              <SelectContent>
+                {groups.map((g) => <SelectItem key={g.id} value={g.id}>{g.name} ({g.question_count})</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+        <div className="flex items-center justify-end gap-2 pt-1">
+          <Button variant="outline" size="sm" onClick={onClose} className="rounded-xl text-xs font-bold">Cancel</Button>
+          <Button size="sm" onClick={send} disabled={!bankId || sending} className="rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold">
+            {sending ? 'Sending…' : 'Send'}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function ExamBuilder() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -285,18 +516,17 @@ export default function ExamBuilder() {
   const [saving, setSaving] = useState(false);
   const [newType, setNewType] = useState(QUESTION_TYPES[0].value);
   const [previewing, setPreviewing] = useState(false);
-  const previewViolations = useRef(0);
   const [showBankPicker, setShowBankPicker] = useState(false);
   const importFromBank = (newQuestions) => {
     setExam((prev) => ({ ...prev, questions: [...prev.questions, ...newQuestions] }));
   };
+  const [sendToBankQuestion, setSendToBankQuestion] = useState(null);
 
   const startPreview = () => {
     if (exam.questions.length === 0) { toast.error('Add at least one question first.'); return; }
-    previewViolations.current = 0;
     setPreviewing(true);
   };
-  const exitPreview = () => { setPreviewing(false); previewViolations.current = 0; };
+  const exitPreview = () => setPreviewing(false);
   const previewAttempt = {
     id: 'preview',
     questions_snapshot: exam.questions,
@@ -310,6 +540,97 @@ export default function ExamBuilder() {
   const [bulkTargetSection, setBulkTargetSection] = useState('');
   const [activeSectionFilter, setActiveSectionFilter] = useState(null); // null = show all, '' = Ungrouped, else a section name
   const { confirm, ConfirmDialog } = useConfirm();
+
+  const [selectedQIds, setSelectedQIds] = useState(() => new Set());
+  const rightSidebarRef = useRef(null);
+  const getQKey = (q, idx) => q._id || idx;
+
+  useEffect(() => {
+    if (selectedQIds.size > 0 && rightSidebarRef.current) {
+      rightSidebarRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [selectedQIds.size]);
+
+  const toggleSelectQuestion = (qId) => {
+    setSelectedQIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(qId)) next.delete(qId);
+      else next.add(qId);
+      return next;
+    });
+  };
+
+  const selectAllQuestions = () => {
+    if (selectedQIds.size === exam.questions.length) {
+      setSelectedQIds(new Set());
+    } else {
+      setSelectedQIds(new Set(exam.questions.map((q, idx) => getQKey(q, idx))));
+    }
+  };
+
+  const clearQuestionSelection = () => {
+    setSelectedQIds(new Set());
+  };
+
+  const bulkDeleteQuestions = async () => {
+    if (selectedQIds.size === 0) return;
+    const count = selectedQIds.size;
+    const confirmed = await confirm(
+      `Are you sure you want to delete ${count} selected question${count > 1 ? 's' : ''}?`,
+      { title: 'Delete Selected Questions', confirmLabel: 'Delete All' }
+    );
+    if (!confirmed) return;
+    setExam((prev) => ({
+      ...prev,
+      questions: prev.questions.filter((q, idx) => !selectedQIds.has(getQKey(q, idx))),
+    }));
+    setSelectedQIds(new Set());
+    toast.success(`Deleted ${count} question${count > 1 ? 's' : ''}.`);
+  };
+
+  const bulkMoveToSection = (targetSection) => {
+    if (selectedQIds.size === 0) return;
+    const count = selectedQIds.size;
+    setExam((prev) => ({
+      ...prev,
+      questions: prev.questions.map((q, idx) =>
+        selectedQIds.has(getQKey(q, idx)) ? { ...q, section: targetSection } : q
+      ),
+    }));
+    toast.success(`Moved ${count} question${count > 1 ? 's' : ''} to ${targetSection || 'Ungrouped'}.`);
+  };
+
+  const bulkSetPoints = (pts) => {
+    if (selectedQIds.size === 0 || isNaN(pts)) return;
+    const count = selectedQIds.size;
+    setExam((prev) => ({
+      ...prev,
+      questions: prev.questions.map((q, idx) =>
+        selectedQIds.has(getQKey(q, idx)) ? { ...q, points: pts } : q
+      ),
+    }));
+    toast.success(`Set points to ${pts} for ${count} question${count > 1 ? 's' : ''}.`);
+  };
+
+  const bulkDuplicateQuestions = () => {
+    if (selectedQIds.size === 0) return;
+    const count = selectedQIds.size;
+    setExam((prev) => {
+      const nextQuestions = [];
+      prev.questions.forEach((q, idx) => {
+        nextQuestions.push(q);
+        if (selectedQIds.has(getQKey(q, idx))) {
+          const copy = JSON.parse(JSON.stringify(q));
+          copy._id = uid();
+          if (copy.prompt) copy.prompt = `${copy.prompt} (Copy)`;
+          nextQuestions.push(copy);
+        }
+      });
+      return { ...prev, questions: nextQuestions };
+    });
+    setSelectedQIds(new Set());
+    toast.success(`Duplicated ${count} question${count > 1 ? 's' : ''}.`);
+  };
 
   useEffect(() => {
     if (isNew) return;
@@ -564,7 +885,116 @@ export default function ExamBuilder() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-full min-h-0 items-start">
 
           {/* EXAM SETTINGS PANEL (Right column on desktop, 4 cols width) */}
-          <div className="order-1 lg:order-2 lg:col-span-4 h-full overflow-y-auto p-1 space-y-4 scrollbar-thin">
+          <div ref={rightSidebarRef} className="order-1 lg:order-2 lg:col-span-4 h-full overflow-y-auto p-1 space-y-4 scrollbar-thin scroll-smooth">
+            {/* Bulk Question Actions Card (Appears in Right Sidebar when questions are selected - Light Theme) */}
+            {selectedQIds.size > 0 && (
+              <Card className="p-4 space-y-3.5 rounded-2xl border-2 border-blue-500 bg-gradient-to-b from-blue-50/70 via-white to-white shadow-md animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="flex items-center justify-between border-b border-blue-100 pb-2.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-black bg-blue-600 text-white px-2.5 py-1 rounded-lg shadow-2xs">
+                      {selectedQIds.size} Selected
+                    </span>
+                    <span className="text-xs font-bold text-slate-600">
+                      of {exam.questions.length} questions
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={clearQuestionSelection}
+                    className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+                    title="Deselect all questions"
+                  >
+                    <HiOutlineX className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="space-y-3 text-xs">
+                  {/* Move Section */}
+                  {orderedSectionNames.length > 0 && (
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
+                        Move Selected to Section
+                      </label>
+                      <Select
+                        onValueChange={(val) => {
+                          if (val) bulkMoveToSection(val === '__UNGROUPED__' ? '' : val);
+                        }}
+                      >
+                        <SelectTrigger className="w-full bg-white text-xs font-bold text-slate-800 rounded-xl border border-slate-200 shadow-2xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 h-9">
+                          <SelectValue placeholder="Select target section…" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-white border border-slate-200 shadow-lg rounded-xl">
+                          <SelectItem value="__UNGROUPED__" className="text-xs font-bold text-slate-700 cursor-pointer">
+                            Ungrouped
+                          </SelectItem>
+                          {orderedSectionNames.map((s) => (
+                            <SelectItem key={s} value={s} className="text-xs font-bold text-slate-900 cursor-pointer">
+                              {s}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
+                  {/* Points */}
+                  <div className="space-y-1">
+                    <label className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
+                      Batch Set Points
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min="0"
+                        placeholder="e.g. 2"
+                        id="bulk-pts-sidebar-input"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && e.target.value !== '') {
+                            bulkSetPoints(Number(e.target.value));
+                            e.target.value = '';
+                          }
+                        }}
+                        className="flex-1 bg-white text-xs font-bold text-slate-800 px-3 py-2 rounded-xl border border-slate-200 shadow-2xs outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                      />
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          const input = document.getElementById('bulk-pts-sidebar-input');
+                          if (input && input.value !== '') {
+                            bulkSetPoints(Number(input.value));
+                            input.value = '';
+                          }
+                        }}
+                        className="rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-3.5 py-2 shadow-2xs"
+                      >
+                        Set
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Duplicate & Delete Actions */}
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={bulkDuplicateQuestions}
+                      className="w-full rounded-xl border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-800 text-xs font-bold flex items-center justify-center gap-1.5 py-2 shadow-2xs"
+                    >
+                      <HiOutlineDuplicate className="w-3.5 h-3.5 text-blue-600" /> Duplicate
+                    </Button>
+
+                    <Button
+                      size="sm"
+                      onClick={bulkDeleteQuestions}
+                      className="w-full rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold flex items-center justify-center gap-1.5 py-2 shadow-2xs"
+                    >
+                      <HiOutlineTrash className="w-3.5 h-3.5 text-rose-600" /> Delete ({selectedQIds.size})
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            )}
+
             <Card className="p-4 sm:p-5 space-y-4 rounded-2xl border border-slate-200/80 shadow-2xs bg-white">
               <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
                 <h3 className="text-sm font-black text-slate-900 tracking-tight">Exam Settings</h3>
@@ -681,37 +1111,9 @@ export default function ExamBuilder() {
                   )}
                 </div>
               </div>
-
-              {/* Scheduling window */}
-              <div className="pt-2 border-t border-slate-100 space-y-2">
-                <label className="block text-xs font-bold text-slate-700">
-                  Scheduling Window <span className="font-normal text-slate-400">(optional)</span>
-                </label>
-                <div className="grid grid-cols-2 gap-2.5">
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-500 mb-1">Opens At</label>
-                    <input
-                      type="datetime-local"
-                      value={toLocalInputValue(exam.opens_at)}
-                      onChange={(e) => set('opens_at', fromLocalInputValue(e.target.value))}
-                      className="w-full px-2.5 py-2 text-xs font-semibold text-slate-900 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500 bg-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-500 mb-1">Closes At</label>
-                    <input
-                      type="datetime-local"
-                      value={toLocalInputValue(exam.closes_at)}
-                      onChange={(e) => set('closes_at', fromLocalInputValue(e.target.value))}
-                      className="w-full px-2.5 py-2 text-xs font-semibold text-slate-900 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500 bg-white"
-                    />
-                  </div>
-                </div>
-                <p className="text-[10px] text-slate-400 font-semibold">Leave blank for no restriction. Only gates starting a new attempt — one already in progress isn't cut off.</p>
-              </div>
             </Card>
 
-            {/* Sections management */}
+            {/* Sections management (High Priority Middle Position) */}
             <Card className="p-4 sm:p-5 space-y-4 rounded-2xl border border-slate-200/80 shadow-2xs bg-white">
               <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
                 <h3 className="text-sm font-black text-slate-900 tracking-tight">Sections</h3>
@@ -833,6 +1235,41 @@ export default function ExamBuilder() {
                 </div>
               )}
             </Card>
+
+            {/* Scheduling window (Optional Card at Bottom) */}
+            <Card className="p-4 sm:p-5 space-y-3 rounded-2xl border border-slate-200/80 shadow-2xs bg-white">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <label className="block text-xs font-extrabold text-slate-900 tracking-tight flex items-center gap-1.5">
+                  <HiOutlineCalendar className="w-4 h-4 text-blue-600" />
+                  Scheduling Window
+                </label>
+                <span className="text-[10px] font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
+                  Optional
+                </span>
+              </div>
+
+              <div className="space-y-2.5">
+                <DateTimeInputCard
+                  label="Opens At"
+                  isoValue={exam.opens_at}
+                  onChange={(iso) => set('opens_at', iso)}
+                  defaultTime="09:00"
+                  borderAccent="blue"
+                />
+
+                <DateTimeInputCard
+                  label="Closes At"
+                  isoValue={exam.closes_at}
+                  onChange={(iso) => set('closes_at', iso)}
+                  defaultTime="23:59"
+                  borderAccent="emerald"
+                />
+              </div>
+
+              <p className="text-[10px] text-slate-400 font-semibold leading-relaxed">
+                Leave blank for no restriction. Gates starting a new attempt — existing attempts are not cut off.
+              </p>
+            </Card>
           </div>
 
           {/* QUESTIONS LIST (Left column on desktop, 8 cols width - independent scrolling) */}
@@ -841,6 +1278,23 @@ export default function ExamBuilder() {
               <h2 className="text-sm font-extrabold text-slate-900 uppercase tracking-wider">
                 Exam Questions ({exam.questions.length})
               </h2>
+              {exam.questions.length > 0 && (
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200/80 px-3 py-1.5 rounded-xl shadow-2xs transition-all select-none">
+                  <input
+                    type="checkbox"
+                    checked={selectedQIds.size > 0 && selectedQIds.size === exam.questions.length}
+                    onChange={selectAllQuestions}
+                    className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer"
+                  />
+                  <span>
+                    {selectedQIds.size === exam.questions.length
+                      ? 'Deselect All'
+                      : selectedQIds.size > 0
+                      ? `Selected (${selectedQIds.size}/${exam.questions.length})`
+                      : 'Select All'}
+                  </span>
+                </label>
+              )}
             </div>
 
             {exam.questions.length === 0 && orderedSectionNames.length === 0 && (
@@ -877,6 +1331,9 @@ export default function ExamBuilder() {
                         isLast={pos === items.length - 1}
                         sectionNames={orderedSectionNames}
                         onMoveToSection={(target) => moveQuestionToSection(idx, target)}
+                        isSelected={selectedQIds.has(getQKey(q, idx))}
+                        onToggleSelect={() => toggleSelectQuestion(getQKey(q, idx))}
+                        onSendToBank={() => setSendToBankQuestion(q)}
                       />
                     ))}
                   </div>
@@ -932,6 +1389,9 @@ export default function ExamBuilder() {
                       isLast={pos === ungroupedItems.length - 1}
                       sectionNames={orderedSectionNames}
                       onMoveToSection={(target) => moveQuestionToSection(idx, target)}
+                      isSelected={selectedQIds.has(getQKey(q, idx))}
+                      onToggleSelect={() => toggleSelectQuestion(getQKey(q, idx))}
+                      onSendToBank={() => setSendToBankQuestion(q)}
                     />
                   ))}
                 </div>
@@ -966,6 +1426,7 @@ export default function ExamBuilder() {
         sectionNames={orderedSectionNames}
         onImport={importFromBank}
       />
+      <SendToBankModal question={sendToBankQuestion} onClose={() => setSendToBankQuestion(null)} />
       {previewing && (
         <ExamRunner
           attempt={previewAttempt}
@@ -973,11 +1434,9 @@ export default function ExamBuilder() {
           onBack={exitPreview}
           onSaveAnswer={() => {}}
           onSubmit={async () => { toast.success('Preview finished — nothing was saved.'); }}
-          onReportViolation={async (type) => {
-            previewViolations.current += 1;
-            return { violation_count: previewViolations.current, auto_submitted_now: false };
-          }}
+          onReportViolation={async () => ({ violation_count: 0, auto_submitted_now: false })}
           onFinished={exitPreview}
+          previewMode
         />
       )}
     </div>

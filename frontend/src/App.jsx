@@ -105,7 +105,7 @@ function App() {
           <Route path="exams/new"       element={<AdminRoute><ExamBuilder /></AdminRoute>} />
           <Route path="exams/:id/edit"  element={<AdminRoute><ExamBuilder /></AdminRoute>} />
           <Route path="exams/:id/attempts" element={<AdminRoute><ExamAttempts /></AdminRoute>} />
-          <Route path="question-bank" element={<AdminRoute><QuestionBank /></AdminRoute>} />
+          <Route path="question-bank" element={<Navigate to="/admin/exams?tab=question-bank" replace />} />
           <Route path="question-bank/:bankId" element={<AdminRoute><QuestionBankDetail /></AdminRoute>} />
         </Route>
 

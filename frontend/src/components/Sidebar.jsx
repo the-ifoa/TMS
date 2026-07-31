@@ -22,11 +22,11 @@ import { SimpleTooltip } from '@/components/ui/tooltip';
 const adminNavigation = [
   { name: 'Dashboard',    href: '/admin',                  icon: HiOutlineHome },
   { name: 'Airlines',     href: '/admin/airlines',         icon: FaPlaneDeparture },
+  { name: 'Participants', href: '/admin/participants',     icon: HiOutlineUsers },
   { name: 'Contracts',    href: '/admin/contracts',        icon: HiOutlineDocumentText },
   { name: 'Attendance',   href: '/admin/attendance',       icon: HiOutlineClipboardCheck },
   { name: 'Exam Results', href: '/admin/exam-results',     icon: HiOutlineClipboardList },
   { name: 'Exam System',  href: '/admin/exams',            icon: HiOutlineAcademicCap },
-  { name: 'Question Bank', href: '/admin/question-bank',   icon: HiOutlineCollection },
   { name: 'DGR CBTA',     href: '/admin/dgr',              icon: HiOutlineShieldExclamation },
   { name: 'Profile',      href: '/admin/profile',          icon: HiOutlineUserCircle },
 ];
@@ -56,6 +56,12 @@ export default function Sidebar({ open, setOpen }) {
         currentPath === '/airline' ||
         currentPath === '/dashboard' ||
         currentPath === ''
+      );
+    }
+    if (item.name === 'Exam System') {
+      return (
+        currentPath.includes('/exams') ||
+        currentPath.includes('/question-bank')
       );
     }
     return currentPath === item.href || currentPath.startsWith(item.href + '/');

@@ -22,6 +22,8 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
+import { CosmicParallaxBg } from '@/components/ui/parallax-cosmic-background';
+import { CountUp } from '@/components/ui/count-up';
 import logoImg from '../assets/logo.png';
 
 /* ── Wave Animation Text Component ── */
@@ -134,12 +136,12 @@ export default function LandingPage() {
         initial={{ opacity: 0, y: -12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
-        className="fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-md border-b border-slate-200/80 shadow-2xs"
+        className="fixed top-0 left-0 right-0 z-50 bg-slate-950/40 backdrop-blur-md border-b border-white/10 shadow-lg"
       >
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2 flex-shrink-0">
-            <img src={logoImg} alt="IFOA Logo" className="h-9 w-auto object-contain" />
+            <img src={logoImg} alt="IFOA Logo" className="h-9 w-auto object-contain brightness-0 invert" />
           </Link>
 
           {/* Desktop nav */}
@@ -150,31 +152,31 @@ export default function LandingPage() {
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <button className="flex items-center gap-2.5 text-left rounded-full hover:opacity-90 transition-all outline-none focus:outline-none cursor-pointer">
-                      <Avatar className="w-9 h-9">
+                      <Avatar className="w-9 h-9 border border-white/20">
                         {!isAdmin && admin?.logo_url && <AvatarImage src={admin.logo_url} alt={admin.airlineName} />}
-                        <AvatarFallback className="bg-[#0B132B] text-white font-bold text-xs">
+                        <AvatarFallback className="bg-slate-800 text-white font-bold text-xs">
                           {!isAdmin && admin?.airlineName ? admin.airlineName.charAt(0).toUpperCase() : initials}
                         </AvatarFallback>
                       </Avatar>
                       <div className="hidden md:block leading-tight">
-                        <p className="text-sm font-bold text-slate-900">{profileLabel}</p>
-                        <p className="text-xs text-slate-500 font-normal">{profileSublabel}</p>
+                        <p className="text-sm font-bold text-white">{profileLabel}</p>
+                        <p className="text-xs text-slate-300 font-normal">{profileSublabel}</p>
                       </div>
                     </button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-64 p-0 rounded-2xl bg-white shadow-xl border border-slate-100 overflow-hidden">
+                  <DropdownMenuContent align="end" className="w-64 p-0 rounded-2xl bg-slate-900 shadow-2xl border border-white/10 overflow-hidden text-white">
                     {/* User Info Header */}
                     <div className="px-5 py-4 space-y-0.5">
-                      <p className="text-base font-extrabold text-slate-900 leading-tight">
+                      <p className="text-base font-extrabold text-white leading-tight">
                         {admin?.name || 'User'}
                       </p>
                       {!isAdmin && admin?.airlineName && (
-                        <p className="text-xs font-semibold text-slate-700">
+                        <p className="text-xs font-semibold text-slate-300">
                           {admin.airlineName}
                         </p>
                       )}
                       {isAdmin && (
-                        <p className="text-xs font-semibold text-slate-700">
+                        <p className="text-xs font-semibold text-slate-300">
                           Administrator
                         </p>
                       )}
@@ -185,34 +187,34 @@ export default function LandingPage() {
                       )}
                     </div>
 
-                    <div className="border-t border-slate-100" />
+                    <div className="border-t border-white/10" />
 
                     {/* Menu Items */}
                     <DropdownMenuItem
                       onClick={() => navigate(dashboardPath)}
-                      className="px-5 py-3.5 cursor-pointer text-slate-700 font-semibold text-sm flex items-center gap-3 hover:bg-slate-50 focus:bg-slate-50 focus:outline-none"
+                      className="group px-5 py-3.5 cursor-pointer text-slate-200 font-semibold text-sm flex items-center gap-3 hover:bg-white/10 hover:text-white focus:bg-white/10 focus:text-white data-[highlighted]:bg-white/10 data-[highlighted]:text-white focus:outline-none transition-colors"
                     >
-                      <HiOutlineCog className="w-5 h-5 text-slate-600 flex-shrink-0" />
+                      <HiOutlineCog className="w-5 h-5 text-slate-400 group-hover:text-white group-focus:text-white group-data-[highlighted]:text-white flex-shrink-0 transition-colors" />
                       <span>Dashboard</span>
                     </DropdownMenuItem>
 
-                    <div className="border-t border-slate-100" />
+                    <div className="border-t border-white/10" />
 
                     <DropdownMenuItem
                       onClick={() => navigate(isAdmin ? '/admin/profile' : '/airline/profile')}
-                      className="px-5 py-3.5 cursor-pointer text-slate-700 font-semibold text-sm flex items-center gap-3 hover:bg-slate-50 focus:bg-slate-50 focus:outline-none"
+                      className="group px-5 py-3.5 cursor-pointer text-slate-200 font-semibold text-sm flex items-center gap-3 hover:bg-white/10 hover:text-white focus:bg-white/10 focus:text-white data-[highlighted]:bg-white/10 data-[highlighted]:text-white focus:outline-none transition-colors"
                     >
-                      <HiOutlineUserCircle className="w-5 h-5 text-slate-600 flex-shrink-0" />
+                      <HiOutlineUserCircle className="w-5 h-5 text-slate-400 group-hover:text-white group-focus:text-white group-data-[highlighted]:text-white flex-shrink-0 transition-colors" />
                       <span>My Profile</span>
                     </DropdownMenuItem>
 
-                    <div className="border-t border-slate-100" />
+                    <div className="border-t border-white/10" />
 
                     <DropdownMenuItem
                       onClick={handleLogout}
-                      className="px-5 py-3.5 cursor-pointer text-red-500 font-semibold text-sm flex items-center gap-3 hover:bg-red-50/40 focus:bg-red-50/40 focus:outline-none"
+                      className="group px-5 py-3.5 cursor-pointer text-red-400 font-semibold text-sm flex items-center gap-3 hover:bg-red-500/20 hover:text-red-300 focus:bg-red-500/20 focus:text-red-300 data-[highlighted]:bg-red-500/20 data-[highlighted]:text-red-300 focus:outline-none transition-colors"
                     >
-                      <HiOutlineLogout className="w-5 h-5 text-red-500 flex-shrink-0" />
+                      <HiOutlineLogout className="w-5 h-5 text-red-400 group-hover:text-red-300 group-focus:text-red-300 group-data-[highlighted]:text-red-300 flex-shrink-0 transition-colors" />
                       <span>Logout</span>
                     </DropdownMenuItem>
                   </DropdownMenuContent>
@@ -221,7 +223,7 @@ export default function LandingPage() {
             ) : (
               <>
                 <Link to="/login"
-                  className="px-4 py-2 text-sm font-semibold text-slate-600 hover:text-slate-900 transition-colors rounded-lg hover:bg-slate-100/60">
+                  className="px-4 py-2 text-sm font-semibold text-slate-200 hover:text-white transition-colors rounded-lg hover:bg-white/10">
                   Sign In
                 </Link>
                 <Link to="/signup"
@@ -234,38 +236,38 @@ export default function LandingPage() {
 
           {/* Mobile burger */}
           <button
-            className="sm:hidden p-2 rounded-lg hover:bg-slate-100 transition-colors"
+            className="sm:hidden p-2 rounded-lg hover:bg-white/10 transition-colors text-white"
             onClick={() => setMobileMenuOpen(o => !o)}
           >
             {mobileMenuOpen
-              ? <HiOutlineX className="w-5 h-5 text-slate-700" />
-              : <HiOutlineMenu className="w-5 h-5 text-slate-700" />}
+              ? <HiOutlineX className="w-5 h-5 text-white" />
+              : <HiOutlineMenu className="w-5 h-5 text-white" />}
           </button>
         </div>
 
         {/* Mobile menu */}
         {mobileMenuOpen && (
-          <div className="sm:hidden bg-white border-t border-slate-200/80 px-4 py-4 space-y-2 shadow-lg">
+          <div className="sm:hidden bg-slate-900/95 backdrop-blur-md border-t border-white/10 px-4 py-4 space-y-2 shadow-xl text-white">
             {admin ? (
               <div className="space-y-1.5">
-                <div className="flex items-center gap-2.5 w-full py-2 px-3 bg-slate-100 rounded-xl">
-                  <Avatar className="w-8 h-8">
+                <div className="flex items-center gap-2.5 w-full py-2 px-3 bg-white/10 rounded-xl">
+                  <Avatar className="w-8 h-8 border border-white/20">
                     {!isAdmin && admin?.logo_url && <AvatarImage src={admin.logo_url} alt={admin.airlineName} />}
-                    <AvatarFallback className="text-xs bg-slate-200 text-slate-900 font-bold">
+                    <AvatarFallback className="text-xs bg-slate-800 text-white font-bold">
                       {!isAdmin && admin?.airlineName ? admin.airlineName.charAt(0).toUpperCase() : initials}
                     </AvatarFallback>
                   </Avatar>
                   <div className="text-left leading-tight">
-                    <p className="text-xs font-bold text-slate-900">{profileLabel}</p>
-                    <p className="text-[10px] text-slate-500">{profileSublabel}</p>
+                    <p className="text-xs font-bold text-white">{profileLabel}</p>
+                    <p className="text-[10px] text-slate-300">{profileSublabel}</p>
                   </div>
                 </div>
                 <Link to={dashboardPath} onClick={() => setMobileMenuOpen(false)}
-                  className="flex items-center gap-2 w-full py-2.5 px-3 bg-slate-900 text-white rounded-xl text-sm font-semibold">
+                  className="flex items-center gap-2 w-full py-2.5 px-3 bg-white text-slate-950 rounded-xl text-sm font-bold">
                   <HiOutlineArrowRight className="w-4 h-4" /> Dashboard
                 </Link>
                 <button onClick={handleLogout}
-                  className="w-full flex items-center gap-2 py-2.5 px-3 border border-red-200 text-red-600 rounded-xl text-sm font-semibold hover:bg-red-50 transition-colors">
+                  className="w-full flex items-center gap-2 py-2.5 px-3 border border-red-500/30 text-red-400 rounded-xl text-sm font-semibold hover:bg-red-500/20 transition-colors">
                   <HiOutlineLogout className="w-4 h-4" />
                   Logout
                 </button>
@@ -273,11 +275,11 @@ export default function LandingPage() {
             ) : (
               <>
                 <Link to="/login" onClick={() => setMobileMenuOpen(false)}
-                  className="flex items-center justify-center w-full py-2.5 border border-slate-200 text-slate-700 rounded-xl text-sm font-semibold hover:bg-slate-50 transition-colors">
+                  className="flex items-center justify-center w-full py-2.5 border border-white/20 text-white rounded-xl text-sm font-semibold hover:bg-white/10 transition-colors">
                   Sign In
                 </Link>
                 <Link to="/signup" onClick={() => setMobileMenuOpen(false)}
-                  className="flex items-center justify-center gap-2 w-full py-2.5 bg-slate-900 text-white rounded-xl text-sm font-semibold">
+                  className="flex items-center justify-center gap-2 w-full py-2.5 bg-white text-slate-950 rounded-xl text-sm font-bold">
                   Get Started <HiOutlineArrowRight className="w-4 h-4" />
                 </Link>
               </>
@@ -287,23 +289,23 @@ export default function LandingPage() {
       </motion.nav>
 
       {/* ── Hero ── */}
-      <section className="relative min-h-[85vh] pt-20 pb-16 px-4 sm:px-6 flex flex-col items-center justify-center">
-        <div className="max-w-7xl mx-auto relative w-full flex flex-col items-center justify-center text-center">
-          <div className="text-center max-w-4xl mx-auto flex flex-col items-center justify-center">
+      <section className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden">
+        <CosmicParallaxBg className="min-h-screen w-full flex flex-col items-center justify-center pt-24 pb-16 px-4 sm:px-6">
+          <div className="max-w-4xl mx-auto flex flex-col items-center justify-center text-center">
 
             {/* Heading — Letter-by-letter fluid wave animation */}
-            <h1 className="text-4xl sm:text-6xl md:text-7xl lg:text-[5.25rem] font-extrabold leading-[1.06] tracking-tight">
+            <h1 className="text-4xl sm:text-6xl md:text-7xl lg:text-[5.25rem] font-black leading-[1.06] tracking-tight">
               <WaveText
                 text="Training"
                 className="block"
-                colorClass="text-slate-900"
+                colorClass="text-white"
                 baseDelay={0.08}
                 letterStagger={0.035}
               />
               <WaveText
                 text="Management System"
                 className="flex flex-wrap justify-center gap-x-3 sm:gap-x-5 mt-1 sm:mt-2"
-                colorClass="text-[#0000ff]"
+                colorClass="text-white"
                 baseDelay={0.38}
                 letterStagger={0.03}
               />
@@ -314,10 +316,10 @@ export default function LandingPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.65, delay: 0.72, ease: [0.215, 0.61, 0.355, 1] }}
-              className="mt-6 text-base sm:text-lg md:text-xl text-slate-600 font-medium max-w-2xl mx-auto leading-relaxed tracking-tight text-center"
+              className="mt-6 text-base sm:text-lg md:text-xl text-white/90 font-medium max-w-2xl mx-auto leading-relaxed tracking-tight text-center"
             >
               <span className="block">A centralised platform to plan, manage, and track all aviation training activities.</span>
-              <span className="block mt-1.5 text-slate-500 font-normal">Keep your team compliant, organised, and audit-ready at every stage.</span>
+              <span className="block mt-1.5 text-white/70 font-normal">Keep your team compliant, organised, and audit-ready at every stage.</span>
             </motion.p>
 
             {/* CTA */}
@@ -325,24 +327,24 @@ export default function LandingPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.65, delay: 0.9, ease: [0.215, 0.61, 0.355, 1] }}
-              className="mt-9"
+              className="mt-9 flex items-center justify-center gap-4"
             >
               {admin ? (
-                <Link to="/admin"
-                  className="group inline-flex items-center justify-center gap-2 px-8 py-3.5 bg-slate-900 text-white rounded-xl text-sm font-semibold shadow-md hover:bg-slate-800 transition-all duration-200">
-                  Open Dashboard
-                  <HiOutlineArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                <Link to={dashboardPath}
+                  className="liquid-btn group gap-2.5 rounded-2xl text-sm font-black shadow-xl cursor-pointer">
+                  <span>Open Dashboard</span>
+                  <HiOutlineArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform flex-shrink-0" />
                 </Link>
               ) : (
                 <Link to="/signup"
-                  className="group inline-flex items-center justify-center gap-2 px-8 py-3.5 bg-slate-900 text-white rounded-xl text-sm font-semibold shadow-md hover:bg-slate-800 transition-all duration-200">
-                  Get Started
-                  <HiOutlineArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                  className="liquid-btn group gap-2.5 rounded-2xl text-sm font-black shadow-xl cursor-pointer">
+                  <span>Get Started</span>
+                  <HiOutlineArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform flex-shrink-0" />
                 </Link>
               )}
             </motion.div>
           </div>
-        </div>
+        </CosmicParallaxBg>
       </section>
 
       {/* ── Stats ── */}
@@ -356,7 +358,9 @@ export default function LandingPage() {
         >
           {stats.map((s) => (
             <motion.div key={s.label} variants={itemReveal} className="flex flex-col items-center py-5 px-4 text-center">
-              <span className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{s.value}</span>
+              <span className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+                <CountUp value={s.value} />
+              </span>
               <span className="text-xs font-bold text-slate-700 mt-1.5">{s.label}</span>
               <span className="text-[11px] font-medium text-slate-400 mt-0.5">{s.sub}</span>
             </motion.div>
@@ -430,10 +434,10 @@ export default function LandingPage() {
               <p className="text-slate-300 text-sm sm:text-base mb-7 leading-relaxed">
                 Access the admin panel to manage participants and generate regulation-compliant training certificates.
               </p>
-              <Link to={admin ? '/admin' : '/signup'}
-                className="group inline-flex items-center gap-2 px-7 py-3.5 bg-white text-slate-900 rounded-xl text-sm font-bold shadow-md hover:bg-slate-100 transition-all duration-200">
-                {admin ? 'Open Dashboard' : 'Get Started'}
-                <HiOutlineArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              <Link to={admin ? dashboardPath : '/signup'}
+                className="liquid-btn group gap-2.5 rounded-2xl text-sm font-black shadow-xl cursor-pointer">
+                <span>{admin ? 'Open Dashboard' : 'Get Started'}</span>
+                <HiOutlineArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform flex-shrink-0" />
               </Link>
             </div>
           </motion.div>

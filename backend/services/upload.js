@@ -9,20 +9,23 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-// Cloudinary storage — logos stored in 'IFOA_LOGO' folder
+// Cloudinary storage — logos stored in 'IFOA_LOGO' folder. quality/fetch_format
+// 'auto' shrink delivered bytes (bandwidth) the same way exam images do below;
+// Cloudinary leaves vector SVGs alone under f_auto rather than rasterizing them.
 const storage = new CloudinaryStorage({
   cloudinary,
   params: {
     folder:          'IFOA_LOGO',
     allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'svg'],
-    transformation:  [{ width: 400, height: 400, crop: 'limit' }],
+    transformation:  [{ width: 400, height: 400, crop: 'limit', quality: 'auto:good', fetch_format: 'auto' }],
   },
 });
 
-// Multer — max 2 MB, images only
+// Multer — frontend compresses client-side first (see compressImageFile),
+// this is a safety ceiling, not the normal case.
 const upload = multer({
   storage,
-  limits: { fileSize: 2 * 1024 * 1024 },
+  limits: { fileSize: 3 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     if (!file.mimetype.startsWith('image/')) {
       return cb(new Error('Only image files are allowed.'), false);
@@ -51,7 +54,10 @@ const examImageStorage = new CloudinaryStorage({
 
 const examImageUpload = multer({
   storage: examImageStorage,
-  limits: { fileSize: 3 * 1024 * 1024 },
+  // Frontend downscales/re-encodes before upload (see compressImageFile in
+  // QuestionEditor.jsx), so this is a safety ceiling, not the normal case —
+  // covers formats the browser couldn't compress client-side (e.g. HEIC).
+  limits: { fileSize: 8 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     if (!file.mimetype.startsWith('image/')) {
       return cb(new Error('Only image files are allowed.'), false);

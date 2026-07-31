@@ -2,10 +2,11 @@ import { useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
   HiOutlinePhotograph, HiOutlineX, HiOutlinePlusCircle, HiOutlineTrash,
-  HiOutlineChevronUp, HiOutlineChevronDown,
+  HiOutlineChevronUp, HiOutlineChevronDown, HiOutlineCollection,
 } from 'react-icons/hi';
 import { uploadExamImage, deleteExamImage } from '../../api';
 import ImageLightbox from '../ImageLightbox';
+import { compressImageFile } from '../../utils/compressImage';
 
 export const QUESTION_TYPES = [
   { value: 'mcq',            label: 'Multiple Choice' },
@@ -28,7 +29,7 @@ const uid = () => `new-${Math.random().toString(36).slice(2, 10)}`;
 
 export function createEmptyQuestion(type) {
   return {
-    _id: uid(), type, prompt: '', image_url: '', image_public_id: '', images: [], points: 1, order: 0, explanation: '', section: '',
+    _id: uid(), type, prompt: '', image_url: '', image_public_id: '', images: [], points: 1, time_limit_seconds: null, order: 0, explanation: '', section: '',
     options: ['mcq', 'multi_response', 'select_list'].includes(type)
       ? [{ _id: uid(), text: '', is_correct: false }, { _id: uid(), text: '', is_correct: false }]
       : type === 'true_false'
@@ -59,7 +60,8 @@ function ImageField({ url, publicId, onChange, label = 'Image' }) {
     if (!file) return;
     setBusy(true);
     try {
-      const res = await uploadExamImage(file);
+      const compressed = await compressImageFile(file);
+      const res = await uploadExamImage(compressed);
       if (publicId) deleteExamImage(publicId).catch(() => {});
       onChange({ url: res.data.url, publicId: res.data.public_id });
     } catch (err) {
@@ -122,7 +124,7 @@ function ImageGalleryField({ images, onChange, label = 'Add question image' }) {
     if (files.length === 0) return;
     setBusy(true);
     try {
-      const uploaded = await Promise.all(files.map((file) => uploadExamImage(file)));
+      const uploaded = await Promise.all(files.map((file) => compressImageFile(file).then(uploadExamImage)));
       onChange([...images, ...uploaded.map((res) => ({ url: res.data.url, public_id: res.data.public_id }))]);
     } catch (err) {
       toast.error(err.response?.data?.error || 'Image upload failed.');
@@ -212,10 +214,10 @@ function ChoiceOptionsEditor({ q, set, multi = false, locked = false }) {
           return (
             <div
               key={opt._id || idx}
-              className={`flex items-center gap-2.5 p-2 rounded-xl border transition-all ${
+              className={`flex items-center gap-2.5 px-3 py-1.5 rounded-xl border transition-all ${
                 isCorrect
-                  ? 'bg-emerald-50/40 border-emerald-300/80 shadow-2xs'
-                  : 'bg-white border-slate-200/80 hover:border-slate-300'
+                  ? 'bg-emerald-50/60 border-emerald-300 ring-1 ring-emerald-500/20 shadow-2xs'
+                  : 'bg-white border-slate-200/90 hover:border-slate-300 focus-within:border-slate-900 focus-within:ring-2 focus-within:ring-slate-900/10'
               }`}
             >
               <button
@@ -244,7 +246,9 @@ function ChoiceOptionsEditor({ q, set, multi = false, locked = false }) {
                 disabled={locked}
                 onChange={(e) => setOptions(options.map((o, i) => (i === idx ? { ...o, text: e.target.value } : o)))}
                 placeholder={`Option ${letter}`}
-                className={inputCls + (locked ? ' bg-slate-100 text-slate-500 cursor-not-allowed' : '')}
+                className={`w-full py-1 text-sm font-medium text-slate-800 bg-transparent border-none outline-none focus:ring-0 placeholder:text-slate-400 ${
+                  locked ? 'cursor-not-allowed text-slate-400' : ''
+                }`}
               />
 
               <ImageField
@@ -631,15 +635,29 @@ function EssayEditor({ q, set }) {
 }
 
 // ── Main editor shell ─────────────────────────────────────────────────────────
-export default function QuestionEditor({ question: q, index, onChange, onDelete, onMoveUp, onMoveDown, isFirst, isLast, sectionNames = [], onMoveToSection }) {
+export default function QuestionEditor({
+  question: q, index, onChange, onDelete, onMoveUp, onMoveDown, isFirst, isLast, sectionNames = [], onMoveToSection,
+  isSelected = false, onToggleSelect, onSendToBank,
+}) {
   const set = (key, value) => onChange({ ...q, [key]: value });
   const typeLabel = QUESTION_TYPES.find((t) => t.value === q.type)?.label || q.type;
 
   return (
-    <div className="bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-5 shadow-2xs hover:shadow-xs transition-all space-y-4">
+    <div className={`bg-white border rounded-2xl p-4 sm:p-5 shadow-2xs hover:shadow-xs transition-all space-y-4 ${
+      isSelected ? 'border-blue-500 ring-2 ring-blue-500/20 bg-blue-50/10' : 'border-slate-200/80'
+    }`}>
       {/* ── Top Horizontal Header Bar: Question Number, Type, Points & Actions ── */}
       <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
         <div className="flex items-center gap-2.5">
+          {onToggleSelect && (
+            <input
+              type="checkbox"
+              checked={isSelected}
+              onChange={onToggleSelect}
+              className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer flex-shrink-0"
+              title="Select question for bulk operations"
+            />
+          )}
           <span className="w-7 h-7 rounded-xl bg-slate-900 text-white font-extrabold text-xs flex items-center justify-center shadow-2xs flex-shrink-0">
             {index + 1}
           </span>
@@ -654,6 +672,18 @@ export default function QuestionEditor({ question: q, index, onChange, onDelete,
               value={q.points}
               onChange={(e) => set('points', Number(e.target.value))}
               className="w-12 text-center text-xs font-bold text-slate-900 bg-transparent border-none outline-none p-0 focus:ring-0"
+            />
+          </div>
+
+          <div className="flex items-center gap-1.5 ml-1 bg-slate-50 border border-slate-200/80 px-2.5 py-1 rounded-lg" title="Per-question time limit in seconds — blank means no separate limit">
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Time (sec)</span>
+            <input
+              type="number"
+              min="0"
+              placeholder="—"
+              value={q.time_limit_seconds ?? ''}
+              onChange={(e) => set('time_limit_seconds', e.target.value === '' ? null : Number(e.target.value))}
+              className="w-14 text-center text-xs font-bold text-slate-900 bg-transparent border-none outline-none p-0 focus:ring-0 placeholder:text-slate-300"
             />
           </div>
 
@@ -694,6 +724,19 @@ export default function QuestionEditor({ question: q, index, onChange, onDelete,
               <HiOutlineChevronDown className="w-3.5 h-3.5" />
             </button>
           </div>
+
+          {/* Send a copy to the Question Bank */}
+          {onSendToBank && (
+            <button
+              type="button"
+              onClick={onSendToBank}
+              title="Send a copy of this question to the Question Bank"
+              className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200/80 rounded-lg transition-colors"
+            >
+              <HiOutlineCollection className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Send to Bank</span>
+            </button>
+          )}
 
           {/* Delete Question */}
           <button

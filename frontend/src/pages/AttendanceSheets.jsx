@@ -168,7 +168,7 @@ function SheetCard({ sheet, onEdit, onPreview, previewing, forceOpen }) {
 
 // ── Airline group section ──────────────────────────────────────────────────────
 function AirlineGroup({ airlineName, logoUrl, sheets, onEdit, onPreview, previewing, forceOpen }) {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
   const isOpen = Boolean(!collapsed || forceOpen);
 
   return (

@@ -502,6 +502,131 @@ function LikertPlayer({ q, response, onChange }) {
   );
 }
 
+function ImageGallery({ gallery, setLightboxSrc }) {
+  const scrollRef = useRef(null);
+  const isDragging = useRef(false);
+  const startX = useRef(0);
+  const scrollLeftStart = useRef(0);
+  const hasDragged = useRef(false);
+  const targetScroll = useRef(0);
+  const animFrame = useRef(null);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    targetScroll.current = el.scrollLeft;
+
+    const smoothLoop = () => {
+      if (!el) return;
+      const diff = targetScroll.current - el.scrollLeft;
+      if (Math.abs(diff) > 0.4) {
+        el.scrollLeft += diff * 0.18;
+        animFrame.current = requestAnimationFrame(smoothLoop);
+      } else {
+        el.scrollLeft = targetScroll.current;
+        animFrame.current = null;
+      }
+    };
+
+    const onWheel = (e) => {
+      const delta = e.deltaY !== 0 ? e.deltaY : e.deltaX;
+      if (delta !== 0) {
+        e.preventDefault();
+        const maxScroll = el.scrollWidth - el.clientWidth;
+        const currentBase = animFrame.current ? targetScroll.current : el.scrollLeft;
+        targetScroll.current = Math.max(0, Math.min(maxScroll, currentBase + delta * 2.2));
+        
+        if (!animFrame.current) {
+          animFrame.current = requestAnimationFrame(smoothLoop);
+        }
+      }
+    };
+
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => {
+      el.removeEventListener('wheel', onWheel);
+      if (animFrame.current) cancelAnimationFrame(animFrame.current);
+    };
+  }, []);
+
+  const handleMouseDown = (e) => {
+    if (!scrollRef.current) return;
+    if (animFrame.current) cancelAnimationFrame(animFrame.current);
+    animFrame.current = null;
+    isDragging.current = true;
+    hasDragged.current = false;
+    startX.current = e.pageX - scrollRef.current.offsetLeft;
+    scrollLeftStart.current = scrollRef.current.scrollLeft;
+    targetScroll.current = scrollRef.current.scrollLeft;
+  };
+
+  const handleMouseLeaveOrUp = () => {
+    isDragging.current = false;
+  };
+
+  const handleMouseMove = (e) => {
+    if (!isDragging.current || !scrollRef.current) return;
+    const x = e.pageX - scrollRef.current.offsetLeft;
+    const walk = (x - startX.current) * 1.5;
+    if (Math.abs(walk) > 5) {
+      hasDragged.current = true;
+    }
+    const newPos = scrollLeftStart.current - walk;
+    scrollRef.current.scrollLeft = newPos;
+    targetScroll.current = newPos;
+  };
+
+  const multi = gallery.length > 1;
+
+  return (
+    <div
+      ref={scrollRef}
+      onMouseDown={multi ? handleMouseDown : undefined}
+      onMouseLeave={multi ? handleMouseLeaveOrUp : undefined}
+      onMouseUp={multi ? handleMouseLeaveOrUp : undefined}
+      onMouseMove={multi ? handleMouseMove : undefined}
+      className={
+        multi
+          ? 'flex gap-3 overflow-x-auto pb-2.5 -mx-1 px-1 scrollbar-thin select-none cursor-grab active:cursor-grabbing'
+          : 'flex justify-center'
+      }
+    >
+      {gallery.map((img, idx) => (
+        <div
+          key={idx}
+          onClick={() => {
+            if (!hasDragged.current) setLightboxSrc(img.url);
+          }}
+          className={`group relative rounded-2xl border border-slate-200/80 p-1.5 bg-slate-50/70 inline-flex items-center justify-center cursor-zoom-in hover:border-blue-400 transition-all shadow-2xs overflow-hidden ${
+            multi ? 'flex-shrink-0' : 'max-w-full'
+          }`}
+        >
+          {multi && (
+            <span className="absolute top-2 left-2 z-10 w-5 h-5 rounded-full bg-slate-900/80 text-white text-[10px] font-extrabold flex items-center justify-center">
+              {idx + 1}
+            </span>
+          )}
+          <img
+            src={img.url}
+            alt=""
+            draggable={false}
+            className={
+              multi
+                ? 'h-40 sm:h-48 w-auto max-w-[85vw] sm:max-w-xs rounded-xl object-contain pointer-events-none'
+                : 'max-w-full max-h-40 sm:max-h-48 rounded-xl object-contain'
+            }
+          />
+          <span className="absolute bottom-2.5 left-1/2 -translate-x-1/2 px-3 py-1 rounded-xl bg-slate-900/80 hover:bg-slate-900 text-white text-xs font-bold backdrop-blur-2xs flex items-center gap-1.5 shadow-md transition-transform group-hover:scale-105 whitespace-nowrap pointer-events-none">
+            <HiOutlineZoomIn className="w-3.5 h-3.5 text-blue-400" />
+            Click to expand
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function QuestionPlayer({ question: q, response, onChange }) {
   const [lightboxSrc, setLightboxSrc] = useState(null);
 
@@ -518,34 +643,7 @@ export default function QuestionPlayer({ question: q, response, onChange }) {
       {q.type !== 'hotspot' && q.type !== 'drag_drop' && (() => {
         const gallery = q.images && q.images.length > 0 ? q.images : (q.image_url ? [{ url: q.image_url }] : []);
         if (gallery.length === 0) return null;
-        const multi = gallery.length > 1;
-        return (
-          <div className={multi ? 'flex gap-3 justify-center overflow-x-auto pb-2 -mx-1 px-1 snap-x snap-mandatory scrollbar-thin' : 'flex justify-center'}>
-            {gallery.map((img, idx) => (
-              <button
-                key={idx}
-                type="button"
-                onClick={() => setLightboxSrc(img.url)}
-                className={`group relative rounded-2xl border border-slate-200/80 p-1.5 bg-slate-50/70 inline-flex items-center justify-center cursor-zoom-in hover:border-blue-400 transition-all shadow-2xs overflow-hidden ${multi ? 'flex-shrink-0 snap-start' : 'max-w-full'}`}
-              >
-                {multi && (
-                  <span className="absolute top-2 left-2 z-10 w-5 h-5 rounded-full bg-slate-900/80 text-white text-[10px] font-extrabold flex items-center justify-center">
-                    {idx + 1}
-                  </span>
-                )}
-                <img
-                  src={img.url}
-                  alt=""
-                  className={multi ? 'h-40 sm:h-48 w-auto max-w-[85vw] sm:max-w-xs rounded-xl object-contain' : 'max-w-full max-h-40 sm:max-h-48 rounded-xl object-contain'}
-                />
-                <span className="absolute bottom-2.5 left-1/2 -translate-x-1/2 px-3 py-1 rounded-xl bg-slate-900/80 hover:bg-slate-900 text-white text-xs font-bold backdrop-blur-2xs flex items-center gap-1.5 shadow-md transition-transform group-hover:scale-105 whitespace-nowrap">
-                  <HiOutlineZoomIn className="w-3.5 h-3.5 text-blue-400" />
-                  Click to expand
-                </span>
-              </button>
-            ))}
-          </div>
-        );
+        return <ImageGallery gallery={gallery} setLightboxSrc={setLightboxSrc} />;
       })()}
 
       {/* Answer Options (Below Image) */}

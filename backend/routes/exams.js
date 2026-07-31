@@ -63,12 +63,30 @@ router.get('/airline-results', async (req, res) => {
   try {
     if (isAdmin(req)) return res.status(403).json({ error: 'Airline access required.' });
     const invites = await ExamInvite.find({ airline_id: req.admin.id }).sort({ created_at: -1 });
-    const attemptIds = invites.map((i) => i.attempt_id).filter(Boolean);
+
+    // Exams with an expired visibility cutoff drop out of the airline's list
+    // — their invites/scores stay reachable via the participant performance
+    // view (GET /exams/participants/:id/performance), which doesn't filter
+    // on this at all, so historical data is never actually lost. A per-airline
+    // override in airline_visibility wins over the exam's global visible_until.
+    const examIds = [...new Set(invites.map((i) => String(i.exam_id)))];
+    const exams = await Exam.find({ _id: { $in: examIds } }).select('visible_until airline_visibility');
+    const now = new Date();
+    const hiddenExamIds = new Set(
+      exams.filter((e) => {
+        const override = (e.airline_visibility || []).find((v) => String(v.airline_id) === String(req.admin.id));
+        const effective = override ? override.visible_until : e.visible_until;
+        return effective && effective <= now;
+      }).map((e) => String(e._id))
+    );
+    const visibleInvites = invites.filter((i) => !hiddenExamIds.has(String(i.exam_id)));
+
+    const attemptIds = visibleInvites.map((i) => i.attempt_id).filter(Boolean);
     const attempts = await ExamAttempt.find({ _id: { $in: attemptIds } })
       .select('score max_score percentage passed status submitted_at time_taken_seconds');
     const attemptById = Object.fromEntries(attempts.map((a) => [String(a._id), a]));
 
-    res.json(invites.map((i) => {
+    res.json(visibleInvites.map((i) => {
       const json = i.toJSON();
       const att = i.attempt_id && attemptById[String(i.attempt_id)];
       json.attempt = att
@@ -407,15 +425,24 @@ router.put('/attempts/:attemptId/grade', async (req, res) => {
 });
 
 // ─── POST /exams/questions/upload-image — admin uploads a question image ────────
-router.post('/questions/upload-image', examImageUpload.single('image'), async (req, res) => {
-  try {
-    if (!isAdmin(req)) return res.status(403).json({ error: 'Admin access required.' });
-    if (!req.file) return res.status(400).json({ error: 'No image uploaded.' });
-    res.json({ url: req.file.path, public_id: req.file.filename });
-  } catch (err) {
-    console.error('POST /exams/questions/upload-image error:', err.message);
-    res.status(500).json({ error: err.message });
-  }
+// examImageUpload runs the actual Cloudinary upload as multer middleware, so a
+// failure there (bad credentials, network block, etc.) throws before the
+// handler body below ever runs — invoke it manually to catch and report that.
+router.post('/questions/upload-image', (req, res) => {
+  examImageUpload.single('image')(req, res, (uploadErr) => {
+    if (uploadErr) {
+      console.error('POST /exams/questions/upload-image upload error:', uploadErr.message);
+      return res.status(500).json({ error: uploadErr.message || 'Image upload failed.' });
+    }
+    try {
+      if (!isAdmin(req)) return res.status(403).json({ error: 'Admin access required.' });
+      if (!req.file) return res.status(400).json({ error: 'No image uploaded.' });
+      res.json({ url: req.file.path, public_id: req.file.filename });
+    } catch (err) {
+      console.error('POST /exams/questions/upload-image error:', err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
 });
 
 // ─── DELETE /exams/questions/image/:publicId — admin removes an unsaved upload ──

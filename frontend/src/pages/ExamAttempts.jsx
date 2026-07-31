@@ -161,6 +161,109 @@ function StatTile({ label, value }) {
   );
 }
 
+function AttemptImageGallery({ gallery }) {
+  const scrollRef = useRef(null);
+  const isDragging = useRef(false);
+  const startX = useRef(0);
+  const scrollLeftStart = useRef(0);
+  const targetScroll = useRef(0);
+  const animFrame = useRef(null);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    targetScroll.current = el.scrollLeft;
+
+    const smoothLoop = () => {
+      if (!el) return;
+      const diff = targetScroll.current - el.scrollLeft;
+      if (Math.abs(diff) > 0.4) {
+        el.scrollLeft += diff * 0.18;
+        animFrame.current = requestAnimationFrame(smoothLoop);
+      } else {
+        el.scrollLeft = targetScroll.current;
+        animFrame.current = null;
+      }
+    };
+
+    const onWheel = (e) => {
+      const delta = e.deltaY !== 0 ? e.deltaY : e.deltaX;
+      if (delta !== 0) {
+        e.preventDefault();
+        const maxScroll = el.scrollWidth - el.clientWidth;
+        const currentBase = animFrame.current ? targetScroll.current : el.scrollLeft;
+        targetScroll.current = Math.max(0, Math.min(maxScroll, currentBase + delta * 2.2));
+
+        if (!animFrame.current) {
+          animFrame.current = requestAnimationFrame(smoothLoop);
+        }
+      }
+    };
+
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => {
+      el.removeEventListener('wheel', onWheel);
+      if (animFrame.current) cancelAnimationFrame(animFrame.current);
+    };
+  }, []);
+
+  const handleMouseDown = (e) => {
+    if (!scrollRef.current) return;
+    if (animFrame.current) cancelAnimationFrame(animFrame.current);
+    animFrame.current = null;
+    isDragging.current = true;
+    startX.current = e.pageX - scrollRef.current.offsetLeft;
+    scrollLeftStart.current = scrollRef.current.scrollLeft;
+    targetScroll.current = scrollRef.current.scrollLeft;
+  };
+
+  const handleMouseLeaveOrUp = () => {
+    isDragging.current = false;
+  };
+
+  const handleMouseMove = (e) => {
+    if (!isDragging.current || !scrollRef.current) return;
+    const x = e.pageX - scrollRef.current.offsetLeft;
+    const walk = (x - startX.current) * 1.5;
+    const newPos = scrollLeftStart.current - walk;
+    scrollRef.current.scrollLeft = newPos;
+    targetScroll.current = newPos;
+  };
+
+  const multi = gallery.length > 1;
+  return (
+    <div
+      ref={scrollRef}
+      onMouseDown={multi ? handleMouseDown : undefined}
+      onMouseLeave={multi ? handleMouseLeaveOrUp : undefined}
+      onMouseUp={multi ? handleMouseLeaveOrUp : undefined}
+      onMouseMove={multi ? handleMouseMove : undefined}
+      className={
+        multi
+          ? 'flex gap-3 overflow-x-auto pb-2.5 -mx-1 px-1 scrollbar-thin select-none cursor-grab active:cursor-grabbing'
+          : 'flex'
+      }
+    >
+      {gallery.map((img, gi) => (
+        <div key={gi} className={`relative rounded-2xl overflow-hidden border border-slate-200/80 bg-slate-50 p-3 ${multi ? 'flex-shrink-0' : 'mx-auto'}`}>
+          {multi && (
+            <span className="absolute top-2 left-2 z-10 w-5 h-5 rounded-full bg-slate-900/80 text-white text-[10px] font-extrabold flex items-center justify-center">
+              {gi + 1}
+            </span>
+          )}
+          <img
+            src={img.url}
+            alt="Question asset"
+            draggable={false}
+            className={multi ? 'h-56 w-auto max-w-xs rounded-xl object-contain pointer-events-none' : 'max-h-72 rounded-xl object-contain mx-auto'}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function GradeModal({ attemptId, onClose, onGraded }) {
   const [attempt, setAttempt] = useState(null);
   const [scores, setScores] = useState({});
@@ -419,25 +522,7 @@ function GradeModal({ attemptId, onClose, onGraded }) {
                     {(() => {
                       const gallery = q.images && q.images.length > 0 ? q.images : (q.image_url ? [{ url: q.image_url }] : []);
                       if (gallery.length === 0) return null;
-                      const multi = gallery.length > 1;
-                      return (
-                        <div className={multi ? 'flex gap-3 overflow-x-auto pb-2 -mx-1 px-1 snap-x snap-mandatory scrollbar-thin' : 'flex'}>
-                          {gallery.map((img, gi) => (
-                            <div key={gi} className={`relative rounded-2xl overflow-hidden border border-slate-200/80 bg-slate-50 p-3 ${multi ? 'flex-shrink-0 snap-start' : 'mx-auto'}`}>
-                              {multi && (
-                                <span className="absolute top-2 left-2 z-10 w-5 h-5 rounded-full bg-slate-900/80 text-white text-[10px] font-extrabold flex items-center justify-center">
-                                  {gi + 1}
-                                </span>
-                              )}
-                              <img
-                                src={img.url}
-                                alt="Question asset"
-                                className={multi ? 'h-56 w-auto max-w-xs rounded-xl object-contain' : 'max-h-72 rounded-xl object-contain mx-auto'}
-                              />
-                            </div>
-                          ))}
-                        </div>
-                      );
+                      return <AttemptImageGallery gallery={gallery} />;
                     })()}
 
                     {/* Grading reference note — authored by the admin when the question

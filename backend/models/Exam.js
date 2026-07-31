@@ -37,6 +37,9 @@ const questionSchema = new mongoose.Schema(
       { url: { type: String, default: '' }, public_id: { type: String, default: '' } },
     ],
     points:          { type: Number, default: 1 },
+    // Optional per-question soft time budget (seconds) — admin-set pacing on
+    // top of the exam's overall duration_minutes; null means no separate limit.
+    time_limit_seconds: { type: Number, default: null },
     order:           { type: Number, default: 0 },
     explanation:     { type: String, default: '' },
     // Free-text section/group label — questions sharing the same name render
@@ -130,6 +133,21 @@ const examSchema = new mongoose.Schema(
     // duration_minutes regardless of closes_at passing mid-attempt.
     opens_at:  { type: Date, default: null },
     closes_at: { type: Date, default: null },
+
+    // When to stop showing this exam in an airline's exam list — independent
+    // of opens_at/closes_at (which gate starting an attempt). Past results
+    // stay visible in the participant performance view either way; this only
+    // hides the exam itself. null = always visible ("Never").
+    // `visible_until` is the global default; `airline_visibility` lets an
+    // admin override that per airline (an airline with no entry here just
+    // inherits the global default).
+    visible_until: { type: Date, default: null },
+    airline_visibility: [
+      {
+        airline_id:    { type: mongoose.Schema.Types.ObjectId, ref: 'Airline', required: true },
+        visible_until: { type: Date, default: null },
+      },
+    ],
 
     // Lockdown mode — fullscreen exam view with violation tracking (tab-switch,
     // exiting fullscreen, etc). max_violations is how many infractions are

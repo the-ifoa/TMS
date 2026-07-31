@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -7,9 +7,11 @@ import {
   HiOutlineUserAdd, HiOutlineClipboardCheck, HiOutlineOfficeBuilding,
   HiOutlineSearch, HiOutlineX, HiOutlineUserGroup, HiChevronRight,
   HiOutlineClock, HiOutlineDocumentText, HiOutlineMail, HiOutlineCheckCircle,
-  HiOutlinePaperAirplane,
+  HiOutlinePaperAirplane, HiOutlineCollection,
 } from 'react-icons/hi';
-import { listExams, deleteExam, publishExam, getExamAirlines, assignExam, sendExamInvites, getExamInvites } from '../api';
+import { listExams, deleteExam, publishExam, getExamAirlines, assignExam, updateExam, sendExamInvites, getExamInvites } from '../api';
+import QuestionBankList from './QuestionBank';
+import { DateTimeInputCard } from './ExamBuilder';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
@@ -30,6 +32,34 @@ function AssignModal({ exam, onClose, onAssigned }) {
   const [search, setSearch] = useState('');
   const [expandedAirlines, setExpandedAirlines] = useState(new Set());
   const [pendingOnly, setPendingOnly] = useState(false);
+  const [visibleUntil, setVisibleUntil] = useState(exam.visible_until || null);
+  const [showGlobalVisibility, setShowGlobalVisibility] = useState(false);
+  // Per-airline overrides — key present (even with value null = "Never") means
+  // this airline has its OWN setting; key absent means it inherits the global
+  // default above. Seeded from exam.airline_visibility.
+  const [airlineOverrides, setAirlineOverrides] = useState(() =>
+    Object.fromEntries((exam.airline_visibility || []).map((v) => [String(v.airline_id), v.visible_until || null]))
+  );
+  const [expandedVisibility, setExpandedVisibility] = useState(() => new Set());
+
+  const toggleAirlineOverride = (airlineId, enabled) => {
+    setAirlineOverrides((prev) => {
+      const next = { ...prev };
+      if (enabled) next[airlineId] = visibleUntil || null;
+      else delete next[airlineId];
+      return next;
+    });
+  };
+  const setAirlineOverrideValue = (airlineId, iso) => {
+    setAirlineOverrides((prev) => ({ ...prev, [airlineId]: iso }));
+  };
+  const toggleVisibilityPanel = (airlineId) => {
+    setExpandedVisibility((prev) => {
+      const next = new Set(prev);
+      next.has(airlineId) ? next.delete(airlineId) : next.add(airlineId);
+      return next;
+    });
+  };
 
   useEffect(() => {
     getExamAirlines()
@@ -99,15 +129,29 @@ function AssignModal({ exam, onClose, onAssigned }) {
     });
   };
 
+  const originalOverrides = Object.fromEntries((exam.airline_visibility || []).map((v) => [String(v.airline_id), v.visible_until || null]));
+  const overridesChanged = JSON.stringify(airlineOverrides) !== JSON.stringify(originalOverrides);
+  const globalChanged = (exam.visible_until || null) !== (visibleUntil || null);
+  const visibilityChanged = globalChanged || overridesChanged;
+
   const save = async () => {
-    if (selected.size === 0) return onClose();
+    if (selected.size === 0 && !visibilityChanged) return onClose();
     setSaving(true);
     try {
-      await assignExam(exam.id, [...selected]);
-      toast.success(`Exam assigned to ${selected.size} candidate(s).`);
+      if (selected.size > 0) await assignExam(exam.id, [...selected]);
+      if (visibilityChanged) {
+        await updateExam(exam.id, {
+          visible_until: visibleUntil,
+          airline_visibility: Object.entries(airlineOverrides).map(([airline_id, visible_until]) => ({ airline_id, visible_until })),
+        });
+      }
+      const parts = [];
+      if (selected.size > 0) parts.push(`assigned to ${selected.size} candidate(s)`);
+      if (visibilityChanged) parts.push('airline visibility updated');
+      toast.success(`Exam ${parts.join(', ')}.`);
       onAssigned();
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to assign exam.');
+      toast.error(err.response?.data?.error || 'Failed to save changes.');
     } finally {
       setSaving(false);
     }
@@ -145,6 +189,36 @@ function AssignModal({ exam, onClose, onAssigned }) {
                 </p>
               </div>
             </div>
+          </div>
+
+          {/* Global default visibility — collapsed by default; per-airline overrides live next to each airline below */}
+          <div className="mt-3 pt-3 border-t border-slate-100/80">
+            <button
+              type="button"
+              onClick={() => setShowGlobalVisibility((s) => !s)}
+              className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all border ${
+                globalChanged ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-slate-50 border-slate-200/80 text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <span className="flex items-center gap-1.5">
+                <HiOutlineClock className="w-3.5 h-3.5" />
+                Global Default Visibility: {visibleUntil ? new Date(visibleUntil).toLocaleString() : 'Never'}
+              </span>
+              <HiChevronRight className={`w-3.5 h-3.5 transition-transform ${showGlobalVisibility ? 'rotate-90' : ''}`} />
+            </button>
+            {showGlobalVisibility && (
+              <div className="mt-2">
+                <DateTimeInputCard
+                  label="Visible to Airlines Until (default)"
+                  isoValue={visibleUntil}
+                  onChange={setVisibleUntil}
+                  defaultTime="23:59"
+                />
+                <p className="text-[10px] text-slate-400 font-semibold mt-1.5 leading-relaxed">
+                  Applies to every airline unless overridden individually below. Leave blank ("Never") to keep this exam visible indefinitely. Past results always stay visible under each candidate's own performance page regardless.
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Search + Global Select Toolbar */}
@@ -238,6 +312,9 @@ function AssignModal({ exam, onClose, onAssigned }) {
                 eligibleInGroup.length > 0 && eligibleInGroup.every((p) => selected.has(p._id));
               const selectedCountInGroup = participants.filter((p) => selected.has(p._id)).length;
               const isExpanded = search.trim() !== '' || expandedAirlines.has(airline._id);
+              const hasOverride = Object.prototype.hasOwnProperty.call(airlineOverrides, airline._id);
+              const overrideValue = airlineOverrides[airline._id];
+              const isVisibilityOpen = expandedVisibility.has(airline._id);
 
               return (
                 <div
@@ -265,6 +342,17 @@ function AssignModal({ exam, onClose, onAssigned }) {
                       <span className="px-2.5 py-0.5 rounded-full bg-slate-200/80 text-slate-700 text-[11px] font-bold min-w-[28px] text-center">
                         {participants.length}
                       </span>
+
+                      <button
+                        type="button"
+                        onClick={() => toggleVisibilityPanel(airline._id)}
+                        title={hasOverride ? `Custom visibility: ${overrideValue ? new Date(overrideValue).toLocaleString() : 'Never'}` : 'Inherits global default visibility'}
+                        className={`p-1.5 rounded-lg border transition-all ${
+                          hasOverride ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-white border-slate-200 text-slate-400 hover:text-slate-700 hover:bg-slate-50'
+                        }`}
+                      >
+                        <HiOutlineClock className="w-3.5 h-3.5" />
+                      </button>
 
                       {eligibleInGroup.length > 0 ? (
                         <div
@@ -295,6 +383,31 @@ function AssignModal({ exam, onClose, onAssigned }) {
                       )}
                     </div>
                   </div>
+
+                  {/* Per-airline visibility override — independent of participant list expansion */}
+                  {isVisibilityOpen && (
+                    <div className="px-4 py-3 border-t border-slate-100 bg-slate-50/60 space-y-2">
+                      <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer select-none">
+                        <Checkbox
+                          checked={hasOverride}
+                          onCheckedChange={(c) => toggleAirlineOverride(airline._id, !!c)}
+                        />
+                        Custom visibility for {airline.airlineName}
+                      </label>
+                      {hasOverride ? (
+                        <DateTimeInputCard
+                          label={`Visible to ${airline.airlineName} Until`}
+                          isoValue={overrideValue}
+                          onChange={(iso) => setAirlineOverrideValue(airline._id, iso)}
+                          defaultTime="23:59"
+                        />
+                      ) : (
+                        <p className="text-[10px] text-slate-400 font-semibold">
+                          Inherits the global default: {visibleUntil ? new Date(visibleUntil).toLocaleString() : 'Never'}
+                        </p>
+                      )}
+                    </div>
+                  )}
 
                   {/* Animated Student List */}
                   <AnimatePresence initial={false}>
@@ -385,6 +498,8 @@ function AssignModal({ exam, onClose, onAssigned }) {
           <div className="text-xs font-semibold text-slate-500">
             {selected.size > 0 ? (
               <span className="text-slate-900 font-bold">{selected.size} candidate(s) selected</span>
+            ) : visibilityChanged ? (
+              <span className="text-slate-900 font-bold">Visibility changed</span>
             ) : (
               'No new candidates selected'
             )}
@@ -396,10 +511,10 @@ function AssignModal({ exam, onClose, onAssigned }) {
             <Button
               variant="primary"
               onClick={save}
-              disabled={saving || selected.size === 0}
+              disabled={saving || (selected.size === 0 && !visibilityChanged)}
               className="bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold px-5 py-2 shadow-2xs"
             >
-              {saving ? 'Assigning…' : `Assign (${selected.size})`}
+              {saving ? 'Saving…' : selected.size > 0 ? `Assign (${selected.size})` : 'Save'}
             </Button>
           </div>
         </DialogFooter>
@@ -600,11 +715,20 @@ function SendInviteModal({ exam, onClose, onSent }) {
 
 export default function ExamSystem() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get('tab') === 'question-bank' ? 'question-bank' : 'exams';
+  
   const [exams, setExams] = useState([]);
   const [loading, setLoading] = useState(true);
   const [assignTarget, setAssignTarget] = useState(null);
   const [sendTarget, setSendTarget] = useState(null);
+  const [bankShowCreate, setBankShowCreate] = useState(false);
   const { confirm, ConfirmDialog } = useConfirm();
+
+  const setActiveTab = (tab) => {
+    if (tab === 'question-bank') setSearchParams({ tab: 'question-bank' });
+    else setSearchParams({});
+  };
 
   const load = () => listExams().then((res) => setExams(res.data)).catch(() => toast.error('Failed to load exams.')).finally(() => setLoading(false));
   useEffect(() => { load(); }, []);
@@ -635,28 +759,65 @@ export default function ExamSystem() {
     <div className="w-full min-h-full pb-20 flex flex-col">
       {/* Flush Full-Width Sticky Page Header */}
       <div className="sticky top-0 z-20 w-full bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-3.5 sm:px-6 lg:px-8 py-2.5 shadow-2xs">
-        <div className="w-full max-w-7xl mx-auto flex items-center justify-between gap-4">
+        <div className="w-full max-w-7xl mx-auto flex items-center justify-between gap-4 flex-wrap sm:flex-nowrap">
           <div className="flex items-center gap-3 min-w-0">
             <h1 className="text-base sm:text-lg font-black text-slate-900 tracking-tight flex-shrink-0">Exam System</h1>
-            <span className="hidden sm:inline-block text-xs font-medium text-slate-400 truncate border-l border-slate-200 pl-3">
-              Create, publish and assign exams to your airline students
-            </span>
+            
+            {/* Executive Tab Switcher */}
+            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200/80 ml-2">
+              <button
+                type="button"
+                onClick={() => setActiveTab('exams')}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-extrabold transition-all ${
+                  activeTab === 'exams'
+                    ? 'bg-white text-slate-900 shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <HiOutlineAcademicCap className="w-4 h-4 text-blue-600" />
+                <span>Exams</span>
+                <span className="ml-0.5 px-1.5 py-0.2 rounded-full bg-slate-200 text-slate-800 text-[10px]">
+                  {exams.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('question-bank')}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-extrabold transition-all ${
+                  activeTab === 'question-bank'
+                    ? 'bg-white text-slate-900 shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <HiOutlineCollection className="w-4 h-4 text-indigo-600" />
+                <span>Question Bank</span>
+              </button>
+            </div>
           </div>
-          <Button onClick={() => navigate('/admin/exams/new')} className="bg-slate-900 hover:bg-slate-800 text-white text-xs sm:text-sm font-bold rounded-xl shadow-2xs flex items-center gap-1.5 px-4 py-2 flex-shrink-0">
-            <HiOutlinePlusCircle className="w-4 h-4" /> New Exam
-          </Button>
+
+          {activeTab === 'exams' ? (
+            <Button onClick={() => navigate('/admin/exams/new')} className="bg-slate-900 hover:bg-slate-800 text-white text-xs sm:text-sm font-bold rounded-xl shadow-2xs flex items-center gap-1.5 px-4 py-2 flex-shrink-0">
+              <HiOutlinePlusCircle className="w-4 h-4" /> New Exam
+            </Button>
+          ) : (
+            <Button onClick={() => setBankShowCreate((s) => !s)} className="bg-slate-900 hover:bg-slate-800 text-white text-xs sm:text-sm font-bold rounded-xl shadow-2xs flex items-center gap-1.5 px-4 py-2 flex-shrink-0">
+              <HiOutlinePlusCircle className="w-4 h-4" /> New Bank
+            </Button>
+          )}
         </div>
       </div>
 
       {/* Main Content Body */}
       <div className="w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 space-y-6 flex-1">
-
-      {loading ? (
-        <div className="flex items-center justify-center py-20 gap-2 text-slate-400">
-          <div className="w-5 h-5 border-2 border-slate-300 border-t-blue-600 rounded-full animate-spin" />
-          <span className="text-sm font-medium">Loading exams…</span>
-        </div>
-      ) : exams.length === 0 ? (
+        {activeTab === 'question-bank' ? (
+          <QuestionBankList embedded showCreateState={bankShowCreate} setShowCreateState={setBankShowCreate} />
+        ) : loading ? (
+          <div className="flex items-center justify-center py-20 gap-2 text-slate-400">
+            <div className="w-5 h-5 border-2 border-slate-300 border-t-blue-600 rounded-full animate-spin" />
+            <span className="text-sm font-medium">Loading exams…</span>
+          </div>
+        ) : exams.length === 0 ? (
         <Card className="p-12 text-center text-sm font-medium text-slate-400">
           No exams yet. Create your first exam to get started.
         </Card>
@@ -665,110 +826,117 @@ export default function ExamSystem() {
           {exams.map((exam) => (
             <Card
               key={exam.id}
-              className="group p-6 bg-white border border-slate-200/90 rounded-3xl shadow-2xs hover:shadow-md hover:border-slate-300 transition-all duration-200 flex flex-col justify-between"
+              className="group p-5 sm:p-6 bg-white border border-slate-200/90 rounded-3xl shadow-2xs hover:shadow-lg hover:border-slate-300 transition-all duration-200 flex flex-col justify-between"
             >
-              <div className="space-y-4">
+              <div className="space-y-3.5">
                 {/* Header */}
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-11 h-11 rounded-2xl bg-slate-900 text-white flex items-center justify-center flex-shrink-0 shadow-2xs group-hover:scale-105 transition-transform">
+                    <div className="w-10 h-10 rounded-2xl bg-slate-900 text-white flex items-center justify-center flex-shrink-0 shadow-2xs group-hover:scale-105 transition-transform">
                       <HiOutlineAcademicCap className="w-5 h-5 text-white" />
                     </div>
                     <div className="min-w-0">
-                      <h2 className="text-base font-bold text-slate-900 break-words leading-snug group-hover:text-blue-600 transition-colors">
+                      <h2 className="text-sm sm:text-base font-extrabold text-slate-900 break-words leading-snug group-hover:text-blue-600 transition-colors" title={exam.title}>
                         {exam.title}
                       </h2>
-                      <p className="text-[11px] font-medium text-slate-400">
+                      <p className="text-[11px] font-medium text-slate-400 mt-0.5">
                         {exam.questions?.length || 0} Questions · {exam.duration_minutes} Mins
                       </p>
                     </div>
                   </div>
-                  <Badge
-                    variant={STATUS_VARIANT[exam.status]}
-                    className="capitalize font-bold text-[11px] px-2.5 py-0.5 rounded-full flex-shrink-0"
-                  >
-                    {exam.status}
-                  </Badge>
+                  
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <Badge
+                      variant={STATUS_VARIANT[exam.status]}
+                      className="capitalize font-bold text-[10px] px-2.5 py-0.5 rounded-full"
+                    >
+                      {exam.status}
+                    </Badge>
+                    <SimpleTooltip label="Delete exam">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"
+                        onClick={() => handleDelete(exam)}
+                      >
+                        <HiOutlineTrash className="w-3.5 h-3.5" />
+                      </Button>
+                    </SimpleTooltip>
+                  </div>
                 </div>
 
-                {/* Description */}
-                {exam.description ? (
-                  <p className="text-xs text-slate-500 leading-relaxed line-clamp-2 min-h-[36px]">
-                    {exam.description}
+                {/* Description with fixed min-height for perfect card alignment */}
+                <div className="h-9 flex items-center">
+                  <p className="text-xs text-slate-500 leading-relaxed line-clamp-2">
+                    {exam.description || <span className="italic text-slate-300">No description provided</span>}
                   </p>
-                ) : (
-                  <div className="min-h-[12px]" />
-                )}
+                </div>
 
                 {/* Info Grid */}
-                <div className="grid grid-cols-2 gap-2 text-xs font-semibold text-slate-600 pt-1">
-                  <div className="flex items-center gap-2 p-2 rounded-xl bg-slate-50 border border-slate-100">
-                    <HiOutlineClock className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                <div className="grid grid-cols-2 gap-2 text-xs font-semibold text-slate-600 pt-0.5">
+                  <div className="flex items-center gap-2 p-2 rounded-xl bg-slate-50/80 border border-slate-200/60">
+                    <HiOutlineClock className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
                     <span className="truncate">Pass ≥ {exam.pass_percentage}%</span>
                   </div>
-                  <div className="flex items-center gap-2 p-2 rounded-xl bg-slate-50 border border-slate-100">
-                    <HiOutlineUserGroup className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                  <div className="flex items-center gap-2 p-2 rounded-xl bg-slate-50/80 border border-slate-200/60">
+                    <HiOutlineUserGroup className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
                     <span className="truncate">{exam.assignments?.length || 0} Assigned</span>
                   </div>
                 </div>
               </div>
 
-              {/* Action Buttons Bar */}
-              <div className="flex flex-wrap items-center gap-1.5 pt-4 mt-4 border-t border-slate-100">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => navigate(`/admin/exams/${exam.id}/edit`)}
-                  className="rounded-xl border-slate-200 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 shadow-2xs"
-                >
-                  <HiOutlinePencil className="w-3.5 h-3.5" /> Edit
-                </Button>
-                {exam.status === 'draft' && (
+              {/* Structured 2-Row Action Bar */}
+              <div className="pt-3.5 mt-3.5 border-t border-slate-100/90 space-y-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => navigate(`/admin/exams/${exam.id}/edit`)}
+                    className="w-full rounded-xl border-slate-200 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 hover:text-slate-900 shadow-2xs h-8 flex items-center justify-center gap-1"
+                  >
+                    <HiOutlinePencil className="w-3.5 h-3.5 text-slate-400" /> Edit
+                  </Button>
+
                   <Button
                     size="sm"
                     variant="outline"
-                    className="rounded-xl border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-bold text-xs shadow-2xs"
-                    onClick={() => handlePublish(exam)}
+                    className="w-full rounded-xl border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:text-slate-900 font-bold text-xs shadow-2xs h-8 flex items-center justify-center gap-1"
+                    onClick={() => setAssignTarget(exam)}
                   >
-                    Publish
+                    <HiOutlineUserAdd className="w-3.5 h-3.5 text-slate-400" /> Assign
                   </Button>
-                )}
-                {exam.status === 'published' && (
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  {exam.status === 'draft' ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="w-full rounded-xl border-emerald-200 bg-emerald-50/70 text-emerald-700 hover:bg-emerald-100 font-bold text-xs shadow-2xs h-8 flex items-center justify-center gap-1"
+                      onClick={() => handlePublish(exam)}
+                    >
+                      <HiOutlineCheckCircle className="w-3.5 h-3.5 text-emerald-600" /> Publish
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="w-full rounded-xl border-blue-200/80 bg-blue-50/60 text-blue-700 hover:bg-blue-100/80 font-bold text-xs shadow-2xs h-8 flex items-center justify-center gap-1"
+                      onClick={() => setSendTarget(exam)}
+                    >
+                      <HiOutlineMail className="w-3.5 h-3.5 text-blue-600" /> Send Link
+                    </Button>
+                  )}
+
                   <Button
-                    size="sm"
                     variant="outline"
-                    className="rounded-xl border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold text-xs shadow-2xs"
-                    onClick={() => setSendTarget(exam)}
+                    size="sm"
+                    onClick={() => navigate(`/admin/exams/${exam.id}/attempts`)}
+                    className="w-full rounded-xl border-slate-200 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 hover:text-slate-900 shadow-2xs h-8 flex items-center justify-center gap-1"
                   >
-                    <HiOutlineMail className="w-3.5 h-3.5" /> Send Link
+                    <HiOutlineClipboardCheck className="w-3.5 h-3.5 text-slate-400" /> Results
                   </Button>
-                )}
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="rounded-xl border-slate-200 bg-white text-slate-700 hover:bg-slate-50 font-bold text-xs shadow-2xs"
-                  onClick={() => setAssignTarget(exam)}
-                >
-                  <HiOutlineUserAdd className="w-3.5 h-3.5" /> Assign
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => navigate(`/admin/exams/${exam.id}/attempts`)}
-                  className="rounded-xl border-slate-200 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 shadow-2xs"
-                >
-                  <HiOutlineClipboardCheck className="w-3.5 h-3.5" /> Results
-                </Button>
-                <SimpleTooltip label="Delete exam">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="ml-auto h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl"
-                    onClick={() => handleDelete(exam)}
-                  >
-                    <HiOutlineTrash className="w-4 h-4" />
-                  </Button>
-                </SimpleTooltip>
+                </div>
               </div>
             </Card>
           ))}

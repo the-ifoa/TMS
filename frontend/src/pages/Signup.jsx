@@ -16,6 +16,7 @@ import {
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import { airlineSignup, airlineVerifyOtp, airlineResendOtp, uploadAirlineLogo } from '../api';
+import { compressImageFile } from '../utils/compressImage';
 import { useAuth } from '../context/AuthContext';
 import logoImg from '../assets/logo.png';
 
@@ -112,13 +113,15 @@ export default function Signup() {
 
   const fmt = s => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
 
-  const handleLogoChange = (e) => {
+  const handleLogoChange = async (e) => {
     const file = e.target.files[0];
+    e.target.value = '';
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) { toast.error('Logo must be under 2 MB'); return; }
     if (!file.type.startsWith('image/')) { toast.error('Please select an image file'); return; }
-    setLogoFile(file);
-    setLogoPreview(URL.createObjectURL(file));
+    const compressed = await compressImageFile(file);
+    if (compressed.size > 2 * 1024 * 1024) { toast.error('Logo is still too large after compression — try a smaller image.'); return; }
+    setLogoFile(compressed);
+    setLogoPreview(URL.createObjectURL(compressed));
   };
 
   const removeLogo = () => {

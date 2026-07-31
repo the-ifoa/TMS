@@ -45,7 +45,7 @@ const VIOLATION_LABEL = {
   devtools_suspected: 'Suspicious activity detected.',
 };
 
-export default function ExamRunner({ attempt, exam, onSaveAnswer, onSubmit, onReportViolation, onFinished, onBack }) {
+export default function ExamRunner({ attempt, exam, onSaveAnswer, onSubmit, onReportViolation, onFinished, onBack, previewMode = false }) {
   const questions = attempt.questions_snapshot;
 
   const [answers, setAnswers] = useState(() => {
@@ -78,7 +78,9 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onSubmit, onRe
     return map;
   }, [exam.section_settings]);
   const hasSectionTimers = Object.keys(sectionTimeLimits).length > 0;
-  const sectionStartedAtRef = useRef({});
+  // ms accumulated while THIS section was the active one — only advances
+  // while the candidate is actually on it, so navigating away pauses it.
+  const sectionElapsedRef = useRef({});
   const [lockedSections, setLockedSections] = useState(() => new Set());
   const [, forceSectionTick] = useState(0);
   const indexRef = useRef(index);
@@ -86,7 +88,25 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onSubmit, onRe
   const lockedSectionsRef = useRef(lockedSections);
   useEffect(() => { lockedSectionsRef.current = lockedSections; }, [lockedSections]);
 
-  const lockdownEnabled = exam.lockdown_enabled;
+  // ── Per-question time budgets — same soft-lock mechanism as section
+  // timers, but scoped to one question's own clock (admin-set per question).
+  const questionTimeLimits = useMemo(() => {
+    const map = {};
+    questions.forEach((qq) => { if (qq.time_limit_seconds > 0) map[qq._id] = qq.time_limit_seconds; });
+    return map;
+  }, [questions]);
+  const hasQuestionTimers = Object.keys(questionTimeLimits).length > 0;
+  // ms accumulated while THIS question was the active one — paused whenever
+  // the candidate is looking at a different question.
+  const questionElapsedRef = useRef({});
+  const [lockedQuestionIds, setLockedQuestionIds] = useState(() => new Set());
+  const lockedQuestionIdsRef = useRef(lockedQuestionIds);
+  useEffect(() => { lockedQuestionIdsRef.current = lockedQuestionIds; }, [lockedQuestionIds]);
+
+  // Preview mode (admin testing an exam from ExamBuilder) never enforces
+  // lockdown — no forced fullscreen, no violation counting/warnings — since
+  // there's no real candidate to police.
+  const lockdownEnabled = exam.lockdown_enabled && !previewMode;
   const maxViolations = exam.max_violations || 4;
 
   const handleSubmit = useMemo(() => async () => {
@@ -195,18 +215,14 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onSubmit, onRe
     if (!hasSectionTimers) return;
     const t = setInterval(() => {
       const currentSection = questions[indexRef.current]?.section || '';
-      if (
-        sectionTimeLimits[currentSection] != null &&
-        !sectionStartedAtRef.current[currentSection] &&
-        !lockedSectionsRef.current.has(currentSection)
-      ) {
-        sectionStartedAtRef.current[currentSection] = Date.now();
+      if (sectionTimeLimits[currentSection] != null && !lockedSectionsRef.current.has(currentSection)) {
+        sectionElapsedRef.current[currentSection] = (sectionElapsedRef.current[currentSection] || 0) + 1000;
       }
 
       let justLocked = null;
       Object.entries(sectionTimeLimits).forEach(([name, limit]) => {
-        const startedAt = sectionStartedAtRef.current[name];
-        if (startedAt && !lockedSectionsRef.current.has(name) && (Date.now() - startedAt) / 1000 >= limit) {
+        const elapsed = sectionElapsedRef.current[name] || 0;
+        if (!lockedSectionsRef.current.has(name) && elapsed / 1000 >= limit) {
           justLocked = name;
         }
       });
@@ -230,17 +246,65 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onSubmit, onRe
     return () => clearInterval(t);
   }, [hasSectionTimers, questions, sectionTimeLimits, handleSubmit]);
 
+  useEffect(() => {
+    if (!hasQuestionTimers) return;
+    const t = setInterval(() => {
+      const currentQ = questions[indexRef.current];
+      const qid = currentQ?._id;
+      if (qid && questionTimeLimits[qid] != null && !lockedQuestionIdsRef.current.has(qid)) {
+        questionElapsedRef.current[qid] = (questionElapsedRef.current[qid] || 0) + 1000;
+      }
+
+      let justLockedQ = null;
+      Object.entries(questionTimeLimits).forEach(([id, limit]) => {
+        const elapsed = questionElapsedRef.current[id] || 0;
+        if (!lockedQuestionIdsRef.current.has(id) && elapsed / 1000 >= limit) {
+          justLockedQ = id;
+        }
+      });
+
+      if (justLockedQ) {
+        const lockedId = justLockedQ;
+        setLockedQuestionIds((prev) => {
+          const next = new Set(prev).add(lockedId);
+          lockedQuestionIdsRef.current = next;
+          if (questions[indexRef.current]?._id === lockedId) {
+            const nextIdx = questions.findIndex((qq, i) => i > indexRef.current && !next.has(qq._id) && !lockedSectionsRef.current.has(qq.section || ''));
+            if (nextIdx === -1) {
+              const anyIdx = questions.findIndex((qq) => !next.has(qq._id) && !lockedSectionsRef.current.has(qq.section || ''));
+              if (anyIdx === -1) handleSubmit();
+              else setIndex(anyIdx);
+            } else setIndex(nextIdx);
+          }
+          return next;
+        });
+        toast.error("Time's up for this question — locked, moving on.");
+      }
+      forceSectionTick((n) => n + 1);
+    }, 1000);
+    return () => clearInterval(t);
+  }, [hasQuestionTimers, questions, questionTimeLimits, handleSubmit]);
+
   // Remaining seconds for a section's own budget, or null if it has none.
   const sectionRemaining = (name) => {
     const limit = sectionTimeLimits[name];
     if (limit == null) return null;
-    const startedAt = sectionStartedAtRef.current[name];
-    if (!startedAt) return limit;
-    return Math.max(0, Math.round(limit - (Date.now() - startedAt) / 1000));
+    const elapsed = (sectionElapsedRef.current[name] || 0) / 1000;
+    return Math.max(0, Math.round(limit - elapsed));
+  };
+
+  // Remaining seconds for a single question's own budget, or null if none.
+  const questionRemaining = (qid) => {
+    const limit = questionTimeLimits[qid];
+    if (limit == null) return null;
+    const elapsed = (questionElapsedRef.current[qid] || 0) / 1000;
+    return Math.max(0, Math.round(limit - elapsed));
   };
 
   const q = questions[index];
   const currentSectionLocked = lockedSections.has(q.section || '');
+  const currentQuestionLocked = lockedQuestionIds.has(q._id);
+  const currentLocked = currentSectionLocked || currentQuestionLocked;
 
   // Group questions by admin-defined section for the sidebar navigator.
   const hasSections = questions.some((qq) => qq.section);
@@ -253,6 +317,7 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onSubmit, onRe
   });
 
   const setResponse = (response) => {
+    if (currentQuestionLocked) { toast.error("Time's up for this question — answer is locked."); return; }
     if (currentSectionLocked) { toast.error("Time's up for this section — answers are locked."); return; }
     setAnswers((prev) => ({ ...prev, [q._id]: response }));
     onSaveAnswer(q._id, response);
@@ -330,7 +395,13 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onSubmit, onRe
           <span><strong>Warning {warning.count}/{maxViolations}:</strong> {warning.message} {warning.remaining > 0 ? `${warning.remaining} more will auto-submit your exam.` : ''}</span>
         </div>
       )}
-      {currentSectionLocked && (
+      {currentQuestionLocked && (
+        <div className="bg-rose-50 border-b border-rose-200 text-rose-900 px-4 sm:px-6 py-2 text-xs font-medium flex items-center justify-center gap-2 flex-shrink-0">
+          <HiOutlineClock className="w-4 h-4 text-rose-600 flex-shrink-0" />
+          <span>Time's up for this question — you can still review it, but the answer is locked.</span>
+        </div>
+      )}
+      {!currentQuestionLocked && currentSectionLocked && (
         <div className="bg-rose-50 border-b border-rose-200 text-rose-900 px-4 sm:px-6 py-2 text-xs font-medium flex items-center justify-center gap-2 flex-shrink-0">
           <HiOutlineClock className="w-4 h-4 text-rose-600 flex-shrink-0" />
           <span>Time's up for this section — you can still review it, but answers are locked.</span>
@@ -357,11 +428,11 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onSubmit, onRe
                   const isCurrentSection = group.items.some((qq) => qq._index === index);
                   return (
                     <button key={gi} onClick={() => setIndex(group.items[0]._index)}
-                      className={`flex-shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all border flex items-center gap-1.5 ${isCurrentSection ? 'bg-blue-600 text-white border-blue-600 shadow-2xs' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'}`}>
+                      className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-extrabold transition-all border flex items-center gap-1.5 ${isCurrentSection ? 'bg-[#002eff] text-white border-[#002eff] shadow-2xs' : 'bg-blue-50 text-[#002eff] border-blue-200/90 hover:bg-blue-100'}`}>
                       <span>{group.section || 'Ungrouped'}</span>
-                      <span className={`text-[9px] px-1.5 py-0.2 rounded-md font-semibold ${isCurrentSection ? 'bg-blue-700 text-white' : 'bg-slate-200/80 text-slate-600'}`}>{answeredInSec}/{group.items.length}</span>
+                      <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-extrabold ${isCurrentSection ? 'bg-blue-800 text-white' : 'bg-blue-100 text-blue-900'}`}>{answeredInSec}/{group.items.length}</span>
                       {sectionTimeLimits[group.section || ''] != null && (
-                        <span className={`text-[9px] px-1.5 py-0.2 rounded-md font-semibold ${lockedSections.has(group.section || '') ? 'bg-rose-600 text-white' : isCurrentSection ? 'bg-blue-800 text-blue-100' : 'bg-slate-300/80 text-slate-700'}`}>
+                        <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-semibold ${lockedSections.has(group.section || '') ? 'bg-rose-600 text-white' : isCurrentSection ? 'bg-blue-900 text-blue-100' : 'bg-blue-200 text-blue-900'}`}>
                           {lockedSections.has(group.section || '') ? 'Locked' : formatTime(sectionRemaining(group.section || ''))}
                         </span>
                       )}
@@ -378,7 +449,7 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onSubmit, onRe
                 const i = qq._index;
                 const isAnswered = answers[qq._id] !== undefined && answers[qq._id] !== null && answers[qq._id] !== '';
                 let btnCls = 'bg-slate-100 text-slate-600';
-                if (i === index) btnCls = 'bg-blue-600 text-white font-bold ring-2 ring-blue-600/30';
+                if (i === index) btnCls = 'bg-[#002eff] text-white font-bold ring-2 ring-[#002eff]/30';
                 else if (marked.has(qq._id)) btnCls = 'bg-amber-500 text-white font-bold';
                 else if (isAnswered) btnCls = 'bg-emerald-500 text-white font-bold';
                 return <button key={qq._id} onClick={() => setIndex(i)} className={`w-8 h-8 rounded-full text-xs font-bold transition-all flex items-center justify-center flex-shrink-0 ${btnCls}`}>{i + 1}</button>;
@@ -391,7 +462,7 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onSubmit, onRe
             <div className="space-y-4">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <span className="text-xs font-extrabold text-slate-500 uppercase tracking-wider">QUESTIONS</span>
-                <span className="text-xs font-extrabold text-blue-700 bg-blue-50 border border-blue-100 px-2.5 py-0.5 rounded-full">{Math.round((answeredCount / questions.length) * 100)}%</span>
+                <span className="text-xs font-extrabold text-[#002eff] bg-blue-50 border border-blue-100 px-2.5 py-0.5 rounded-full">{Math.round((answeredCount / questions.length) * 100)}%</span>
               </div>
               {hasSections && (
                 <div className="space-y-2 border-b border-slate-100 pb-3">
@@ -402,14 +473,14 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onSubmit, onRe
                       const isCurrentSection = group.items.some((qq) => qq._index === index);
                       return (
                         <button key={gi} type="button" onClick={() => setIndex(group.items[0]._index)}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${isCurrentSection ? 'bg-blue-600 text-white border-blue-600 shadow-2xs ring-2 ring-blue-600/20' : 'bg-slate-50 text-slate-700 border-slate-200/80 hover:bg-slate-100'}`}>
+                          className={`px-3.5 py-1.5 rounded-full text-xs font-extrabold transition-all border flex items-center gap-1.5 ${isCurrentSection ? 'bg-[#002eff] text-white border-[#002eff] shadow-2xs ring-2 ring-[#002eff]/20' : 'bg-blue-50 text-[#002eff] border-blue-200/90 hover:bg-blue-100'}`}>
                           <span className="truncate max-w-[130px]">{group.section || 'Ungrouped'}</span>
                           {sectionTimeLimits[group.section || ''] != null && (
-                            <span className={`text-[10px] px-1.5 py-0.2 rounded-md font-semibold ${lockedSections.has(group.section || '') ? 'bg-rose-600 text-white' : isCurrentSection ? 'bg-blue-800 text-blue-100' : 'bg-slate-300/70 text-slate-700'}`}>
+                            <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-semibold ${lockedSections.has(group.section || '') ? 'bg-rose-600 text-white' : isCurrentSection ? 'bg-blue-900 text-blue-100' : 'bg-blue-200 text-blue-900'}`}>
                               {lockedSections.has(group.section || '') ? 'Locked' : formatTime(sectionRemaining(group.section || ''))}
                             </span>
                           )}
-                          <span className={`text-[10px] px-1.5 py-0.2 rounded-md font-semibold ${isCurrentSection ? 'bg-blue-700 text-white' : 'bg-slate-200/70 text-slate-600'}`}>{answeredInSec}/{group.items.length}</span>
+                          <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-extrabold ${isCurrentSection ? 'bg-blue-800 text-white' : 'bg-blue-100 text-blue-900'}`}>{answeredInSec}/{group.items.length}</span>
                         </button>
                       );
                     })}
@@ -425,7 +496,7 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onSubmit, onRe
                         const i = qq._index;
                         const isAnswered = answers[qq._id] !== undefined && answers[qq._id] !== null && answers[qq._id] !== '';
                         let btnCls = 'bg-slate-100 text-slate-600 hover:bg-slate-200';
-                        if (i === index) btnCls = 'bg-blue-600 text-white font-bold shadow-2xs ring-2 ring-blue-600/30';
+                        if (i === index) btnCls = 'bg-[#002eff] text-white font-bold shadow-2xs ring-2 ring-[#002eff]/30';
                         else if (marked.has(qq._id)) btnCls = 'bg-amber-500 text-white font-bold shadow-2xs';
                         else if (isAnswered) btnCls = 'bg-emerald-500 text-white font-bold shadow-2xs';
                         return <button key={qq._id} onClick={() => setIndex(i)} className={`w-9 h-9 rounded-full text-xs font-bold transition-all flex items-center justify-center ${btnCls}`}>{i + 1}</button>;
@@ -438,7 +509,7 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onSubmit, onRe
             <div className="border-t border-slate-100 pt-4 space-y-2 text-[11px] font-semibold text-slate-600">
               <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500 flex-shrink-0" /><span>Answered</span></div>
               <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-amber-500 flex-shrink-0" /><span>Marked for review</span></div>
-              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-blue-600 flex-shrink-0" /><span>Current</span></div>
+              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#002eff] flex-shrink-0" /><span>Current</span></div>
             </div>
           </aside>
 
@@ -446,9 +517,17 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onSubmit, onRe
           <section className="md:col-span-8 lg:col-span-8 bg-white border border-slate-200/80 rounded-2xl shadow-2xs flex flex-col h-full overflow-hidden min-h-0">
             <div className="px-4 sm:px-6 py-2.5 sm:py-3 border-b border-slate-100 flex items-center justify-between flex-shrink-0 bg-white rounded-t-2xl z-10">
               <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-                {q.section && <span className="text-[10px] sm:text-[11px] font-extrabold text-blue-600 bg-blue-50 border border-blue-100 px-2.5 py-0.5 rounded-full">{q.section}</span>}
+                {q.section && <span className="text-[10px] sm:text-[11px] font-extrabold text-white bg-[#002eff] px-3 py-1 rounded-full shadow-2xs">{q.section}</span>}
                 <span className="text-xs font-extrabold text-slate-700 uppercase tracking-wider">QUESTION {index + 1} <span className="text-slate-400 font-semibold">OF {questions.length}</span></span>
                 <span className="text-[10px] sm:text-xs font-semibold text-slate-400 border-l border-slate-200 pl-2 sm:pl-3">1 mark</span>
+                {questionTimeLimits[q._id] != null && (
+                  <span className={`inline-flex items-center gap-1 text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-full border ${
+                    currentQuestionLocked ? 'bg-rose-600 text-white border-rose-600' : 'bg-amber-50 text-amber-700 border-amber-200'
+                  }`}>
+                    <HiOutlineClock className="w-3 h-3" />
+                    {currentQuestionLocked ? 'Locked' : formatTime(questionRemaining(q._id))}
+                  </span>
+                )}
               </div>
               <Button variant="outline" size="sm" onClick={() => toggleMarked(q._id)}
                 className={`rounded-xl text-[11px] sm:text-xs font-bold flex items-center gap-1.5 transition-all ${marked.has(q._id) ? 'border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}>

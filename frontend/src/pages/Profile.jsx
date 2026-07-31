@@ -17,6 +17,7 @@ import {
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import { updateProfile, uploadAirlineLogo } from '../api';
+import { compressImageFile } from '../utils/compressImage';
 import logoImg from '../assets/logo.png';
 
 export default function Profile() {
@@ -49,13 +50,15 @@ export default function Profile() {
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const logoInputRef = useRef(null);
 
-  const handleLogoFileChange = (e) => {
+  const handleLogoFileChange = async (e) => {
     const file = e.target.files[0];
+    e.target.value = '';
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) { toast.error('Logo must be under 2 MB'); return; }
     if (!file.type.startsWith('image/')) { toast.error('Please select an image file'); return; }
-    setLogoFile(file);
-    setLogoPreview(URL.createObjectURL(file));
+    const compressed = await compressImageFile(file);
+    if (compressed.size > 2 * 1024 * 1024) { toast.error('Logo is still too large after compression — try a smaller image.'); return; }
+    setLogoFile(compressed);
+    setLogoPreview(URL.createObjectURL(compressed));
   };
 
   const handleLogoUpload = async () => {

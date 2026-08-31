@@ -8,6 +8,7 @@ import {
   HiOutlineDuplicate,
 } from 'react-icons/hi';
 import { getExam, createExam, updateExam, listQuestionBankGroups, listQuestionBankItems, getQuestionBankTopics, createQuestionBankItem } from '../api';
+import { useAuth } from '../context/AuthContext';
 import QuestionEditor, { QUESTION_TYPES, createEmptyQuestion } from '../components/examQuestions/QuestionEditor';
 import { TagBadges, DIFFICULTY_BADGE } from './QuestionBank';
 import QuestionPlayer from '../components/examPlayers/QuestionPlayer';
@@ -509,6 +510,8 @@ function SendToBankModal({ question, onClose }) {
 export default function ExamBuilder() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { isAdmin } = useAuth();
+  const base = isAdmin ? '/admin/exams' : '/airline/exams';
   const isNew = !id;
 
   const [exam, setExam] = useState(emptyExam());
@@ -796,7 +799,7 @@ export default function ExamBuilder() {
       if (isNew) {
         const res = await createExam(payload);
         toast.success('Exam created.');
-        navigate(`/admin/exams/${res.data.id}/edit`, { replace: true });
+        navigate(`${base}/${res.data.id}/edit`, { replace: true });
       } else {
         const res = await updateExam(id, payload);
         setExam(res.data);
@@ -826,7 +829,7 @@ export default function ExamBuilder() {
         <div className="w-full max-w-7xl mx-auto flex items-center justify-between gap-3">
           {/* Left: Back button */}
           <div className="flex items-center flex-shrink-0">
-            <Button variant="outline" size="sm" onClick={() => navigate('/admin/exams')} className="rounded-xl border-slate-200 text-xs font-semibold">
+            <Button variant="outline" size="sm" onClick={() => navigate(isAdmin ? '/admin/exams' : '/airline/exams/manage')} className="rounded-xl border-slate-200 text-xs font-semibold">
               <HiOutlineArrowLeft className="w-4 h-4" /> <span className="hidden sm:inline">Back to Exam System</span><span className="sm:hidden">Back</span>
             </Button>
           </div>
@@ -867,9 +870,11 @@ export default function ExamBuilder() {
             <span className="text-xs font-semibold text-slate-500 hidden md:inline">
               {exam.questions.length} Question{exam.questions.length !== 1 ? 's' : ''}
             </span>
+            {isAdmin && (
             <Button variant="outline" size="sm" onClick={() => setShowBankPicker(true)} className="rounded-xl border-slate-200 text-xs font-bold">
               <HiOutlineCollection className="w-4 h-4" /> <span className="hidden sm:inline">Import from Bank</span>
             </Button>
+            )}
             <Button variant="outline" size="sm" onClick={startPreview} className="rounded-xl border-slate-200 text-xs font-bold">
               <HiOutlineEye className="w-4 h-4" /> Preview
             </Button>
@@ -1333,7 +1338,7 @@ export default function ExamBuilder() {
                         onMoveToSection={(target) => moveQuestionToSection(idx, target)}
                         isSelected={selectedQIds.has(getQKey(q, idx))}
                         onToggleSelect={() => toggleSelectQuestion(getQKey(q, idx))}
-                        onSendToBank={() => setSendToBankQuestion(q)}
+                        onSendToBank={isAdmin ? () => setSendToBankQuestion(q) : undefined}
                       />
                     ))}
                   </div>
@@ -1391,7 +1396,7 @@ export default function ExamBuilder() {
                       onMoveToSection={(target) => moveQuestionToSection(idx, target)}
                       isSelected={selectedQIds.has(getQKey(q, idx))}
                       onToggleSelect={() => toggleSelectQuestion(getQKey(q, idx))}
-                      onSendToBank={() => setSendToBankQuestion(q)}
+                      onSendToBank={isAdmin ? () => setSendToBankQuestion(q) : undefined}
                     />
                   ))}
                 </div>

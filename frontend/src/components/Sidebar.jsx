@@ -37,15 +37,22 @@ const airlineNavigation = [
   { name: 'Participants',   href: '/airline/participants',  icon: HiOutlineUsers },
   { name: 'New Enrollment', href: '/airline/enrollment/new', icon: HiOutlinePlusCircle },
   { name: 'DGR CBTA',       href: '/airline/dgr',           icon: HiOutlineShieldExclamation },
-  { name: 'Exam System',    href: '/airline/exams',         icon: HiOutlineAcademicCap },
+  { name: 'Exam Results',   href: '/airline/exams',         icon: HiOutlineClipboardCheck },
   { name: 'Profile',        href: '/airline/profile',       icon: HiOutlineUserCircle },
 ];
+
+// Airlines granted exam-authoring get a "Manage Exams" entry above "Exam Results".
+const airlineExamAuthorItem = { name: 'Manage Exams', href: '/airline/exams/manage', icon: HiOutlineAcademicCap };
 
 export default function Sidebar({ open, setOpen }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isAdmin } = useAuth();
-  const navigation = isAdmin ? adminNavigation : airlineNavigation;
+  const { isAdmin, admin } = useAuth();
+  let navigation = isAdmin ? adminNavigation : airlineNavigation;
+  if (!isAdmin && admin?.can_author_exams) {
+    navigation = [...airlineNavigation];
+    navigation.splice(5, 0, airlineExamAuthorItem); // before "Exam Results"
+  }
 
   const currentPath = location.pathname.replace(/\/$/, '');
 
@@ -63,6 +70,14 @@ export default function Sidebar({ open, setOpen }) {
         currentPath.includes('/exams') ||
         currentPath.includes('/question-bank')
       );
+    }
+    if (item.name === 'Manage Exams') {
+      return currentPath.startsWith('/airline/exams/manage') ||
+        currentPath.startsWith('/airline/exams/new') ||
+        /^\/airline\/exams\/[^/]+\/(edit|attempts)/.test(currentPath);
+    }
+    if (item.name === 'Exam Results' && item.href === '/airline/exams') {
+      return currentPath === '/airline/exams' || /^\/airline\/exams\/[^/]+\/result/.test(currentPath);
     }
     return currentPath === item.href || currentPath.startsWith(item.href + '/');
   };

@@ -120,6 +120,11 @@ const examSchema = new mongoose.Schema(
     description: { type: String, default: '' },
     created_by:  { type: mongoose.Schema.Types.ObjectId, ref: 'Admin' },
 
+    // null  = IFOA/admin-owned (global). Set = owned by this airline, which
+    // manages it and can only assign it to its own participants. IFOA admins
+    // get view-only access to airline-owned exams.
+    owner_airline: { type: mongoose.Schema.Types.ObjectId, ref: 'Airline', default: null },
+
     status: { type: String, enum: ['draft', 'published', 'archived'], default: 'draft' },
 
     duration_minutes: { type: Number, default: 30 },

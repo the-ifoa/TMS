@@ -19,6 +19,7 @@ import {
   HiOutlineChevronUp,
 } from 'react-icons/hi';
 import { listExamAttempts, getExam, getExamAttemptResult, gradeExamAttempt, getExamAnalytics } from '../api';
+import { useAuth } from '../context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
@@ -706,6 +707,8 @@ function GradeModal({ attemptId, onClose, onGraded }) {
 export default function ExamAttempts() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { isAdmin } = useAuth();
+  const backToExams = isAdmin ? '/admin/exams' : '/airline/exams/manage';
   const [exam, setExam] = useState(null);
   const [attempts, setAttempts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -758,7 +761,7 @@ export default function ExamAttempts() {
                 variant="outline"
                 size="sm"
                 className="h-8 px-2.5 rounded-lg border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-1.5 flex-shrink-0 shadow-2xs"
-                onClick={() => navigate('/admin/exams')}
+                onClick={() => navigate(backToExams)}
                 title="Back to Exams"
               >
                 <HiOutlineArrowLeft className="w-3.5 h-3.5 text-slate-500" />

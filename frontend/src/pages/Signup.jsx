@@ -156,19 +156,22 @@ export default function Signup() {
         setUploading(false);
       }
 
-      // OTP VERIFICATION DISABLED — signup now returns token directly
       const res = await airlineSignup({ name: form.name, airlineName: form.airlineName, email: form.email, password: form.password, logo_url });
-      loginAdmin(res.data.token, { ...res.data.admin, role: 'airline' });
-      toast.success(`Welcome to IFOA, ${form.airlineName}!`);
-      navigate('/airline');
 
-      // // OTP step (disabled)
-      // setPendingEmail(form.email);
-      // setPendingAirline(form.airlineName);
-      // resetTimer(600);
-      // setOtp('');
-      // setStep('otp');
-      // toast.success(`Verification code sent to ${form.email}`, { duration: 4000 });
+      if (res.data?.otpSent) {
+        // Email verification is enabled on the backend — go to the OTP step.
+        setPendingEmail(form.email);
+        setPendingAirline(form.airlineName);
+        resetTimer(600);
+        setOtp('');
+        setStep('otp');
+        toast.success(`Verification code sent to ${form.email}`, { duration: 4000 });
+      } else {
+        // Verification disabled — the account is active, log straight in.
+        loginAdmin(res.data.token, { ...res.data.admin, role: 'airline' });
+        toast.success(`Welcome to IFOA, ${form.airlineName}!`);
+        navigate('/airline');
+      }
     } catch (err) {
       toast.error(err.response?.data?.error || 'Registration failed');
     } finally {

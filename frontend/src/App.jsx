@@ -52,6 +52,17 @@ function AdminRoute({ children }) {
   return children;
 }
 
+// Requires an airline with the admin-granted exam-authoring permission (admins
+// pass straight through — they have /admin/exams already).
+function ExamAuthorRoute({ children }) {
+  const { admin, loading, isAdmin } = useAuth();
+  if (loading) return null;
+  if (!admin) return <Navigate to="/login" replace />;
+  if (isAdmin) return children;
+  if (!admin.can_author_exams) return <Navigate to="/airline" replace />;
+  return children;
+}
+
 // Redirects logged-in users away from login/signup
 function GuestRoute({ children }) {
   const { admin, loading, isAdmin } = useAuth();
@@ -118,6 +129,10 @@ function App() {
           <Route path="enrollment/new" element={<AddParticipant />} />
           <Route path="dgr" element={<DgrForms />} />
           <Route path="exams" element={<AirlineExams />} />
+          <Route path="exams/manage"       element={<ExamAuthorRoute><ExamSystem /></ExamAuthorRoute>} />
+          <Route path="exams/new"          element={<ExamAuthorRoute><ExamBuilder /></ExamAuthorRoute>} />
+          <Route path="exams/:id/edit"     element={<ExamAuthorRoute><ExamBuilder /></ExamAuthorRoute>} />
+          <Route path="exams/:id/attempts" element={<ExamAuthorRoute><ExamAttempts /></ExamAuthorRoute>} />
           <Route path="exams/:examId/result/:attemptId" element={<ExamResultView />} />
           <Route path="profile" element={<Profile />} />
         </Route>

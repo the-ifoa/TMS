@@ -8,6 +8,11 @@ const { sendPasswordResetEmail, sendOtpEmail } = require('../services/emailServi
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) throw new Error('JWT_SECRET environment variable is required');
 
+// When true, airline signup emails a 6-digit OTP and the account stays
+// inactive until /airline/verify-otp succeeds. When false (default), the
+// account is created verified and a token is returned straight away.
+const EMAIL_VERIFICATION_ENABLED = process.env.EMAIL_VERIFICATION_ENABLED === 'true';
+
 // ─────────────────────────────────────────────
 //  ADMIN SIGNUP
 //  POST /api/auth/signup
@@ -106,11 +111,43 @@ exports.airlineSignup = async (req, res) => {
     if (existing && existing.emailVerified)
       return res.status(400).json({ error: 'An account with this email already exists.' });
 
-    // // OTP VERIFICATION DISABLED — commented out for now
-    // const rawOtp    = String(Math.floor(100000 + Math.random() * 900000));
-    // const hashedOtp = await bcrypt.hash(rawOtp, 10);
-    // const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    // ── Email verification ON: email an OTP, keep the account inactive ──────────
+    if (EMAIL_VERIFICATION_ENABLED) {
+      const rawOtp    = String(Math.floor(100000 + Math.random() * 900000));
+      const hashedOtp = await bcrypt.hash(rawOtp, 10);
+      const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
+      if (existing && !existing.emailVerified) {
+        existing.name        = name;
+        existing.airlineName  = airlineName;
+        existing.password     = password; // pre-save hook re-hashes
+        existing.logo_url     = logo_url || null;
+        existing.emailVerified = false;
+        existing.otpCode      = hashedOtp;
+        existing.otpExpiry    = otpExpiry;
+        existing.otpAttempts  = 0;
+        await existing.save();
+      } else {
+        await Airline.create({
+          name, airlineName,
+          email:         email.toLowerCase().trim(),
+          password,
+          logo_url:      logo_url || null,
+          emailVerified: false,
+          otpCode:       hashedOtp,
+          otpExpiry,
+          otpAttempts:   0,
+        });
+      }
+
+      await sendOtpEmail({ toEmail: email, airlineName, otp: rawOtp });
+      return res.status(200).json({
+        otpSent: true,
+        message: `Verification code sent to ${email}. It expires in 10 minutes.`,
+      });
+    }
+
+    // ── Email verification OFF: create the account verified and log straight in ─
     let airline;
     if (existing && !existing.emailVerified) {
       // Reuse the pending record — update fields and mark verified directly
@@ -119,9 +156,6 @@ exports.airlineSignup = async (req, res) => {
       existing.password      = password;  // pre-save hook will re-hash
       existing.logo_url      = logo_url || null;
       existing.emailVerified = true;
-      // existing.otpCode     = hashedOtp;
-      // existing.otpExpiry   = otpExpiry;
-      // existing.otpAttempts = 0;
       await existing.save();
       airline = existing;
     } else {
@@ -132,14 +166,8 @@ exports.airlineSignup = async (req, res) => {
         password,
         logo_url:      logo_url || null,
         emailVerified: true,
-        // otpCode:      hashedOtp,
-        // otpExpiry,
-        // otpAttempts:  0,
       });
     }
-
-    // // Send OTP email — disabled
-    // await sendOtpEmail({ toEmail: email, airlineName, otp: rawOtp });
 
     const token = jwt.sign(
       { id: airline._id, email: airline.email, name: airline.name, airlineName: airline.airlineName, role: 'airline' },
@@ -467,12 +495,13 @@ exports.adminUpdateAirline = async (req, res) => {
     const airline = await Airline.findById(req.params.id);
     if (!airline) return res.status(404).json({ error: 'Airline not found.' });
 
-    const { airlineName, address } = req.body;
+    const { airlineName, address, can_author_exams } = req.body;
     if (airlineName !== undefined) {
       if (!airlineName.trim()) return res.status(400).json({ error: 'Airline name cannot be empty.' });
       airline.airlineName = airlineName.trim();
     }
     if (address !== undefined) airline.address = (address || '').trim();
+    if (typeof can_author_exams === 'boolean') airline.can_author_exams = can_author_exams;
 
     await airline.save();
     res.json({ message: 'Airline updated.', airline: airline.toJSON() });

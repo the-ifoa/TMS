@@ -1022,7 +1022,7 @@ export default function Airlines() {
   const [downloadingDhlId, setDownloadingDhlId] = useState(null);
   const [dhlRowPreview, setDhlRowPreview] = useState(null);
   // Admin edit-airline modal: { open, id, airlineName, address }
-  const [editAirline, setEditAirline] = useState({ open: false, id: null, airlineName: '', address: '' });
+  const [editAirline, setEditAirline] = useState({ open: false, id: null, airlineName: '', address: '', can_author_exams: false });
   const [savingAirline, setSavingAirline] = useState(false);
   const [controlBarOpen, setControlBarOpen] = useState(false);
 
@@ -1484,20 +1484,25 @@ export default function Airlines() {
       id: airline._id || airline.id,
       airlineName: airline.airlineName || '',
       address: airline.address || '',
+      can_author_exams: !!airline.can_author_exams,
     });
   };
-  const closeEditAirline = () => setEditAirline({ open: false, id: null, airlineName: '', address: '' });
+  const closeEditAirline = () => setEditAirline({ open: false, id: null, airlineName: '', address: '', can_author_exams: false });
   const saveEditAirline = async () => {
     const name = editAirline.airlineName.trim();
     if (!name) { toast.error('Airline name cannot be empty'); return; }
     setSavingAirline(true);
     try {
-      const res = await updateAirline(editAirline.id, { airlineName: name, address: editAirline.address.trim() });
+      const res = await updateAirline(editAirline.id, {
+        airlineName: name,
+        address: editAirline.address.trim(),
+        can_author_exams: editAirline.can_author_exams,
+      });
       const updated = res.data.airline;
       // Patch in-memory data so the change shows immediately without a full reload
       setData(prev => prev.map(d =>
         airlineKey(d.airline) === String(editAirline.id)
-          ? { ...d, airline: { ...d.airline, airlineName: updated.airlineName, address: updated.address } }
+          ? { ...d, airline: { ...d.airline, airlineName: updated.airlineName, address: updated.address, can_author_exams: updated.can_author_exams } }
           : d
       ));
       toast.success('Airline updated');
@@ -1845,6 +1850,15 @@ export default function Airlines() {
                     className="w-full border border-primary-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-400 resize-y"
                     placeholder="Airline address" />
                 </div>
+                <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                  <input type="checkbox" checked={editAirline.can_author_exams}
+                    onChange={e => setEditAirline(prev => ({ ...prev, can_author_exams: e.target.checked }))}
+                    className="mt-0.5 w-4 h-4 rounded border-primary-300 text-accent-500 focus:ring-accent-400" />
+                  <span className="text-xs text-primary-600 leading-relaxed">
+                    <span className="font-semibold text-primary-800">Allow this airline to create and assign its own exams</span><br />
+                    Adds a "Manage Exams" area where the airline builds exams, emails them to its own students, and views results.
+                  </span>
+                </label>
               </div>
               <div className="px-5 pb-5 flex gap-3">
                 <button onClick={closeEditAirline} className="btn-outline flex-1">Cancel</button>

@@ -4,6 +4,8 @@ const dns = require('dns');
 dns.setServers(['8.8.8.8', '8.8.4.4']);
 
 require('dotenv').config();
+// Load first so every console.* below is also written to logs/backend.log
+const { requestLogger } = require('./utils/logger');
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -65,6 +67,7 @@ app.use(cors({
 // Handle preflight OPTIONS requests for every route
 app.options('*', cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: '20mb' }));
+app.use(requestLogger);
 
 let dbConnected = false;
 
@@ -127,6 +130,7 @@ const dgrRouter             = require('./routes/dgr');
 const examsRouter           = require('./routes/exams');
 const publicExamRouter      = require('./routes/publicExam');
 const questionBankRouter    = require('./routes/questionBank');
+const clientLogsRouter      = require('./routes/clientLogs');
 
 app.use('/api/auth', authRouter);
 app.use('/api/participants', participantsRouter);
@@ -139,6 +143,7 @@ app.use('/api/dgr', dgrRouter);
 app.use('/api/exams', examsRouter);
 app.use('/api/public-exam', publicExamRouter);
 app.use('/api/question-bank', questionBankRouter);
+app.use('/api/client-logs', clientLogsRouter);
 
 // Frontend is served separately (localhost in dev, or its own host in prod).
 // The backend is API-only — do NOT serve static files from here.

@@ -8,6 +8,9 @@ const airlineSchema = new mongoose.Schema({
   email:       { type: String, required: true, unique: true, lowercase: true, trim: true },
   password:    { type: String, required: true, minlength: 6 },
   role:        { type: String, default: 'airline' },
+  // Admin-granted: when true this airline can create/publish its own exams and
+  // assign them to its own participants (see examsController). Default off.
+  can_author_exams: { type: Boolean, default: false },
   lastLogin:   { type: Date, default: Date.now },
   logo_url:          { type: String, default: null },
   resetPasswordToken:  { type: String, default: null },

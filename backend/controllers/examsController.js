@@ -13,6 +13,27 @@ function isAdmin(req) {
   return req.admin?.role === 'admin' || req.admin?.role === 'Administrator';
 }
 
+// Non-admin caller who is an airline with the admin-granted exam-authoring
+// permission — resolves to the Airline doc, or null if not permitted.
+async function authoringAirline(req) {
+  if (isAdmin(req)) return null;
+  const airline = await Airline.findById(req.admin.id).select('can_author_exams');
+  return airline && airline.can_author_exams ? airline : null;
+}
+
+// True when this airline caller owns the given exam.
+function ownsExam(req, exam) {
+  return !isAdmin(req) && exam.owner_airline && String(exam.owner_airline) === String(req.admin.id);
+}
+
+// Who may edit/publish/assign/send/delete an exam: an IFOA admin for global
+// (admin-owned) exams, or the owning airline for its own. IFOA admins are
+// view-only on airline-owned exams.
+function canManageExam(req, exam) {
+  if (ownsExam(req, exam)) return true;
+  return isAdmin(req) && !exam.owner_airline;
+}
+
 async function deleteExamImages(exam) {
   const ids = [];
   exam.questions.forEach((q) => {
@@ -26,9 +47,13 @@ async function deleteExamImages(exam) {
 // ─── GET /exams/airlines — admin only: airlines with participants, for assigning ──
 exports.listAirlines = async (req, res) => {
   try {
-    if (!isAdmin(req)) return res.status(403).json({ error: 'Admin access required.' });
+    // An exam-authoring airline gets the same picker, scoped to itself only.
+    if (!isAdmin(req) && !(await authoringAirline(req))) {
+      return res.status(403).json({ error: 'Admin access required.' });
+    }
 
-    const airlines     = await Airline.find({}).sort({ airlineName: 1 });
+    const airlineFilter = isAdmin(req) ? {} : { _id: req.admin.id };
+    const airlines     = await Airline.find(airlineFilter).sort({ airlineName: 1 });
     const participants = await Participant.find({}).sort({ created_at: -1 });
 
     const result = airlines.map((a) => ({
@@ -357,9 +382,12 @@ exports.reportViolation = async (req, res) => {
 // ─── PUT /exams/attempts/:attemptId/grade — admin manually grades pending items ─
 exports.gradeAttempt = async (req, res) => {
   try {
-    if (!isAdmin(req)) return res.status(403).json({ error: 'Admin access required.' });
     const attempt = await ExamAttempt.findById(req.params.attemptId);
     if (!attempt) return res.status(404).json({ error: 'Attempt not found.' });
+    if (!isAdmin(req)) {
+      const ownerExam = await Exam.findById(attempt.exam_id).select('owner_airline');
+      if (!ownerExam || !ownsExam(req, ownerExam)) return res.status(403).json({ error: 'Access denied.' });
+    }
     // Admin can grade a pending attempt AND override points on an already
     // scored one (submitted/graded) — never touch an in-progress attempt.
     if (attempt.status === 'in_progress') {
@@ -424,13 +452,15 @@ exports.gradeAttempt = async (req, res) => {
 // failure there (bad credentials, network block, etc.) throws before the
 // handler body below ever runs — invoke it manually to catch and report that.
 exports.uploadQuestionImage = (req, res) => {
-  examImageUpload.single('image')(req, res, (uploadErr) => {
+  examImageUpload.single('image')(req, res, async (uploadErr) => {
     if (uploadErr) {
       console.error('POST /exams/questions/upload-image upload error:', uploadErr.message);
       return res.status(500).json({ error: uploadErr.message || 'Image upload failed.' });
     }
     try {
-      if (!isAdmin(req)) return res.status(403).json({ error: 'Admin access required.' });
+      if (!isAdmin(req) && !(await authoringAirline(req))) {
+        return res.status(403).json({ error: 'Admin access required.' });
+      }
       if (!req.file) return res.status(400).json({ error: 'No image uploaded.' });
       res.json({ url: req.file.path, public_id: req.file.filename });
     } catch (err) {
@@ -443,7 +473,9 @@ exports.uploadQuestionImage = (req, res) => {
 // ─── DELETE /exams/questions/image/:publicId — admin removes an unsaved upload ──
 exports.deleteQuestionImage = async (req, res) => {
   try {
-    if (!isAdmin(req)) return res.status(403).json({ error: 'Admin access required.' });
+    if (!isAdmin(req) && !(await authoringAirline(req))) {
+      return res.status(403).json({ error: 'Admin access required.' });
+    }
     await deleteCloudinaryImage(req.params.publicId);
     res.json({ deleted: true });
   } catch (err) {
@@ -458,8 +490,26 @@ exports.listExams = async (req, res) => {
     let exams;
     if (isAdmin(req)) {
       exams = await Exam.find({}).sort({ created_at: -1 });
+      // Tag airline-created exams with the owning airline's name for the admin UI.
+      const ownerIds = [...new Set(exams.filter((e) => e.owner_airline).map((e) => String(e.owner_airline)))];
+      if (ownerIds.length) {
+        const owners = await Airline.find({ _id: { $in: ownerIds } }).select('airlineName');
+        const nameById = Object.fromEntries(owners.map((a) => [String(a._id), a.airlineName]));
+        return res.json(exams.map((e) => {
+          const json = e.toJSON();
+          if (json.owner_airline) json.owner_airline_name = nameById[String(json.owner_airline)] || 'Airline';
+          return json;
+        }));
+      }
+      return res.json(exams.map((e) => e.toJSON()));
     } else {
-      exams = await Exam.find({ status: 'published', 'assignments.airline_id': req.admin.id }).sort({ created_at: -1 });
+      // Airline sees: exams it owns (any status) + published exams assigned to it.
+      exams = await Exam.find({
+        $or: [
+          { owner_airline: req.admin.id },
+          { status: 'published', 'assignments.airline_id': req.admin.id },
+        ],
+      }).sort({ created_at: -1 });
     }
     res.json(exams.map((e) => e.toJSON()));
   } catch (err) {
@@ -471,10 +521,17 @@ exports.listExams = async (req, res) => {
 // ─── POST /exams — create (admin, draft) ──────────────────────────────────────
 exports.createExam = async (req, res) => {
   try {
-    if (!isAdmin(req)) return res.status(403).json({ error: 'Admin access required.' });
+    const airline = isAdmin(req) ? null : await authoringAirline(req);
+    if (!isAdmin(req) && !airline) return res.status(403).json({ error: 'Admin access required.' });
     if (!req.body.title) return res.status(400).json({ error: 'title is required.' });
 
-    const exam = await Exam.create({ ...req.body, created_by: req.admin.id, status: 'draft' });
+    const { owner_airline, created_by, ...body } = req.body;
+    const exam = await Exam.create({
+      ...body,
+      created_by: isAdmin(req) ? req.admin.id : undefined,
+      owner_airline: airline ? req.admin.id : null,
+      status: 'draft',
+    });
     res.status(201).json(exam.toJSON());
   } catch (err) {
     console.error('POST /exams error:', err.message);
@@ -489,6 +546,8 @@ exports.getExam = async (req, res) => {
     if (!exam) return res.status(404).json({ error: 'Exam not found.' });
 
     if (!isAdmin(req)) {
+      // The owning airline gets the full exam for editing.
+      if (ownsExam(req, exam)) return res.json(exam.toJSON());
       const assigned = exam.assignments.some((a) => String(a.airline_id) === String(req.admin.id));
       if (exam.status !== 'published' || !assigned) return res.status(403).json({ error: 'Access denied.' });
       const json = exam.toJSON();
@@ -505,11 +564,11 @@ exports.getExam = async (req, res) => {
 // ─── PUT /exams/:id — update meta + questions (admin) ─────────────────────────
 exports.updateExam = async (req, res) => {
   try {
-    if (!isAdmin(req)) return res.status(403).json({ error: 'Admin access required.' });
     const exam = await Exam.findById(req.params.id);
     if (!exam) return res.status(404).json({ error: 'Exam not found.' });
+    if (!canManageExam(req, exam)) return res.status(403).json({ error: 'Access denied.' });
 
-    const { created_by, _id, id, assignments, status, ...updatable } = req.body;
+    const { created_by, owner_airline, _id, id, assignments, status, ...updatable } = req.body;
     Object.assign(exam, updatable);
     await exam.save();
     res.json(exam.toJSON());
@@ -522,9 +581,9 @@ exports.updateExam = async (req, res) => {
 // ─── POST /exams/:id/publish — draft/archived -> published (admin) ───────────
 exports.publishExam = async (req, res) => {
   try {
-    if (!isAdmin(req)) return res.status(403).json({ error: 'Admin access required.' });
     const exam = await Exam.findById(req.params.id);
     if (!exam) return res.status(404).json({ error: 'Exam not found.' });
+    if (!canManageExam(req, exam)) return res.status(403).json({ error: 'Access denied.' });
     if (exam.questions.length === 0) return res.status(400).json({ error: 'Add at least one question before publishing.' });
 
     exam.status = 'published';
@@ -539,12 +598,15 @@ exports.publishExam = async (req, res) => {
 // ─── POST /exams/:id/assign — assign to participants (admin) ─────────────────
 exports.assignExam = async (req, res) => {
   try {
-    if (!isAdmin(req)) return res.status(403).json({ error: 'Admin access required.' });
     const exam = await Exam.findById(req.params.id);
     if (!exam) return res.status(404).json({ error: 'Exam not found.' });
+    if (!canManageExam(req, exam)) return res.status(403).json({ error: 'Access denied.' });
 
     const { participant_ids = [] } = req.body;
-    const participants = await Participant.find({ _id: { $in: participant_ids } });
+    const query = { _id: { $in: participant_ids } };
+    // An airline can only assign its own participants.
+    if (ownsExam(req, exam)) query.submitted_by = req.admin.id;
+    const participants = await Participant.find(query);
 
     participants.forEach((p) => {
       const already = exam.assignments.some((a) => String(a.participant_id) === String(p._id));
@@ -566,15 +628,18 @@ exports.assignExam = async (req, res) => {
 // per participant, stable token), and emails the passwordless take link.
 exports.sendInvites = async (req, res) => {
   try {
-    if (!isAdmin(req)) return res.status(403).json({ error: 'Admin access required.' });
     const exam = await Exam.findById(req.params.id);
     if (!exam) return res.status(404).json({ error: 'Exam not found.' });
+    if (!canManageExam(req, exam)) return res.status(403).json({ error: 'Access denied.' });
     if (exam.status !== 'published') return res.status(400).json({ error: 'Publish the exam before sending invites.' });
 
     const { participant_ids = [] } = req.body;
     if (participant_ids.length === 0) return res.status(400).json({ error: 'Select at least one participant.' });
 
-    const participants = await Participant.find({ _id: { $in: participant_ids } });
+    const query = { _id: { $in: participant_ids } };
+    // An airline can only invite its own participants.
+    if (ownsExam(req, exam)) query.submitted_by = req.admin.id;
+    const participants = await Participant.find(query);
     const airlines = await Airline.find({});
     const airlineName = (id) => airlines.find((a) => String(a._id) === String(id))?.airlineName || '';
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
@@ -640,7 +705,10 @@ exports.sendInvites = async (req, res) => {
 // ─── GET /exams/:id/invites — admin: invite + attempt status for an exam ────────
 exports.listInvites = async (req, res) => {
   try {
-    if (!isAdmin(req)) return res.status(403).json({ error: 'Admin access required.' });
+    if (!isAdmin(req)) {
+      const exam = await Exam.findById(req.params.id).select('owner_airline');
+      if (!exam || !ownsExam(req, exam)) return res.status(403).json({ error: 'Access denied.' });
+    }
     const invites = await ExamInvite.find({ exam_id: req.params.id }).sort({ created_at: -1 });
     const attemptIds = invites.map((i) => i.attempt_id).filter(Boolean);
     const attempts = await ExamAttempt.find({ _id: { $in: attemptIds } })
@@ -664,9 +732,9 @@ exports.listInvites = async (req, res) => {
 // ─── GET /exams/:id/analytics — admin: per-question miss rate + pass-rate over time ──
 exports.getAnalytics = async (req, res) => {
   try {
-    if (!isAdmin(req)) return res.status(403).json({ error: 'Admin access required.' });
-    const exam = await Exam.findById(req.params.id).select('questions title');
+    const exam = await Exam.findById(req.params.id).select('questions title owner_airline');
     if (!exam) return res.status(404).json({ error: 'Exam not found.' });
+    if (!isAdmin(req) && !ownsExam(req, exam)) return res.status(403).json({ error: 'Access denied.' });
 
     const attempts = await ExamAttempt.find({ exam_id: exam._id, status: { $ne: 'in_progress' } })
       .select('answers status passed percentage submitted_at');
@@ -780,9 +848,9 @@ exports.startAttempt = async (req, res) => {
 // ─── DELETE /exams/:id (admin) — cascades Cloudinary image cleanup ───────────
 exports.deleteExam = async (req, res) => {
   try {
-    if (!isAdmin(req)) return res.status(403).json({ error: 'Admin access required.' });
     const exam = await Exam.findById(req.params.id);
     if (!exam) return res.status(404).json({ error: 'Exam not found.' });
+    if (!canManageExam(req, exam)) return res.status(403).json({ error: 'Access denied.' });
 
     await deleteExamImages(exam);
     await exam.deleteOne();

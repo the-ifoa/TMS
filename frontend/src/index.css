@@ -143,6 +143,20 @@
   background: #94a3b8;
 }
 
+/* Re-show scrollbar inside Radix Select dropdowns (Radix hides it by default) */
+[data-radix-select-viewport][data-radix-select-viewport] {
+  scrollbar-width: thin !important;
+  -ms-overflow-style: auto !important;
+}
+[data-radix-select-viewport][data-radix-select-viewport]::-webkit-scrollbar {
+  display: block !important;
+  width: 6px;
+}
+[data-radix-select-viewport][data-radix-select-viewport]::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
 /* Smooth transitions for sidebar */
 .sidebar-transition {
   transition: width 0.25s ease, transform 0.25s ease;

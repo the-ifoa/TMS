@@ -15,7 +15,6 @@ import {
   HiOutlineTrash,
   HiOutlineX,
   HiOutlineSearch,
-  HiOutlineOfficeBuilding,
   HiOutlineSelector,
 } from 'react-icons/hi';
 import {

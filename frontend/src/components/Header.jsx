@@ -15,12 +15,12 @@ import {
   HiOutlineUserAdd,
   HiOutlineLogout,
   HiOutlineAcademicCap,
-  HiOutlineOfficeBuilding,
   HiOutlineCalendar,
   HiOutlineLocationMarker,
   HiOutlineClock,
   HiOutlineShieldExclamation,
 } from 'react-icons/hi';
+import { FaPlaneDeparture } from 'react-icons/fa';
 import { getParticipants, getNotifications } from '../api';
 import { useAuth } from '../context/AuthContext';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
@@ -114,7 +114,7 @@ const NOTIF_CONFIG = {
   certificate: { icon: HiOutlineDocumentText,  color: 'text-emerald-500', bg: 'bg-emerald-50' },
   participant:  { icon: HiOutlineUserAdd,        color: 'text-blue-500',    bg: 'bg-blue-50'    },
   score:        { icon: HiOutlineCheckCircle,    color: 'text-amber-500',   bg: 'bg-amber-50'   },
-  airline:      { icon: HiOutlineOfficeBuilding, color: 'text-violet-500',  bg: 'bg-violet-50'  },
+  airline:      { icon: FaPlaneDeparture, color: 'text-violet-500',  bg: 'bg-violet-50'  },
   pending:      { icon: HiOutlineClock,          color: 'text-orange-500',  bg: 'bg-orange-50'  },
   dgr:          { icon: HiOutlineShieldExclamation, color: 'text-red-500',  bg: 'bg-red-50'     },
   exam:         { icon: HiOutlineAcademicCap,    color: 'text-indigo-500',  bg: 'bg-indigo-50'  },

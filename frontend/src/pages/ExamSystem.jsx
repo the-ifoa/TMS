@@ -4,11 +4,12 @@ import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   HiOutlineAcademicCap, HiOutlinePlusCircle, HiOutlinePencil, HiOutlineTrash,
-  HiOutlineUserAdd, HiOutlineClipboardCheck, HiOutlineOfficeBuilding,
+  HiOutlineUserAdd, HiOutlineClipboardCheck,
   HiOutlineSearch, HiOutlineX, HiOutlineUserGroup, HiChevronRight,
   HiOutlineClock, HiOutlineDocumentText, HiOutlineMail, HiOutlineCheckCircle,
   HiOutlinePaperAirplane, HiOutlineCollection,
 } from 'react-icons/hi';
+import { FaPlaneDeparture } from 'react-icons/fa';
 import { listExams, deleteExam, publishExam, getExamAirlines, assignExam, updateExam, sendExamInvites, getExamInvites } from '../api';
 import QuestionBankList from './QuestionBank';
 import { DateTimeInputCard } from './ExamBuilder';
@@ -330,7 +331,7 @@ function AssignModal({ exam, onClose, onAssigned }) {
                     <div className="flex items-center gap-2.5 min-w-0 flex-1 pr-2">
                       <HiChevronRight className={`w-4 h-4 text-slate-400 flex-shrink-0 transition-transform duration-200 ${isExpanded ? 'rotate-90 text-slate-700' : ''}`} />
                       <div className="w-7 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-700 shadow-2xs flex-shrink-0">
-                        <HiOutlineOfficeBuilding className="w-4 h-4" />
+                        <FaPlaneDeparture className="w-4 h-4" />
                       </div>
                       <span className="text-sm font-bold text-slate-900 truncate">
                         {airline.airlineName}
@@ -630,7 +631,7 @@ function SendInviteModal({ exam, onClose, onSent }) {
                     <div className="flex items-center gap-2.5 min-w-0 flex-1">
                       <HiChevronRight className={`w-4 h-4 text-slate-400 flex-shrink-0 transition-transform ${isOpen ? 'rotate-90 text-slate-600' : ''}`} />
                       <div className="w-7 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-700 shadow-2xs flex-shrink-0">
-                        <HiOutlineOfficeBuilding className="w-4 h-4" />
+                        <FaPlaneDeparture className="w-4 h-4" />
                       </div>
                       <span className="text-sm font-bold text-slate-800 truncate">{airline.airlineName}</span>
                       <span className="px-2 py-0.5 rounded-full bg-slate-200/80 text-slate-700 text-[11px] font-bold">{participants.length}</span>

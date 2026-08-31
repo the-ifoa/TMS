@@ -8,7 +8,6 @@ import {
   HiOutlinePhotograph,
   HiOutlineTrash,
   HiOutlineX,
-  HiOutlineOfficeBuilding,
   HiOutlineCalendar,
   HiOutlineArrowLeft,
   HiOutlinePencil,
@@ -21,6 +20,7 @@ import {
   HiOutlineChevronLeft,
   HiOutlineChevronRight,
 } from 'react-icons/hi';
+import { FaPlaneDeparture } from 'react-icons/fa';
 import toast from 'react-hot-toast';
 import LogoAvatar from '../components/LogoAvatar';
 import {
@@ -840,7 +840,7 @@ function ContractEditor({ airline, onBack, onSent }) {
       {/* Recipient + header date */}
       <div className="bg-white rounded-2xl border border-slate-200/80 p-4 sm:p-6 space-y-4 shadow-sm">
         <div className="flex items-center gap-2">
-          <HiOutlineOfficeBuilding className="w-5 h-5 text-primary-500" />
+          <FaPlaneDeparture className="w-5 h-5 text-primary-500" />
           <h3 className="text-base font-bold text-primary-800">Recipient &amp; Document</h3>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1100,7 +1100,7 @@ export default function Contract() {
           <div className="flex items-center gap-2.5 flex-shrink-0">
             {selectedAirline && (
               <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200">
-                <HiOutlineOfficeBuilding className="w-4 h-4 text-slate-600" />
+                <FaPlaneDeparture className="w-4 h-4 text-slate-600" />
                 <span className="text-xs font-bold text-slate-800">{selectedAirline.airlineName}</span>
               </div>
             )}

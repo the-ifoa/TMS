@@ -37,13 +37,18 @@ const ALL_MODULES = [
 ];
 
 const DEPARTMENT_OPTIONS = [
-  'Flight Operations',
-  'OCC',
-  'Crew Control',
-  'Reservation',
+  'CAMO',
   'Compliance Monitoring',
-  'Training',
+  'Crew Control',
+  'Flight Dispatch',
+  'Flight Operations',
   'Ground Operations',
+  'LCC',
+  'MOC/MCC',
+  'OCC',
+  'Reservation',
+  'Security',
+  'Training',
 ];
 
 const emptyRow = (defaultNdgSubtype = 'I', defaultDepartment = '') => ({
@@ -406,7 +411,7 @@ function BulkRow({ row, idx, onChange, onRemove, result, isNDG, ndgMode, departm
           {departmentMode === 'manual' && (
             <Select value={row.department || undefined} onValueChange={v => onChange(row.id, 'department', v)} disabled={hasSuccess}>
               <SelectTrigger className="text-sm flex-1 sm:w-44"><SelectValue placeholder="Department" /></SelectTrigger>
-              <SelectContent>
+              <SelectContent className="max-h-60">
                 {DEPARTMENT_OPTIONS.map(dep => (
                   <SelectItem key={dep} value={dep}>{dep}</SelectItem>
                 ))}
@@ -666,7 +671,7 @@ function BulkForm({ isAdmin, airlineName, airlineOptions, onSuccess }) {
                 <label className="text-[10px] font-semibold text-primary-400 uppercase tracking-wider">Choose Department</label>
                 <Select value={shared.department || undefined} onValueChange={v => setSharedField('department', v)}>
                   <SelectTrigger className="mt-1"><SelectValue placeholder="Choose department" /></SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-60">
                     {DEPARTMENT_OPTIONS.map(dep => (
                       <SelectItem key={dep} value={dep}>{dep}</SelectItem>
                     ))}

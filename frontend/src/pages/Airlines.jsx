@@ -4,7 +4,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Clock, CheckCircle2 } from 'lucide-react';
 import LogoAvatar from '../components/LogoAvatar';
 import {
-  HiOutlineOfficeBuilding,
   HiOutlineUsers,
   HiOutlineChevronDown,
   HiOutlineChevronUp,

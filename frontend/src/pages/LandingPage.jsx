@@ -291,7 +291,7 @@ export default function LandingPage() {
       </motion.nav>
 
       {/* ── Hero ── */}
-      <section className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden">
+      <section className="relative min-h-screen w-full flex flex-col items-center justify-center overflow-hidden">
         <CosmicParallaxBg className="min-h-screen w-full flex flex-col items-center justify-center pt-24 pb-16 px-4 sm:px-6">
           <div className="max-w-4xl mx-auto flex flex-col items-center justify-center text-center">
 

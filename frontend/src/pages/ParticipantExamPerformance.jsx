@@ -12,11 +12,11 @@ import {
   HiOutlineExclamationCircle,
   HiOutlineChartBar,
   HiOutlineChartPie,
-  HiOutlineOfficeBuilding,
   HiOutlineCalendar,
   HiOutlineX,
   HiOutlineBadgeCheck,
 } from 'react-icons/hi';
+import { FaPlaneDeparture } from 'react-icons/fa';
 import { getParticipantExamPerformance, getExamAttemptResult } from '../api';
 import { useAuth } from '../context/AuthContext';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -561,7 +561,7 @@ export default function ParticipantExamPerformance() {
           {isAdmin && participant.company && (
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2 bg-indigo-50/80 border border-indigo-100/80 px-3.5 py-1.5 rounded-xl text-xs font-extrabold text-indigo-900">
-                <HiOutlineOfficeBuilding className="w-4 h-4 text-indigo-600" />
+                <FaPlaneDeparture className="w-4 h-4 text-indigo-600" />
                 <span>{participant.company}</span>
               </div>
             </div>

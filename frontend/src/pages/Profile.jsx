@@ -9,7 +9,6 @@ import {
   HiOutlineLockClosed,
   HiOutlinePhotograph,
   HiOutlineX,
-  HiOutlineOfficeBuilding,
   HiOutlineCheckCircle,
   HiOutlineInformationCircle,
   HiOutlineLocationMarker,

@@ -20,6 +20,8 @@
 #                  default is dev mode (nodemon + vite dev server)
 #    --keep-logs   do NOT clear the logs on start/restart (they are wiped
 #                  by default; the previous run is kept as <file>.prev)
+#    --no-tail     do NOT follow logs/backend.log after start/restart
+#                  (by default start/restart tail -F it once services are up)
 #
 #  PIDs live in logs/.run/ , logs in logs/ :
 #    logs/backend.log        server console + HTTP lines (written by the app)
@@ -43,12 +45,14 @@ FRONTEND_PORT="${FRONTEND_PORT:-3000}"
 
 MODE="dev"
 KEEP_LOGS="false"
+NO_TAIL="false"
 ARGS=()
 for a in "$@"; do
   case "$a" in
     --prod|-p)   MODE="prod" ;;
     --dev)       MODE="dev" ;;
     --keep-logs) KEEP_LOGS="true" ;;
+    --no-tail)   NO_TAIL="true" ;;
     *)           ARGS+=("$a") ;;
   esac
 done
@@ -204,10 +208,24 @@ do_logs() {
   tail -n 40 -F "${files[@]}"
 }
 
+# After start/restart, follow the app log so the fresh run is visible right away.
+# Skips when --no-tail is given, stdout is not a terminal, or the target is
+# frontend-only. Ctrl-C quits the tail; the services keep running.
+tail_backend() {
+  [ "$NO_TAIL" = "true" ] && return 0
+  [ -t 1 ] || return 0
+  case "$TARGET" in frontend) return 0 ;; esac
+  local f="$LOG_DIR/backend.log"
+  [ -f "$f" ] || : > "$f"
+  echo
+  info "following ${f#$ROOT/}  ${c_dim}(Ctrl-C to quit — server keeps running; --no-tail to skip)${c_rst}"
+  exec tail -n 40 -F "$f"
+}
+
 case "$CMD" in
-  start)   do_start "$TARGET"; echo; do_status ;;
+  start)   do_start "$TARGET"; echo; do_status; tail_backend ;;
   stop)    do_stop  "$TARGET" ;;
-  restart) do_stop "$TARGET"; sleep 1; do_start "$TARGET"; echo; do_status ;;
+  restart) do_stop "$TARGET"; sleep 1; do_start "$TARGET"; echo; do_status; tail_backend ;;
   status)  do_status ;;
   logs)    do_logs "$TARGET" ;;
   build)   ( cd "$FRONTEND_DIR" && npm run build ) ;;

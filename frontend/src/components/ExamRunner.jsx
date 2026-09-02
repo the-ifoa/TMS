@@ -114,7 +114,7 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onSubmit, onRe
     finishedRef.current = true;
     setSubmitting(true);
     try {
-      if (isFullscreen()) await exitFullscreen().catch(() => {});
+      if (isFullscreen()) await exitFullscreen().catch(() => { });
       await onSubmit();
       onFinished();
     } catch (err) {
@@ -152,7 +152,7 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onSubmit, onRe
       pendingReenter = false;
       document.removeEventListener('pointerdown', reenter, true);
       document.removeEventListener('keydown', reenter, true);
-      if (!isFullscreen() && !finishedRef.current) requestFullscreen(document.documentElement).catch(() => {});
+      if (!isFullscreen() && !finishedRef.current) requestFullscreen(document.documentElement).catch(() => { });
     };
     const armReenter = () => {
       setAwaitingFsGesture(true);
@@ -176,7 +176,7 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onSubmit, onRe
     };
     const onPrintScreen = (e) => {
       if (e.key === 'PrintScreen') {
-        navigator.clipboard?.writeText('').catch(() => {});
+        navigator.clipboard?.writeText('').catch(() => { });
         toast.error('Screenshots are not permitted during the exam.');
       }
     };
@@ -203,7 +203,7 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onSubmit, onRe
     };
   }, [lockdownEnabled, reportViolation]);
 
-  useEffect(() => () => { if (isFullscreen()) exitFullscreen().catch(() => {}); }, []);
+  useEffect(() => () => { if (isFullscreen()) exitFullscreen().catch(() => { }); }, []);
 
   useEffect(() => {
     if (secondsLeft <= 0) { handleSubmit(); return; }
@@ -371,11 +371,10 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onSubmit, onRe
 
           {/* Timer Clock Badge */}
           <div
-            className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-mono font-bold transition-all border shadow-2xs ${
-              secondsLeft < 120
+            className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-mono font-bold transition-all border shadow-2xs ${secondsLeft < 120
                 ? 'bg-rose-600 text-white border-rose-500 animate-pulse'
                 : 'bg-slate-800/90 text-white border-slate-700/80'
-            }`}
+              }`}
           >
             <HiOutlineClock className="w-4 h-4 text-blue-400 flex-shrink-0" />
             <span>{formatTime(secondsLeft)}</span>
@@ -521,9 +520,8 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onSubmit, onRe
                 <span className="text-xs font-extrabold text-slate-700 uppercase tracking-wider">QUESTION {index + 1} <span className="text-slate-400 font-semibold">OF {questions.length}</span></span>
                 <span className="text-[10px] sm:text-xs font-semibold text-slate-400 border-l border-slate-200 pl-2 sm:pl-3">1 mark</span>
                 {questionTimeLimits[q._id] != null && (
-                  <span className={`inline-flex items-center gap-1 text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-full border ${
-                    currentQuestionLocked ? 'bg-rose-600 text-white border-rose-600' : 'bg-amber-50 text-amber-700 border-amber-200'
-                  }`}>
+                  <span className={`inline-flex items-center gap-1 text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-full border ${currentQuestionLocked ? 'bg-rose-600 text-white border-rose-600' : 'bg-amber-50 text-amber-700 border-amber-200'
+                    }`}>
                     <HiOutlineClock className="w-3 h-3" />
                     {currentQuestionLocked ? 'Locked' : formatTime(questionRemaining(q._id))}
                   </span>

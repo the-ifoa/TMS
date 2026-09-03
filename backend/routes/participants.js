@@ -51,6 +51,9 @@ router.delete('/airline/:airlineName', participantsController.deleteByAirlineNam
 // ─── DELETE airline account + all their participants by airline _id (admin only) ──────
 router.delete('/airline-by-id/:airlineId', participantsController.deleteByAirlineId);
 
+// ─── DELETE the airline account itself (login included) + any submissions (admin only) ──
+router.delete('/airline-account/:airlineId', participantsController.deleteAirlineAccount);
+
 // ─── DELETE single participant (admin only) ───────────────────────────────────
 router.delete('/:id', participantsController.deleteParticipant);
 

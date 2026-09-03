@@ -24,7 +24,7 @@ import {
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import {
-  getParticipantsByAirline, deleteParticipant, deleteAirlineData, deleteAirlineById,
+  getParticipantsByAirline, deleteParticipant, deleteAirlineData, deleteAirlineById, deleteAirlineAccount,
   generateCertificateBlob, generateCertificateWithModules,
   updateFullCertId, getCertCounters, resetCertCounter, resetAllCertCounters,
   updateNdgScore, updateFdrHours, revokeCertificate, updateValidity, updateAirline,
@@ -1013,6 +1013,7 @@ export default function Airlines() {
   const [resetting, setResetting]   = useState(null);
   const [filterCertStatus, setFilterCertStatus] = useState(''); // '' | 'pending' | 'generated'
   const [sortKey, setSortKey] = useState('name_asc');
+  const [showEmptyAirlines, setShowEmptyAirlines] = useState(false); // also list airlines with no submissions
   const [checkedAirlines, setCheckedAirlines] = useState(new Set());
   const [deletingAirlines, setDeletingAirlines] = useState(false);
   const [deletingSelected, setDeletingSelected] = useState(false);
@@ -1539,19 +1540,40 @@ export default function Airlines() {
 
   const handleDeleteSelectedAirlines = async () => {
     if (checkedAirlines.size === 0) { toast.error('Select at least one airline'); return; }
+
+    // Split the selection: airlines with submissions only get their participant
+    // records wiped; empty airlines are removed account + login and all.
+    const selected = [...checkedAirlines]
+      .map(aKey => data.find(d => airlineKey(d.airline) === aKey))
+      .filter(Boolean);
+    const emptyOnes = selected.filter(d => d.participants.length === 0);
+    const withData  = selected.filter(d => d.participants.length > 0);
+
+    const lines = [];
+    if (withData.length)  lines.push(`• remove all submissions for ${withData.length} airline(s) (account kept)`);
+    if (emptyOnes.length) lines.push(`• permanently delete ${emptyOnes.length} empty airline account(s) — login included`);
     const confirmed = await confirm(
-      `Remove all submissions for ${checkedAirlines.size} airline(s)?\n\nThis deletes their participant records from the admin view.\nAll airline accounts and logins remain intact. Cannot be undone.`,
-      { title: 'Remove all submissions', confirmLabel: 'Remove' }
+      `This will:\n${lines.join('\n')}\n\nCannot be undone.`,
+      { title: 'Delete airlines', confirmLabel: 'Delete' }
     );
     if (!confirmed) return;
+
     setDeletingAirlines(true);
     const deletedIds = new Set(); let fail = 0;
-    for (const airlineId of checkedAirlines) {
-      try { await deleteAirlineById(airlineId); deletedIds.add(airlineId); } catch { fail++; }
+    for (const d of selected) {
+      const aKey = airlineKey(d.airline);
+      try {
+        if (d.participants.length === 0) await deleteAirlineAccount(d.airline._id || d.airline.id);
+        else                             await deleteAirlineById(d.airline._id || d.airline.id);
+        deletedIds.add(aKey);
+      } catch { fail++; }
     }
     setDeletingAirlines(false);
-    // Remove only the exact airlines whose key was deleted — others with same name are unaffected
-    setData(prev => prev.filter(d => !deletedIds.has(airlineKey(d.airline))));
+    // Drop airlines whose account was removed; for submission-only wipes, clear their rows.
+    const emptyKeys = new Set(emptyOnes.map(d => airlineKey(d.airline)));
+    setData(prev => prev
+      .filter(d => !(deletedIds.has(airlineKey(d.airline)) && emptyKeys.has(airlineKey(d.airline))))
+      .map(d => (deletedIds.has(airlineKey(d.airline)) ? { ...d, participants: [] } : d)));
     setCheckedAirlines(new Set());
     setChecked(prev => {
       const n = new Set(prev);
@@ -1781,7 +1803,14 @@ export default function Airlines() {
           return nm && typeMatch && statusMatch;
         }),
       };
-    }).filter(({ participants }) => participants.length > 0).sort((a, b) => {
+    }).filter(({ airline, participants }) => {
+      if (participants.length > 0) return true;
+      if (!showEmptyAirlines) return false;
+      // Only surface airlines that genuinely have zero submissions — not ones
+      // whose rows were merely hidden by the active search / type / status filters.
+      const raw = data.find(d => airlineKey(d.airline) === airlineKey(airline));
+      return !raw || raw.participants.length === 0;
+    }).sort((a, b) => {
       switch (sortKey) {
         case 'name_asc':   return (a.airline.airlineName || '').localeCompare(b.airline.airlineName || '');
         case 'name_desc':  return (b.airline.airlineName || '').localeCompare(a.airline.airlineName || '');
@@ -1790,7 +1819,7 @@ export default function Airlines() {
         default:           return 0;
       }
     });
-  }, [data, search, filterType, filterCertStatus, sortKey]);
+  }, [data, search, filterType, filterCertStatus, sortKey, showEmptyAirlines]);
 
   const totalParticipants = allParticipants.length;
   const totalAirlines     = data.length;
@@ -2256,6 +2285,23 @@ export default function Airlines() {
                       </SelectContent>
                     </Select>
                   </div>
+
+                  {/* 4. Show empty airlines toggle */}
+                  <button
+                    type="button"
+                    onClick={() => setShowEmptyAirlines(v => !v)}
+                    title="Also show airlines that have no submissions yet"
+                    className={`col-span-3 sm:col-span-1 sm:w-[130px] flex items-center justify-center gap-1.5 px-2 h-7 text-xs font-semibold rounded-lg border transition-all shadow-2xs ${
+                      showEmptyAirlines
+                        ? 'bg-slate-900 text-white border-slate-900'
+                        : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
+                    }`}
+                  >
+                    {showEmptyAirlines
+                      ? <HiOutlineCheckCircle className="w-3.5 h-3.5" />
+                      : <HiOutlineFilter className="w-3.5 h-3.5" />}
+                    Empty airlines
+                  </button>
                 </div>
               </div>
             </div>

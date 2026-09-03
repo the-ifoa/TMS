@@ -115,11 +115,11 @@ exports.listByAirline = async (req, res) => {
       ),
     }));
 
-    // Filter out airline entries with zero participants — keeps UI clean
-    const nonEmpty = result.filter(r => r.participants.length > 0);
+    // Return every airline, including ones with zero submissions — the admin UI
+    // has a "Empty airlines" toggle that decides whether to show them.
     // Orphaned participants (submitted_by points to deleted airline) are silently
     // excluded from the admin view — they remain in DB and can be found by direct search.
-    res.json(nonEmpty);
+    res.json(result);
   } catch (err) {
     console.error('GET /by-airline error:', err.message);
     res.status(500).json({ error: err.message });
@@ -548,6 +548,47 @@ exports.deleteByAirlineId = async (req, res) => {
     });
   } catch (err) {
     console.error('DELETE /participants/airline-by-id error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// ─── DELETE the airline account document itself + any submissions (admin only) ────────
+// Unlike deleteByAirlineId, this also removes the Airline doc, so the account and
+// its login are gone. Used by the admin grid to fully remove empty airlines.
+exports.deleteAirlineAccount = async (req, res) => {
+  try {
+    if (req.admin.role === 'airline') {
+      return res.status(403).json({ error: 'Only admins can delete airline accounts.' });
+    }
+    const { airlineId } = req.params;
+
+    const airlineDoc = await Airline.findById(airlineId);
+    if (!airlineDoc) return res.status(404).json({ error: 'Airline not found.' });
+
+    const deleteFilter = {
+      $or: [
+        { submitted_by: airlineDoc._id },
+        {
+          submitted_by: null,
+          $or: [
+            { airline_name: airlineDoc.airlineName },
+            { company:      airlineDoc.airlineName },
+          ],
+        },
+      ],
+    };
+    const ids    = await Participant.find(deleteFilter, { _id: 1 }).lean();
+    const result = await Participant.deleteMany(deleteFilter);
+    await DhlCertificate.deleteMany({ participant: { $in: ids.map(d => d._id) } });
+    await Airline.findByIdAndDelete(airlineId);
+
+    res.json({
+      message: `Deleted airline "${airlineDoc.airlineName}"${result.deletedCount ? ` and ${result.deletedCount} submission(s)` : ''}.`,
+      deletedCount: result.deletedCount,
+      airlineId,
+    });
+  } catch (err) {
+    console.error('DELETE /participants/airline-account error:', err.message);
     res.status(500).json({ error: err.message });
   }
 };

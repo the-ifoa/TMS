@@ -99,6 +99,7 @@ export const updateParticipant        = (id, data) => api.put(`/participants/${i
 export const deleteParticipant        = (id)       => api.delete(`/participants/${id}`);
 export const deleteAirlineData        = (airlineName) => api.delete(`/participants/airline/${encodeURIComponent(airlineName)}`);
 export const deleteAirlineById        = (airlineId)   => api.delete(`/participants/airline-by-id/${airlineId}`);
+export const deleteAirlineAccount     = (airlineId)   => api.delete(`/participants/airline-account/${airlineId}`);
 export const updateCertSequence       = (id, cert_sequence) => api.patch(`/participants/${id}/cert-sequence`, { cert_sequence });
 export const updateFullCertId         = (id, cert_sequence, cert_year) => api.patch(`/participants/${id}/full-cert-id`, { cert_sequence, cert_year });
 export const updateNdgScore           = (id, ndg_score) => api.patch(`/participants/${id}/ndg-score`, { ndg_score });

@@ -114,6 +114,22 @@ async function generateDhlCertificate(participant, sequence) {
   const trainingLine = 'Flight Dispatch Recurrent Training';
   drawInField(trainingLine, FIELD.trainingType, helveticaBold, 13);
 
+  // ── 2b. Training duration — its own centered line in the gap just below the
+  //      bold training-type line and above the baked module-list paragraph.
+  //      Only shown when FDR hours were entered.
+  const fdrHours = Number(participant.fdr_hours);
+  if (Number.isFinite(fdrHours) && fdrHours > 0) {
+    const hoursText = `Duration: ${Number.isInteger(fdrHours) ? fdrHours : fdrHours.toFixed(1)} Hours`;
+    const hSize = 11;
+    const hWidth = timesBoldItalic.widthOfTextAtSize(hoursText, hSize);
+    const centerX = FIELD.trainingType.x + FIELD.trainingType.width / 2;
+    page.drawText(hoursText, {
+      x: centerX - hWidth / 2,
+      y: FIELD.trainingType.y + 6.5,
+      size: hSize, font: timesBoldItalic, color: black,
+    });
+  }
+
   // ── 3. Course Date (= end_date, fallback training_date) ─────────────────
   const certDateStr = (participant.end_date && participant.end_date.trim())
     ? participant.end_date : participant.training_date;

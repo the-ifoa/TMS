@@ -21,6 +21,7 @@ import {
   HiOutlineDocumentText,
   HiOutlinePlusCircle,
   HiOutlineSelector,
+  HiOutlineClipboardCheck,
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import {
@@ -29,9 +30,11 @@ import {
   updateFullCertId, getCertCounters, resetCertCounter, resetAllCertCounters,
   updateNdgScore, updateFdrHours, revokeCertificate, updateValidity, updateAirline,
   generateDhlCertificateBlob, revokeDhlCertificate, downloadDhlCertificate,
+  bulkEnsureAttendanceSheets,
   API_BASE,
 } from '../api';
 import ModuleSelector from '../components/ModuleSelector';
+import AttendanceChecklistModal from '../components/AttendanceChecklistModal';
 import { useConfirm } from '@/hooks/use-confirm';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem, SelectGroup, SelectLabel } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -1014,6 +1017,8 @@ export default function Airlines() {
   const [filterCertStatus, setFilterCertStatus] = useState(''); // '' | 'pending' | 'generated'
   const [sortKey, setSortKey] = useState('name_asc');
   const [showEmptyAirlines, setShowEmptyAirlines] = useState(false); // also list airlines with no submissions
+  const [attendanceModal, setAttendanceModal]   = useState(null);    // sheet object being marked
+  const [addingAttendance, setAddingAttendance] = useState(false);
   const [checkedAirlines, setCheckedAirlines] = useState(new Set());
   const [deletingAirlines, setDeletingAirlines] = useState(false);
   const [deletingSelected, setDeletingSelected] = useState(false);
@@ -1585,6 +1590,33 @@ export default function Airlines() {
     fail === 0 ? toast.success(`${deletedIds.size} airline${deletedIds.size > 1 ? 's' : ''} deleted`) : toast.error(`${deletedIds.size} deleted, ${fail} failed`);
   };
 
+  // ── Attendance ───────────────────────────────────────────────────────────────
+  // Selected participants → one attendance sheet per training batch (dates come
+  // from each batch's start / end date). Opens the first sheet for marking; the
+  // rest are available on the Attendance page.
+  const handleAddAttendance = async () => {
+    const ids = allParticipants.filter(p => checked.has(p.id || p._id)).map(p => p.id || p._id);
+    if (!ids.length) { toast.error('Select participants first'); return; }
+    setAddingAttendance(true);
+    try {
+      const res    = await bulkEnsureAttendanceSheets(ids);
+      const sheets = (res.data.sheets || []).map(s => s.sheet);
+      if (!sheets.length) { toast.error('Could not build attendance — participants need a training start date'); return; }
+      const newCount = (res.data.sheets || []).filter(s => s.created).length;
+      toast.success(
+        sheets.length === 1
+          ? (newCount ? 'Attendance sheet created' : 'Attendance sheet already existed — opening it')
+          : `${sheets.length} attendance sheets ready (${newCount} new) — opening the first`
+      );
+      setAttendanceModal(sheets[0]);
+      setChecked(new Set());
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to add attendance');
+    } finally {
+      setAddingAttendance(false);
+    }
+  };
+
   // ── Certificate generation ───────────────────────────────────────────────────
   const generateOneWithVariant = async (p, modulesOverride, variant, validity = '36') => {
     const pid = p.id || p._id;
@@ -1834,6 +1866,19 @@ export default function Airlines() {
         dhlEligibleCount={(pendingGenerate.current?.toGenerate || []).filter(eligibleForDhlExtra).length}
         includeDhl={includeDhlExtra} setIncludeDhl={setIncludeDhlExtra} />
       <CertResultModal results={certResults} onClose={closeResults} />
+
+      {attendanceModal && (
+        <AttendanceChecklistModal
+          participants={attendanceModal.participants || []}
+          startDate={attendanceModal.start_date}
+          endDate={attendanceModal.end_date}
+          company={attendanceModal.company}
+          trainingType={attendanceModal.training_type}
+          attendanceId={attendanceModal._id || attendanceModal.id}
+          readOnly={false}
+          onClose={() => setAttendanceModal(null)}
+        />
+      )}
 
       {/* ── Admin: Edit Airline Modal ── */}
       <AnimatePresence>
@@ -2200,6 +2245,13 @@ export default function Airlines() {
                     )}
 
                     <DropdownMenuSeparator />
+
+                    {checked.size > 0 && (
+                      <DropdownMenuItem onClick={handleAddAttendance} disabled={addingAttendance}>
+                        <HiOutlineClipboardCheck className="w-4 h-4 text-emerald-600" />
+                        <span>{addingAttendance ? 'Preparing…' : `Add Attendance (${checked.size})`}</span>
+                      </DropdownMenuItem>
+                    )}
 
                     {checked.size > 0 && (
                       <DropdownMenuItem onClick={handleDeleteSelected} disabled={deletingSelected} danger>

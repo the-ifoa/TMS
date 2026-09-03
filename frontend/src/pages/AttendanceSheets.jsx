@@ -122,7 +122,7 @@ function SheetCard({ sheet, onEdit, onPreview, previewing, forceOpen }) {
               {/* Meta grid */}
               <div className="px-4 sm:px-5 py-4 grid grid-cols-2 sm:grid-cols-4 gap-4 bg-slate-50/50 border-b border-slate-100">
                 {[
-                  ['Airline', sheet.company || '—'],
+                  ['Airline', sheet.airline_name || sheet.company || '—'],
                   ['Training Type', null],
                   ['Training Period', `${fmtDate(sheet.start_date)}${sheet.end_date && sheet.end_date !== sheet.start_date ? ` – ${fmtDate(sheet.end_date)}` : ''}`],
                   ['Date Submitted', fmtDateTime(sheet.created_at)],
@@ -285,7 +285,7 @@ export default function AttendanceSheets() {
     if (!search) return true;
     const q = search.toLowerCase();
     return (
-      (s.company || '').toLowerCase().includes(q) ||
+      (s.airline_name || s.company || '').toLowerCase().includes(q) ||
       (s.training_type || '').toLowerCase().includes(q) ||
       (s.participants || []).some(p =>
         `${p.first_name} ${p.last_name}`.toLowerCase().includes(q)
@@ -294,7 +294,7 @@ export default function AttendanceSheets() {
   });
 
   const groups = filtered.reduce((acc, sheet) => {
-    const key = sheet.company || 'Unknown';
+    const key = sheet.airline_name || sheet.company || 'Unknown';
     if (!acc[key]) acc[key] = [];
     acc[key].push(sheet);
     return acc;
@@ -308,7 +308,7 @@ export default function AttendanceSheets() {
           participants={activeSheet.participants || []}
           startDate={activeSheet.start_date}
           endDate={activeSheet.end_date}
-          company={activeSheet.company}
+          company={activeSheet.airline_name || activeSheet.company}
           trainingType={activeSheet.training_type}
           attendanceId={activeSheet._id}
           readOnly={false}

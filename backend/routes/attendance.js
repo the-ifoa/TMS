@@ -11,6 +11,9 @@ router.get('/', attendanceController.listSheets);
 // ─── GET /api/attendance/:id ──────────────────────────────────────────────────
 router.get('/:id', attendanceController.getSheet);
 
+// ─── POST /api/attendance/bulk — ensure one sheet per training batch ─────────
+router.post('/bulk', attendanceController.bulkEnsureSheets);
+
 // ─── POST /api/attendance — create new sheet ──────────────────────────────────
 router.post('/', attendanceController.createSheet);
 

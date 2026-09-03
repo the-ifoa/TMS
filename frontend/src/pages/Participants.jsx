@@ -197,7 +197,7 @@ function EmailInlineEditor({ rec }) {
   );
 }
 
-function SubmissionGroup({ groupKey, records, open, onToggle, focusId, attendanceSheets = [], onViewSheet, bulkEmail = false, emailDrafts = {}, onEmailDraft }) {
+function SubmissionGroup({ groupKey, records, open, onToggle, focusId, attendanceSheets = [], onViewSheet, onAddSheet, bulkEmail = false, emailDrafts = {}, onEmailDraft }) {
   const [downloading, setDownloading] = useState(null);
   const [preview, setPreview]       = useState(null);
   const [downloadingDhl, setDownloadingDhl] = useState(null);
@@ -368,9 +368,24 @@ function SubmissionGroup({ groupKey, records, open, onToggle, focusId, attendanc
             )}
 
             {/* Attendance sheets for this group */}
-            {attendanceSheets.length > 0 && (
+            {(attendanceSheets.length > 0 || onAddSheet) && (
               <div className="px-4 sm:px-5 py-3 bg-emerald-50/30 border-b border-emerald-100/70">
-                <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block mb-2">Attendance</span>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">Attendance</span>
+                  {onAddSheet && (
+                    <button
+                      type="button"
+                      onClick={() => onAddSheet(records)}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] sm:text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-2xs"
+                    >
+                      <HiOutlinePlusCircle className="w-3.5 h-3.5" />
+                      Add Attendance
+                    </button>
+                  )}
+                </div>
+                {attendanceSheets.length === 0 ? (
+                  <p className="text-[11px] text-emerald-700/70 font-medium">No attendance checklist yet for this batch.</p>
+                ) : (
                 <div className="flex flex-wrap gap-2">
                   {attendanceSheets.map(sheet => (
                     <div key={sheet._id} className="flex items-center justify-between sm:justify-start gap-2 bg-white border border-emerald-150 rounded-xl px-3 py-1.5 shadow-2xs w-full sm:w-auto">
@@ -405,6 +420,7 @@ function SubmissionGroup({ groupKey, records, open, onToggle, focusId, attendanc
                     </div>
                   ))}
                 </div>
+                )}
               </div>
             )}
 
@@ -846,6 +862,28 @@ export default function Participants() {
 
   const [detailRecord, setDetailRecord] = useState(null);
 
+  // Airline: open a fresh attendance checklist for a whole training batch.
+  // Dates come from the batch itself; the modal creates the sheet on save
+  // (backend attributes it to this airline account).
+  const handleAddSheetForGroup = (recs) => {
+    const first = recs[0] || {};
+    setActiveSheet({
+      _id: undefined,
+      participants: recs.map(r => {
+        const nameParts = (r.participant_name || '').trim().split(/\s+/);
+        return {
+          first_name: r.first_name || nameParts[0] || '',
+          last_name:  r.last_name  || nameParts.slice(1).join(' ') || '',
+        };
+      }),
+      start_date: (first.training_date || '').slice(0, 10),
+      end_date:   (first.end_date || '').slice(0, 10) || null,
+      company:    first.company || first.airline_name || '',
+      training_type: first.training_type || '',
+      readOnly: false,
+    });
+  };
+
   // ─────────────────────────────────────────────────────────────────────────────
   // AIRLINE VIEW — grouped collapsible layout
   // ─────────────────────────────────────────────────────────────────────────────
@@ -857,11 +895,11 @@ export default function Participants() {
             participants={activeSheet.participants || []}
             startDate={activeSheet.start_date}
             endDate={activeSheet.end_date}
-            company={activeSheet.company}
+            company={activeSheet.airline_name || activeSheet.company}
             trainingType={activeSheet.training_type}
             attendanceId={activeSheet._id}
             readOnly={activeSheet.readOnly}
-            onClose={() => setActiveSheet(null)}
+            onClose={() => { setActiveSheet(null); fetchRecords({ silent: true }); }}
           />
         )}
         {/* Page Header (Full width header banner) */}
@@ -1053,7 +1091,8 @@ export default function Participants() {
                   onToggle={() => setOpenGroups(prev => ({ ...prev, [key]: !prev[key] }))}
                   focusId={focusId}
                   attendanceSheets={groupSheets}
-                  onViewSheet={sheet => setActiveSheet({ ...sheet, readOnly: true })}
+                  onViewSheet={sheet => setActiveSheet({ ...sheet, readOnly: false })}
+                  onAddSheet={handleAddSheetForGroup}
                   bulkEmail={bulkEmail}
                   emailDrafts={emailDrafts}
                   onEmailDraft={setEmailDraft}
@@ -1085,7 +1124,7 @@ export default function Participants() {
           participants={activeSheet.participants || []}
           startDate={activeSheet.start_date}
           endDate={activeSheet.end_date}
-          company={activeSheet.company}
+          company={activeSheet.airline_name || activeSheet.company}
           trainingType={activeSheet.training_type}
           attendanceId={activeSheet._id}
           readOnly={false}
@@ -1367,7 +1406,7 @@ export default function Participants() {
         {/* ATTENDANCE RECORDS */}
         {activeTab === 'attendance' && (() => {
           const filtered = attendanceSheets.filter(s => {
-            const matchesSearch = !attSearch || s.company?.toLowerCase().includes(attSearch.toLowerCase());
+            const matchesSearch = !attSearch || (s.airline_name || s.company || '').toLowerCase().includes(attSearch.toLowerCase());
             const matchesType = !attFilterType || s.training_type === attFilterType;
             return matchesSearch && matchesType;
           });
@@ -1409,7 +1448,7 @@ export default function Participants() {
                     <div key={sheet._id} className="flex items-center justify-between gap-3 px-5 py-3.5 hover:bg-slate-50/70 transition-colors">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-sm font-bold text-slate-800">{sheet.company}</span>
+                          <span className="text-sm font-bold text-slate-800">{sheet.airline_name || sheet.company}</span>
                           {typeBadge(sheet.training_type)}
                         </div>
                         <p className="text-[11px] text-slate-500 mt-0.5 font-medium flex items-center gap-1.5">

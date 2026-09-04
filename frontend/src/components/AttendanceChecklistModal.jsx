@@ -70,6 +70,25 @@ export default function AttendanceChecklistModal({
     setAttendance(prev => ({ ...prev, [date]: new Array(valid.length).fill(present) }));
   };
 
+  // True when every student is present on every day of the course
+  const allDaysAllPresent = valid.length > 0 && allDates.length > 0 &&
+    allDates.every(d => {
+      const arr = attendance[d] || [];
+      return valid.every((_, i) => arr[i]);
+    });
+
+  // Toggle: mark every student present on every day, or clear all if already full
+  const toggleAllDaysPresent = () => {
+    if (readOnly || !valid.length || !allDates.length) return;
+    const fill = !allDaysAllPresent;
+    const next = {};
+    allDates.forEach(d => { next[d] = new Array(valid.length).fill(fill); });
+    setAttendance(next);
+    toast.success(fill
+      ? `All ${valid.length} marked present for ${allDates.length} day${allDates.length !== 1 ? 's' : ''}`
+      : 'Cleared all attendance marks');
+  };
+
   const handleSave = async () => {
     if (readOnly) return;
     if (!startDate) { toast.error('No start date set'); return; }
@@ -159,7 +178,20 @@ export default function AttendanceChecklistModal({
               {' · '}{allDates.length} day{allDates.length !== 1 ? 's' : ''}
             </p>
           </div>
-          <button type="button" onClick={onClose} className="text-primary-400 hover:text-primary-600 text-2xl leading-none w-8 h-8 flex items-center justify-center rounded-lg hover:bg-primary-100 transition-colors">×</button>
+          <div className="flex items-center gap-2">
+            {!readOnly && startDate && valid.length > 0 && allDates.length > 0 && (
+              <button type="button" onClick={toggleAllDaysPresent}
+                className={`inline-flex items-center gap-1.5 text-xs font-semibold border rounded-lg px-2.5 py-1.5 transition-colors ${
+                  allDaysAllPresent
+                    ? 'text-primary-600 bg-primary-50 hover:bg-primary-100 border-primary-200'
+                    : 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border-emerald-200'
+                }`}>
+                <HiOutlineCheckCircle className="w-4 h-4" />
+                {allDaysAllPresent ? 'Unmark all · all days' : 'Mark all present · all days'}
+              </button>
+            )}
+            <button type="button" onClick={onClose} className="text-primary-400 hover:text-primary-600 text-2xl leading-none w-8 h-8 flex items-center justify-center rounded-lg hover:bg-primary-100 transition-colors">×</button>
+          </div>
         </div>
 
         {/* Body */}
@@ -237,9 +269,20 @@ export default function AttendanceChecklistModal({
                       </span>
                       {!readOnly && valid.length > 1 && (
                         <div className="flex items-center gap-2">
-                          <button type="button" onClick={() => markAll(selectedDate, true)} className="text-[10px] text-emerald-600 hover:text-emerald-700 font-semibold">All Present</button>
-                          <span className="text-primary-200 text-xs">|</span>
-                          <button type="button" onClick={() => markAll(selectedDate, false)} className="text-[10px] text-primary-400 hover:text-primary-600 font-semibold">Clear</button>
+                          <button
+                            type="button"
+                            onClick={() => markAll(selectedDate, true)}
+                            className="px-3 py-1 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all active:scale-95 cursor-pointer"
+                          >
+                            All Present
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => markAll(selectedDate, false)}
+                            className="px-3 py-1 text-xs font-medium rounded-lg bg-white hover:bg-primary-100 text-primary-600 border border-primary-200 shadow-sm transition-all active:scale-95 cursor-pointer"
+                          >
+                            Clear
+                          </button>
                         </div>
                       )}
                     </div>

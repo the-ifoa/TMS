@@ -43,6 +43,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuCheckboxItem,
   DropdownMenuSeparator,
   DropdownMenuLabel,
 } from '@/components/ui/dropdown-menu';
@@ -978,7 +979,10 @@ export default function Airlines() {
   const [data, setData]             = useState([]);
   const [loading, setLoading]       = useState(true);
   const [search, setSearch]         = useState('');
-  const [filterType, setFilterType] = useState('');
+  // Multi-select: empty array = no filter (all types). Any entries = OR match.
+  const [filterType, setFilterType] = useState([]);
+  const toggleFilterType = v => setFilterType(prev =>
+    prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]);
   // Persist which airline cards are open across navigation (e.g. Edit → Back)
   // so the accordion doesn't collapse when the page remounts.
   const [expanded, setExpanded]     = useState(() => {
@@ -1381,29 +1385,15 @@ export default function Airlines() {
 
   // ── Selection helpers ────────────────────────────────────────────────────────
   const allParticipants = data.flatMap(({ participants }) => participants);
-  const allIds          = allParticipants.map(p => p.id || p._id);
-  const allChecked      = allIds.length > 0 && allIds.every(id => checked.has(id));
-  const toggleSelectAll = () => allChecked ? setChecked(new Set()) : setChecked(new Set(allIds));
   const toggleOne       = id => setChecked(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const toggleGroupAll  = participants => {
     const ids = participants.map(p => p.id || p._id);
     const all = ids.every(id => checked.has(id));
     setChecked(prev => { const n = new Set(prev); all ? ids.forEach(id => n.delete(id)) : ids.forEach(id => n.add(id)); return n; });
   };
-  // Always use airlineKey() — never raw airlineName — so two accounts with the
-  // same airline name are never treated as the same entry.
-  const allAirlinesChecked = data.length > 0 && data.every(({ airline }) => checkedAirlines.has(airlineKey(airline)));
-  const toggleAllAirlines = () => {
-    if (allAirlinesChecked) {
-      // Deselect all airlines AND all participants
-      setCheckedAirlines(new Set());
-      setChecked(new Set());
-    } else {
-      // Select all airlines AND all their participants
-      setCheckedAirlines(new Set(data.map(({ airline }) => airlineKey(airline))));
-      setChecked(new Set(data.flatMap(({ participants }) => participants.map(p => p.id || p._id))));
-    }
-  };
+  // allChecked / toggleSelectAll / allAirlinesChecked / toggleAllAirlines are
+  // defined just after `filtered` — the "select all" controls must act only on
+  // the rows currently visible under the active filters, never on hidden rows.
   const toggleAirline = key => {
     // Toggle the airline checkbox
     setCheckedAirlines(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
@@ -1828,7 +1818,7 @@ export default function Airlines() {
         airline,
         participants: participants.filter(p => {
           const nm = !search || airlineMatch || [p.participant_name, p.first_name, p.last_name, p.department].some(s => (s || '').toLowerCase().includes(search.toLowerCase()));
-          const typeMatch   = !filterType || p.training_type === filterType;
+          const typeMatch   = filterType.length === 0 || filterType.includes(p.training_type);
           const statusMatch = !filterCertStatus
             || (filterCertStatus === 'pending'   && !p.cert_released)
             || (filterCertStatus === 'generated' &&  p.cert_released);
@@ -1852,6 +1842,33 @@ export default function Airlines() {
       }
     });
   }, [data, search, filterType, filterCertStatus, sortKey, showEmptyAirlines]);
+
+  // ── Select-all — scoped to the visible (filtered) rows only ──────────────────
+  // "Select all candidates" / "select all airlines" must touch exactly the rows
+  // the admin can currently see. Deriving these from `data` selected hidden rows
+  // too. They union into / subtract from the existing selection so rows picked
+  // under a different filter are left untouched.
+  const visibleParticipants = filtered.flatMap(({ participants }) => participants);
+  const visibleIds          = visibleParticipants.map(p => p.id || p._id);
+  const allChecked          = visibleIds.length > 0 && visibleIds.every(id => checked.has(id));
+  const toggleSelectAll     = () => setChecked(prev => {
+    const n = new Set(prev);
+    allChecked ? visibleIds.forEach(id => n.delete(id)) : visibleIds.forEach(id => n.add(id));
+    return n;
+  });
+  // Always use airlineKey() — never raw airlineName — so two accounts with the
+  // same airline name are never treated as the same entry.
+  const visibleAirlineKeys = filtered.map(({ airline }) => airlineKey(airline)).filter(k => k !== null);
+  const allAirlinesChecked = visibleAirlineKeys.length > 0 && visibleAirlineKeys.every(k => checkedAirlines.has(k));
+  const toggleAllAirlines  = () => {
+    if (allAirlinesChecked) {
+      setCheckedAirlines(prev => { const n = new Set(prev); visibleAirlineKeys.forEach(k => n.delete(k)); return n; });
+      setChecked(prev => { const n = new Set(prev); visibleIds.forEach(id => n.delete(id)); return n; });
+    } else {
+      setCheckedAirlines(prev => { const n = new Set(prev); visibleAirlineKeys.forEach(k => n.add(k)); return n; });
+      setChecked(prev => { const n = new Set(prev); visibleIds.forEach(id => n.add(id)); return n; });
+    }
+  };
 
   const totalParticipants = allParticipants.length;
   const totalAirlines     = data.length;
@@ -2308,15 +2325,45 @@ export default function Airlines() {
                     </Select>
                   </div>
 
-                  {/* 2. Training Type Filter Select */}
+                  {/* 2. Training Type Filter — multi-select */}
                   <div className="w-full sm:w-[130px]">
-                    <Select value={filterType || 'all'} onValueChange={v => setFilterType(v === 'all' ? '' : v)}>
-                      <SelectTrigger className="px-2 text-xs py-1 h-7 font-semibold text-slate-700 rounded-lg bg-white border border-slate-200 w-full"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Types</SelectItem>
-                        {TRAINING_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          className="px-2 text-xs py-1 h-7 font-semibold text-slate-700 rounded-lg bg-white border border-slate-200 w-full flex items-center justify-between gap-1 shadow-2xs"
+                        >
+                          <span className="truncate">
+                            {filterType.length === 0
+                              ? 'All Types'
+                              : filterType.length === 1
+                                ? filterType[0]
+                                : `${filterType.length} types`}
+                          </span>
+                          <HiOutlineChevronDown className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="max-h-[300px] overflow-y-auto">
+                        <DropdownMenuItem
+                          onSelect={e => { e.preventDefault(); setFilterType([]); }}
+                          className="text-xs font-semibold"
+                        >
+                          All Types
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        {TRAINING_TYPES.map(t => (
+                          <DropdownMenuCheckboxItem
+                            key={t.value}
+                            checked={filterType.includes(t.value)}
+                            onSelect={e => e.preventDefault()}
+                            onCheckedChange={() => toggleFilterType(t.value)}
+                            className="text-xs"
+                          >
+                            {t.label}
+                          </DropdownMenuCheckboxItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
 
                   {/* 3. Sort Key Select */}
@@ -2375,7 +2422,7 @@ export default function Airlines() {
       {/* ── Airline Groups ── */}
       {!loading && filtered.filter(({ airline }) => airlineKey(airline) !== null).map(({ airline, participants }) => {
         const aKey = airlineKey(airline);
-        const filterKey = `${search.trim()}_${filterType}_${filterCertStatus}`;
+        const filterKey = `${search.trim()}_${[...filterType].sort().join(',')}_${filterCertStatus}`;
         const initialOpen = Boolean(expanded[aKey]);
 
         return (

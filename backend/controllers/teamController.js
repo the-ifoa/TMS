@@ -11,7 +11,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
 const Admin = require('../models/Admin');
 const Airline = require('../models/Airline');
-const Participant = require('../models/Participant');
 const { catalogForScope, clampPermissions, keysForScope } = require('../config/permissions');
 
 // Effective permission ceiling for the caller, per target scope.
@@ -252,76 +251,9 @@ exports.remove = async (req, res) => {
   }
 };
 
-// ─── GET /api/team/members/:id/participants — assigned vs available pool ──────
-//     "assigned"  = records currently owned by this department
-//     "available" = records sitting in the shared main airline list
-exports.listMemberParticipants = async (req, res) => {
-  try {
-    const found = await findManaged(req, req.params.id);
-    if (!found || found.scope !== 'airline')
-      return res.status(404).json({ error: 'Department not found or not yours to manage.' });
-    const dept = found.doc;
-    const topId = String(dept.parent_airline);
-    const deptId = String(dept._id);
-
-    const docs = await Participant.find({ submitted_by: { $in: [topId, deptId] } })
-      .select('participant_name first_name last_name department training_type training_date submitted_by')
-      .sort({ created_at: -1 });
-
-    const shape = (p) => ({
-      id: String(p._id),
-      participant_name: p.participant_name || `${p.first_name} ${p.last_name}`.trim(),
-      department: p.department,
-      training_type: p.training_type,
-      training_date: p.training_date,
-    });
-
-    res.json({
-      assigned:  docs.filter(p => String(p.submitted_by) === deptId).map(shape),
-      available: docs.filter(p => String(p.submitted_by) === topId).map(shape),
-    });
-  } catch (err) {
-    console.error('GET /team/members/:id/participants error:', err.message);
-    res.status(500).json({ error: err.message });
-  }
-};
-
-// ─── PATCH /api/team/members/:id/participants — assign / unassign in bulk ─────
-//     { assign: [ids], unassign: [ids] }
-//     assign   → submitted_by := department   (only from the main list)
-//     unassign → submitted_by := main account
-exports.updateMemberParticipants = async (req, res) => {
-  try {
-    const found = await findManaged(req, req.params.id);
-    if (!found || found.scope !== 'airline')
-      return res.status(404).json({ error: 'Department not found or not yours to manage.' });
-    const dept = found.doc;
-    const topId = String(dept.parent_airline);
-    const deptId = String(dept._id);
-
-    const assign = Array.isArray(req.body.assign) ? req.body.assign : [];
-    const unassign = Array.isArray(req.body.unassign) ? req.body.unassign : [];
-
-    let moved = 0;
-    if (assign.length) {
-      const r = await Participant.updateMany(
-        { _id: { $in: assign }, submitted_by: topId },
-        { $set: { submitted_by: deptId } },
-      );
-      moved += r.modifiedCount || 0;
-    }
-    if (unassign.length) {
-      const r = await Participant.updateMany(
-        { _id: { $in: unassign }, submitted_by: deptId },
-        { $set: { submitted_by: topId } },
-      );
-      moved += r.modifiedCount || 0;
-    }
-    res.json({ message: 'Participants updated.', moved });
-  } catch (err) {
-    console.error('PATCH /team/members/:id/participants error:', err.message);
-    res.status(500).json({ error: err.message });
-  }
-};
+// NOTE: departments no longer share a participant pool with the main airline.
+// Each department builds its own separate list by submitting enrollments while
+// logged in (see participantsController.resolveOwnerOnCreate), so the old
+// "assign participants to a department" endpoints have been removed.
 
 module.exports.keysForScope = keysForScope;

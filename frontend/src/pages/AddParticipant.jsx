@@ -67,8 +67,6 @@ function SingleForm({ isAdmin, isDepartment, departmentLabel, airlineName, airli
   const [saving, setSaving] = useState(false);
   const [showChecklist, setShowChecklist] = useState(false);
   const [attendanceSheetId, setAttendanceSheetId] = useState(null);
-  // Department caller: default false → record goes to the shared main airline list.
-  const [keepInDepartment, setKeepInDepartment] = useState(false);
   const [form, setForm] = useState({
     first_name: '',
     last_name: '',
@@ -106,7 +104,7 @@ function SingleForm({ isAdmin, isDepartment, departmentLabel, airlineName, airli
     }
     try {
       setSaving(true);
-      const saved = await createParticipant({ ...form, keep_in_department: isDepartment ? keepInDepartment : undefined });
+      const saved = await createParticipant({ ...form });
       // Send one confirmation email (airline only — fire-and-forget)
       if (!isAdmin) {
         sendSubmissionConfirmation({
@@ -323,24 +321,11 @@ function SingleForm({ isAdmin, isDepartment, departmentLabel, airlineName, airli
       )}
 
       {isDepartment && (
-        <div className="pt-4 border-t border-primary-200">
-          <label className="label">Where should this record go?</label>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
-            <button type="button" onClick={() => setKeepInDepartment(false)}
-              className={`text-left px-3 py-2 rounded-lg border text-xs transition-colors ${
-                !keepInDepartment
-                  ? 'bg-blue-50 border-blue-300 text-blue-800 font-semibold'
-                  : 'bg-white border-primary-200 text-primary-600 hover:border-primary-300'}`}>
-              Main airline list <span className="font-normal">(default — visible to the whole airline)</span>
-            </button>
-            <button type="button" onClick={() => setKeepInDepartment(true)}
-              className={`text-left px-3 py-2 rounded-lg border text-xs transition-colors ${
-                keepInDepartment
-                  ? 'bg-blue-50 border-blue-300 text-blue-800 font-semibold'
-                  : 'bg-white border-primary-200 text-primary-600 hover:border-primary-300'}`}>
-              Keep private to my department
-            </button>
-          </div>
+        <div className="pt-4 border-t border-primary-200 flex items-start gap-2">
+          <span className="text-sm mt-0.5" style={{ color: '#0000ff' }}>ℹ</span>
+          <p className="text-xs" style={{ color: '#3b4f9e' }}>
+            This enrollment is added to <strong>{departmentLabel}</strong>'s own participant list. It is not shared with the main airline or other departments.
+          </p>
         </div>
       )}
 
@@ -496,7 +481,6 @@ function BulkForm({ isAdmin, isDepartment, departmentLabel, airlineName, airline
   const [company, setCompany]           = useState(isAdmin ? '' : (airlineName || ''));
   const [customCompany, setCustomCompany] = useState('');
   const [saving, setSaving]              = useState(false);
-  const [keepInDepartment, setKeepInDepartment] = useState(false);
   const [results, setResults] = useState({});
   const [done, setDone]       = useState(false);
   const [showChecklist, setShowChecklist]     = useState(false);
@@ -606,7 +590,6 @@ function BulkForm({ isAdmin, isDepartment, departmentLabel, airlineName, airline
           modules:            shared.modules,
           ndg_subtype:        shared.ndg_mode === 'M' ? row.ndg_subtype : shared.ndg_mode,
           online_synchronous: shared.online_synchronous,
-          keep_in_department: isDepartment ? keepInDepartment : undefined,
         });
         setResults(prev => ({ ...prev, [row.id]: { status: 'success' } }));
         // Record in local array so we can use it synchronously below
@@ -934,24 +917,11 @@ function BulkForm({ isAdmin, isDepartment, departmentLabel, airlineName, airline
       )}
 
       {isDepartment && !done && (
-        <div className="card p-4">
-          <label className="label">Where should these records go?</label>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
-            <button type="button" onClick={() => setKeepInDepartment(false)}
-              className={`text-left px-3 py-2 rounded-lg border text-xs transition-colors ${
-                !keepInDepartment
-                  ? 'bg-blue-50 border-blue-300 text-blue-800 font-semibold'
-                  : 'bg-white border-primary-200 text-primary-600 hover:border-primary-300'}`}>
-              Main airline list <span className="font-normal">(default)</span>
-            </button>
-            <button type="button" onClick={() => setKeepInDepartment(true)}
-              className={`text-left px-3 py-2 rounded-lg border text-xs transition-colors ${
-                keepInDepartment
-                  ? 'bg-blue-50 border-blue-300 text-blue-800 font-semibold'
-                  : 'bg-white border-primary-200 text-primary-600 hover:border-primary-300'}`}>
-              Keep private to my department
-            </button>
-          </div>
+        <div className="flex items-start gap-2 p-3 rounded-lg border" style={{ background: '#eff6ff', borderColor: '#bfdbfe' }}>
+          <span className="text-sm mt-0.5" style={{ color: '#0000ff' }}>ℹ</span>
+          <p className="text-xs" style={{ color: '#3b4f9e' }}>
+            These enrollments are added to <strong>{departmentLabel}</strong>'s own participant list. They are not shared with the main airline or other departments.
+          </p>
         </div>
       )}
 

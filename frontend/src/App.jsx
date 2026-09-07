@@ -150,6 +150,7 @@ function App() {
           <Route path="participants" element={<PermRoute perms={['participants.view']}><AirlineParticipants /></PermRoute>} />
           <Route path="participants/:participantId/performance" element={<ParticipantExamPerformance />} />
           <Route path="enrollment/new" element={<PermRoute perms={['participants.create']}><AddParticipant /></PermRoute>} />
+          <Route path="enrollment/:id/edit" element={<PermRoute perms={['participants.edit']}><EditParticipant /></PermRoute>} />
           <Route path="dgr" element={<PermRoute perms={['dgr.view']}><DgrForms /></PermRoute>} />
           <Route path="exams" element={<AirlineExams />} />
           <Route path="exams/manage"       element={<ExamAuthorRoute><ExamSystem /></ExamAuthorRoute>} />

@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { HiOutlineArrowLeft } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import { getParticipant, updateParticipant } from '../api';
+import { useAuth } from '../context/AuthContext';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 
 const TRAINING_TYPES = [
@@ -27,6 +28,7 @@ const ALL_MODULES = [
 export default function EditParticipant() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { isAdmin } = useAuth();
   const [saving, setSaving]   = useState(false);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({
@@ -74,7 +76,7 @@ export default function EditParticipant() {
         });
       } catch {
         toast.error('Failed to load record');
-        navigate('/admin/airlines');
+        navigate(-1);
       } finally {
         setLoading(false);
       }
@@ -103,7 +105,7 @@ export default function EditParticipant() {
       setSaving(true);
       await updateParticipant(id, form);
       toast.success('Record updated');
-      navigate('/admin/airlines');
+      navigate(-1);
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to update');
     } finally {
@@ -175,7 +177,9 @@ export default function EditParticipant() {
           <div>
             <label className="label">Airline Name *</label>
             <input name="company" value={form.company} onChange={handleChange}
-              className="input-field" placeholder="e.g. Emirates Airlines" />
+              readOnly={!isAdmin}
+              className={`input-field ${!isAdmin ? 'bg-primary-100 cursor-not-allowed text-primary-500' : ''}`}
+              placeholder="e.g. Emirates Airlines" />
           </div>
           <div>
             <label className="label">Department *</label>
@@ -299,11 +303,13 @@ export default function EditParticipant() {
           </div>
         )}
 
-        {/* Admin notice */}
+        {/* Save notice */}
         <div className="flex items-start gap-2 p-3 bg-primary-50 border border-primary-200 rounded-lg">
           <span className="text-primary-400 text-sm mt-0.5">ℹ</span>
           <p className="text-xs text-primary-500">
-            As admin you are editing a locked record submitted by the airline. Changes are saved immediately.
+            {isAdmin
+              ? 'As admin you are editing a locked record submitted by the airline. Changes are saved immediately.'
+              : 'You are editing a record in your own list. Changes are saved immediately.'}
           </p>
         </div>
 

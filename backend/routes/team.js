@@ -13,8 +13,4 @@ router.post('/members', teamController.create);
 router.patch('/members/:id', teamController.update);
 router.delete('/members/:id', teamController.remove);
 
-// Assign specific participants to a department (so it only sees those records).
-router.get('/members/:id/participants', teamController.listMemberParticipants);
-router.patch('/members/:id/participants', teamController.updateMemberParticipants);
-
 module.exports = router;

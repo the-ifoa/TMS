@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   HiOutlineUsers, HiOutlineSearch, HiOutlineMail, HiOutlineCheck, HiOutlineX,
-  HiOutlineFilter, HiOutlineCheckCircle, HiOutlineClock, HiOutlineChartBar,
+  HiOutlineFilter, HiOutlineCheckCircle, HiOutlineClock, HiOutlineChartBar, HiOutlinePlus,
+  HiOutlinePencil, HiOutlineTrash,
 } from 'react-icons/hi';
-import { getParticipants, updateParticipantEmail, moveParticipantScope } from '../api';
+import { getParticipants, updateParticipantEmail, deleteParticipant } from '../api';
 import { useAuth } from '../context/AuthContext';
+import { useConfirm } from '@/hooks/use-confirm';
 import { Card } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -68,28 +70,33 @@ function EmailCell({ rec }) {
 // Airline participants directory — flat, searchable/filterable list of all the
 // airline's participants with details and inline email editing.
 export default function AirlineParticipants() {
-  const { admin, isDepartment } = useAuth();
-  const selfId = String(admin?._id || admin?.id || '');
-  const parentId = String(admin?.parent_airline || '');
+  const { can } = useAuth();
+  const navigate = useNavigate();
+  const { confirm, ConfirmDialog } = useConfirm();
+  const canEdit = !can || can('participants.edit');
+  const canDelete = !can || can('participants.delete');
   const [records, setRecords] = useState([]);
-  const [movingId, setMovingId] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState(null);
 
-  const moveScope = async (rec, target) => {
+  const removeRecord = async (rec) => {
     const id = rec.id || rec._id;
-    setMovingId(id);
+    const name = rec.participant_name || `${rec.first_name || ''} ${rec.last_name || ''}`.trim() || 'this participant';
+    if (!(await confirm(`Delete ${name}? This cannot be undone.`, {
+      title: 'Delete participant', confirmLabel: 'Delete',
+    }))) return;
+    setDeletingId(id);
     try {
-      const res = await moveParticipantScope(id, target);
-      const newOwner = res.data.participant?.submitted_by;
-      setRecords((prev) => prev.map((r) =>
-        (r.id || r._id) === id ? { ...r, submitted_by: newOwner } : r));
-      toast.success(target === 'main' ? 'Moved to main airline list' : 'Pulled into your department');
+      await deleteParticipant(id);
+      setRecords((prev) => prev.filter((r) => (r.id || r._id) !== id));
+      toast.success('Participant deleted');
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Move failed');
+      toast.error(err.response?.data?.error || 'Delete failed');
     } finally {
-      setMovingId(null);
+      setDeletingId(null);
     }
   };
+
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('');
   const [emailFilter, setEmailFilter] = useState(''); // '' | 'with' | 'without'
@@ -164,7 +171,7 @@ export default function AirlineParticipants() {
               </span>
             </div>
 
-            {/* Bulk Email Manager Action */}
+            {/* Bulk Email Manager + New Enrollment Actions */}
             {bulkEmail ? (
               <div className="flex items-center gap-1.5 flex-shrink-0">
                 <button type="button" onClick={saveAllEmails} disabled={savingEmails}
@@ -177,10 +184,18 @@ export default function AirlineParticipants() {
                 </button>
               </div>
             ) : (
-              <button type="button" onClick={enterBulk}
-                className="inline-flex items-center gap-1 h-7 px-2.5 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-xs font-semibold shadow-2xs whitespace-nowrap flex-shrink-0">
-                <HiOutlineMail className="w-3.5 h-3.5 text-slate-500" /> Manage Emails
-              </button>
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                <button type="button" onClick={enterBulk}
+                  className="inline-flex items-center gap-1 h-7 px-2.5 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-xs font-semibold shadow-2xs whitespace-nowrap">
+                  <HiOutlineMail className="w-3.5 h-3.5 text-slate-500" /> Manage Emails
+                </button>
+                {(!can || can('participants.create')) && (
+                  <Link to="/airline/enrollment/new"
+                    className="inline-flex items-center gap-1 h-7 px-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-2xs whitespace-nowrap">
+                    <HiOutlinePlus className="w-3.5 h-3.5" /> New Enrollment
+                  </Link>
+                )}
+              </div>
             )}
           </div>
 
@@ -291,24 +306,29 @@ export default function AirlineParticipants() {
                     </Link>
                   </div>
 
-                  {/* Department Move/Pull Action */}
-                  {isDepartment && (
-                    <div className="w-44 shrink-0 flex justify-end">
-                      {String(r.submitted_by) === selfId ? (
-                        <button type="button" disabled={movingId === (r.id || r._id)}
-                          onClick={() => moveScope(r, 'main')}
-                          className="w-full justify-center inline-flex items-center px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-50 border border-slate-200 hover:border-emerald-300 hover:bg-emerald-50 text-slate-600 hover:text-emerald-700 transition-all disabled:opacity-50 cursor-pointer">
-                          Move to main list
+                  {/* Edit / Delete */}
+                  {(canEdit || canDelete) && (
+                    <div className="shrink-0 flex items-center gap-1">
+                      {canEdit && (
+                        <button type="button"
+                          onClick={() => navigate(`/airline/enrollment/${r.id || r._id}/edit`)}
+                          title="Edit participant"
+                          className="p-1.5 rounded-lg bg-slate-50 border border-slate-200 hover:border-blue-300 hover:bg-blue-50 text-slate-500 hover:text-blue-600 transition-all">
+                          <HiOutlinePencil className="w-3.5 h-3.5" />
                         </button>
-                      ) : parentId && String(r.submitted_by) === parentId ? (
-                        <button type="button" disabled={movingId === (r.id || r._id)}
-                          onClick={() => moveScope(r, 'department')}
-                          className="w-full justify-center inline-flex items-center px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-50 border border-slate-200 hover:border-blue-300 hover:bg-blue-50 text-slate-600 hover:text-blue-600 transition-all disabled:opacity-50 cursor-pointer">
-                          Pull into my department
+                      )}
+                      {canDelete && (
+                        <button type="button"
+                          onClick={() => removeRecord(r)}
+                          disabled={deletingId === (r.id || r._id)}
+                          title="Delete participant"
+                          className="p-1.5 rounded-lg bg-slate-50 border border-slate-200 hover:border-red-300 hover:bg-red-50 text-slate-500 hover:text-red-600 transition-all disabled:opacity-50">
+                          <HiOutlineTrash className="w-3.5 h-3.5" />
                         </button>
-                      ) : null}
+                      )}
                     </div>
                   )}
+
                 </div>
               </div>
             ))}
@@ -321,6 +341,7 @@ export default function AirlineParticipants() {
           </p>
         )}
       </div>
+      {ConfirmDialog}
     </div>
   );
 }

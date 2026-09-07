@@ -6,50 +6,36 @@ const { sendSubmissionConfirmation } = require('../services/emailService');
 // Owner (`submitted_by`) for a newly created participant.
 //   admin              → null
 //   top-level airline  → its own id
-//   department         → the MAIN airline account by default (record shows in
-//                        the main list); its own id when keepInDepartment is set
-function resolveOwnerOnCreate(req, keepInDepartment) {
+//   department         → ALWAYS its own id. A department keeps a completely
+//                        separate participant list from the main airline; the
+//                        record never lands in the shared main list.
+function resolveOwnerOnCreate(req) {
   if (req.admin.role !== 'airline') return null;
   const s = req.scope;
-  if (s && s.isDepartment) {
-    return keepInDepartment ? s.selfId : s.topAirlineId;
-  }
+  if (s && s.isDepartment) return s.selfId;
   return req.admin.id;
 }
 
-// ─── PATCH /participants/:id/scope — move a record between the shared main
-//     airline list and a department's private list ──────────────────────────
-exports.updateParticipantScope = async (req, res) => {
-  try {
-    const s = req.scope;
-    if (!s || s.kind !== 'airline')
-      return res.status(403).json({ error: 'Airline access required.' });
+// Owner ids a caller is allowed to SEE in the participant list.
+//   admin              → null (no ownership filter — sees everything)
+//   department         → only its own records
+//   top-level airline  → only its own records, NOT its departments' (those are
+//                        private to each department)
+function visibleOwnerIds(req) {
+  if (req.admin.role !== 'airline') return null;
+  const s = req.scope || {};
+  if (s.isDepartment) return [String(s.selfId || req.admin.id)];
+  return [String(s.topAirlineId || req.admin.id)];
+}
 
-    const { target } = req.body; // 'main' | 'department'
-    if (!['main', 'department'].includes(target))
-      return res.status(400).json({ error: "target must be 'main' or 'department'." });
-
-    const p = await Participant.findById(req.params.id);
-    if (!p) return res.status(404).json({ error: 'Participant not found.' });
-
-    // Caller must currently be able to see this record.
-    const visible = (s.visibleAirlineIds || []).map(String);
-    if (!p.submitted_by || !visible.includes(String(p.submitted_by)))
-      return res.status(403).json({ error: 'This record is not in your scope.' });
-
-    if (target === 'department') {
-      if (!s.isDepartment)
-        return res.status(400).json({ error: 'Only a department can pull a record into its own list.' });
-      p.submitted_by = s.selfId;
-    } else {
-      p.submitted_by = s.topAirlineId;
-    }
-    await p.save();
-    res.json({ message: 'Record moved.', participant: p.toJSON() });
-  } catch (err) {
-    console.error('PATCH /participants/:id/scope error:', err.message);
-    res.status(500).json({ error: err.message });
-  }
+// ─── PATCH /participants/:id/scope — DEPRECATED ─────────────────────────────
+//     A department's participant list is now fully separate from the main
+//     airline's: records are never moved between the two. Kept only so old
+//     clients get a clear message instead of a silent failure.
+exports.updateParticipantScope = async (_req, res) => {
+  res.status(410).json({
+    error: 'Participant lists are now separate per department; records can no longer be moved between a department and the main airline.',
+  });
 };
 
 // ─── GET all participants ─────────────────────────────────────────────────────
@@ -68,16 +54,18 @@ exports.listParticipants = async (req, res) => {
       // PRIMARY filter: match by submitted_by (MongoDB _id of the airline account).
       // This is the ONLY safe filter — two airline accounts with the same airlineName
       // (e.g. both named "indigo") must NOT see each other's data.
-      // A top-level airline also sees every department it owns (scope.visibleAirlineIds);
-      // a plain department sees only itself.
-      const visibleIds = (req.scope && req.scope.visibleAirlineIds) || [req.admin.id];
+      // A department sees ONLY its own records; a top-level airline sees only its
+      // own — NOT its departments' (each department keeps a separate list).
+      const visibleIds = visibleOwnerIds(req) || [req.admin.id];
       const airlineFilters = [{ submitted_by: { $in: visibleIds } }];
 
       // LEGACY fallback: for old records that were created before submitted_by existed
       // (submitted_by === null), also match by airline_name/company name.
       // The submitted_by: null condition ensures a record owned by another airline
       // (which has a different submitted_by ObjectId) is never accidentally included.
-      if (req.admin.airlineName) {
+      // Departments are excluded — a legacy record has no owner, so it belongs to
+      // the main airline list, never a department's private list.
+      if (req.admin.airlineName && !(req.scope && req.scope.isDepartment)) {
         const escaped = req.admin.airlineName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const airlineRegex = new RegExp(`^${escaped}$`, 'i');
         airlineFilters.push({
@@ -253,7 +241,6 @@ exports.createParticipant = async (req, res) => {
       training_type, training_date,
       end_date, location, modules,
       ndg_subtype, online_synchronous,
-      keep_in_department,   // department caller: keep this record private to the department
     } = req.body;
 
     const fName = (first_name || '').trim()
@@ -294,10 +281,9 @@ exports.createParticipant = async (req, res) => {
         ? (req.admin.airlineName || company)
         : company,
       // Ownership: an admin → null. A top-level airline → itself. A department →
-      // by default the shared MAIN airline account (so it lands in the main
-      // participants list), unless it explicitly asked to keep the record
-      // private to the department.
-      submitted_by: resolveOwnerOnCreate(req, keep_in_department),
+      // always itself; a department's participants are a separate list, never
+      // merged into the main airline's.
+      submitted_by: resolveOwnerOnCreate(req),
       locked: true,
     });
 
@@ -314,13 +300,12 @@ exports.createParticipant = async (req, res) => {
 exports.bulkCreateParticipants = async (req, res) => {
   try {
     const body = req.body;
-    // Accept either a bare array (legacy) or { rows, keep_in_department }.
+    // Accept either a bare array (legacy) or { rows }.
     const rows = Array.isArray(body) ? body : (body.rows || []);
-    const keepInDepartment = !Array.isArray(body) && !!body.keep_in_department;
     if (!Array.isArray(rows) || rows.length === 0) {
       return res.status(400).json({ error: 'Expected a non-empty array of participants' });
     }
-    const owner = resolveOwnerOnCreate(req, keepInDepartment);
+    const owner = resolveOwnerOnCreate(req);
 
     const results = [];
     for (const item of rows) {
@@ -448,13 +433,12 @@ exports.updateEmail = async (req, res) => {
   }
 };
 
-// ─── UPDATE participant (admin only) ─────────────────────────────────────────
+// ─── UPDATE participant ─────────────────────────────────────────────────────
+//   • admin (with participants.edit) — may edit any record
+//   • airline (with participants.edit) — may edit ONLY a record it owns
+//     (submitted_by === its own account id). Departments own their own list.
 exports.updateParticipant = async (req, res) => {
   try {
-    if (req.admin.role === 'airline') {
-      return res.status(403).json({ error: 'Submitted records are locked. Only admins can edit.' });
-    }
-
     const {
       first_name, last_name, email,
       participant_name,
@@ -466,6 +450,13 @@ exports.updateParticipant = async (req, res) => {
 
     const doc = await Participant.findById(req.params.id);
     if (!doc) return res.status(404).json({ error: 'Participant not found' });
+
+    if (req.admin.role === 'airline') {
+      const owns = doc.submitted_by && String(doc.submitted_by) === String(req.admin.id);
+      if (!owns) {
+        return res.status(403).json({ error: 'You can only edit records in your own list.' });
+      }
+    }
 
     if (first_name !== undefined) doc.first_name = first_name.trim();
     if (last_name  !== undefined) doc.last_name  = last_name.trim();
@@ -685,12 +676,21 @@ exports.deleteAirlineAccount = async (req, res) => {
   }
 };
 
-// ─── DELETE single participant (admin only) ───────────────────────────────────
+// ─── DELETE single participant ──────────────────────────────────────────────
+//   • admin (with participants.delete) — any record
+//   • airline (with participants.delete) — ONLY a record it owns
 exports.deleteParticipant = async (req, res) => {
   try {
+    const doc = await Participant.findById(req.params.id);
+    if (!doc) return res.status(404).json({ error: 'Participant not found' });
+
     if (req.admin.role === 'airline') {
-      return res.status(403).json({ error: 'Only admins can delete records.' });
+      const owns = doc.submitted_by && String(doc.submitted_by) === String(req.admin.id);
+      if (!owns) {
+        return res.status(403).json({ error: 'You can only delete records in your own list.' });
+      }
     }
+
     const deleted = await Participant.findByIdAndDelete(req.params.id);
     if (!deleted) return res.status(404).json({ error: 'Participant not found' });
     // Cascade: free up the DHL ST-001 number, if any, held by this participant

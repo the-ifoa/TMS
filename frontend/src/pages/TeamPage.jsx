@@ -3,15 +3,15 @@ import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import {
   HiOutlineUserGroup, HiOutlinePlusCircle, HiOutlinePencil, HiOutlineTrash,
-  HiOutlineX, HiOutlineShieldCheck, HiOutlineOfficeBuilding, HiOutlineUsers, HiOutlineSearch,
-  HiOutlineCheck,
+  HiOutlineX, HiOutlineShieldCheck, HiOutlineOfficeBuilding, HiOutlineUsers,
+  HiOutlineCheck, HiOutlineInformationCircle,
 } from 'react-icons/hi';
 import { FaPlaneDeparture } from 'react-icons/fa';
+import { ShieldCheck, Building2, Users, CheckCircle2, Sliders, Info, Layers } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import {
   getTeamCatalog, getTeamAirlines, getTeamMembers,
   createTeamMember, updateTeamMember, deleteTeamMember,
-  getMemberParticipants, updateMemberParticipants,
 } from '../api';
 import { useConfirm } from '@/hooks/use-confirm';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
@@ -127,7 +127,7 @@ export default function TeamPage() {
   const [members, setMembers] = useState({ subAdmins: [], departments: [] });
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null);    // { mode:'create'|'edit', ... }
-  const [partModal, setPartModal] = useState(null);  // { id, name, loading, rows[], checked:Set, orig:Set, search, saving }
+  const [infoOpen, setInfoOpen] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -210,46 +210,6 @@ export default function TeamPage() {
     }
   };
 
-  // ── Participant assignment ──────────────────────────────────────────────────
-  const openParticipants = async (m) => {
-    const id = m._id || m.id;
-    setPartModal({ id, name: m.department_name || m.name, loading: true, rows: [], checked: new Set(), orig: new Set(), search: '', saving: false });
-    try {
-      const res = await getMemberParticipants(id);
-      const assigned = res.data.assigned || [];
-      const available = res.data.available || [];
-      const rows = [...assigned.map(p => ({ ...p, was: true })), ...available.map(p => ({ ...p, was: false }))];
-      const checked = new Set(assigned.map(p => p.id));
-      setPartModal(pm => pm && pm.id === id
-        ? { ...pm, loading: false, rows, checked, orig: new Set(checked) }
-        : pm);
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to load participants');
-      setPartModal(null);
-    }
-  };
-  const togglePart = (pid) => setPartModal(pm => {
-    const checked = new Set(pm.checked);
-    checked.has(pid) ? checked.delete(pid) : checked.add(pid);
-    return { ...pm, checked };
-  });
-  const savePart = async () => {
-    const pm = partModal;
-    const assign = [...pm.checked].filter(id => !pm.orig.has(id));
-    const unassign = [...pm.orig].filter(id => !pm.checked.has(id));
-    if (!assign.length && !unassign.length) { setPartModal(null); return; }
-    setPartModal(x => ({ ...x, saving: true }));
-    try {
-      await updateMemberParticipants(pm.id, { assign, unassign });
-      toast.success('Participants updated');
-      setPartModal(null);
-      load();
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Save failed');
-      setPartModal(x => ({ ...x, saving: false }));
-    }
-  };
-
   const toggleStatus = async (m) => {
     try {
       await updateTeamMember(m._id || m.id, {
@@ -275,6 +235,15 @@ export default function TeamPage() {
           <h1 className="text-base sm:text-xl font-bold text-primary-800 tracking-tight flex items-center gap-2">
             <HiOutlineUserGroup className="w-5 h-5 text-accent-500" />
             {isAdmin ? 'Sub-admins & Sub-departments' : 'Departments'}
+            <button
+              type="button"
+              onClick={() => setInfoOpen(true)}
+              title="How does this work?"
+              aria-label="How does this work?"
+              className="p-1 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
+            >
+              <HiOutlineInformationCircle className="w-5 h-5" />
+            </button>
           </h1>
           <p className="text-xs text-primary-400 mt-0.5 hidden sm:block">
             {isAdmin
@@ -389,14 +358,10 @@ export default function TeamPage() {
                   <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2 mt-auto">
                     <div>
                       {m.memberScope === 'airline' && (
-                        <button
-                          type="button"
-                          onClick={() => openParticipants(m)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-blue-50/80 border border-blue-200/80 text-blue-700 hover:bg-blue-100/80 transition-colors cursor-pointer shadow-2xs"
-                        >
+                        <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-slate-400">
                           <HiOutlineUsers className="w-3.5 h-3.5" />
-                          <span>Participants</span>
-                        </button>
+                          Keeps its own participant list
+                        </span>
                       )}
                     </div>
 
@@ -594,86 +559,284 @@ export default function TeamPage() {
           </div>
         </div>
       )}
-      {/* Participant assignment modal */}
-      {partModal && (
+      {/* "How it works" info modal */}
+      {infoOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          onClick={(e) => { if (e.target === e.currentTarget) setPartModal(null); }}>
-          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" />
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[92vh] flex flex-col">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
-              <div>
-                <h2 className="text-base font-bold text-slate-800">Participants — {partModal.name}</h2>
-                <p className="text-[11px] text-slate-400 mt-0.5">
-                  Ticked participants are moved into this department and only it sees them. Unticked ones go back to the main airline list.
-                </p>
+          onClick={(e) => { if (e.target === e.currentTarget) setInfoOpen(false); }}>
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm" />
+          <div className="relative bg-white rounded-3xl shadow-2xl border border-slate-100 w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden my-auto">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 bg-slate-50/60">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 bg-blue-50 text-blue-600 border border-blue-100 shadow-2xs">
+                  <Info className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <h2 className="text-base font-bold text-slate-900 leading-tight tracking-tight">How the Team System Works</h2>
+                  <p className="text-xs text-slate-500 mt-0.5">Overview of roles, permissions, and participant routing</p>
+                </div>
               </div>
-              <button onClick={() => setPartModal(null)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400">
+              <button
+                type="button"
+                onClick={() => setInfoOpen(false)}
+                className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-all cursor-pointer"
+              >
                 <HiOutlineX className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="px-5 pt-3">
-              <div className="relative">
-                <HiOutlineSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input
-                  value={partModal.search}
-                  onChange={(e) => setPartModal(pm => ({ ...pm, search: e.target.value }))}
-                  placeholder="Search participants…"
-                  className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                />
+            {/* Content Body */}
+            <div className="p-6 space-y-5 overflow-y-auto text-sm text-slate-600 leading-relaxed max-h-[72vh]">
+              {/* Concept Overview Banner */}
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-50/70 via-slate-50/50 to-indigo-50/50 border border-blue-100/80">
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center flex-shrink-0 mt-0.5 shadow-2xs">
+                    <Layers className="w-4 h-4" />
+                  </div>
+                  <div className="text-xs text-slate-600 leading-relaxed">
+                    <p className="font-bold text-slate-900 text-sm mb-0.5">
+                      {isAdmin ? 'Delegated Team Management' : 'Department Sub-Accounts'}
+                    </p>
+                    <p>
+                      {isAdmin
+                        ? 'Safely distribute platform responsibilities without sharing master admin credentials. Issue scoped sub-accounts with custom functional permissions.'
+                        : 'Create isolated team logins (e.g. Flight Dispatch, Cabin Crew) so departments manage their own trainees and rosters independently.'}
+                    </p>
+                  </div>
+                </div>
               </div>
-            </div>
 
-            <div className="p-5 overflow-y-auto flex-1">
-              {partModal.loading ? (
-                <div className="py-12 flex items-center justify-center text-slate-400">
-                  <div className="w-6 h-6 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" />
-                </div>
-              ) : partModal.rows.length === 0 ? (
-                <p className="text-sm text-slate-400 text-center py-10">No participants in the main airline list yet.</p>
-              ) : (
-                <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden">
-                  {partModal.rows
-                    .filter(p => {
-                      const q = partModal.search.trim().toLowerCase();
-                      return !q || [p.participant_name, p.department, p.training_type]
-                        .some(s => (s || '').toLowerCase().includes(q));
-                    })
-                    .map(p => (
-                      <label key={p.id}
-                        className="flex items-center gap-3 px-3.5 py-2.5 hover:bg-slate-50 cursor-pointer text-sm">
-                        <input type="checkbox" className="accent-blue-600"
-                          checked={partModal.checked.has(p.id)} onChange={() => togglePart(p.id)} />
-                        <span className="flex-1 min-w-0">
-                          <span className="font-semibold text-slate-800 block truncate">{p.participant_name || '—'}</span>
-                          <span className="text-[11px] text-slate-400">
-                            {p.department || '—'}{p.training_type ? ` · ${p.training_type}` : ''}
+              {isAdmin ? (
+                <>
+                  {/* Account Types */}
+                  <div>
+                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2.5">Account Roles</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {/* Sub-Admin */}
+                      <div className="p-4 rounded-2xl border border-violet-100 bg-violet-50/30 space-y-2 hover:border-violet-200 transition-colors">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="w-7 h-7 rounded-lg bg-violet-100 text-violet-700 flex items-center justify-center flex-shrink-0">
+                              <ShieldCheck className="w-4 h-4" />
+                            </div>
+                            <span className="text-xs font-bold text-slate-900">Sub-Admin</span>
+                          </div>
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 border border-violet-200/80">
+                            Global Scope
                           </span>
+                        </div>
+                        <p className="text-xs text-slate-600 leading-relaxed">
+                          Operates across <strong>all airlines</strong> with platform powers limited strictly to what you enable (e.g. view-only auditor or report exporter).
+                        </p>
+                      </div>
+
+                      {/* Sub-Department */}
+                      <div className="p-4 rounded-2xl border border-blue-100 bg-blue-50/30 space-y-2 hover:border-blue-200 transition-colors">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="w-7 h-7 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center flex-shrink-0">
+                              <Building2 className="w-4 h-4" />
+                            </div>
+                            <span className="text-xs font-bold text-slate-900">Sub-Department</span>
+                          </div>
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 border border-blue-200/80">
+                            Single Airline
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-600 leading-relaxed">
+                          Locked to <strong>one parent airline</strong>. Keeps its own separate participant list and only the airline-level powers you grant.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Core Mechanics */}
+                  <div>
+                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2.5">Key Mechanics</p>
+                    <div className="space-y-2.5">
+                      <div className="flex items-start gap-3 p-3.5 rounded-xl border border-slate-200/80 bg-white hover:border-slate-300 transition-colors">
+                        <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                          <CheckCircle2 className="w-4 h-4" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold text-slate-900">Granular Permission Checklist</p>
+                          <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+                            Permissions are grouped by domain (results, participants, attendance). Toggle individual powers or use <strong>Select all</strong>. Each card displays active power counts in real-time.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-start gap-3 p-3.5 rounded-xl border border-slate-200/80 bg-white hover:border-slate-300 transition-colors">
+                        <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 border border-blue-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                          <Users className="w-4 h-4" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold text-slate-900">Separate Participant Lists</p>
+                          <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+                            A sub-department keeps its <strong>own participant list</strong>, fully separate from the parent airline's. The department builds it by submitting enrollments once logged in &mdash; records are never shared with, or moved from, the main airline pool.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-start gap-3 p-3.5 rounded-xl border border-slate-200/80 bg-white hover:border-slate-300 transition-colors">
+                        <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 border border-slate-200 flex items-center justify-center flex-shrink-0 mt-0.5">
+                          <Sliders className="w-4 h-4" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold text-slate-900">Disable vs. Remove Lifecycle</p>
+                          <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+                            <strong>Disable</strong> instantly suspends login access while preserving permissions and the department's participant list. <strong>Remove</strong> permanently deletes the account and everything it owns.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Setup Guide */}
+                  <div className="p-4 rounded-2xl border border-slate-200/80 bg-slate-50/50">
+                    <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-3">Quick 3-Step Setup</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="flex items-start gap-2.5">
+                        <div className="w-5 h-5 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px] font-bold flex-shrink-0 mt-0.5">
+                          1
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-slate-800">Choose Role</p>
+                          <p className="text-[11px] text-slate-500 mt-0.5">Click New Sub-Admin or New Sub-Department</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-2.5">
+                        <div className="w-5 h-5 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px] font-bold flex-shrink-0 mt-0.5">
+                          2
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-slate-800">Set Permissions</p>
+                          <p className="text-[11px] text-slate-500 mt-0.5">Check specific powers to grant</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-2.5">
+                        <div className="w-5 h-5 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px] font-bold flex-shrink-0 mt-0.5">
+                          3
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-slate-800">Hand Over</p>
+                          <p className="text-[11px] text-slate-500 mt-0.5">The department logs in and adds its own participants</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Department Workspace */}
+                  <div>
+                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2.5">Department Workspace</p>
+                    <div className="p-4 rounded-2xl border border-blue-100 bg-blue-50/30 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center flex-shrink-0">
+                            <Building2 className="w-4 h-4" />
+                          </div>
+                          <span className="text-xs font-bold text-slate-900">Department Logins</span>
+                        </div>
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 border border-blue-200/80">
+                          Airline Scoped
                         </span>
-                        {p.was && !partModal.checked.has(p.id) && (
-                          <span className="text-[10px] font-semibold text-amber-600">→ back to main</span>
-                        )}
-                        {!p.was && partModal.checked.has(p.id) && (
-                          <span className="text-[10px] font-semibold text-blue-600">→ assign</span>
-                        )}
-                      </label>
-                    ))}
-                </div>
+                      </div>
+                      <p className="text-xs text-slate-600 leading-relaxed">
+                        Department accounts log in with their own email and password. They only see your airline's data and are restricted strictly to the permissions you tick when creating them.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Core Mechanics */}
+                  <div>
+                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2.5">Key Mechanics</p>
+                    <div className="space-y-2.5">
+                      <div className="flex items-start gap-3 p-3.5 rounded-xl border border-slate-200/80 bg-white hover:border-slate-300 transition-colors">
+                        <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                          <CheckCircle2 className="w-4 h-4" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold text-slate-900">Custom Capability Checklist</p>
+                          <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+                            Organized by area (results, participants, attendance). Each department card shows a live count and summary of its current powers.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-start gap-3 p-3.5 rounded-xl border border-slate-200/80 bg-white hover:border-slate-300 transition-colors">
+                        <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 border border-blue-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                          <Users className="w-4 h-4" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold text-slate-900">Separate Participant Lists</p>
+                          <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+                            Each department keeps its <strong>own participant list</strong>, fully separate from your main list and from other departments'. A department builds its list by submitting its own enrollments after logging in &mdash; nothing is shared or moved between lists.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-start gap-3 p-3.5 rounded-xl border border-slate-200/80 bg-white hover:border-slate-300 transition-colors">
+                        <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 border border-slate-200 flex items-center justify-center flex-shrink-0 mt-0.5">
+                          <Sliders className="w-4 h-4" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold text-slate-900">Account Management (Disable vs. Remove)</p>
+                          <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+                            <strong>Disable</strong> pauses login access instantly without losing data. <strong>Remove</strong> permanently deletes the account and its participant list.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Setup Guide */}
+                  <div className="p-4 rounded-2xl border border-slate-200/80 bg-slate-50/50">
+                    <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-3">Quick 3-Step Setup</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="flex items-start gap-2.5">
+                        <div className="w-5 h-5 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px] font-bold flex-shrink-0 mt-0.5">
+                          1
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-slate-800">Create Department</p>
+                          <p className="text-[11px] text-slate-500 mt-0.5">Enter contact credentials & name</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-2.5">
+                        <div className="w-5 h-5 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px] font-bold flex-shrink-0 mt-0.5">
+                          2
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-slate-800">Set Permissions</p>
+                          <p className="text-[11px] text-slate-500 mt-0.5">Toggle what powers to grant</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-2.5">
+                        <div className="w-5 h-5 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px] font-bold flex-shrink-0 mt-0.5">
+                          3
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-slate-800">Hand Over</p>
+                          <p className="text-[11px] text-slate-500 mt-0.5">The department logs in and adds its own participants</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </>
               )}
             </div>
 
-            <div className="px-5 py-4 border-t border-slate-200 flex items-center justify-between gap-2">
-              <span className="text-[11px] text-slate-400">{partModal.checked.size} assigned</span>
-              <div className="flex gap-2">
-                <button onClick={() => setPartModal(null)}
-                  className="px-3.5 py-2 rounded-xl text-sm font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50">
-                  Cancel
-                </button>
-                <button onClick={savePart} disabled={partModal.saving || partModal.loading}
-                  className="px-3.5 py-2 rounded-xl text-sm font-bold bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-50">
-                  {partModal.saving ? 'Saving…' : 'Save'}
-                </button>
-              </div>
+            {/* Footer */}
+            <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/60 flex items-center justify-end">
+              <button
+                type="button"
+                onClick={() => setInfoOpen(false)}
+                className="px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold bg-slate-900 text-white hover:bg-slate-800 transition-all cursor-pointer shadow-sm hover:shadow-md active:scale-[0.98]"
+              >
+                Got it
+              </button>
             </div>
           </div>
         </div>

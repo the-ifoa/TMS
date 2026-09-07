@@ -342,6 +342,15 @@ exports.airlineLogin = async (req, res) => {
       const parent = await Airline.findById(airline.parent_airline).select('logo_url');
       if (parent?.logo_url) { adminOut.logo_url = parent.logo_url; adminOut.logo_inherited = true; }
     }
+    // Self-heal: a top-level airline that already has departments must be able to
+    // see & manage its own team.
+    if (!airline.parent_airline && !airline.can_create_subusers) {
+      const deptCount = await Airline.countDocuments({ parent_airline: airline._id });
+      if (deptCount > 0) {
+        await Airline.updateOne({ _id: airline._id }, { $set: { can_create_subusers: true } });
+        adminOut.can_create_subusers = true;
+      }
+    }
 
     res.json({ token, admin: adminOut });
   } catch (err) {
@@ -364,6 +373,15 @@ exports.getMe = async (req, res) => {
       if (!out.logo_url && airline.parent_airline) {
         const parent = await Airline.findById(airline.parent_airline).select('logo_url');
         if (parent?.logo_url) { out.logo_url = parent.logo_url; out.logo_inherited = true; }
+      }
+      // Self-heal: a top-level airline that already has departments (e.g. an admin
+      // created them) must be able to see & manage its own team.
+      if (!airline.parent_airline && !airline.can_create_subusers) {
+        const deptCount = await Airline.countDocuments({ parent_airline: airline._id });
+        if (deptCount > 0) {
+          await Airline.updateOne({ _id: airline._id }, { $set: { can_create_subusers: true } });
+          out.can_create_subusers = true;
+        }
       }
       return res.json(out);
     } else {

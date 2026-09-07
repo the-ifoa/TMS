@@ -97,6 +97,7 @@ export const getAirlinesList          = () => api.get('/participants/airlines');
 export const getParticipants          = (params) => api.get('/participants', { params });
 export const getParticipant           = (id)     => api.get(`/participants/${id}`);
 export const createParticipant        = (data)   => api.post('/participants', data);
+export const createCandidate          = (data)   => api.post('/participants/candidate', data);
 export const bulkCreateParticipants   = (rows)   => api.post('/participants/bulk', rows);
 export const updateParticipant        = (id, data) => api.put(`/participants/${id}`, data);
 export const deleteParticipant        = (id)       => api.delete(`/participants/${id}`);

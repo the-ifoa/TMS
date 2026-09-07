@@ -11,18 +11,20 @@ const participantSchema = new mongoose.Schema(
     email:            { type: String, default: '', trim: true, lowercase: true },
     company:          { type: String, required: true },
     department:       { type: String, required: true },
+    // Optional: a department's "My Team" roster entry has name + email only and
+    // no training assigned yet. A full enrollment always sets these.
     training_type: {
       type: String,
-      required: true,
+      default: null,
       enum: [
         'Dispatch Graduate', 'Human Factors', 'Recurrent',
-        'FDI', 'FDR', 'FDA', 'FTL', 'NDG', 'HF', 'GD', 'TCD'
+        'FDI', 'FDR', 'FDA', 'FTL', 'NDG', 'HF', 'GD', 'TCD', null
       ]
     },
     airline_name: { type: String, default: null },
     submitted_by: { type: mongoose.Schema.Types.ObjectId, ref: 'Airline', default: null },
     locked:       { type: Boolean, default: true },
-    training_date: { type: String, required: true },
+    training_date: { type: String, default: null },
     end_date:      { type: String, default: null },
     location:      { type: String, default: null },
     modules:       { type: String, default: null },

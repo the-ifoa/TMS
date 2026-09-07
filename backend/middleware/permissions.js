@@ -81,6 +81,9 @@ async function loadScope(req, _res, next) {
       const me = await Airline.findById(c.id).select('can_create_subusers can_view_all_results').lean();
       topCanCreateSubusers = !!me?.can_create_subusers;
       topCanViewAllResults = !!me?.can_view_all_results;
+      // A top-level airline that already has departments can always view/manage
+      // its own team, even if the flag was never explicitly set.
+      if (!topCanCreateSubusers && departmentIds.length > 0) topCanCreateSubusers = true;
     }
 
     let visibleAirlineIds;

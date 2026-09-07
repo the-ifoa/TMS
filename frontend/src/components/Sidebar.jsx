@@ -46,17 +46,33 @@ const airlineNavigation = [
   { name: 'Profile',        href: '/airline/profile',       icon: HiOutlineUserCircle },
 ];
 
+// A logged-in sub-department manages a simple name+email roster ("My Team")
+// instead of the full participant / enrollment pages.
+const departmentNavigation = [
+  { name: 'Dashboard',        href: '/airline',            icon: HiOutlineHome },
+  { name: 'My Team',          href: '/airline/my-team',    icon: HiOutlineUsers,             perm: 'participants.view' },
+  { name: 'Exam Results',     href: '/airline/exams',      icon: HiOutlineClipboardCheck },
+  { name: 'Department Results', href: '/airline/results',  icon: HiOutlineChartSquareBar,    resultsTab: true },
+  { name: 'Team',             href: '/airline/team',       icon: HiOutlineUserGroup,         team: true },
+  { name: 'Profile',          href: '/airline/profile',    icon: HiOutlineUserCircle },
+];
+
 // Airlines granted exam-authoring get a "Manage Exams" entry above "Exam Results".
 const airlineExamAuthorItem = { name: 'Manage Exams', href: '/airline/exams/manage', icon: HiOutlineAcademicCap };
 
 export default function Sidebar({ open, setOpen }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isAdmin, admin, can, canManageTeam, logout } = useAuth();
-  let navigation = isAdmin ? adminNavigation : airlineNavigation;
-  if (!isAdmin && admin?.can_author_exams) {
+  const { isAdmin, isDepartment, admin, can, canManageTeam, logout } = useAuth();
+  let navigation;
+  if (isAdmin) {
+    navigation = adminNavigation;
+  } else if (isDepartment) {
+    navigation = [...departmentNavigation];
+    if (admin?.can_author_exams) navigation.splice(2, 0, airlineExamAuthorItem); // before "Exam Results"
+  } else {
     navigation = [...airlineNavigation];
-    navigation.splice(5, 0, airlineExamAuthorItem); // before "Exam Results"
+    if (admin?.can_author_exams) navigation.splice(5, 0, airlineExamAuthorItem); // before "Exam Results"
   }
   // Hide entries the current user (a sub-user / department) has no power for.
   navigation = navigation.filter((item) => {

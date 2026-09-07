@@ -31,6 +31,24 @@ function ownsExam(req, exam) {
   return exam.owner_airline && String(exam.owner_airline) === me;
 }
 
+// True when the caller may assign / send / view invites for this exam. Same as
+// ownsExam, but a department may also do this for exams owned by its parent
+// airline (assigning them to its own team roster only).
+function canAssignExam(req, exam) {
+  if (ownsExam(req, exam)) return true;
+  const s = req.scope;
+  return !!(s && s.isDepartment && exam.owner_airline
+    && String(exam.owner_airline) === String(s.topAirlineId));
+}
+
+// Owner ids a caller may assign / invite from. A department is limited to its
+// own "My Team" roster; everyone else uses their full visible scope.
+function assignableOwnerIds(req) {
+  const s = req.scope;
+  if (s && s.isDepartment) return [String(req.admin.id)];
+  return (s && s.visibleAirlineIds) || [req.admin.id];
+}
+
 // Who may edit/publish/assign/send/delete an exam: an IFOA admin for global
 // (admin-owned) exams, or the owning airline for its own. IFOA admins are
 // view-only on airline-owned exams.
@@ -67,7 +85,9 @@ exports.listAirlines = async (req, res) => {
         .filter(
           (p) =>
             (p.submitted_by && String(p.submitted_by) === String(a._id)) ||
-            (!p.submitted_by && (p.company === a.airlineName || p.airline_name === a.airlineName))
+            // Legacy name-match only for the admin view — an airline/department
+            // must never pick up un-owned records that merely share its name.
+            (isAdmin(req) && !p.submitted_by && (p.company === a.airlineName || p.airline_name === a.airlineName))
         )
         .map((p) => ({
           _id: String(p._id), participant_name: p.participant_name, training_type: p.training_type, email: p.email || '',
@@ -684,14 +704,14 @@ exports.assignExam = async (req, res) => {
   try {
     const exam = await Exam.findById(req.params.id);
     if (!exam) return res.status(404).json({ error: 'Exam not found.' });
-    if (!canManageExam(req, exam)) return res.status(403).json({ error: 'Access denied.' });
+    if (!canAssignExam(req, exam)) return res.status(403).json({ error: 'Access denied.' });
 
     const { participant_ids = [] } = req.body;
     const query = { _id: { $in: participant_ids } };
     // An airline can only assign participants within its own scope (a department:
-    // just its own; a top-level airline: its own + every department's).
-    if (ownsExam(req, exam)) {
-      query.submitted_by = { $in: (req.scope && req.scope.visibleAirlineIds) || [req.admin.id] };
+    // just its own "My Team"; a top-level airline: its own + every department's).
+    if (!isAdmin(req)) {
+      query.submitted_by = { $in: assignableOwnerIds(req) };
     }
     const participants = await Participant.find(query);
 
@@ -717,16 +737,17 @@ exports.sendInvites = async (req, res) => {
   try {
     const exam = await Exam.findById(req.params.id);
     if (!exam) return res.status(404).json({ error: 'Exam not found.' });
-    if (!canManageExam(req, exam)) return res.status(403).json({ error: 'Access denied.' });
+    if (!canAssignExam(req, exam)) return res.status(403).json({ error: 'Access denied.' });
     if (exam.status !== 'published') return res.status(400).json({ error: 'Publish the exam before sending invites.' });
 
     const { participant_ids = [] } = req.body;
     if (participant_ids.length === 0) return res.status(400).json({ error: 'Select at least one participant.' });
 
     const query = { _id: { $in: participant_ids } };
-    // An airline can only invite participants within its own scope.
-    if (ownsExam(req, exam)) {
-      query.submitted_by = { $in: (req.scope && req.scope.visibleAirlineIds) || [req.admin.id] };
+    // An airline can only invite participants within its own scope (a department:
+    // just its own "My Team").
+    if (!isAdmin(req)) {
+      query.submitted_by = { $in: assignableOwnerIds(req) };
     }
     const participants = await Participant.find(query);
     const airlines = await Airline.find({});
@@ -794,11 +815,15 @@ exports.sendInvites = async (req, res) => {
 // ─── GET /exams/:id/invites — admin: invite + attempt status for an exam ────────
 exports.listInvites = async (req, res) => {
   try {
+    const inviteQuery = { exam_id: req.params.id };
     if (!isAdmin(req)) {
-      const exam = await Exam.findById(req.params.id).select('owner_airline');
-      if (!exam || !ownsExam(req, exam)) return res.status(403).json({ error: 'Access denied.' });
+      const exam = await Exam.findById(req.params.id).select('owner_airline owner_department');
+      if (!exam || !canAssignExam(req, exam)) return res.status(403).json({ error: 'Access denied.' });
+      // Only show invites for participants in this caller's own scope (a
+      // department: just its own "My Team").
+      inviteQuery.airline_id = { $in: assignableOwnerIds(req) };
     }
-    const invites = await ExamInvite.find({ exam_id: req.params.id }).sort({ created_at: -1 });
+    const invites = await ExamInvite.find(inviteQuery).sort({ created_at: -1 });
     const attemptIds = invites.map((i) => i.attempt_id).filter(Boolean);
     const attempts = await ExamAttempt.find({ _id: { $in: attemptIds } })
       .select('score max_score percentage passed status');

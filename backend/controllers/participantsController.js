@@ -296,6 +296,52 @@ exports.createParticipant = async (req, res) => {
   }
 };
 
+// ─── CREATE a "My Team" candidate (department only) ─────────────────────────
+//   A lightweight roster entry: name + email only. company/department are
+//   auto-filled from the department's own account; no training is assigned yet.
+exports.createCandidate = async (req, res) => {
+  try {
+    const s = req.scope;
+    if (!s || s.kind !== 'airline' || !s.isDepartment) {
+      return res.status(403).json({ error: 'Only a department can add team candidates.' });
+    }
+
+    const email = (req.body.email || '').trim().toLowerCase();
+    let fName = (req.body.first_name || '').trim();
+    let lName = (req.body.last_name || '').trim();
+    if (!fName && !lName && req.body.participant_name) {
+      const parts = String(req.body.participant_name).trim().split(/\s+/);
+      fName = parts[0] || '';
+      lName = parts.slice(1).join(' ');
+    }
+    if (!fName) return res.status(400).json({ error: 'First name is required.' });
+
+    const me = await Airline.findById(req.admin.id).select('airlineName department_name name');
+    const company    = me?.airlineName || req.admin.airlineName || 'Airline';
+    const department = me?.department_name || me?.name || 'Department';
+
+    const doc = new Participant({
+      first_name:       fName,
+      last_name:        lName,
+      participant_name: `${fName} ${lName}`.trim(),
+      email,
+      company,
+      department,
+      training_type:    null,
+      training_date:    null,
+      airline_name:     company,
+      submitted_by:     req.admin.id,   // department owns its own roster
+      locked:           true,
+    });
+
+    await doc.save();
+    res.status(201).json(doc.toJSON());
+  } catch (err) {
+    console.error('POST /participants/candidate error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+};
+
 // ─── BULK CREATE participants ─────────────────────────────────────────────────
 exports.bulkCreateParticipants = async (req, res) => {
   try {

@@ -178,6 +178,17 @@ exports.create = async (req, res) => {
       created_by_admin: s.kind === 'admin' ? s.adminId : null,
       created_by_airline: s.kind === 'airline' ? s.selfId : null,
     });
+
+    // An admin adding a department to an airline implies that airline should be
+    // able to see & manage its own team — enable it so the parent's Team page
+    // and nav appear (the airline can then add more departments itself).
+    if (s.kind === 'admin') {
+      await Airline.updateOne(
+        { _id: topAirlineId, can_create_subusers: { $ne: true } },
+        { $set: { can_create_subusers: true } },
+      );
+    }
+
     return res.status(201).json({ member: { ...doc.toJSON(), memberScope: 'airline' } });
   } catch (err) {
     console.error('POST /team/members error:', err.message);

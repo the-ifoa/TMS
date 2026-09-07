@@ -32,6 +32,9 @@ router.get('/:id', canView, participantsController.getParticipant);
 // ─── CREATE participant ───────────────────────────────────────────────────────
 router.post('/', canCreate, participantsController.createParticipant);
 
+// ─── CREATE a department "My Team" candidate (name + email only) ─────────────
+router.post('/candidate', canCreate, participantsController.createCandidate);
+
 // ─── BULK CREATE participants ─────────────────────────────────────────────────
 router.post('/bulk', canCreate, participantsController.bulkCreateParticipants);
 

@@ -673,7 +673,7 @@ export default function TeamPage() {
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-bold text-slate-900">Separate Participant Lists</p>
                           <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
-                            A sub-department keeps its <strong>own participant list</strong>, fully separate from the parent airline's. The department builds it by submitting enrollments once logged in &mdash; records are never shared with, or moved from, the main airline pool.
+                            A sub-department keeps its <strong>own team roster</strong> (name + email per person), fully separate from the parent airline's. The department builds it on its <strong>My Team</strong> page once logged in &mdash; records are never shared with, or moved from, the main airline pool.
                           </p>
                         </div>
                       </div>
@@ -720,7 +720,7 @@ export default function TeamPage() {
                         </div>
                         <div>
                           <p className="text-xs font-bold text-slate-800">Hand Over</p>
-                          <p className="text-[11px] text-slate-500 mt-0.5">The department logs in and adds its own participants</p>
+                          <p className="text-[11px] text-slate-500 mt-0.5">The department logs in and adds its people on My Team</p>
                         </div>
                       </div>
                     </div>
@@ -772,7 +772,7 @@ export default function TeamPage() {
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-bold text-slate-900">Separate Participant Lists</p>
                           <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
-                            Each department keeps its <strong>own participant list</strong>, fully separate from your main list and from other departments'. A department builds its list by submitting its own enrollments after logging in &mdash; nothing is shared or moved between lists.
+                            Each department keeps its <strong>own team roster</strong> (name + email per person), fully separate from your main list and from other departments'. A department builds it on its <strong>My Team</strong> page after logging in &mdash; nothing is shared or moved between lists.
                           </p>
                         </div>
                       </div>
@@ -819,7 +819,7 @@ export default function TeamPage() {
                         </div>
                         <div>
                           <p className="text-xs font-bold text-slate-800">Hand Over</p>
-                          <p className="text-[11px] text-slate-500 mt-0.5">The department logs in and adds its own participants</p>
+                          <p className="text-[11px] text-slate-500 mt-0.5">The department logs in and adds its people on My Team</p>
                         </div>
                       </div>
                     </div>

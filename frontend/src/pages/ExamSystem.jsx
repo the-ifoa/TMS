@@ -338,7 +338,7 @@ function AssignModal({ exam, onClose, onAssigned, isAdmin = true }) {
                         <FaPlaneDeparture className="w-4 h-4" />
                       </div>
                       <span className="text-sm font-bold text-slate-900 truncate">
-                        {airline.airlineName}
+                        {airline.is_department ? (airline.department_name || airline.name || airline.airlineName) : airline.airlineName}
                       </span>
                     </div>
 
@@ -639,7 +639,7 @@ function SendInviteModal({ exam, onClose, onSent }) {
                       <div className="w-7 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-700 shadow-2xs flex-shrink-0">
                         <FaPlaneDeparture className="w-4 h-4" />
                       </div>
-                      <span className="text-sm font-bold text-slate-800 truncate">{airline.airlineName}</span>
+                      <span className="text-sm font-bold text-slate-800 truncate">{airline.is_department ? (airline.department_name || airline.name || airline.airlineName) : airline.airlineName}</span>
                       <span className="px-2 py-0.5 rounded-full bg-slate-200/80 text-slate-700 text-[11px] font-bold">{participants.length}</span>
                     </div>
                     {sendable.length > 0 && (

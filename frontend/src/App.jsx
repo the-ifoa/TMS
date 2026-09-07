@@ -28,6 +28,8 @@ import ExamResultView from './pages/ExamResultView';
 import PublicExam from './pages/PublicExam';
 import ParticipantExamPerformance from './pages/ParticipantExamPerformance';
 import QuestionBank, { QuestionBankDetail } from './pages/QuestionBank';
+import TeamPage from './pages/TeamPage';
+import DepartmentResults from './pages/DepartmentResults';
 
 // Requires any authenticated user (admin or airline)
 function ProtectedRoute({ children }) {
@@ -60,6 +62,26 @@ function ExamAuthorRoute({ children }) {
   if (!admin) return <Navigate to="/login" replace />;
   if (isAdmin) return children;
   if (!admin.can_author_exams) return <Navigate to="/airline" replace />;
+  return children;
+}
+
+// Requires an account that can manage sub-users (super admin, admin/airline
+// sub-user with team.manage, or a top-level airline granted can_create_subusers).
+function TeamRoute({ children }) {
+  const { admin, loading, canManageTeam, isAdmin } = useAuth();
+  if (loading) return null;
+  if (!admin) return <Navigate to="/login" replace />;
+  if (!canManageTeam) return <Navigate to={isAdmin ? '/admin' : '/airline'} replace />;
+  return children;
+}
+
+// Requires one of the given permission keys (can() already lets top-level
+// admin / top-level airline through).
+function PermRoute({ perms, children }) {
+  const { admin, loading, can, isAdmin } = useAuth();
+  if (loading) return null;
+  if (!admin) return <Navigate to="/login" replace />;
+  if (!perms.some((p) => can(p))) return <Navigate to={isAdmin ? '/admin' : '/airline'} replace />;
   return children;
 }
 
@@ -100,40 +122,45 @@ function App() {
         <Route path="/admin" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
           {/* Available to all authenticated users */}
           <Route index element={<Dashboard />} />
-          <Route path="participants" element={<Participants />} />
-          <Route path="participants/add" element={<AddParticipant />} />
+          <Route path="participants" element={<PermRoute perms={['participants.view']}><Participants /></PermRoute>} />
+          <Route path="participants/add" element={<PermRoute perms={['participants.create']}><AddParticipant /></PermRoute>} />
           <Route path="participants/:participantId/performance" element={<ParticipantExamPerformance />} />
           <Route path="profile" element={<Profile />} />
 
-          {/* Admin-only routes */}
-          <Route path="airlines" element={<AdminRoute><Airlines /></AdminRoute>} />
-          <Route path="contracts" element={<AdminRoute><Contract /></AdminRoute>} />
-          <Route path="participants/edit/:id" element={<AdminRoute><EditParticipant /></AdminRoute>} />
-          <Route path="attendance"   element={<AdminRoute><AttendanceSheets /></AdminRoute>} />
-          <Route path="exam-results" element={<AdminRoute><ExamResults /></AdminRoute>} />
-          <Route path="dgr"          element={<AdminRoute><DgrForms /></AdminRoute>} />
-          <Route path="exams"           element={<AdminRoute><ExamSystem /></AdminRoute>} />
+          {/* Admin-only routes — sub-admins are further gated by permission */}
+          <Route path="airlines" element={<AdminRoute><PermRoute perms={['airlines.view', 'airlines.manage']}><Airlines /></PermRoute></AdminRoute>} />
+          <Route path="contracts" element={<AdminRoute><PermRoute perms={['contracts.manage']}><Contract /></PermRoute></AdminRoute>} />
+          <Route path="participants/edit/:id" element={<AdminRoute><PermRoute perms={['participants.edit']}><EditParticipant /></PermRoute></AdminRoute>} />
+          <Route path="attendance"   element={<AdminRoute><PermRoute perms={['attendance.view', 'attendance.manage']}><AttendanceSheets /></PermRoute></AdminRoute>} />
+          <Route path="exam-results" element={<AdminRoute><PermRoute perms={['examResults.view', 'examResults.manage']}><ExamResults /></PermRoute></AdminRoute>} />
+          <Route path="dgr"          element={<AdminRoute><PermRoute perms={['dgr.view', 'dgr.manage']}><DgrForms /></PermRoute></AdminRoute>} />
+          <Route path="exams"           element={<AdminRoute><PermRoute perms={['exams.author', 'exams.assign', 'exams.grade']}><ExamSystem /></PermRoute></AdminRoute>} />
           <Route path="exams/new"       element={<AdminRoute><ExamBuilder /></AdminRoute>} />
           <Route path="exams/:id/edit"  element={<AdminRoute><ExamBuilder /></AdminRoute>} />
           <Route path="exams/:id/attempts" element={<AdminRoute><ExamAttempts /></AdminRoute>} />
           <Route path="question-bank" element={<Navigate to="/admin/exams?tab=question-bank" replace />} />
           <Route path="question-bank/:bankId" element={<AdminRoute><QuestionBankDetail /></AdminRoute>} />
+          <Route path="team" element={<TeamRoute><TeamPage /></TeamRoute>} />
         </Route>
 
         {/* Airline-friendly URL aliases — same pages, nicer URLs for airline users */}
         <Route path="/airline" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
           <Route index element={<Dashboard />} />
-          <Route path="submissions" element={<Participants />} />
-          <Route path="participants" element={<AirlineParticipants />} />
+          <Route path="submissions" element={<PermRoute perms={['participants.view']}><Participants /></PermRoute>} />
+          <Route path="participants" element={<PermRoute perms={['participants.view']}><AirlineParticipants /></PermRoute>} />
           <Route path="participants/:participantId/performance" element={<ParticipantExamPerformance />} />
-          <Route path="enrollment/new" element={<AddParticipant />} />
-          <Route path="dgr" element={<DgrForms />} />
+          <Route path="enrollment/new" element={<PermRoute perms={['participants.create']}><AddParticipant /></PermRoute>} />
+          <Route path="dgr" element={<PermRoute perms={['dgr.view']}><DgrForms /></PermRoute>} />
           <Route path="exams" element={<AirlineExams />} />
           <Route path="exams/manage"       element={<ExamAuthorRoute><ExamSystem /></ExamAuthorRoute>} />
           <Route path="exams/new"          element={<ExamAuthorRoute><ExamBuilder /></ExamAuthorRoute>} />
           <Route path="exams/:id/edit"     element={<ExamAuthorRoute><ExamBuilder /></ExamAuthorRoute>} />
           <Route path="exams/:id/attempts" element={<ExamAuthorRoute><ExamAttempts /></ExamAuthorRoute>} />
           <Route path="exams/:examId/result/:attemptId" element={<ExamResultView />} />
+          <Route path="team" element={<TeamRoute><TeamPage /></TeamRoute>} />
+          <Route path="results" element={
+            <PermRoute perms={['results.viewOwn', 'results.viewAll']}><DepartmentResults /></PermRoute>
+          } />
           <Route path="profile" element={<Profile />} />
         </Route>
       </Routes>

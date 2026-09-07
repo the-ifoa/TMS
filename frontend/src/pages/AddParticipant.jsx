@@ -63,10 +63,12 @@ const emptyRow = (defaultNdgSubtype = 'I', defaultDepartment = '') => ({
 // AttendanceChecklistModal — imported from ../components/AttendanceChecklistModal
 
 // ─── Single-mode form ─────────────────────────────────────────────────────────
-function SingleForm({ isAdmin, airlineName, airlineOptions, onSuccess }) {
+function SingleForm({ isAdmin, isDepartment, departmentLabel, airlineName, airlineOptions, onSuccess }) {
   const [saving, setSaving] = useState(false);
   const [showChecklist, setShowChecklist] = useState(false);
   const [attendanceSheetId, setAttendanceSheetId] = useState(null);
+  // Department caller: default false → record goes to the shared main airline list.
+  const [keepInDepartment, setKeepInDepartment] = useState(false);
   const [form, setForm] = useState({
     first_name: '',
     last_name: '',
@@ -104,7 +106,7 @@ function SingleForm({ isAdmin, airlineName, airlineOptions, onSuccess }) {
     }
     try {
       setSaving(true);
-      const saved = await createParticipant(form);
+      const saved = await createParticipant({ ...form, keep_in_department: isDepartment ? keepInDepartment : undefined });
       // Send one confirmation email (airline only — fire-and-forget)
       if (!isAdmin) {
         sendSubmissionConfirmation({
@@ -320,6 +322,28 @@ function SingleForm({ isAdmin, airlineName, airlineOptions, onSuccess }) {
         </div>
       )}
 
+      {isDepartment && (
+        <div className="pt-4 border-t border-primary-200">
+          <label className="label">Where should this record go?</label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
+            <button type="button" onClick={() => setKeepInDepartment(false)}
+              className={`text-left px-3 py-2 rounded-lg border text-xs transition-colors ${
+                !keepInDepartment
+                  ? 'bg-blue-50 border-blue-300 text-blue-800 font-semibold'
+                  : 'bg-white border-primary-200 text-primary-600 hover:border-primary-300'}`}>
+              Main airline list <span className="font-normal">(default — visible to the whole airline)</span>
+            </button>
+            <button type="button" onClick={() => setKeepInDepartment(true)}
+              className={`text-left px-3 py-2 rounded-lg border text-xs transition-colors ${
+                keepInDepartment
+                  ? 'bg-blue-50 border-blue-300 text-blue-800 font-semibold'
+                  : 'bg-white border-primary-200 text-primary-600 hover:border-primary-300'}`}>
+              Keep private to my department
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-end gap-3 pt-4 border-t border-primary-200">
         <button
           type="button"
@@ -467,11 +491,12 @@ function BulkRow({ row, idx, onChange, onRemove, result, isNDG, ndgMode, departm
 }
 
 // ─── Bulk mode form ───────────────────────────────────────────────────────────
-function BulkForm({ isAdmin, airlineName, airlineOptions, onSuccess }) {
+function BulkForm({ isAdmin, isDepartment, departmentLabel, airlineName, airlineOptions, onSuccess }) {
   const [rows, setRows]       = useState([emptyRow('I', ''), emptyRow('I', ''), emptyRow('I', '')]);
   const [company, setCompany]           = useState(isAdmin ? '' : (airlineName || ''));
   const [customCompany, setCustomCompany] = useState('');
   const [saving, setSaving]              = useState(false);
+  const [keepInDepartment, setKeepInDepartment] = useState(false);
   const [results, setResults] = useState({});
   const [done, setDone]       = useState(false);
   const [showChecklist, setShowChecklist]     = useState(false);
@@ -581,6 +606,7 @@ function BulkForm({ isAdmin, airlineName, airlineOptions, onSuccess }) {
           modules:            shared.modules,
           ndg_subtype:        shared.ndg_mode === 'M' ? row.ndg_subtype : shared.ndg_mode,
           online_synchronous: shared.online_synchronous,
+          keep_in_department: isDepartment ? keepInDepartment : undefined,
         });
         setResults(prev => ({ ...prev, [row.id]: { status: 'success' } }));
         // Record in local array so we can use it synchronously below
@@ -907,6 +933,28 @@ function BulkForm({ isAdmin, airlineName, airlineOptions, onSuccess }) {
         </div>
       )}
 
+      {isDepartment && !done && (
+        <div className="card p-4">
+          <label className="label">Where should these records go?</label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
+            <button type="button" onClick={() => setKeepInDepartment(false)}
+              className={`text-left px-3 py-2 rounded-lg border text-xs transition-colors ${
+                !keepInDepartment
+                  ? 'bg-blue-50 border-blue-300 text-blue-800 font-semibold'
+                  : 'bg-white border-primary-200 text-primary-600 hover:border-primary-300'}`}>
+              Main airline list <span className="font-normal">(default)</span>
+            </button>
+            <button type="button" onClick={() => setKeepInDepartment(true)}
+              className={`text-left px-3 py-2 rounded-lg border text-xs transition-colors ${
+                keepInDepartment
+                  ? 'bg-blue-50 border-blue-300 text-blue-800 font-semibold'
+                  : 'bg-white border-primary-200 text-primary-600 hover:border-primary-300'}`}>
+              Keep private to my department
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="card p-4 flex flex-wrap items-center justify-between gap-3">
         <div className="text-sm text-primary-600">
           {successCount > 0
@@ -946,8 +994,9 @@ function BulkForm({ isAdmin, airlineName, airlineOptions, onSuccess }) {
 // ─── Page wrapper ─────────────────────────────────────────────────────────────
 export default function AddParticipant() {
   const navigate = useNavigate();
-  const { admin, isAdmin } = useAuth();
+  const { admin, isAdmin, isDepartment } = useAuth();
   const airlineName = admin?.airlineName || '';
+  const departmentLabel = admin?.department_name || 'this department';
   const [mode, setMode] = useState('bulk'); // 'single' | 'bulk'
   const [airlineOptions, setAirlineOptions] = useState([]);
 
@@ -1018,12 +1067,12 @@ export default function AddParticipant() {
         <AnimatePresence mode="wait">
           {mode === 'single' && (
             <motion.div key="single" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }}>
-              <SingleForm isAdmin={isAdmin} airlineName={airlineName} airlineOptions={airlineOptions} onSuccess={handleSuccess} />
+              <SingleForm isAdmin={isAdmin} isDepartment={isDepartment} departmentLabel={departmentLabel} airlineName={airlineName} airlineOptions={airlineOptions} onSuccess={handleSuccess} />
             </motion.div>
           )}
           {mode === 'bulk' && (
             <motion.div key="bulk" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }}>
-              <BulkForm isAdmin={isAdmin} airlineName={airlineName} airlineOptions={airlineOptions} onSuccess={handleSuccess} />
+              <BulkForm isAdmin={isAdmin} isDepartment={isDepartment} departmentLabel={departmentLabel} airlineName={airlineName} airlineOptions={airlineOptions} onSuccess={handleSuccess} />
             </motion.div>
           )}
         </AnimatePresence>

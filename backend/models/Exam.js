@@ -125,6 +125,11 @@ const examSchema = new mongoose.Schema(
     // get view-only access to airline-owned exams.
     owner_airline: { type: mongoose.Schema.Types.ObjectId, ref: 'Airline', default: null },
 
+    // When a department (an Airline sub-user) authors an exam, owner_airline is
+    // set to the TOP-LEVEL airline id (so the main account still sees it) and
+    // owner_department names the department that manages it.
+    owner_department: { type: mongoose.Schema.Types.ObjectId, ref: 'Airline', default: null },
+
     status: { type: String, enum: ['draft', 'published', 'archived'], default: 'draft' },
 
     duration_minutes: { type: Number, default: 30 },

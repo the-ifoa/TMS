@@ -113,15 +113,17 @@ const stats = [
 ];
 
 export default function LandingPage() {
-  const { admin, isAdmin, logout } = useAuth();
+  const { admin, isAdmin, isSubAdmin, logout } = useAuth();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const initials = admin?.name
     ? admin.name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
     : 'AD';
-  const profileLabel = isAdmin ? (admin?.name || 'Admin') : (admin?.airlineName || admin?.name || 'Airline');
-  const profileSublabel = isAdmin ? 'Administrator' : 'Airline User';
+  const profileLabel = isAdmin ? (admin?.name || 'Admin') : (admin?.name || admin?.airlineName || 'Airline');
+  // Secondary line: prioritise department, then airline.
+  const airlineSubLabel = admin?.department_name || admin?.airlineName || 'Airline User';
+  const profileSublabel = isAdmin ? (isSubAdmin ? 'Sub-admin' : 'Administrator') : airlineSubLabel;
   const dashboardPath = isAdmin ? '/admin' : '/airline';
 
   function handleLogout() {
@@ -172,14 +174,14 @@ export default function LandingPage() {
                       <p className="text-base font-extrabold text-white leading-tight">
                         {admin?.name || 'User'}
                       </p>
-                      {!isAdmin && admin?.airlineName && (
+                      {!isAdmin && (
                         <p className="text-xs font-semibold text-slate-300">
-                          {admin.airlineName}
+                          {airlineSubLabel}
                         </p>
                       )}
                       {isAdmin && (
                         <p className="text-xs font-semibold text-slate-300">
-                          Administrator
+                          {isSubAdmin ? 'Sub-admin' : 'Administrator'}
                         </p>
                       )}
                       {admin?.email && (
@@ -229,8 +231,9 @@ export default function LandingPage() {
                   Sign In
                 </Link>
                 <Link to="/signup"
-                  className="group inline-flex items-center gap-2 px-4.5 py-2 bg-slate-900 text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-2xs">
-                  Get Started <HiOutlineArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                  className="group inline-flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-2xs">
+                  <span>Get Started</span>
+                  <HiOutlineArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
                 </Link>
               </>
             )}

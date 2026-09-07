@@ -6,7 +6,7 @@ import {
   HiOutlineEye, HiOutlineEyeOff,
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
-import { airlineLogin, forgotPassword } from '../api';
+import { airlineLogin, login as adminLoginApi, forgotPassword } from '../api';
 import { useAuth } from '../context/AuthContext';
 import logoImg from '../assets/logo.png';
 
@@ -31,7 +31,25 @@ export default function Login() {
       toast.success(`Welcome, ${res.data.admin.airlineName}!`);
       navigate('/airline');
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Login failed. Please check your credentials.');
+      // Not an airline account — this form ALSO accepts admin-created sub-admins
+      // (they have parent_admin set). Top-level admins must still use /admin-login.
+      try {
+        const res = await adminLoginApi({ email: form.email, password: form.password });
+        if (!res.data.admin?.parent_admin) {
+          toast.error('Use the admin sign-in page for this account.');
+          return;
+        }
+        loginAdmin(res.data.token, { ...res.data.admin, role: 'admin' });
+        toast.success(`Welcome, ${res.data.admin.name || 'Admin'}!`);
+        navigate('/admin');
+        return;
+      } catch (adminErr) {
+        toast.error(
+          adminErr.response?.data?.error
+          || err.response?.data?.error
+          || 'Login failed. Please check your credentials.',
+        );
+      }
     } finally {
       setLoading(false);
     }

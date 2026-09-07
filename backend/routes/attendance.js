@@ -1,23 +1,27 @@
 const express = require('express');
 const router = express.Router();
 const { authMiddleware } = require('../middleware/auth');
+const { loadScope, requirePermission } = require('../middleware/permissions');
 const attendanceController = require('../controllers/attendanceController');
 
-router.use(authMiddleware);
+router.use(authMiddleware, loadScope);
+
+const canView   = requirePermission('attendance.view');
+const canManage = requirePermission('attendance.manage');
 
 // ─── GET /api/attendance — list sheets ───────────────────────────────────────
-router.get('/', attendanceController.listSheets);
+router.get('/', canView, attendanceController.listSheets);
 
 // ─── GET /api/attendance/:id ──────────────────────────────────────────────────
-router.get('/:id', attendanceController.getSheet);
+router.get('/:id', canView, attendanceController.getSheet);
 
 // ─── POST /api/attendance/bulk — ensure one sheet per training batch ─────────
-router.post('/bulk', attendanceController.bulkEnsureSheets);
+router.post('/bulk', canManage, attendanceController.bulkEnsureSheets);
 
 // ─── POST /api/attendance — create new sheet ──────────────────────────────────
-router.post('/', attendanceController.createSheet);
+router.post('/', canManage, attendanceController.createSheet);
 
 // ─── PUT /api/attendance/:id — update existing sheet ─────────────────────────
-router.put('/:id', attendanceController.updateSheet);
+router.put('/:id', canManage, attendanceController.updateSheet);
 
 module.exports = router;

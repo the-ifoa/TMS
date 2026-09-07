@@ -3,6 +3,55 @@ const Airline = require('../models/Airline');
 const DhlCertificate = require('../models/DhlCertificate');
 const { sendSubmissionConfirmation } = require('../services/emailService');
 
+// Owner (`submitted_by`) for a newly created participant.
+//   admin              → null
+//   top-level airline  → its own id
+//   department         → the MAIN airline account by default (record shows in
+//                        the main list); its own id when keepInDepartment is set
+function resolveOwnerOnCreate(req, keepInDepartment) {
+  if (req.admin.role !== 'airline') return null;
+  const s = req.scope;
+  if (s && s.isDepartment) {
+    return keepInDepartment ? s.selfId : s.topAirlineId;
+  }
+  return req.admin.id;
+}
+
+// ─── PATCH /participants/:id/scope — move a record between the shared main
+//     airline list and a department's private list ──────────────────────────
+exports.updateParticipantScope = async (req, res) => {
+  try {
+    const s = req.scope;
+    if (!s || s.kind !== 'airline')
+      return res.status(403).json({ error: 'Airline access required.' });
+
+    const { target } = req.body; // 'main' | 'department'
+    if (!['main', 'department'].includes(target))
+      return res.status(400).json({ error: "target must be 'main' or 'department'." });
+
+    const p = await Participant.findById(req.params.id);
+    if (!p) return res.status(404).json({ error: 'Participant not found.' });
+
+    // Caller must currently be able to see this record.
+    const visible = (s.visibleAirlineIds || []).map(String);
+    if (!p.submitted_by || !visible.includes(String(p.submitted_by)))
+      return res.status(403).json({ error: 'This record is not in your scope.' });
+
+    if (target === 'department') {
+      if (!s.isDepartment)
+        return res.status(400).json({ error: 'Only a department can pull a record into its own list.' });
+      p.submitted_by = s.selfId;
+    } else {
+      p.submitted_by = s.topAirlineId;
+    }
+    await p.save();
+    res.json({ message: 'Record moved.', participant: p.toJSON() });
+  } catch (err) {
+    console.error('PATCH /participants/:id/scope error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+};
+
 // ─── GET all participants ─────────────────────────────────────────────────────
 exports.listParticipants = async (req, res) => {
   try {
@@ -19,7 +68,10 @@ exports.listParticipants = async (req, res) => {
       // PRIMARY filter: match by submitted_by (MongoDB _id of the airline account).
       // This is the ONLY safe filter — two airline accounts with the same airlineName
       // (e.g. both named "indigo") must NOT see each other's data.
-      const airlineFilters = [{ submitted_by: req.admin.id }];
+      // A top-level airline also sees every department it owns (scope.visibleAirlineIds);
+      // a plain department sees only itself.
+      const visibleIds = (req.scope && req.scope.visibleAirlineIds) || [req.admin.id];
+      const airlineFilters = [{ submitted_by: { $in: visibleIds } }];
 
       // LEGACY fallback: for old records that were created before submitted_by existed
       // (submitted_by === null), also match by airline_name/company name.
@@ -77,6 +129,30 @@ exports.listParticipants = async (req, res) => {
       return obj;
     });
 
+    // Airline side: tag each record with which account submitted it — the main
+    // airline account or a specific department — so the UI can label & filter.
+    if (req.scope && req.scope.kind === 'airline') {
+      const ownerIds = [...new Set(participants.map(p => String(p.submitted_by || '')).filter(Boolean))];
+      const ownerDocs = await Airline.find({ _id: { $in: ownerIds } })
+        .select('airlineName department_name is_department parent_airline');
+      const infoById = {};
+      ownerDocs.forEach((a) => {
+        infoById[String(a._id)] = {
+          label: a.is_department
+            ? (a.department_name || a.name || 'Department')
+            : `${a.airlineName} · main account`,
+          isDepartment: !!a.is_department,
+        };
+      });
+      participants.forEach((p) => {
+        const oid = String(p.submitted_by || '');
+        const info = infoById[oid];
+        p.owner_id = oid || null;
+        p.owner_label = info ? info.label : 'Unknown';
+        p.owner_is_department = info ? info.isDepartment : false;
+      });
+    }
+
     res.json(participants);
   } catch (err) {
     console.error('GET /participants error:', err.message);
@@ -91,7 +167,12 @@ exports.listByAirline = async (req, res) => {
       return res.status(403).json({ error: 'Admin access required.' });
     }
 
-    const airlines        = await Airline.find({}).sort({ airlineName: 1 });
+    // Only top-level airline accounts appear as cards here — department
+    // sub-users (parent_airline set) are managed from the Team page instead.
+    // Their participants still roll up under the parent airline's card.
+    const airlines        = await Airline.find({ parent_airline: null }).sort({ airlineName: 1 });
+    const departments     = await Airline.find({ parent_airline: { $ne: null } }).select('parent_airline').lean();
+    const parentByDept    = new Map(departments.map(d => [String(d._id), String(d.parent_airline)]));
     const participantDocs = await Participant.find({}).sort({ created_at: -1 });
 
     // Attach DHL ST-001 extra-cert status — lives in its own collection, so
@@ -108,11 +189,13 @@ exports.listByAirline = async (req, res) => {
 
     const result = airlines.map((a) => ({
       airline: a.toJSON(),
-      participants: participants.filter(
-        (p) =>
-          (p.submitted_by && String(p.submitted_by) === String(a._id)) ||
-          (!p.submitted_by && (p.company === a.airlineName || p.airline_name === a.airlineName))
-      ),
+      participants: participants.filter((p) => {
+        if (p.submitted_by) {
+          const owner = String(p.submitted_by);
+          return owner === String(a._id) || parentByDept.get(owner) === String(a._id);
+        }
+        return p.company === a.airlineName || p.airline_name === a.airlineName;
+      }),
     }));
 
     // Return every airline, including ones with zero submissions — the admin UI
@@ -170,6 +253,7 @@ exports.createParticipant = async (req, res) => {
       training_type, training_date,
       end_date, location, modules,
       ndg_subtype, online_synchronous,
+      keep_in_department,   // department caller: keep this record private to the department
     } = req.body;
 
     const fName = (first_name || '').trim()
@@ -209,7 +293,11 @@ exports.createParticipant = async (req, res) => {
       airline_name: req.admin.role === 'airline'
         ? (req.admin.airlineName || company)
         : company,
-      submitted_by: req.admin.role === 'airline' ? req.admin.id : null,
+      // Ownership: an admin → null. A top-level airline → itself. A department →
+      // by default the shared MAIN airline account (so it lands in the main
+      // participants list), unless it explicitly asked to keep the record
+      // private to the department.
+      submitted_by: resolveOwnerOnCreate(req, keep_in_department),
       locked: true,
     });
 
@@ -225,10 +313,14 @@ exports.createParticipant = async (req, res) => {
 // ─── BULK CREATE participants ─────────────────────────────────────────────────
 exports.bulkCreateParticipants = async (req, res) => {
   try {
-    const rows = req.body;
+    const body = req.body;
+    // Accept either a bare array (legacy) or { rows, keep_in_department }.
+    const rows = Array.isArray(body) ? body : (body.rows || []);
+    const keepInDepartment = !Array.isArray(body) && !!body.keep_in_department;
     if (!Array.isArray(rows) || rows.length === 0) {
       return res.status(400).json({ error: 'Expected a non-empty array of participants' });
     }
+    const owner = resolveOwnerOnCreate(req, keepInDepartment);
 
     const results = [];
     for (const item of rows) {
@@ -277,7 +369,7 @@ exports.bulkCreateParticipants = async (req, res) => {
           airline_name: req.admin.role === 'airline'
             ? (req.admin.airlineName || company)
             : company,
-          submitted_by: req.admin.role === 'airline' ? req.admin.id : null,
+          submitted_by: owner,
           locked: true,
         });
 

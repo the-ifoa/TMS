@@ -2,10 +2,14 @@ const express = require('express');
 const router  = express.Router();
 const multer  = require('multer');
 const { authMiddleware } = require('../middleware/auth');
+const { loadScope, requirePermission } = require('../middleware/permissions');
 const examResultsController = require('../controllers/examResultsController');
 
 // All routes require authentication
-router.use(authMiddleware);
+router.use(authMiddleware, loadScope);
+
+const canView   = requirePermission('examResults.view', 'examResults.manage');
+const canManage = requirePermission('examResults.manage');
 
 // Multer: memory storage for Excel uploads (no disk writes)
 const upload = multer({
@@ -25,36 +29,36 @@ const upload = multer({
 });
 
 // ── GET all exam results ──────────────────────────────────────────────────────
-router.get('/', examResultsController.listResults);
+router.get('/', canView, examResultsController.listResults);
 
 // ── GET batch summary list ────────────────────────────────────────────────────
-router.get('/batches', examResultsController.listBatches);
+router.get('/batches', canView, examResultsController.listBatches);
 
 // ── POST parse Excel preview (no DB write) ────────────────────────────────────
-router.post('/parse-excel', upload.single('file'), examResultsController.parseExcel);
+router.post('/parse-excel', canManage, upload.single('file'), examResultsController.parseExcel);
 
 // ── POST import Excel → DB ────────────────────────────────────────────────────
-router.post('/import-excel', upload.single('file'), examResultsController.importExcel);
+router.post('/import-excel', canManage, upload.single('file'), examResultsController.importExcel);
 
 // ── GET single exam result ────────────────────────────────────────────────────
-router.get('/:id', examResultsController.getResult);
+router.get('/:id', canView, examResultsController.getResult);
 
 // ── GET result sheet PDF (only if sheet has been issued by admin) ─────────────
-router.get('/:id/pdf', examResultsController.getResultPdf);
+router.get('/:id/pdf', canView, examResultsController.getResultPdf);
 
 // ── POST create exam result ───────────────────────────────────────────────────
-router.post('/', examResultsController.createResult);
+router.post('/', canManage, examResultsController.createResult);
 
 // ── POST bulk create ──────────────────────────────────────────────────────────
-router.post('/bulk', examResultsController.bulkCreate);
+router.post('/bulk', canManage, examResultsController.bulkCreate);
 
 // ── PUT update exam result ────────────────────────────────────────────────────
-router.put('/:id', examResultsController.updateResult);
+router.put('/:id', canManage, examResultsController.updateResult);
 
 // ── PATCH mark sheet as issued ────────────────────────────────────────────────
-router.patch('/:id/issue-sheet', examResultsController.issueSheet);
+router.patch('/:id/issue-sheet', canManage, examResultsController.issueSheet);
 
 // ── DELETE exam result ────────────────────────────────────────────────────────
-router.delete('/:id', examResultsController.deleteResult);
+router.delete('/:id', canManage, examResultsController.deleteResult);
 
 module.exports = router;

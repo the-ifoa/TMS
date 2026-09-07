@@ -28,11 +28,13 @@ import {
   getParticipantsByAirline, deleteParticipant, deleteAirlineData, deleteAirlineById, deleteAirlineAccount,
   generateCertificateBlob, generateCertificateWithModules,
   updateFullCertId, getCertCounters, resetCertCounter, resetAllCertCounters,
-  updateNdgScore, updateFdrHours, revokeCertificate, updateValidity, updateAirline,
+  updateNdgScore, updateFdrHours, revokeCertificate, updateValidity, updateAirline, adminCreateAirline,
   generateDhlCertificateBlob, revokeDhlCertificate, downloadDhlCertificate,
   bulkEnsureAttendanceSheets,
+  uploadAirlineLogo,
   API_BASE,
 } from '../api';
+import { compressImageFile } from '../utils/compressImage';
 import ModuleSelector from '../components/ModuleSelector';
 import AttendanceChecklistModal from '../components/AttendanceChecklistModal';
 import { useConfirm } from '@/hooks/use-confirm';
@@ -1032,8 +1034,15 @@ export default function Airlines() {
   const [downloadingDhlId, setDownloadingDhlId] = useState(null);
   const [dhlRowPreview, setDhlRowPreview] = useState(null);
   // Admin edit-airline modal: { open, id, airlineName, address }
-  const [editAirline, setEditAirline] = useState({ open: false, id: null, airlineName: '', address: '', can_author_exams: false });
+  const [editAirline, setEditAirline] = useState({ open: false, id: null, airlineName: '', address: '', can_author_exams: false, can_create_subusers: false });
   const [savingAirline, setSavingAirline] = useState(false);
+  // Admin create-airline modal (registers an airline on its behalf — no OTP)
+  const EMPTY_CREATE_AIRLINE = { open: false, name: '', airlineName: '', email: '', password: '', confirm: '', address: '', can_author_exams: false, can_create_subusers: false };
+  const [createAirline, setCreateAirline] = useState(EMPTY_CREATE_AIRLINE);
+  const [creatingAirline, setCreatingAirline] = useState(false);
+  const [createLogoFile, setCreateLogoFile] = useState(null);
+  const [createLogoPreview, setCreateLogoPreview] = useState(null);
+  const createLogoInputRef = useRef(null);
   const [controlBarOpen, setControlBarOpen] = useState(false);
 
   const ALL_TYPES = ['FDI', 'FDR', 'FDA', 'FTL', 'HF', 'NDG', 'GD', 'TCD'];
@@ -1397,13 +1406,16 @@ export default function Airlines() {
   const toggleAirline = key => {
     // Toggle the airline checkbox
     setCheckedAirlines(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
-    // Also select / deselect all participants belonging to that airline
-    const group = data.find(d => airlineKey(d.airline) === key);
+    // Also select / deselect that airline's participants — but ONLY the rows
+    // currently visible under the active filters, never the hidden ones. Use
+    // `filtered` (what's on screen), not the full `data` set.
+    const group = filtered.find(d => airlineKey(d.airline) === key)
+      || data.find(d => airlineKey(d.airline) === key);
     if (!group) return;
     const ids = group.participants.map(p => p.id || p._id);
     setChecked(prev => {
       const n = new Set(prev);
-      const alreadyIn = ids.every(id => n.has(id));
+      const alreadyIn = ids.length > 0 && ids.every(id => n.has(id));
       alreadyIn ? ids.forEach(id => n.delete(id)) : ids.forEach(id => n.add(id));
       return n;
     });
@@ -1481,9 +1493,10 @@ export default function Airlines() {
       airlineName: airline.airlineName || '',
       address: airline.address || '',
       can_author_exams: !!airline.can_author_exams,
+      can_create_subusers: !!airline.can_create_subusers,
     });
   };
-  const closeEditAirline = () => setEditAirline({ open: false, id: null, airlineName: '', address: '', can_author_exams: false });
+  const closeEditAirline = () => setEditAirline({ open: false, id: null, airlineName: '', address: '', can_author_exams: false, can_create_subusers: false });
   const saveEditAirline = async () => {
     const name = editAirline.airlineName.trim();
     if (!name) { toast.error('Airline name cannot be empty'); return; }
@@ -1493,12 +1506,13 @@ export default function Airlines() {
         airlineName: name,
         address: editAirline.address.trim(),
         can_author_exams: editAirline.can_author_exams,
+        can_create_subusers: editAirline.can_create_subusers,
       });
       const updated = res.data.airline;
       // Patch in-memory data so the change shows immediately without a full reload
       setData(prev => prev.map(d =>
         airlineKey(d.airline) === String(editAirline.id)
-          ? { ...d, airline: { ...d.airline, airlineName: updated.airlineName, address: updated.address, can_author_exams: updated.can_author_exams } }
+          ? { ...d, airline: { ...d.airline, airlineName: updated.airlineName, address: updated.address, can_author_exams: updated.can_author_exams, can_create_subusers: updated.can_create_subusers } }
           : d
       ));
       toast.success('Airline updated');
@@ -1507,6 +1521,59 @@ export default function Airlines() {
       toast.error(err.response?.data?.error || 'Failed to update airline');
     } finally {
       setSavingAirline(false);
+    }
+  };
+
+  // ── Admin create airline (on the airline's behalf, no email verification) ────
+  const clearCreateLogo = () => {
+    setCreateLogoFile(null);
+    setCreateLogoPreview(null);
+    if (createLogoInputRef.current) createLogoInputRef.current.value = '';
+  };
+  const openCreateAirline  = () => { clearCreateLogo(); setCreateAirline({ ...EMPTY_CREATE_AIRLINE, open: true }); };
+  const closeCreateAirline = () => { clearCreateLogo(); setCreateAirline(EMPTY_CREATE_AIRLINE); };
+  const handleCreateLogoChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { toast.error('Please select an image file'); return; }
+    try {
+      const compressed = await compressImageFile(file);
+      if (compressed.size > 2 * 1024 * 1024) { toast.error('Logo still too large after compression — try a smaller image.'); return; }
+      setCreateLogoFile(compressed);
+      setCreateLogoPreview(URL.createObjectURL(compressed));
+    } catch { toast.error('Could not process that image'); }
+  };
+  const saveCreateAirline = async () => {
+    const name        = createAirline.name.trim();
+    const airlineName  = createAirline.airlineName.trim();
+    const email        = createAirline.email.trim();
+    const { password, confirm } = createAirline;
+    if (!name || !airlineName || !email || !password) { toast.error('Contact name, airline name, email and password are required'); return; }
+    if (password.length < 6)   { toast.error('Password must be at least 6 characters'); return; }
+    if (password !== confirm)  { toast.error('Passwords do not match'); return; }
+    setCreatingAirline(true);
+    try {
+      let logo_url = null;
+      if (createLogoFile) {
+        try {
+          const up = await uploadAirlineLogo(createLogoFile);
+          logo_url = up.data.logo_url;
+        } catch { toast.error('Logo upload failed — creating airline without logo'); }
+      }
+      await adminCreateAirline({
+        name, airlineName, email, password, logo_url,
+        address: createAirline.address.trim(),
+        can_author_exams: createAirline.can_author_exams,
+        can_create_subusers: createAirline.can_create_subusers,
+      });
+      toast.success(`Airline "${airlineName}" created`);
+      closeCreateAirline();
+      setShowEmptyAirlines(true);       // reveal the new (submission-less) airline
+      await fetchData({ silent: true });
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to create airline');
+    } finally {
+      setCreatingAirline(false);
     }
   };
 
@@ -1950,6 +2017,15 @@ export default function Airlines() {
                     Adds a "Manage Exams" area where the airline builds exams, emails them to its own students, and views results.
                   </span>
                 </label>
+                <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                  <input type="checkbox" checked={editAirline.can_create_subusers}
+                    onChange={e => setEditAirline(prev => ({ ...prev, can_create_subusers: e.target.checked }))}
+                    className="mt-0.5 w-4 h-4 rounded border-primary-300 text-accent-500 focus:ring-accent-400" />
+                  <span className="text-xs text-primary-600 leading-relaxed">
+                    <span className="font-semibold text-primary-800">Allow this airline to create its own sub-users (departments)</span><br />
+                    Adds a "Team" area where the airline creates department logins and grants each a subset of its own powers.
+                  </span>
+                </label>
               </div>
               <div className="px-5 pb-5 flex gap-3">
                 <button onClick={closeEditAirline} className="btn-outline flex-1">Cancel</button>
@@ -1964,6 +2040,140 @@ export default function Airlines() {
           </>
         )}
       </AnimatePresence>
+
+      {/* ── Admin: Create Airline Modal (registers on the airline's behalf — no email verification) ── */}
+      <AnimatePresence>
+        {createAirline.open && (
+          <>
+            <motion.div
+              key="backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed -inset-20 z-50 bg-black/40 backdrop-blur-sm pointer-events-none"
+            />
+            <div
+              key="layout"
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto"
+              onClick={closeCreateAirline}
+            >
+              <motion.div
+                key="card"
+                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+                className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden my-auto"
+                onClick={e => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between px-5 py-4 border-b border-primary-100">
+                  <div>
+                    <h2 className="text-base font-bold text-primary-800">Create Airline</h2>
+                    <p className="text-xs text-primary-400 mt-0.5">Registers the account directly — no email verification.</p>
+                  </div>
+                  <button onClick={closeCreateAirline} className="p-1.5 rounded-lg hover:bg-primary-100 text-primary-400"><HiOutlineX className="w-5 h-5" /></button>
+                </div>
+                <div className="p-5 space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-primary-500 uppercase tracking-wider mb-1.5">Contact Name</label>
+                      <input type="text" value={createAirline.name}
+                        onChange={e => setCreateAirline(prev => ({ ...prev, name: e.target.value }))}
+                        className="w-full border border-primary-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-400"
+                        placeholder="Full name" autoFocus />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-primary-500 uppercase tracking-wider mb-1.5">Airline Name</label>
+                      <input type="text" value={createAirline.airlineName}
+                        onChange={e => setCreateAirline(prev => ({ ...prev, airlineName: e.target.value }))}
+                        className="w-full border border-primary-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-400"
+                        placeholder="e.g. Emirates Airlines" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-primary-500 uppercase tracking-wider mb-1.5">Email Address</label>
+                    <input type="email" value={createAirline.email}
+                      onChange={e => setCreateAirline(prev => ({ ...prev, email: e.target.value }))}
+                      className="w-full border border-primary-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-400"
+                      placeholder="ops@youairline.com" />
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-primary-500 uppercase tracking-wider mb-1.5">Password</label>
+                      <input type="password" value={createAirline.password}
+                        onChange={e => setCreateAirline(prev => ({ ...prev, password: e.target.value }))}
+                        className="w-full border border-primary-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-400"
+                        placeholder="Min. 6 chars" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-primary-500 uppercase tracking-wider mb-1.5">Confirm Password</label>
+                      <input type="password" value={createAirline.confirm}
+                        onChange={e => setCreateAirline(prev => ({ ...prev, confirm: e.target.value }))}
+                        onKeyDown={e => { if (e.key === 'Enter') saveCreateAirline(); }}
+                        className="w-full border border-primary-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-400"
+                        placeholder="Repeat password" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-primary-500 uppercase tracking-wider mb-1.5">Address <span className="text-primary-300 normal-case">(optional)</span></label>
+                    <textarea value={createAirline.address} rows={2}
+                      onChange={e => setCreateAirline(prev => ({ ...prev, address: e.target.value }))}
+                      className="w-full border border-primary-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-400 resize-y"
+                      placeholder="Airline address" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-primary-500 uppercase tracking-wider mb-1.5">Company Logo <span className="text-primary-300 normal-case">(optional)</span></label>
+                    {createLogoPreview ? (
+                      <div className="flex items-center gap-3 border border-primary-200 rounded-lg px-3 py-2">
+                        <img src={createLogoPreview} alt="Logo preview" className="w-10 h-10 rounded object-contain flex-shrink-0 bg-primary-50" />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-semibold text-primary-800 truncate">{createLogoFile?.name || 'logo image'}</p>
+                          <p className="text-[11px] text-primary-400">{((createLogoFile?.size || 0) / 1024).toFixed(0)} KB</p>
+                        </div>
+                        <button type="button" onClick={clearCreateLogo}
+                          className="p-1.5 rounded-lg hover:bg-primary-100 text-primary-400 flex-shrink-0"><HiOutlineX className="w-4 h-4" /></button>
+                      </div>
+                    ) : (
+                      <button type="button" onClick={() => createLogoInputRef.current?.click()}
+                        className="w-full flex items-center justify-center gap-2 border-2 border-dashed border-primary-200 rounded-lg px-3 py-3 text-xs font-medium text-primary-500 hover:border-accent-400 hover:text-accent-600 transition-colors">
+                        <HiOutlineDocumentDownload className="w-4 h-4 rotate-180" />
+                        Upload airline logo image
+                        <span className="text-primary-300">· PNG, JPG · max 2MB</span>
+                      </button>
+                    )}
+                    <input ref={createLogoInputRef} type="file" accept="image/*" onChange={handleCreateLogoChange} className="hidden" />
+                  </div>
+                  <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                    <input type="checkbox" checked={createAirline.can_author_exams}
+                      onChange={e => setCreateAirline(prev => ({ ...prev, can_author_exams: e.target.checked }))}
+                      className="mt-0.5 w-4 h-4 rounded border-primary-300 text-accent-500 focus:ring-accent-400" />
+                    <span className="text-xs text-primary-600 leading-relaxed">
+                      <span className="font-semibold text-primary-800">Allow this airline to create and assign its own exams</span>
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                    <input type="checkbox" checked={createAirline.can_create_subusers}
+                      onChange={e => setCreateAirline(prev => ({ ...prev, can_create_subusers: e.target.checked }))}
+                      className="mt-0.5 w-4 h-4 rounded border-primary-300 text-accent-500 focus:ring-accent-400" />
+                    <span className="text-xs text-primary-600 leading-relaxed">
+                      <span className="font-semibold text-primary-800">Allow this airline to create its own sub-users (departments)</span>
+                    </span>
+                  </label>
+                </div>
+                <div className="px-5 pb-5 flex gap-3">
+                  <button onClick={closeCreateAirline} className="btn-outline flex-1">Cancel</button>
+                  <button onClick={saveCreateAirline} disabled={creatingAirline}
+                    className="btn-primary flex-1 flex items-center justify-center gap-2 disabled:opacity-60">
+                    {creatingAirline && <Spin />}
+                    {creatingAirline ? 'Creating…' : 'Create Airline'}
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          </>
+        )}
+      </AnimatePresence>
+
       <CounterResetModal open={counterModal} onClose={() => setCounterModal(false)} counters={counters} ALL_TYPES={ALL_TYPES} resetting={resetting} onReset={handleResetCounter} onResetAll={handleResetAll} />
 
       {/* Per-row preview modal */}
@@ -2085,10 +2295,17 @@ export default function Airlines() {
           </div>
           <p className="text-xs text-primary-400 mt-0.5 hidden sm:block">View airline submissions, generate and manage certificates</p>
         </div>
-        <Link to="/admin/participants/add" className="btn-primary flex items-center justify-center gap-1.5 text-xs px-3 py-1.5 sm:px-4 sm:py-2 whitespace-nowrap flex-shrink-0">
-          <HiOutlinePlusCircle className="w-4 h-4" />
-          <span>Add</span>
-        </Link>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button type="button" onClick={openCreateAirline}
+            className="btn-outline flex items-center justify-center gap-1.5 text-xs px-3 py-1.5 sm:px-4 sm:py-2 whitespace-nowrap">
+            <HiOutlinePlusCircle className="w-4 h-4" />
+            <span>Create Airline</span>
+          </button>
+          <Link to="/admin/participants/add" className="btn-primary flex items-center justify-center gap-1.5 text-xs px-3 py-1.5 sm:px-4 sm:py-2 whitespace-nowrap">
+            <HiOutlinePlusCircle className="w-4 h-4" />
+            <span>Add</span>
+          </Link>
+        </div>
       </div>
 
       {/* ── Page content (padded) ── */}

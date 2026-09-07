@@ -12,6 +12,13 @@ const adminSchema = new mongoose.Schema({
   role: { type: String, default: 'Administrator' },
   organization: { type: String, default: 'IFOA - International Flight Operations Academy' },
   lastLogin: { type: Date, default: Date.now },
+
+  // ── Sub-admins ─────────────────────────────────────────────────────────────
+  // parent_admin = null  → super admin, full access (unchanged behaviour).
+  // parent_admin set      → restricted admin, access limited to `permissions`.
+  parent_admin:   { type: mongoose.Schema.Types.ObjectId, ref: 'Admin', default: null },
+  permissions:    { type: [String], default: [] },
+  account_status: { type: String, enum: ['active', 'disabled'], default: 'active' },
 }, { timestamps: true });
 
 adminSchema.pre('save', async function () {

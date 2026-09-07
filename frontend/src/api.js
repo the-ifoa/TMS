@@ -50,6 +50,9 @@ export const updateProfile = (data) => api.put('/auth/profile', data);
 // Admin: edit an airline's name + address
 export const updateAirline = (id, data) => api.patch(`/auth/admin/airline/${id}`, data);
 
+// Admin: create an airline account on the airline's behalf (no email verification)
+export const adminCreateAirline = (data) => api.post('/auth/admin/airline', data);
+
 // ── Contracts (admin) ─────────────────────────────────────────────────────────
 export const getContractDefaults = () => api.get('/contracts/defaults');
 export const getContractAirlines = () => api.get('/contracts/airlines');
@@ -175,11 +178,24 @@ export const updateQuestionBankItem   = (id, data)    => api.put(`/question-bank
 export const deleteQuestionBankItem   = (id)          => api.delete(`/question-bank/items/${id}`);
 
 export const updateParticipantEmail = (id, email) => api.patch(`/participants/${id}/email`, { email });
+// Department sub-user: move a record between the shared main airline list and the department's own list.
+export const moveParticipantScope = (id, target) => api.patch(`/participants/${id}/scope`, { target });
 
 // ── Exam invites (email a passwordless take-link to participants) ─────────────
 export const sendExamInvites       = (examId, participantIds) => api.post(`/exams/${examId}/send-invites`, { participant_ids: participantIds });
 export const getExamInvites        = (examId)                 => api.get(`/exams/${examId}/invites`);
 export const getAirlineExamResults = ()                       => api.get('/exams/airline-results');
+export const getDepartmentExamResults = ()                    => api.get('/exams/department-results');
+
+// ── Team / sub-user management ──────────────────────────────────────────────
+export const getTeamCatalog  = ()         => api.get('/team/catalog');
+export const getTeamAirlines = ()         => api.get('/team/airlines');
+export const getTeamMembers  = ()         => api.get('/team/members');
+export const createTeamMember = (data)    => api.post('/team/members', data);
+export const updateTeamMember = (id, data) => api.patch(`/team/members/${id}`, data);
+export const deleteTeamMember = (id)      => api.delete(`/team/members/${id}`);
+export const getMemberParticipants    = (id)       => api.get(`/team/members/${id}/participants`);
+export const updateMemberParticipants = (id, data) => api.patch(`/team/members/${id}/participants`, data);
 
 // ── Public token-based exam taking (no auth) ─────────────────────────────────
 export const getPublicExam        = (token)                          => api.get(`/public-exam/${token}`);

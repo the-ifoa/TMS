@@ -49,8 +49,33 @@ export function AuthProvider({ children }) {
   const isAdmin   = admin?.role === 'admin' || admin?.role === 'Administrator';
   const isAirline = admin?.role === 'airline';
 
+  // ── Sub-user / department awareness ───────────────────────────────────────
+  const isSubAdmin        = isAdmin   && !!admin?.parent_admin;
+  const isSuperAdmin      = isAdmin   && !admin?.parent_admin;
+  const isDepartment      = isAirline && !!admin?.parent_airline;
+  const isTopLevelAirline = isAirline && !admin?.parent_airline;
+  const permissions       = Array.isArray(admin?.permissions) ? admin.permissions : [];
+
+  // can(perm) — a top-level admin or top-level airline implicitly has everything
+  // in their own realm; sub-users are limited to their granted permission keys.
+  const can = (perm) => {
+    if (!admin) return false;
+    if (isSuperAdmin) return true;
+    if (isTopLevelAirline) return true;
+    return permissions.includes(perm);
+  };
+
+  const canManageTeam = isSuperAdmin
+    || (isTopLevelAirline && !!admin?.can_create_subusers)
+    || permissions.includes('team.manage');
+
   return (
-    <AuthContext.Provider value={{ admin, loading, loginAdmin, updateAdmin, logout, isAdmin, isAirline }}>
+    <AuthContext.Provider value={{
+      admin, loading, loginAdmin, updateAdmin, logout,
+      isAdmin, isAirline,
+      isSubAdmin, isSuperAdmin, isDepartment, isTopLevelAirline,
+      permissions, can, canManageTeam,
+    }}>
       {children}
     </AuthContext.Provider>
   );

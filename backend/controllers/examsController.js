@@ -21,9 +21,14 @@ async function authoringAirline(req) {
   return airline && airline.can_author_exams ? airline : null;
 }
 
-// True when this airline caller owns the given exam.
+// True when this airline caller owns the given exam. A department owns exams
+// tagged with its id; a top-level airline owns exams whose owner_airline is its
+// id (which also covers every exam its departments authored).
 function ownsExam(req, exam) {
-  return !isAdmin(req) && exam.owner_airline && String(exam.owner_airline) === String(req.admin.id);
+  if (isAdmin(req)) return false;
+  const me = String(req.admin.id);
+  if (exam.owner_department && String(exam.owner_department) === me) return true;
+  return exam.owner_airline && String(exam.owner_airline) === me;
 }
 
 // Who may edit/publish/assign/send/delete an exam: an IFOA admin for global
@@ -121,6 +126,66 @@ exports.airlineResults = async (req, res) => {
     }));
   } catch (err) {
     console.error('GET /exams/airline-results error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// ─── GET /exams/department-results — airline main account / department: exam
+//     invite + score status across every department in scope, grouped-ready ────
+exports.departmentResults = async (req, res) => {
+  try {
+    const s = req.scope;
+    if (isAdmin(req) || !s || s.kind !== 'airline')
+      return res.status(403).json({ error: 'Airline access required.' });
+
+    const perms = s.permissions || [];
+    if (s.isDepartment && !perms.includes('results.viewOwn') && !perms.includes('results.viewAll'))
+      return res.status(403).json({ error: 'You do not have permission to view results.' });
+
+    // Top-level account → its own + every department. Department with
+    // results.viewAll → the whole tree. Department with only results.viewOwn →
+    // strictly its own results.
+    let ids;
+    if (!s.isDepartment || perms.includes('results.viewAll')) {
+      ids = [s.topAirlineId, ...(s.departmentIds || [])];
+    } else {
+      ids = [s.selfId];
+    }
+
+    const invites = await ExamInvite.find({ airline_id: { $in: ids } }).sort({ created_at: -1 });
+
+    const attemptIds = invites.map((i) => i.attempt_id).filter(Boolean);
+    const attempts = await ExamAttempt.find({ _id: { $in: attemptIds } })
+      .select('score max_score percentage passed status submitted_at time_taken_seconds');
+    const attemptById = Object.fromEntries(attempts.map((a) => [String(a._id), a]));
+
+    // Resolve a readable department label for every airline_id we surfaced.
+    const airlineDocs = await Airline.find({ _id: { $in: ids } })
+      .select('department_name airlineName parent_airline is_department');
+    const labelById = {};
+    airlineDocs.forEach((a) => {
+      labelById[String(a._id)] = a.is_department
+        ? (a.department_name || a.name || 'Department')
+        : `${a.airlineName} (main account)`;
+    });
+
+    res.json(invites.map((i) => {
+      const json = i.toJSON();
+      const att = i.attempt_id && attemptById[String(i.attempt_id)];
+      json.department_id = String(i.airline_id || '');
+      json.department_label = labelById[String(i.airline_id)] || i.airline_name || 'Unknown';
+      json.attempt = att
+        ? {
+            id: String(att._id),
+            score: att.score, max_score: att.max_score, percentage: att.percentage,
+            passed: att.passed, status: att.status, submitted_at: att.submitted_at,
+            time_taken_seconds: att.time_taken_seconds,
+          }
+        : null;
+      return json;
+    }));
+  } catch (err) {
+    console.error('GET /exams/department-results error:', err.message);
     res.status(500).json({ error: err.message });
   }
 };
@@ -490,24 +555,36 @@ exports.listExams = async (req, res) => {
     let exams;
     if (isAdmin(req)) {
       exams = await Exam.find({}).sort({ created_at: -1 });
-      // Tag airline-created exams with the owning airline's name for the admin UI.
-      const ownerIds = [...new Set(exams.filter((e) => e.owner_airline).map((e) => String(e.owner_airline)))];
-      if (ownerIds.length) {
-        const owners = await Airline.find({ _id: { $in: ownerIds } }).select('airlineName');
-        const nameById = Object.fromEntries(owners.map((a) => [String(a._id), a.airlineName]));
+      // Tag airline/department-created exams with readable owner names for the admin UI.
+      const airlineIds = [...new Set([
+        ...exams.filter((e) => e.owner_airline).map((e) => String(e.owner_airline)),
+        ...exams.filter((e) => e.owner_department).map((e) => String(e.owner_department)),
+      ])];
+      if (airlineIds.length) {
+        const owners = await Airline.find({ _id: { $in: airlineIds } })
+          .select('airlineName department_name is_department');
+        const byId = Object.fromEntries(owners.map((a) => [String(a._id), a]));
         return res.json(exams.map((e) => {
           const json = e.toJSON();
-          if (json.owner_airline) json.owner_airline_name = nameById[String(json.owner_airline)] || 'Airline';
+          if (json.owner_airline) json.owner_airline_name = byId[String(json.owner_airline)]?.airlineName || 'Airline';
+          if (json.owner_department) {
+            const d = byId[String(json.owner_department)];
+            json.owner_department_name = d?.department_name || d?.name || 'Department';
+          }
           return json;
         }));
       }
       return res.json(exams.map((e) => e.toJSON()));
     } else {
       // Airline sees: exams it owns (any status) + published exams assigned to it.
+      // A top-level airline's scope also covers every department it owns; a plain
+      // department's scope is just itself.
+      const visibleIds = (req.scope && req.scope.visibleAirlineIds) || [req.admin.id];
       exams = await Exam.find({
         $or: [
-          { owner_airline: req.admin.id },
-          { status: 'published', 'assignments.airline_id': req.admin.id },
+          { owner_airline: { $in: visibleIds } },
+          { owner_department: { $in: visibleIds } },
+          { status: 'published', 'assignments.airline_id': { $in: visibleIds } },
         ],
       }).sort({ created_at: -1 });
     }
@@ -525,11 +602,15 @@ exports.createExam = async (req, res) => {
     if (!isAdmin(req) && !airline) return res.status(403).json({ error: 'Admin access required.' });
     if (!req.body.title) return res.status(400).json({ error: 'title is required.' });
 
-    const { owner_airline, created_by, ...body } = req.body;
+    const { owner_airline, owner_department, created_by, ...body } = req.body;
+    // A department's exams are owned by the top-level airline (so the main
+    // account still sees them) and tagged with the department that manages them.
+    const isDept = !isAdmin(req) && req.scope && req.scope.isDepartment;
     const exam = await Exam.create({
       ...body,
       created_by: isAdmin(req) ? req.admin.id : undefined,
-      owner_airline: airline ? req.admin.id : null,
+      owner_airline: airline ? (isDept ? req.scope.topAirlineId : req.admin.id) : null,
+      owner_department: isDept ? req.admin.id : null,
       status: 'draft',
     });
     res.status(201).json(exam.toJSON());
@@ -604,8 +685,11 @@ exports.assignExam = async (req, res) => {
 
     const { participant_ids = [] } = req.body;
     const query = { _id: { $in: participant_ids } };
-    // An airline can only assign its own participants.
-    if (ownsExam(req, exam)) query.submitted_by = req.admin.id;
+    // An airline can only assign participants within its own scope (a department:
+    // just its own; a top-level airline: its own + every department's).
+    if (ownsExam(req, exam)) {
+      query.submitted_by = { $in: (req.scope && req.scope.visibleAirlineIds) || [req.admin.id] };
+    }
     const participants = await Participant.find(query);
 
     participants.forEach((p) => {
@@ -637,8 +721,10 @@ exports.sendInvites = async (req, res) => {
     if (participant_ids.length === 0) return res.status(400).json({ error: 'Select at least one participant.' });
 
     const query = { _id: { $in: participant_ids } };
-    // An airline can only invite its own participants.
-    if (ownsExam(req, exam)) query.submitted_by = req.admin.id;
+    // An airline can only invite participants within its own scope.
+    if (ownsExam(req, exam)) {
+      query.submitted_by = { $in: (req.scope && req.scope.visibleAirlineIds) || [req.admin.id] };
+    }
     const participants = await Participant.find(query);
     const airlines = await Airline.find({});
     const airlineName = (id) => airlines.find((a) => String(a._id) === String(id))?.airlineName || '';

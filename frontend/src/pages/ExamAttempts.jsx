@@ -153,11 +153,42 @@ const VIOLATION_LABELS = {
   devtools_suspected: 'Suspicious activity detected',
 };
 
-function StatTile({ label, value }) {
+function StatTile({ label, value, icon: Icon, color = 'blue' }) {
+  const colorMap = {
+    blue: {
+      bg: 'bg-blue-50/60',
+      border: 'border-blue-100',
+      iconBg: 'bg-blue-100/70 text-blue-600',
+    },
+    emerald: {
+      bg: 'bg-emerald-50/60',
+      border: 'border-emerald-100',
+      iconBg: 'bg-emerald-100/70 text-emerald-600',
+    },
+    violet: {
+      bg: 'bg-violet-50/60',
+      border: 'border-violet-100',
+      iconBg: 'bg-violet-100/70 text-violet-600',
+    },
+    slate: {
+      bg: 'bg-slate-50',
+      border: 'border-slate-200/80',
+      iconBg: 'bg-slate-100 text-slate-600',
+    },
+  };
+  const theme = colorMap[color] || colorMap.slate;
+
   return (
-    <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/80 text-center">
-      <p className="text-lg font-black text-slate-900">{value}</p>
-      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">{label}</p>
+    <div className={`p-4 rounded-2xl ${theme.bg} border ${theme.border} flex items-center gap-3.5 transition-all shadow-2xs`}>
+      {Icon && (
+        <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${theme.iconBg} shadow-2xs`}>
+          <Icon className="w-5 h-5" />
+        </div>
+      )}
+      <div className="min-w-0">
+        <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">{label}</p>
+        <p className="text-xl font-extrabold text-slate-900 tracking-tight leading-tight mt-0.5">{value}</p>
+      </div>
     </div>
   );
 }
@@ -753,27 +784,26 @@ export default function ExamAttempts() {
     <div className="w-full min-h-full pb-20 flex flex-col">
       {/* Integrated Sticky Top Header & Search/Filter Bar */}
       <div className="sticky top-0 z-20 w-full bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-2xs">
-        <div className="w-full max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8 py-2.5 space-y-2">
-          {/* Top Row: Navigation, Title & Attempts Counter */}
+        <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 space-y-2.5">
+          {/* Top Row: Navigation, Title & Right Controls */}
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5 min-w-0 flex-1">
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 px-2.5 rounded-lg border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-1.5 flex-shrink-0 shadow-2xs"
+              <button
+                type="button"
+                className="h-8 px-3 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:border-slate-300 flex items-center gap-1.5 flex-shrink-0 shadow-2xs transition-all cursor-pointer"
                 onClick={() => navigate(backToExams)}
                 title="Back to Exams"
               >
                 <HiOutlineArrowLeft className="w-3.5 h-3.5 text-slate-500" />
                 <span className="hidden sm:inline">Back to Exams</span>
                 <span className="sm:hidden">Back</span>
-              </Button>
+              </button>
 
-              <div className="flex items-center gap-2 min-w-0 truncate border-l border-slate-200 pl-2.5">
-                <h1 className="text-sm sm:text-base font-extrabold text-slate-900 tracking-tight truncate" title={exam?.title}>
+              <div className="flex items-center gap-2 min-w-0 truncate border-l border-slate-200 pl-3">
+                <h1 className="text-sm sm:text-base font-bold text-slate-900 tracking-tight truncate" title={exam?.title}>
                   {exam?.title || 'Exam'}
                 </h1>
-                <span className="hidden sm:inline-block text-[11px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md flex-shrink-0">
+                <span className="hidden sm:inline-block text-[10px] font-bold text-slate-600 bg-slate-100 border border-slate-200/70 px-2 py-0.5 rounded-md flex-shrink-0">
                   Results
                 </span>
               </div>
@@ -784,63 +814,75 @@ export default function ExamAttempts() {
                 <button
                   type="button"
                   onClick={() => setShowAnalytics((s) => !s)}
-                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold shadow-2xs border transition-all ${showAnalytics ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'}`}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold shadow-2xs border transition-all cursor-pointer ${
+                    showAnalytics
+                      ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300'
+                  }`}
                 >
                   <HiOutlineChartBar className="w-3.5 h-3.5" />
                   <span className="hidden sm:inline">Analytics</span>
                 </button>
               )}
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900 text-white text-xs font-bold shadow-2xs">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 text-white text-xs font-semibold shadow-2xs">
                 <HiOutlineUsers className="w-3.5 h-3.5 text-slate-300" />
-                <span>{attempts.length} <span className="hidden sm:inline">Attempts</span></span>
+                <span>{attempts.length} <span className="hidden sm:inline">Attempt{attempts.length !== 1 ? 's' : ''}</span></span>
               </span>
             </div>
           </div>
 
-          {/* Bottom Row: Search Input & Filter Tabs (Sticky inside top bar) */}
+          {/* Bottom Row: Search Input & Filter Tabs */}
           {!loading && attempts.length > 0 && (
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 pt-2 border-t border-slate-100">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-2 border-t border-slate-100">
               <div className="relative flex-1 min-w-0">
-                <HiOutlineSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                <HiOutlineSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                 <input
                   type="text"
                   placeholder="Search candidate by name…"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="w-full pl-9 pr-8 py-1.5 bg-slate-50 border border-slate-200/80 rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900 transition-all"
+                  className="w-full pl-10 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                 />
                 {search && (
                   <button
                     type="button"
                     onClick={() => setSearch('')}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded-lg text-slate-400 hover:text-slate-600"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded-lg text-slate-400 hover:text-slate-600 cursor-pointer"
                   >
                     <HiOutlineX className="w-3.5 h-3.5" />
                   </button>
                 )}
               </div>
 
-              {/* Status Filter Tabs */}
-              <div className="flex items-center gap-1 overflow-x-auto pb-0.5 sm:pb-0 flex-shrink-0">
+              {/* Status Filter Segmented Tabs */}
+              <div className="inline-flex items-center gap-1 p-1 bg-slate-100/90 rounded-xl border border-slate-200/80 overflow-x-auto flex-shrink-0">
                 {[
-                  { id: 'all', label: 'All' },
-                  { id: 'pending_review', label: 'Pending Review' },
-                  { id: 'graded', label: 'Graded' },
-                  { id: 'in_progress', label: 'In Progress' },
-                ].map((tab) => (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    onClick={() => setStatusFilter(tab.id)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all border whitespace-nowrap cursor-pointer ${
-                      statusFilter === tab.id
-                        ? 'bg-slate-900 text-white border-slate-900 shadow-2xs'
-                        : 'bg-white text-slate-600 border-slate-200/90 hover:bg-slate-50'
-                    }`}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
+                  { id: 'all', label: 'All', count: attempts.length },
+                  { id: 'pending_review', label: 'Pending Review', count: attempts.filter((a) => a.status === 'pending_review').length },
+                  { id: 'graded', label: 'Graded', count: attempts.filter((a) => a.status === 'graded' || a.status === 'submitted').length },
+                  { id: 'in_progress', label: 'In Progress', count: attempts.filter((a) => a.status === 'in_progress').length },
+                ].map((tab) => {
+                  const active = statusFilter === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setStatusFilter(tab.id)}
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs transition-all cursor-pointer whitespace-nowrap ${
+                        active
+                          ? 'bg-white text-slate-900 shadow-2xs font-bold'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-white/60 font-medium'
+                      }`}
+                    >
+                      <span>{tab.label}</span>
+                      <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded-md ${
+                        active ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-600'
+                      }`}>
+                        {tab.count}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -852,166 +894,236 @@ export default function ExamAttempts() {
 
         {/* Analytics Panel */}
         {showAnalytics && analytics && (
-          <Card className="p-5 rounded-3xl border border-slate-200/90 shadow-2xs space-y-5">
-            <h2 className="text-sm font-extrabold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-              <HiOutlineChartBar className="w-4 h-4 text-slate-400" /> Analytics
-            </h2>
-
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <StatTile label="Finished" value={analytics.overall.finished_attempts} />
-              <StatTile label="Passed" value={analytics.overall.passed} />
-              <StatTile label="Avg Score" value={analytics.overall.avg_percentage != null ? `${analytics.overall.avg_percentage}%` : '—'} />
-              <StatTile label="Total Attempts" value={analytics.overall.total_attempts} />
+          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-5 sm:p-6 space-y-5">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-100 shadow-2xs">
+                  <HiOutlineChartBar className="w-4.5 h-4.5" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-bold text-slate-900">Performance Analytics</h2>
+                  <p className="text-[11px] text-slate-400">Exam metrics, historical pass rates, and question performance</p>
+                </div>
+              </div>
             </div>
 
-            {analytics.pass_rate_over_time.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Pass Rate Over Time</p>
-                <div className="space-y-1.5">
-                  {analytics.pass_rate_over_time.map((d) => (
-                    <div key={d.date} className="flex items-center gap-2.5">
-                      <span className="text-[10px] font-semibold text-slate-500 w-20 flex-shrink-0">{d.date}</span>
-                      <div className="flex-1 h-2.5 bg-slate-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${d.pass_rate}%` }} />
-                      </div>
-                      <span className="text-[10px] font-bold text-slate-700 w-24 text-right flex-shrink-0">{d.pass_rate}% ({d.passed}/{d.total})</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+              <StatTile label="Finished" value={analytics.overall.finished_attempts} icon={HiOutlineClipboardCheck} color="blue" />
+              <StatTile label="Passed" value={analytics.overall.passed} icon={HiOutlineCheckCircle} color="emerald" />
+              <StatTile label="Avg Score" value={analytics.overall.avg_percentage != null ? `${analytics.overall.avg_percentage}%` : '—'} icon={HiOutlineAcademicCap} color="violet" />
+              <StatTile label="Total Attempts" value={analytics.overall.total_attempts} icon={HiOutlineUsers} color="slate" />
+            </div>
 
-            {analytics.per_question.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Per-Question Miss Rate</p>
-                <div className="max-h-64 overflow-y-auto space-y-1.5 pr-1 scrollbar-thin">
-                  {analytics.per_question.map((q) => (
-                    <div key={q.question_id} className="flex items-center gap-2.5">
-                      <span className="text-xs text-slate-700 font-medium truncate flex-1 min-w-0" title={q.prompt}>
-                        {q.prompt || '(untitled question)'}
-                      </span>
-                      {q.miss_rate != null ? (
-                        <>
-                          <div className="w-24 h-2 bg-slate-100 rounded-full overflow-hidden flex-shrink-0">
-                            <div className="h-full bg-rose-500 rounded-full transition-all" style={{ width: `${q.miss_rate}%` }} />
-                          </div>
-                          <span className="text-[10px] font-bold text-slate-700 w-28 text-right flex-shrink-0">{q.miss_rate}% miss ({q.incorrect}/{q.total})</span>
-                        </>
-                      ) : (
-                        <span className="text-[10px] font-semibold text-slate-400 flex-shrink-0 w-28 text-right">No data yet</span>
-                      )}
-                    </div>
-                  ))}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 pt-1">
+              {/* Pass Rate Over Time */}
+              {analytics.pass_rate_over_time.length > 0 && (
+                <div className="p-4 rounded-2xl bg-slate-50/60 border border-slate-200/70 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">Pass Rate Over Time</span>
+                    <span className="text-[11px] font-semibold text-slate-400">{analytics.pass_rate_over_time.length} recorded session(s)</span>
+                  </div>
+                  <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                    {analytics.pass_rate_over_time.map((d) => (
+                      <div key={d.date} className="p-2.5 rounded-xl bg-white border border-slate-200/80 shadow-2xs space-y-1.5">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-semibold text-slate-700">{d.date}</span>
+                          <span className="font-bold text-emerald-600">{d.pass_rate}% <span className="font-normal text-slate-400">({d.passed}/{d.total} passed)</span></span>
+                        </div>
+                        <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                          <div className="h-full bg-emerald-500 rounded-full transition-all duration-500" style={{ width: `${d.pass_rate}%` }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
-          </Card>
+              )}
+
+              {/* Per-Question Miss Rate */}
+              {analytics.per_question.length > 0 && (
+                <div className="p-4 rounded-2xl bg-slate-50/60 border border-slate-200/70 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">Per-Question Miss Rate</span>
+                    <span className="text-[11px] font-semibold text-slate-400">{analytics.per_question.length} questions</span>
+                  </div>
+                  <div className="space-y-2 max-h-56 overflow-y-auto pr-1 scrollbar-thin">
+                    {analytics.per_question.map((q, idx) => (
+                      <div key={q.question_id || idx} className="p-2.5 rounded-xl bg-white border border-slate-200/80 shadow-2xs flex items-center justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] font-extrabold text-slate-400 bg-slate-100 px-1.5 py-0.2 rounded">Q{idx + 1}</span>
+                            <p className="text-xs font-medium text-slate-800 truncate" title={q.prompt}>
+                              {q.prompt || '(untitled question)'}
+                            </p>
+                          </div>
+                        </div>
+                        {q.miss_rate != null ? (
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <div className="w-16 h-2 bg-slate-100 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full rounded-full transition-all duration-500 ${
+                                  q.miss_rate > 50 ? 'bg-rose-500' : q.miss_rate > 20 ? 'bg-amber-500' : 'bg-emerald-500'
+                                }`}
+                                style={{ width: `${q.miss_rate}%` }}
+                              />
+                            </div>
+                            <span className={`text-[11px] font-bold px-2 py-0.5 rounded-md border ${
+                              q.miss_rate > 50
+                                ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                : q.miss_rate > 20
+                                ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            }`}>
+                              {q.miss_rate}% miss
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-[10px] font-semibold text-slate-400">No data</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         )}
 
         {/* Attempts Card List */}
         {loading ? (
           <div className="space-y-3">
-            <Skeleton className="h-20 w-full rounded-3xl" />
-            <Skeleton className="h-20 w-full rounded-3xl" />
-            <Skeleton className="h-20 w-full rounded-3xl" />
+            <Skeleton className="h-20 w-full rounded-2xl" />
+            <Skeleton className="h-20 w-full rounded-2xl" />
+            <Skeleton className="h-20 w-full rounded-2xl" />
           </div>
         ) : filteredAttempts.length === 0 ? (
-          <Card className="p-12 text-center text-sm font-medium text-slate-400 rounded-3xl">
+          <Card className="p-12 text-center text-sm font-medium text-slate-400 rounded-2xl border border-slate-200/80">
             {attempts.length === 0 ? 'No candidates have attempted this exam yet.' : 'No attempt matches your search filter.'}
           </Card>
         ) : (
           <div className="space-y-3">
-            {filteredAttempts.map((a) => (
-              <div key={a.id} className="rounded-3xl bg-white border border-slate-200/90 shadow-2xs hover:border-slate-300 transition-all overflow-hidden">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 sm:p-5 gap-4">
-                  {/* Left: Avatar & Candidate info */}
-                  <div className="flex items-center gap-3.5 min-w-0">
-                    <Avatar className="w-10 h-10 border border-slate-200 shadow-2xs flex-shrink-0">
-                      <AvatarFallback className="bg-slate-900 text-white text-xs font-bold">
-                        {a.participant_name ? a.participant_name.charAt(0).toUpperCase() : 'S'}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="min-w-0">
-                      <p className="text-sm font-bold text-slate-900 truncate">
-                        {a.participant_name}
-                      </p>
-                      <p className="text-xs text-slate-400 font-medium truncate">
-                        Attempt #{a.attempt_number} · {new Date(a.created_at).toLocaleDateString()}
-                      </p>
-                    </div>
-                  </div>
+            {filteredAttempts.map((a) => {
+              const isPending = a.status === 'pending_review';
+              const isGraded = a.status === 'graded' || a.status === 'submitted';
+              const isInProgress = a.status === 'in_progress';
+              const hasViolations = a.violation_count > 0;
+              const isViolationExpanded = expandedViolations.has(a.id);
 
-                  {/* Right: Score, Status & Actions */}
-                  <div className="flex items-center justify-between sm:justify-end gap-3 flex-shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
-                    <div className="flex items-center gap-2">
+              return (
+                <div
+                  key={a.id}
+                  className="rounded-2xl bg-white border border-slate-200/90 shadow-2xs hover:shadow-md hover:border-slate-300/90 transition-all duration-200 overflow-hidden"
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 sm:p-5 gap-3.5">
+                    {/* Left: Avatar & Candidate info */}
+                    <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-slate-800 to-slate-950 text-white flex items-center justify-center font-bold text-xs shadow-2xs flex-shrink-0">
+                        {a.participant_name ? a.participant_name.charAt(0).toUpperCase() : 'S'}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm font-bold text-slate-900 truncate">{a.participant_name}</p>
+                          <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200/70 flex-shrink-0">
+                            Attempt #{a.attempt_number}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-400 font-medium truncate mt-0.5">
+                          {new Date(a.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          {a.submitted_at && ` · Completed at ${new Date(a.submitted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Right: Score, Status & Actions */}
+                    <div className="flex items-center justify-between sm:justify-end gap-2.5 flex-wrap sm:flex-nowrap pt-2.5 sm:pt-0 border-t sm:border-t-0 border-slate-100 flex-shrink-0">
+                      {/* Score Badge */}
                       {a.percentage != null && (
-                        <span
-                          className={`text-xs font-extrabold px-3 py-1 rounded-xl border ${
-                            a.passed
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                              : 'bg-rose-50 text-rose-700 border-rose-200'
-                          }`}
-                        >
-                          {a.percentage}%
-                        </span>
-                      )}
-                      <span
-                        className={`text-xs font-bold px-3 py-1 rounded-xl border capitalize ${
-                          a.status === 'graded' || a.status === 'submitted'
+                        <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl border text-xs font-bold ${
+                          a.passed
                             ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                            : a.status === 'pending_review'
-                            ? 'bg-blue-50 text-blue-700 border-blue-200'
-                            : 'bg-amber-50 text-amber-700 border-amber-200'
-                        }`}
-                      >
+                            : 'bg-rose-50 text-rose-700 border-rose-200'
+                        }`}>
+                          {a.passed ? <HiOutlineCheckCircle className="w-3.5 h-3.5" /> : <HiOutlineXCircle className="w-3.5 h-3.5" />}
+                          <span>{a.percentage}%</span>
+                        </div>
+                      )}
+
+                      {/* Status Badge */}
+                      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl border text-xs font-semibold capitalize ${
+                        isGraded
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : isPending
+                          ? 'bg-blue-50 text-blue-700 border-blue-200'
+                          : 'bg-amber-50 text-amber-700 border-amber-200'
+                      }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${
+                          isGraded ? 'bg-emerald-500' : isPending ? 'bg-blue-500' : 'bg-amber-500'
+                        }`} />
                         {a.status.replace('_', ' ')}
                       </span>
-                      {a.violation_count > 0 && (
+
+                      {/* Violation Badge */}
+                      {hasViolations && (
                         <button
                           type="button"
                           onClick={() => toggleViolations(a.id)}
-                          className="inline-flex items-center gap-1 text-xs font-bold px-3 py-1 rounded-xl border bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100 transition-colors"
+                          className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-xl border transition-all cursor-pointer ${
+                            isViolationExpanded
+                              ? 'bg-rose-600 text-white border-rose-600 shadow-2xs'
+                              : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
+                          }`}
+                          title="View security violations"
                         >
                           <HiOutlineShieldExclamation className="w-3.5 h-3.5" />
-                          {a.violation_count}
-                          {expandedViolations.has(a.id) ? <HiOutlineChevronUp className="w-3 h-3" /> : <HiOutlineChevronDown className="w-3 h-3" />}
+                          <span>{a.violation_count}</span>
+                          {isViolationExpanded ? <HiOutlineChevronUp className="w-3 h-3" /> : <HiOutlineChevronDown className="w-3 h-3" />}
+                        </button>
+                      )}
+
+                      {/* Action Button */}
+                      {!isInProgress && (
+                        <button
+                          type="button"
+                          onClick={() => setGradingId(a.id)}
+                          className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer shadow-2xs active:scale-[0.98] ${
+                            isPending
+                              ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                              : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300'
+                          }`}
+                        >
+                          <HiOutlinePencilAlt className="w-3.5 h-3.5" />
+                          <span>{isPending ? 'Grade Attempt' : 'Edit Grade'}</span>
                         </button>
                       )}
                     </div>
-
-                    {a.status !== 'in_progress' && (
-                      <Button
-                        size="sm"
-                        onClick={() => setGradingId(a.id)}
-                        className={`rounded-xl text-xs font-bold shadow-2xs ${
-                          a.status === 'pending_review'
-                            ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                            : 'bg-white border border-slate-200 hover:bg-slate-50 text-slate-700'
-                        }`}
-                      >
-                        <HiOutlinePencilAlt className="w-3.5 h-3.5" />
-                        {a.status === 'pending_review' ? 'Grade' : 'Edit Grade'}
-                      </Button>
-                    )}
                   </div>
-                </div>
 
-                {expandedViolations.has(a.id) && a.violation_count > 0 && (
-                  <div className="px-4 sm:px-5 pb-4 pt-1 border-t border-rose-100 bg-rose-50/40 space-y-1.5">
-                    <p className="text-[10px] font-bold text-rose-500 uppercase tracking-wider pt-2">Violation Log</p>
-                    {(a.violations || []).map((v, vi) => (
-                      <div key={vi} className="flex items-center justify-between text-xs">
-                        <span className="font-semibold text-rose-800">{VIOLATION_LABELS[v.type] || v.type}</span>
-                        <span className="text-rose-500 font-medium">{new Date(v.at).toLocaleString()}</span>
+                  {/* Violation Expand Drawer */}
+                  {isViolationExpanded && hasViolations && (
+                    <div className="px-5 py-3.5 border-t border-rose-100 bg-rose-50/50 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-[11px] font-bold text-rose-700 uppercase tracking-wider flex items-center gap-1.5">
+                          <HiOutlineShieldExclamation className="w-4 h-4 text-rose-600" />
+                          Security Violations Log ({a.violations?.length || a.violation_count})
+                        </p>
+                        {a.auto_submitted && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-rose-100 text-rose-800 border border-rose-200">
+                            Auto-submitted
+                          </span>
+                        )}
                       </div>
-                    ))}
-                    {a.auto_submitted && (
-                      <p className="text-[11px] font-bold text-rose-600 pt-1">This attempt was auto-submitted after exceeding the violation limit.</p>
-                    )}
-                  </div>
-                )}
-              </div>
-            ))}
+                      <div className="space-y-1.5">
+                        {(a.violations || []).map((v, vi) => (
+                          <div key={vi} className="flex items-center justify-between text-xs bg-white/80 border border-rose-100 px-3 py-1.5 rounded-lg">
+                            <span className="font-semibold text-rose-900">{VIOLATION_LABELS[v.type] || v.type}</span>
+                            <span className="text-rose-500 font-medium text-[11px]">{new Date(v.at).toLocaleString()}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
 

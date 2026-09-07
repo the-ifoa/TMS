@@ -14,6 +14,8 @@ import {
   HiOutlineAcademicCap,
   HiOutlineLogout,
   HiOutlineCollection,
+  HiOutlineUserGroup,
+  HiOutlineChartSquareBar,
 } from 'react-icons/hi';
 import { FaPlaneDeparture } from 'react-icons/fa';
 import { useAuth } from '../context/AuthContext';
@@ -21,23 +23,26 @@ import { SimpleTooltip } from '@/components/ui/tooltip';
 
 const adminNavigation = [
   { name: 'Dashboard',    href: '/admin',                  icon: HiOutlineHome },
-  { name: 'Airlines',     href: '/admin/airlines',         icon: FaPlaneDeparture },
-  { name: 'Participants', href: '/admin/participants',     icon: HiOutlineUsers },
-  { name: 'Contracts',    href: '/admin/contracts',        icon: HiOutlineDocumentText },
-  { name: 'Attendance',   href: '/admin/attendance',       icon: HiOutlineClipboardCheck },
-  { name: 'Exam Results', href: '/admin/exam-results',     icon: HiOutlineClipboardList },
-  { name: 'Exam System',  href: '/admin/exams',            icon: HiOutlineAcademicCap },
-  { name: 'DGR CBTA',     href: '/admin/dgr',              icon: HiOutlineShieldExclamation },
+  { name: 'Airlines',     href: '/admin/airlines',         icon: FaPlaneDeparture,             perm: ['airlines.view', 'airlines.manage'] },
+  { name: 'Participants', href: '/admin/participants',     icon: HiOutlineUsers,               perm: 'participants.view' },
+  { name: 'Contracts',    href: '/admin/contracts',        icon: HiOutlineDocumentText,        perm: 'contracts.manage' },
+  { name: 'Attendance',   href: '/admin/attendance',       icon: HiOutlineClipboardCheck,      perm: 'attendance.view' },
+  { name: 'Exam Results', href: '/admin/exam-results',     icon: HiOutlineClipboardList,       perm: ['examResults.view', 'examResults.manage'] },
+  { name: 'Exam System',  href: '/admin/exams',            icon: HiOutlineAcademicCap,         perm: 'exams.author' },
+  { name: 'DGR CBTA',     href: '/admin/dgr',              icon: HiOutlineShieldExclamation,   perm: ['dgr.view', 'dgr.manage'] },
+  { name: 'Team',         href: '/admin/team',             icon: HiOutlineUserGroup,           team: true },
   { name: 'Profile',      href: '/admin/profile',          icon: HiOutlineUserCircle },
 ];
 
 const airlineNavigation = [
   { name: 'Dashboard',      href: '/airline',               icon: HiOutlineHome },
-  { name: 'My Submissions', href: '/airline/submissions',   icon: HiOutlineClipboardList },
-  { name: 'Participants',   href: '/airline/participants',  icon: HiOutlineUsers },
-  { name: 'New Enrollment', href: '/airline/enrollment/new', icon: HiOutlinePlusCircle },
-  { name: 'DGR CBTA',       href: '/airline/dgr',           icon: HiOutlineShieldExclamation },
+  { name: 'My Submissions', href: '/airline/submissions',   icon: HiOutlineClipboardList,       perm: 'participants.view' },
+  { name: 'Participants',   href: '/airline/participants',  icon: HiOutlineUsers,               perm: 'participants.view' },
+  { name: 'New Enrollment', href: '/airline/enrollment/new', icon: HiOutlinePlusCircle,         perm: 'participants.create' },
+  { name: 'DGR CBTA',       href: '/airline/dgr',           icon: HiOutlineShieldExclamation,   perm: 'dgr.view' },
   { name: 'Exam Results',   href: '/airline/exams',         icon: HiOutlineClipboardCheck },
+  { name: 'Department Results', href: '/airline/results',   icon: HiOutlineChartSquareBar,      resultsTab: true },
+  { name: 'Team',           href: '/airline/team',          icon: HiOutlineUserGroup,           team: true },
   { name: 'Profile',        href: '/airline/profile',       icon: HiOutlineUserCircle },
 ];
 
@@ -47,12 +52,19 @@ const airlineExamAuthorItem = { name: 'Manage Exams', href: '/airline/exams/mana
 export default function Sidebar({ open, setOpen }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isAdmin, admin } = useAuth();
+  const { isAdmin, admin, can, canManageTeam, logout } = useAuth();
   let navigation = isAdmin ? adminNavigation : airlineNavigation;
   if (!isAdmin && admin?.can_author_exams) {
     navigation = [...airlineNavigation];
     navigation.splice(5, 0, airlineExamAuthorItem); // before "Exam Results"
   }
+  // Hide entries the current user (a sub-user / department) has no power for.
+  navigation = navigation.filter((item) => {
+    if (item.team) return canManageTeam;
+    if (item.resultsTab) return can('results.viewOwn') || can('results.viewAll');
+    if (item.perm) return (Array.isArray(item.perm) ? item.perm : [item.perm]).some(can);
+    return true;
+  });
 
   const currentPath = location.pathname.replace(/\/$/, '');
 

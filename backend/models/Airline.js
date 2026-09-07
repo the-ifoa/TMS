@@ -11,6 +11,24 @@ const airlineSchema = new mongoose.Schema({
   // Admin-granted: when true this airline can create/publish its own exams and
   // assign them to its own participants (see examsController). Default off.
   can_author_exams: { type: Boolean, default: false },
+
+  // ── Sub-users / departments ────────────────────────────────────────────────
+  // A top-level airline account has parent_airline = null and behaves exactly
+  // as before (implicit full airline permissions, sees all its departments).
+  // A department is an Airline doc with parent_airline set — it logs in with
+  // the airline login, but its access is limited to `permissions` and its own
+  // data (plus other departments' results only when granted results.viewAll).
+  parent_airline:   { type: mongoose.Schema.Types.ObjectId, ref: 'Airline', default: null },
+  is_department:    { type: Boolean, default: false },
+  department_name:  { type: String, default: '', trim: true },
+  permissions:      { type: [String], default: [] },
+  // Admin-granted to a TOP-LEVEL airline: may it create its own departments?
+  can_create_subusers: { type: Boolean, default: false },
+  // Who created this account: an admin (admin-made airline user) or null (self
+  // signup / airline-made department carries created_by_airline instead).
+  created_by_admin:   { type: mongoose.Schema.Types.ObjectId, ref: 'Admin',   default: null },
+  created_by_airline: { type: mongoose.Schema.Types.ObjectId, ref: 'Airline', default: null },
+  account_status:     { type: String, enum: ['active', 'disabled'], default: 'active' },
   lastLogin:   { type: Date, default: Date.now },
   logo_url:          { type: String, default: null },
   resetPasswordToken:  { type: String, default: null },

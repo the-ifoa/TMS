@@ -13,6 +13,38 @@ if (!JWT_SECRET) throw new Error('JWT_SECRET environment variable is required');
 // account is created verified and a token is returned straight away.
 const EMAIL_VERIFICATION_ENABLED = process.env.EMAIL_VERIFICATION_ENABLED === 'true';
 
+// ── Token helpers — every issue point goes through these so the permission /
+// department claims stay consistent (see middleware/permissions.js). ──────────
+function signAdminToken(admin) {
+  const isSub = !!admin.parent_admin;
+  return jwt.sign(
+    {
+      id: admin._id, email: admin.email, name: admin.name, role: 'admin',
+      organization: admin.organization,
+      parentAdmin: isSub ? String(admin.parent_admin) : null,
+      permissions: isSub ? (admin.permissions || []) : [],
+    },
+    JWT_SECRET,
+    { expiresIn: '7d' },
+  );
+}
+
+function signAirlineToken(airline) {
+  const isDept = !!airline.parent_airline;
+  return jwt.sign(
+    {
+      id: airline._id, email: airline.email, name: airline.name,
+      airlineName: airline.airlineName, role: 'airline',
+      parentAirline: isDept ? String(airline.parent_airline) : null,
+      topAirlineId: isDept ? String(airline.parent_airline) : String(airline._id),
+      isDepartment: isDept,
+      permissions: isDept ? (airline.permissions || []) : [],
+    },
+    JWT_SECRET,
+    { expiresIn: '7d' },
+  );
+}
+
 // ─────────────────────────────────────────────
 //  ADMIN SIGNUP
 //  POST /api/auth/signup
@@ -30,11 +62,7 @@ exports.adminSignup = async (req, res) => {
       return res.status(400).json({ error: 'An account with this email already exists.' });
 
     const admin = await Admin.create({ name, email, password });
-    const token = jwt.sign(
-      { id: admin._id, email: admin.email, name: admin.name, role: 'admin' },
-      JWT_SECRET,
-      { expiresIn: '7d' }
-    );
+    const token = signAdminToken(admin);
 
     res.status(201).json({ token, admin: admin.toJSON() });
   } catch (err) {
@@ -61,14 +89,13 @@ exports.adminLogin = async (req, res) => {
     if (!isMatch)
       return res.status(401).json({ error: 'Invalid email or password.' });
 
+    if (admin.account_status === 'disabled')
+      return res.status(403).json({ error: 'This account has been disabled. Contact your administrator.' });
+
     admin.lastLogin = new Date();
     await admin.save();
 
-    const token = jwt.sign(
-      { id: admin._id, email: admin.email, name: admin.name, role: 'admin', organization: admin.organization },
-      JWT_SECRET,
-      { expiresIn: '7d' }
-    );
+    const token = signAdminToken(admin);
 
     res.json({ token, admin: { ...admin.toJSON(), role: 'admin' } });
   } catch (err) {
@@ -169,11 +196,7 @@ exports.airlineSignup = async (req, res) => {
       });
     }
 
-    const token = jwt.sign(
-      { id: airline._id, email: airline.email, name: airline.name, airlineName: airline.airlineName, role: 'airline' },
-      JWT_SECRET,
-      { expiresIn: '7d' }
-    );
+    const token = signAirlineToken(airline);
 
     res.status(200).json({
       token,
@@ -235,11 +258,7 @@ exports.airlineVerifyOtp = async (req, res) => {
     airline.otpAttempts   = 0;
     await airline.save();
 
-    const token = jwt.sign(
-      { id: airline._id, email: airline.email, name: airline.name, airlineName: airline.airlineName, role: 'airline' },
-      JWT_SECRET,
-      { expiresIn: '7d' }
-    );
+    const token = signAirlineToken(airline);
 
     res.status(200).json({
       token,
@@ -309,14 +328,13 @@ exports.airlineLogin = async (req, res) => {
         email: airline.email,
       });
 
+    if (airline.account_status === 'disabled')
+      return res.status(403).json({ error: 'This account has been disabled. Contact your airline administrator.' });
+
     airline.lastLogin = new Date();
     await airline.save();
 
-    const token = jwt.sign(
-      { id: airline._id, email: airline.email, name: airline.name, airlineName: airline.airlineName, role: 'airline' },
-      JWT_SECRET,
-      { expiresIn: '7d' }
-    );
+    const token = signAirlineToken(airline);
 
     res.json({ token, admin: { ...airline.toJSON(), role: 'airline' } });
   } catch (err) {
@@ -399,10 +417,7 @@ exports.updateProfile = async (req, res) => {
 
     await user.save();
     const role = req.admin.role === 'airline' ? 'airline' : 'admin';
-    const tokenPayload = role === 'airline'
-      ? { id: user._id, email: user.email, name: user.name, airlineName: user.airlineName, role }
-      : { id: user._id, email: user.email, name: user.name, role, organization: user.organization };
-    const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '7d' });
+    const token = role === 'airline' ? signAirlineToken(user) : signAdminToken(user);
 
     // Return the full updated user so the frontend state is always in sync
     res.json({ token, admin: { ...user.toJSON(), role } });
@@ -486,6 +501,69 @@ exports.airlineResetPassword = async (req, res) => {
 };
 
 // ─────────────────────────────────────────────
+//  ADMIN: CREATE AIRLINE (on behalf of the airline — no email verification)
+//  POST /api/auth/admin/airline
+//  Body: { name, airlineName, email, password, address?, logo_url?,
+//          can_author_exams?, can_create_subusers? }
+// ─────────────────────────────────────────────
+exports.adminCreateAirline = async (req, res) => {
+  try {
+    const {
+      name, airlineName, email, password, address, logo_url,
+      can_author_exams, can_create_subusers,
+    } = req.body;
+
+    if (!name || !airlineName || !email || !password)
+      return res.status(400).json({ error: 'Contact name, airline name, email, and password are required.' });
+    if (password.length < 6)
+      return res.status(400).json({ error: 'Password must be at least 6 characters.' });
+
+    const cleanEmail = email.toLowerCase().trim();
+    const existing = await Airline.findOne({ email: cleanEmail });
+    if (existing && existing.emailVerified)
+      return res.status(400).json({ error: 'An account with this email already exists.' });
+
+    let airline;
+    if (existing && !existing.emailVerified) {
+      // Reuse a pending (never-verified) record — overwrite and verify directly.
+      existing.name          = name.trim();
+      existing.airlineName    = airlineName.trim();
+      existing.password       = password; // pre-save hook hashes
+      existing.address        = (address || '').trim();
+      existing.logo_url       = logo_url || null;
+      existing.emailVerified  = true;
+      existing.otpCode        = null;
+      existing.otpExpiry      = null;
+      existing.otpAttempts    = 0;
+      if (typeof can_author_exams === 'boolean')    existing.can_author_exams = can_author_exams;
+      if (typeof can_create_subusers === 'boolean') existing.can_create_subusers = can_create_subusers;
+      await existing.save();
+      airline = existing;
+    } else {
+      airline = await Airline.create({
+        name:          name.trim(),
+        airlineName:    airlineName.trim(),
+        email:          cleanEmail,
+        password,
+        address:        (address || '').trim(),
+        logo_url:       logo_url || null,
+        emailVerified:  true,
+        can_author_exams:    typeof can_author_exams === 'boolean' ? can_author_exams : false,
+        can_create_subusers: typeof can_create_subusers === 'boolean' ? can_create_subusers : false,
+      });
+    }
+
+    res.status(201).json({ message: `Airline "${airline.airlineName}" created.`, airline: airline.toJSON() });
+  } catch (err) {
+    console.error('POST /admin/airline error:', err.message);
+    const msg = err.code === 11000
+      ? 'An account with this email already exists.'
+      : err.message || 'Server error creating airline.';
+    res.status(err.code === 11000 ? 400 : 500).json({ error: msg });
+  }
+};
+
+// ─────────────────────────────────────────────
 //  ADMIN: UPDATE AIRLINE (name + address)
 //  PATCH /api/auth/admin/airline/:id
 //  Admin can edit any airline's airlineName and address.
@@ -495,13 +573,14 @@ exports.adminUpdateAirline = async (req, res) => {
     const airline = await Airline.findById(req.params.id);
     if (!airline) return res.status(404).json({ error: 'Airline not found.' });
 
-    const { airlineName, address, can_author_exams } = req.body;
+    const { airlineName, address, can_author_exams, can_create_subusers } = req.body;
     if (airlineName !== undefined) {
       if (!airlineName.trim()) return res.status(400).json({ error: 'Airline name cannot be empty.' });
       airline.airlineName = airlineName.trim();
     }
     if (address !== undefined) airline.address = (address || '').trim();
     if (typeof can_author_exams === 'boolean') airline.can_author_exams = can_author_exams;
+    if (typeof can_create_subusers === 'boolean') airline.can_create_subusers = can_create_subusers;
 
     await airline.save();
     res.json({ message: 'Airline updated.', airline: airline.toJSON() });

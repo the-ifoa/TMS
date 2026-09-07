@@ -5,7 +5,8 @@ import {
   HiOutlineUsers, HiOutlineSearch, HiOutlineMail, HiOutlineCheck, HiOutlineX,
   HiOutlineFilter, HiOutlineCheckCircle, HiOutlineClock, HiOutlineChartBar,
 } from 'react-icons/hi';
-import { getParticipants, updateParticipantEmail } from '../api';
+import { getParticipants, updateParticipantEmail, moveParticipantScope } from '../api';
+import { useAuth } from '../context/AuthContext';
 import { Card } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -67,8 +68,28 @@ function EmailCell({ rec }) {
 // Airline participants directory — flat, searchable/filterable list of all the
 // airline's participants with details and inline email editing.
 export default function AirlineParticipants() {
+  const { admin, isDepartment } = useAuth();
+  const selfId = String(admin?._id || admin?.id || '');
+  const parentId = String(admin?.parent_airline || '');
   const [records, setRecords] = useState([]);
+  const [movingId, setMovingId] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  const moveScope = async (rec, target) => {
+    const id = rec.id || rec._id;
+    setMovingId(id);
+    try {
+      const res = await moveParticipantScope(id, target);
+      const newOwner = res.data.participant?.submitted_by;
+      setRecords((prev) => prev.map((r) =>
+        (r.id || r._id) === id ? { ...r, submitted_by: newOwner } : r));
+      toast.success(target === 'main' ? 'Moved to main airline list' : 'Pulled into your department');
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Move failed');
+    } finally {
+      setMovingId(null);
+    }
+  };
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('');
   const [emailFilter, setEmailFilter] = useState(''); // '' | 'with' | 'without'
@@ -225,33 +246,69 @@ export default function AirlineParticipants() {
                   </div>
                 </div>
 
-                {/* Meta + email + status */}
-                <div className="flex items-center gap-2 flex-wrap pl-12 lg:pl-0 flex-shrink-0">
-                  {r.training_type && (
-                    <span className="px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-200/80 text-[11px] font-bold text-slate-600">{r.training_type}</span>
+                {/* Meta + email + status + actions */}
+                <div className="flex items-center gap-2.5 flex-wrap lg:flex-nowrap pl-12 lg:pl-0 flex-shrink-0">
+                  {/* Training Type */}
+                  <div className="w-14 shrink-0 flex justify-center">
+                    {r.training_type ? (
+                      <span className="w-full text-center px-2 py-1 rounded-lg bg-slate-100 border border-slate-200/80 text-[11px] font-bold text-slate-600">{r.training_type}</span>
+                    ) : (
+                      <span className="w-full text-center text-slate-300 text-xs">—</span>
+                    )}
+                  </div>
+
+                  {/* Email */}
+                  <div className="w-44 sm:w-48 shrink-0">
+                    {bulkEmail ? (
+                      <input type="email"
+                        value={emailDrafts[r.id || r._id] ?? (r.email || '')}
+                        onChange={(e) => setDraft(r.id || r._id, e.target.value)}
+                        placeholder="candidate@email.com"
+                        className="w-full px-2.5 py-1 text-xs border border-blue-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/25 bg-blue-50/30" />
+                    ) : (
+                      <EmailCell rec={r} />
+                    )}
+                  </div>
+
+                  {/* Status */}
+                  <div className="w-24 shrink-0">
+                    {r.cert_released ? (
+                      <span className="w-full justify-center inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/70">
+                        <HiOutlineCheckCircle className="w-3.5 h-3.5 shrink-0" /> Certified
+                      </span>
+                    ) : (
+                      <span className="w-full justify-center inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold bg-amber-50 text-amber-600 border border-amber-200/60">
+                        <HiOutlineClock className="w-3.5 h-3.5 shrink-0" /> Pending
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Performance */}
+                  <div className="w-28 shrink-0">
+                    <Link to={`/airline/participants/${r.id || r._id}/performance`}
+                      className="w-full justify-center inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold bg-slate-50 border border-slate-200 hover:border-blue-300 hover:bg-blue-50 text-slate-600 hover:text-blue-600 transition-all">
+                      <HiOutlineChartBar className="w-3.5 h-3.5 shrink-0" /> Performance
+                    </Link>
+                  </div>
+
+                  {/* Department Move/Pull Action */}
+                  {isDepartment && (
+                    <div className="w-44 shrink-0 flex justify-end">
+                      {String(r.submitted_by) === selfId ? (
+                        <button type="button" disabled={movingId === (r.id || r._id)}
+                          onClick={() => moveScope(r, 'main')}
+                          className="w-full justify-center inline-flex items-center px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-50 border border-slate-200 hover:border-emerald-300 hover:bg-emerald-50 text-slate-600 hover:text-emerald-700 transition-all disabled:opacity-50 cursor-pointer">
+                          Move to main list
+                        </button>
+                      ) : parentId && String(r.submitted_by) === parentId ? (
+                        <button type="button" disabled={movingId === (r.id || r._id)}
+                          onClick={() => moveScope(r, 'department')}
+                          className="w-full justify-center inline-flex items-center px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-50 border border-slate-200 hover:border-blue-300 hover:bg-blue-50 text-slate-600 hover:text-blue-600 transition-all disabled:opacity-50 cursor-pointer">
+                          Pull into my department
+                        </button>
+                      ) : null}
+                    </div>
                   )}
-                  {bulkEmail ? (
-                    <input type="email"
-                      value={emailDrafts[r.id || r._id] ?? (r.email || '')}
-                      onChange={(e) => setDraft(r.id || r._id, e.target.value)}
-                      placeholder="candidate@email.com"
-                      className="w-52 px-2.5 py-1 text-xs border border-blue-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/25 bg-blue-50/30" />
-                  ) : (
-                    <EmailCell rec={r} />
-                  )}
-                  {r.cert_released ? (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/70">
-                      <HiOutlineCheckCircle className="w-3.5 h-3.5" /> Certified
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-amber-50 text-amber-600 border border-amber-200/60">
-                      <HiOutlineClock className="w-3.5 h-3.5" /> Pending
-                    </span>
-                  )}
-                  <Link to={`/airline/participants/${r.id || r._id}/performance`}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-50 border border-slate-200 hover:border-blue-300 hover:bg-blue-50 text-slate-600 hover:text-blue-600 transition-all">
-                    <HiOutlineChartBar className="w-3.5 h-3.5" /> Performance
-                  </Link>
                 </div>
               </div>
             ))}

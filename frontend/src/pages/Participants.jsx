@@ -450,6 +450,15 @@ function SubmissionGroup({ groupKey, records, open, onToggle, focusId, attendanc
                           {fmtDate(rec.training_date)}
                           {rec.end_date && <> → {fmtDate(rec.end_date)}</>}
                         </span>
+                        {rec.owner_label && (
+                          <span className={`inline-flex items-center mt-1 px-1.5 py-0.5 rounded text-[10px] font-semibold border ${
+                            rec.owner_is_department
+                              ? 'bg-violet-50 text-violet-700 border-violet-200'
+                              : 'bg-slate-100 text-slate-500 border-slate-200'
+                          }`}>
+                            {rec.owner_label}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -749,6 +758,7 @@ export default function Participants() {
   const [search, setSearch]       = useState(searchParams.get('search') || '');
   const [filterType, setFilterType] = useState('');
   const [filterCompany, setFilterCompany] = useState(''); // admin: filter table by airline/company
+  const [filterOwner, setFilterOwner]     = useState(''); // airline: filter by which account submitted (main vs a department)
   const [sortKey, setSortKey]       = useState('submitted_desc');
   const [loading, setLoading]       = useState(true);
   const [openGroups, setOpenGroups] = useState({});
@@ -829,14 +839,27 @@ export default function Participants() {
     }
   };
 
+  // Distinct submitting accounts present in the airline's own records
+  // (main account + any departments) — powers the "Submitted by" filter.
+  const ownerOptions = useMemo(() => {
+    const seen = new Map();
+    records.forEach(r => {
+      if (r.owner_id && !seen.has(r.owner_id)) seen.set(r.owner_id, r.owner_label || 'Unknown');
+    });
+    return [...seen.entries()].map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [records]);
+
   const groups = useMemo(() => {
     if (isAdmin) return null;
     const map = {};
-    records.forEach(r => {
-      const key = `${r.training_type || 'Unknown'}||${r.training_date || ''}`;
-      if (!map[key]) map[key] = [];
-      map[key].push(r);
-    });
+    records
+      .filter(r => !filterOwner || String(r.owner_id) === filterOwner)
+      .forEach(r => {
+        const key = `${r.training_type || 'Unknown'}||${r.training_date || ''}`;
+        if (!map[key]) map[key] = [];
+        map[key].push(r);
+      });
     const entries = Object.entries(map);
     const ts = str => str ? new Date(str).getTime() : 0;
     return entries.sort(([, a], [, b]) => {
@@ -854,7 +877,7 @@ export default function Participants() {
         default:               return 0;
       }
     });
-  }, [records, isAdmin, sortKey]);
+  }, [records, isAdmin, sortKey, filterOwner]);
 
   // Admin: distinct airline/company names present in the current record set
   const companyOptions = useMemo(() => {
@@ -975,6 +998,20 @@ export default function Participants() {
               ]}
             />
 
+            {/* Submitted-by filter — only when >1 account has submitted (main + departments) */}
+            {ownerOptions.length > 1 && (
+              <SelectDropdown
+                icon={HiOutlineFilter}
+                value={filterOwner}
+                onChange={setFilterOwner}
+                minWidth="190px"
+                options={[
+                  { value: '', label: 'Submitted by: Anyone' },
+                  ...ownerOptions.map(o => ({ value: o.value, label: o.label })),
+                ]}
+              />
+            )}
+
             {/* Sort Dropdown */}
             <SelectDropdown
               icon={HiOutlineSelector}
@@ -1042,7 +1079,7 @@ export default function Participants() {
           </div>
 
           {/* Active Filters Summary Bar */}
-          {(search || filterType || sortKey !== 'submitted_desc') && (
+          {(search || filterType || filterOwner || sortKey !== 'submitted_desc') && (
             <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 text-xs">
               <div className="flex flex-wrap items-center gap-1.5">
                 <span className="text-slate-400 font-medium mr-0.5">Active:</span>
@@ -1058,6 +1095,12 @@ export default function Participants() {
                     <button onClick={() => setFilterType('')} className="hover:text-blue-900"><HiOutlineX className="w-3 h-3" /></button>
                   </span>
                 )}
+                {filterOwner && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 font-medium border border-blue-200/60">
+                    By: {ownerOptions.find(o => o.value === filterOwner)?.label || 'account'}
+                    <button onClick={() => setFilterOwner('')} className="hover:text-blue-900"><HiOutlineX className="w-3 h-3" /></button>
+                  </span>
+                )}
                 {sortKey !== 'submitted_desc' && (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-medium border border-slate-200/80">
                     Sorted
@@ -1067,7 +1110,7 @@ export default function Participants() {
               </div>
 
               <button
-                onClick={() => { setSearch(''); setFilterType(''); setSortKey('submitted_desc'); }}
+                onClick={() => { setSearch(''); setFilterType(''); setFilterOwner(''); setSortKey('submitted_desc'); }}
                 className="text-[11px] text-slate-500 hover:text-red-600 font-semibold transition-colors ml-auto"
               >
                 Reset filters
@@ -1121,11 +1164,15 @@ export default function Participants() {
         )}
 
         {/* Footer count */}
-        {!loading && records.length > 0 && (
-          <p className="text-xs text-slate-400 text-right font-medium">
-            {records.length} total record{records.length !== 1 ? 's' : ''} across {groups?.length} submission{groups?.length !== 1 ? 's' : ''}
-          </p>
-        )}
+        {!loading && records.length > 0 && (() => {
+          const shown = (groups || []).reduce((n, [, recs]) => n + recs.length, 0);
+          return (
+            <p className="text-xs text-slate-400 text-right font-medium">
+              {shown} record{shown !== 1 ? 's' : ''} across {groups?.length} submission{groups?.length !== 1 ? 's' : ''}
+              {filterOwner && shown !== records.length ? ` (of ${records.length})` : ''}
+            </p>
+          );
+        })()}
         </div>
       </motion.div>
     );

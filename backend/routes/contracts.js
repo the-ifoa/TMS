@@ -2,9 +2,10 @@
 const express = require('express');
 const router = express.Router();
 const { authMiddleware, adminOnly } = require('../middleware/auth');
+const { loadScope, requirePermission } = require('../middleware/permissions');
 const contractsController = require('../controllers/contractsController');
 
-router.use(authMiddleware, adminOnly);
+router.use(authMiddleware, adminOnly, loadScope, requirePermission('contracts.manage'));
 
 // ─── GET /api/contracts/defaults ─────────────────────────────────────────────
 router.get('/defaults', contractsController.getDefaults);

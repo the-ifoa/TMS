@@ -167,7 +167,10 @@ export default function Header({ sidebarOpen, setSidebarOpen }) {
   const location = useLocation();
   const debounceRef = useRef(null);
 
-  const { isAdmin } = useAuth();
+  const { isAdmin, isSubAdmin } = useAuth();
+  // Secondary line under the user's name: prioritise department, then airline.
+  const airlineSubLabel = admin?.department_name || admin?.airlineName || 'Airline User';
+  const adminSubLabel   = isSubAdmin ? 'Sub-admin' : 'Administrator';
   const initials = admin?.name
     ? admin.name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
     : 'AD';
@@ -456,10 +459,10 @@ export default function Header({ sidebarOpen, setSidebarOpen }) {
               </Avatar>
               <div className="hidden md:block text-left leading-tight">
                 <p className="text-sm font-bold text-slate-900 leading-tight">
-                  {isAdmin ? (admin?.name || 'Admin') : (admin?.airlineName || admin?.name || 'Airline')}
+                  {isAdmin ? (admin?.name || 'Admin') : (admin?.name || admin?.airlineName || 'Airline')}
                 </p>
                 <p className="text-xs text-slate-500 font-normal mt-0.5">
-                  {isAdmin ? 'Administrator' : 'Airline User'}
+                  {isAdmin ? adminSubLabel : airlineSubLabel}
                 </p>
               </div>
             </button>
@@ -470,14 +473,14 @@ export default function Header({ sidebarOpen, setSidebarOpen }) {
               <p className="text-base font-extrabold text-slate-900 leading-tight">
                 {admin?.name || 'User'}
               </p>
-              {!isAdmin && admin?.airlineName && (
+              {!isAdmin && (
                 <p className="text-xs font-semibold text-slate-700">
-                  {admin.airlineName}
+                  {airlineSubLabel}
                 </p>
               )}
               {isAdmin && (
                 <p className="text-xs font-semibold text-slate-700">
-                  Administrator
+                  {adminSubLabel}
                 </p>
               )}
               {admin?.email && (

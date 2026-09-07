@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { upload } = require('../services/upload');
 const { authMiddleware, adminOnly } = require('../middleware/auth');
+const { loadScope, requirePermission } = require('../middleware/permissions');
 const authController = require('../controllers/authController');
 
 // ─── ADMIN SIGNUP — POST /api/auth/signup ────────────────────────────────────
@@ -37,7 +38,10 @@ router.post('/airline/forgot-password', authController.airlineForgotPassword);
 // ─── RESET PASSWORD — POST /api/auth/airline/reset-password ──────────────────
 router.post('/airline/reset-password', authController.airlineResetPassword);
 
+// ─── ADMIN: CREATE AIRLINE — POST /api/auth/admin/airline ────────────────────
+router.post('/admin/airline', authMiddleware, adminOnly, loadScope, requirePermission('airlines.manage'), authController.adminCreateAirline);
+
 // ─── ADMIN: UPDATE AIRLINE — PATCH /api/auth/admin/airline/:id ───────────────
-router.patch('/admin/airline/:id', authMiddleware, adminOnly, authController.adminUpdateAirline);
+router.patch('/admin/airline/:id', authMiddleware, adminOnly, loadScope, requirePermission('airlines.manage'), authController.adminUpdateAirline);
 
 module.exports = router;

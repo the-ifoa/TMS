@@ -767,6 +767,7 @@ export default function Participants() {
   const [activeTab, setActiveTab] = useState('participants'); // 'participants' | 'attendance'
   const [attSearch, setAttSearch] = useState('');
   const [attFilterType, setAttFilterType] = useState('');
+  const [attFilterCompany, setAttFilterCompany] = useState('');
   // Bulk email entry (airline): edit every candidate's exam-invite email inline, save all at once.
   const [bulkEmail, setBulkEmail] = useState(false);
   const [emailDrafts, setEmailDrafts] = useState({});
@@ -885,6 +886,12 @@ export default function Participants() {
     records.forEach(r => { const c = (r.company || '').trim(); if (c) set.add(c); });
     return [...set].sort((a, b) => a.localeCompare(b));
   }, [records]);
+
+  const attCompanyOptions = useMemo(() => {
+    const set = new Set();
+    attendanceSheets.forEach(s => { const c = ((s.airline_name || s.company) || '').trim(); if (c) set.add(c); });
+    return [...set].sort((a, b) => a.localeCompare(b));
+  }, [attendanceSheets]);
 
   // Admin: records shown in the table after the client-side airline filter
   const visibleRecords = useMemo(
@@ -1356,15 +1363,25 @@ export default function Participants() {
                 icon={HiOutlineFilter}
                 value={attFilterType}
                 onChange={setAttFilterType}
-                align="right"
                 minWidth="190px"
                 options={[
                   { value: '', label: 'All Training Types' },
                   ...TRAINING_TYPES.map(t => ({ value: t.value, label: `${t.value} – ${t.label}` })),
                 ]}
               />
+              <SelectDropdown
+                icon={HiOutlineFilter}
+                value={attFilterCompany}
+                onChange={setAttFilterCompany}
+                align="right"
+                minWidth="190px"
+                options={[
+                  { value: '', label: 'All Airlines' },
+                  ...attCompanyOptions.map(c => ({ value: c, label: c })),
+                ]}
+              />
             </div>
-            {(attSearch || attFilterType) && (
+            {(attSearch || attFilterType || attFilterCompany) && (
               <div className="flex flex-wrap items-center justify-between gap-2 pt-1.5 border-t border-slate-100 text-xs">
                 <div className="flex flex-wrap items-center gap-1.5">
                   <span className="text-slate-400 font-medium mr-0.5">Active:</span>
@@ -1380,9 +1397,15 @@ export default function Participants() {
                       <button onClick={() => setAttFilterType('')} className="hover:text-emerald-900"><HiOutlineX className="w-3 h-3" /></button>
                     </span>
                   )}
+                  {attFilterCompany && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 font-medium border border-emerald-200/60">
+                      Airline: {attFilterCompany}
+                      <button onClick={() => setAttFilterCompany('')} className="hover:text-emerald-900"><HiOutlineX className="w-3 h-3" /></button>
+                    </span>
+                  )}
                 </div>
                 <button
-                  onClick={() => { setAttSearch(''); setAttFilterType(''); }}
+                  onClick={() => { setAttSearch(''); setAttFilterType(''); setAttFilterCompany(''); }}
                   className="text-[11px] text-slate-500 hover:text-red-600 font-semibold transition-colors ml-auto"
                 >
                   Reset filters
@@ -1492,9 +1515,11 @@ export default function Participants() {
         {/* ATTENDANCE RECORDS */}
         {activeTab === 'attendance' && (() => {
           const filtered = attendanceSheets.filter(s => {
-            const matchesSearch = !attSearch || (s.airline_name || s.company || '').toLowerCase().includes(attSearch.toLowerCase());
+            const name = (s.airline_name || s.company || '');
+            const matchesSearch = !attSearch || name.toLowerCase().includes(attSearch.toLowerCase());
             const matchesType = !attFilterType || s.training_type === attFilterType;
-            return matchesSearch && matchesType;
+            const matchesCompany = !attFilterCompany || name.trim() === attFilterCompany;
+            return matchesSearch && matchesType && matchesCompany;
           });
           // Group sheets by airline for the accordion layout
           const attGroups = (() => {
@@ -1509,7 +1534,7 @@ export default function Participants() {
             }
             return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
           })();
-          const attFiltering = !!(attSearch || attFilterType);
+          const attFiltering = !!(attSearch || attFilterType || attFilterCompany);
           return (
             <motion.div
               key="attendance"
@@ -1525,9 +1550,9 @@ export default function Participants() {
                   <p className="text-sm text-slate-400 font-medium">
                     {attendanceSheets.length === 0 ? 'No attendance records found.' : 'No sheets match your search.'}
                   </p>
-                  {(attSearch || attFilterType) && (
+                  {attFiltering && (
                     <button
-                      onClick={() => { setAttSearch(''); setAttFilterType(''); }}
+                      onClick={() => { setAttSearch(''); setAttFilterType(''); setAttFilterCompany(''); }}
                       className="mt-2 text-xs text-emerald-600 hover:text-emerald-800 font-semibold"
                     >
                       Clear filters
@@ -1595,8 +1620,8 @@ export default function Participants() {
               )}
               <div className="px-6 py-3 bg-slate-50/70 border-t border-slate-100">
                 <p className="text-xs font-semibold text-slate-500">
-                  {(attSearch || attFilterType) ? `${filtered.length} of ${attendanceSheets.length}` : attendanceSheets.length} sheet{attendanceSheets.length !== 1 ? 's' : ''}
-                  {(attSearch || attFilterType) ? ' matched' : ' total'}
+                  {attFiltering ? `${filtered.length} of ${attendanceSheets.length}` : attendanceSheets.length} sheet{attendanceSheets.length !== 1 ? 's' : ''}
+                  {attFiltering ? ' matched' : ' total'}
                 </p>
               </div>
             </motion.div>

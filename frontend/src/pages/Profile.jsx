@@ -387,8 +387,14 @@ export default function Profile() {
                 <img src={admin.logo_url} alt="Current logo"
                   className="w-12 h-12 sm:w-14 sm:h-14 object-contain rounded-xl flex-shrink-0" />
                 <div className="min-w-0">
-                  <p className="text-sm font-bold text-slate-800">Current logo</p>
-                  <p className="text-xs font-medium text-slate-400 mt-0.5">Shown in your profile and admin airline list</p>
+                  <p className="text-sm font-bold text-slate-800">
+                    {admin?.logo_inherited ? 'Parent airline logo' : 'Current logo'}
+                  </p>
+                  <p className="text-xs font-medium text-slate-400 mt-0.5">
+                    {admin?.logo_inherited
+                      ? 'Inherited from your parent airline by default — upload your own to override it.'
+                      : 'Shown in your profile and admin airline list'}
+                  </p>
                 </div>
               </div>
             )}

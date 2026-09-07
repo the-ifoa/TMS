@@ -159,7 +159,7 @@ exports.create = async (req, res) => {
     if (await Airline.findOne({ email: lowerEmail }))
       return res.status(400).json({ error: 'An account with this email already exists.' });
 
-    const parentDoc = await Airline.findById(topAirlineId).select('airlineName');
+    const parentDoc = await Airline.findById(topAirlineId).select('airlineName logo_url');
     const doc = await Airline.create({
       name: name.trim(),
       airlineName: parentDoc?.airlineName || name.trim(),
@@ -170,6 +170,9 @@ exports.create = async (req, res) => {
       parent_airline: topAirlineId,
       is_department: true,
       department_name: (department_name || name).trim(),
+      // Departments inherit the parent airline's logo by default; the department
+      // (or an admin) can change it later from Profile.
+      logo_url: parentDoc?.logo_url || null,
       permissions: cleanPerms,
       can_author_exams: cleanPerms.includes('exams.author'),
       created_by_admin: s.kind === 'admin' ? s.adminId : null,

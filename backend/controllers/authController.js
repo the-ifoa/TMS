@@ -336,7 +336,14 @@ exports.airlineLogin = async (req, res) => {
 
     const token = signAirlineToken(airline);
 
-    res.json({ token, admin: { ...airline.toJSON(), role: 'airline' } });
+    const adminOut = { ...airline.toJSON(), role: 'airline' };
+    // A department with no logo of its own inherits the parent airline's.
+    if (!adminOut.logo_url && airline.parent_airline) {
+      const parent = await Airline.findById(airline.parent_airline).select('logo_url');
+      if (parent?.logo_url) { adminOut.logo_url = parent.logo_url; adminOut.logo_inherited = true; }
+    }
+
+    res.json({ token, admin: adminOut });
   } catch (err) {
     console.error('Airline login error:', err);
     res.status(500).json({ error: err.message || 'Server error during airline login.' });
@@ -352,7 +359,13 @@ exports.getMe = async (req, res) => {
     if (req.admin.role === 'airline') {
       const airline = await Airline.findById(req.admin.id);
       if (!airline) return res.status(404).json({ error: 'Airline user not found.' });
-      return res.json({ ...airline.toJSON(), role: 'airline' });
+      const out = { ...airline.toJSON(), role: 'airline' };
+      // A department with no logo of its own inherits the parent airline's.
+      if (!out.logo_url && airline.parent_airline) {
+        const parent = await Airline.findById(airline.parent_airline).select('logo_url');
+        if (parent?.logo_url) { out.logo_url = parent.logo_url; out.logo_inherited = true; }
+      }
+      return res.json(out);
     } else {
       const admin = await Admin.findById(req.admin.id);
       if (!admin) return res.status(404).json({ error: 'Admin not found.' });

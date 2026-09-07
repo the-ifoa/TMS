@@ -73,11 +73,14 @@ async function loadScope(req, _res, next) {
       .lean();
     const departmentIds = siblings.map((d) => String(d._id));
 
-    // A top-level airline may only manage sub-users if an admin granted it.
+    // A top-level airline may only manage sub-users / see all department results
+    // if an admin granted it.
     let topCanCreateSubusers = false;
+    let topCanViewAllResults = false;
     if (!isDepartment) {
-      const me = await Airline.findById(c.id).select('can_create_subusers').lean();
+      const me = await Airline.findById(c.id).select('can_create_subusers can_view_all_results').lean();
       topCanCreateSubusers = !!me?.can_create_subusers;
+      topCanViewAllResults = !!me?.can_view_all_results;
     }
 
     let visibleAirlineIds;
@@ -103,6 +106,12 @@ async function loadScope(req, _res, next) {
       permissions,
       visibleAirlineIds,
       topCanCreateSubusers,
+      // Can this request see exam results beyond its own account?
+      //  • department  → only with the results.viewAll grant
+      //  • top-level   → only when an admin flipped can_view_all_results on
+      canViewAllResults: isDepartment
+        ? permissions.includes('results.viewAll')
+        : topCanViewAllResults,
       canManageTeam: isDepartment
         ? permissions.includes('team.manage')
         : topCanCreateSubusers,

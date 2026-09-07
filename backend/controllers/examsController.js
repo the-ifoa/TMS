@@ -142,14 +142,17 @@ exports.departmentResults = async (req, res) => {
     if (s.isDepartment && !perms.includes('results.viewOwn') && !perms.includes('results.viewAll'))
       return res.status(403).json({ error: 'You do not have permission to view results.' });
 
-    // Top-level account → its own + every department. Department with
-    // results.viewAll → the whole tree. Department with only results.viewOwn →
-    // strictly its own results.
+    // Who may see the whole tree's results (main account + every department)?
+    //  • department  → needs the results.viewAll grant
+    //  • top-level   → needs an admin to enable can_view_all_results
+    // Everyone else is limited to their own account's results.
     let ids;
-    if (!s.isDepartment || perms.includes('results.viewAll')) {
+    if (s.canViewAllResults) {
       ids = [s.topAirlineId, ...(s.departmentIds || [])];
-    } else {
+    } else if (s.isDepartment) {
       ids = [s.selfId];
+    } else {
+      ids = [s.topAirlineId];
     }
 
     const invites = await ExamInvite.find({ airline_id: { $in: ids } }).sort({ created_at: -1 });

@@ -274,11 +274,11 @@ export default function TeamPage() {
         <div className="min-w-0">
           <h1 className="text-base sm:text-xl font-bold text-primary-800 tracking-tight flex items-center gap-2">
             <HiOutlineUserGroup className="w-5 h-5 text-accent-500" />
-            {isAdmin ? 'Team & Sub-users' : 'Departments'}
+            {isAdmin ? 'Sub-admins & Sub-departments' : 'Departments'}
           </h1>
           <p className="text-xs text-primary-400 mt-0.5 hidden sm:block">
             {isAdmin
-              ? 'Create restricted admin users and airline department accounts, and grant each one specific powers.'
+              ? 'Create sub-admins (restricted admin logins) and sub-departments (airline department accounts), and grant each one specific powers.'
               : 'Create department logins for your airline and choose exactly what each department can do.'}
           </p>
         </div>
@@ -290,7 +290,7 @@ export default function TeamPage() {
               className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold bg-white border border-slate-200 text-slate-700 hover:text-slate-900 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-2xs active:scale-[0.98] cursor-pointer"
             >
               <HiOutlineShieldCheck className="w-4 h-4 text-violet-600 shrink-0" />
-              <span>New admin user</span>
+              <span>New sub-admin</span>
             </button>
           )}
           <button
@@ -299,7 +299,7 @@ export default function TeamPage() {
             className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold bg-slate-900 text-white hover:bg-slate-800 transition-all shadow-xs active:scale-[0.98] cursor-pointer"
           >
             <FaPlaneDeparture className="w-3.5 h-3.5 shrink-0 text-slate-300" />
-            <span>{isAdmin ? 'New airline user' : 'New department'}</span>
+            <span>{isAdmin ? 'New sub-department' : 'New department'}</span>
           </button>
         </div>
       </div>
@@ -452,7 +452,7 @@ export default function TeamPage() {
                 <div className="min-w-0">
                   <h2 className="text-base font-bold text-slate-900 leading-tight truncate">
                     {modal.mode === 'create'
-                      ? (modal.scope === 'admin' ? 'New admin user' : (isAdmin ? 'New airline user' : 'New department'))
+                      ? (modal.scope === 'admin' ? 'New sub-admin' : (isAdmin ? 'New sub-department' : 'New department'))
                       : `Edit ${modal.name}`}
                   </h2>
                   <p className="text-[11px] text-slate-400">

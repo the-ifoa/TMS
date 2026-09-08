@@ -55,7 +55,17 @@ const themeStyles = {
 };
 
 export default function Dashboard() {
-  const { admin, isAdmin } = useAuth();
+  const { admin, isAdmin, isDepartment } = useAuth();
+  // A department has no enrollment flow — it only keeps a lightweight "My Team"
+  // roster. Point every enrollment-shaped CTA at My Team instead.
+  const primaryTo    = isAdmin ? '/admin/participants/add' : isDepartment ? '/airline/my-team' : '/airline/enrollment/new';
+  const primaryLabel = isAdmin ? 'New Record' : isDepartment ? 'Add Candidate' : 'New Enrollment';
+  const primaryDesc  = isAdmin ? 'Create a new training record' : isDepartment ? 'Add a person to your team roster' : 'Submit a new training enrollment';
+  const listTo       = isAdmin ? '/admin/airlines' : isDepartment ? '/airline/my-team' : '/airline/submissions';
+  const listLabel    = isAdmin ? 'View Airlines' : isDepartment ? 'My Team' : 'My Submissions';
+  const listDesc     = isAdmin ? 'Browse all airline submissions' : isDepartment ? 'View your team roster' : 'View your submitted enrollments';
+  const recentTitle  = isAdmin ? 'Recent Records' : isDepartment ? 'My Team' : 'My Recent Submissions';
+  const emptyText    = isAdmin ? 'No records found. Add your first participant.' : isDepartment ? 'No team members yet. Add your first one.' : 'No submissions yet. Start by adding a new enrollment.';
   const [stats, setStats]             = useState({ total: 0, types: 0, ready: 0, month: 0 });
   const [recentRecords, setRecentRecords] = useState([]);
 
@@ -70,12 +80,13 @@ export default function Dashboard() {
           const d = new Date(p.training_date);
           return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
         });
-        setStats({ total: data.length, types: types.size, ready: data.length, month: thisMonth.length });
+        const withEmail = data.filter((p) => p.email && String(p.email).trim()).length;
+        setStats({ total: data.length, types: types.size, ready: isDepartment ? withEmail : data.length, month: thisMonth.length });
         setRecentRecords(data.slice(0, 5));
       } catch { /* silent */ }
     }
     fetchData();
-  }, []);
+  }, [isDepartment]);
 
   const statCards = isAdmin
     ? [
@@ -83,6 +94,11 @@ export default function Dashboard() {
         { label: 'Training Types',     icon: HiOutlineAcademicCap,  theme: 'purple',  key: 'types' },
         { label: 'Certificates Ready', icon: HiOutlineDocumentText, theme: 'emerald', key: 'ready' },
         { label: 'This Month',         icon: HiOutlineCalendar,     theme: 'amber',  key: 'month' },
+      ]
+    : isDepartment
+    ? [
+        { label: 'Team Members', icon: HiOutlineUsers,       theme: 'blue',   key: 'total' },
+        { label: 'With Email',   icon: HiOutlineDocumentText, theme: 'emerald', key: 'ready' },
       ]
     : [
         { label: 'My Submissions',  icon: HiOutlineUsers,       theme: 'blue', key: 'total' },
@@ -102,20 +118,22 @@ export default function Dashboard() {
           <p className="text-sm text-slate-500 font-normal mt-1">
             {isAdmin
               ? 'Manage training records and generate certificates'
+              : isDepartment
+              ? 'Manage your department team roster'
               : 'Submit and track your training enrollment records'}
           </p>
         </div>
-        <Link 
-          to={isAdmin ? '/admin/participants/add' : '/airline/enrollment/new'} 
+        <Link
+          to={primaryTo}
           className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl transition-all duration-200 font-semibold text-sm shadow-sm whitespace-nowrap flex-shrink-0"
         >
           <HiOutlinePlusCircle className="w-5 h-5" />
-          {isAdmin ? 'New Record' : 'New Enrollment'}
+          {primaryLabel}
         </Link>
       </motion.div>
 
-      {/* Airline Notice Banner */}
-      {!isAdmin && (
+      {/* Airline Notice Banner — enrollment lock notice, not relevant to departments */}
+      {!isAdmin && !isDepartment && (
         <motion.div 
           variants={item} 
           className="flex items-start gap-4 p-5 rounded-2xl border border-blue-100/80 bg-gradient-to-r from-blue-50/40 to-indigo-50/10 backdrop-blur-sm shadow-[0_4px_20px_rgba(59,130,246,0.02)]"
@@ -133,7 +151,7 @@ export default function Dashboard() {
       )}
 
       {/* Stats Cards Grid */}
-      <motion.div variants={item} className={`grid grid-cols-1 sm:grid-cols-2 ${isAdmin ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} gap-4`}>
+      <motion.div variants={item} className={`grid grid-cols-1 sm:grid-cols-2 ${isAdmin ? 'lg:grid-cols-4' : isDepartment ? 'lg:grid-cols-2' : 'lg:grid-cols-3'} gap-4`}>
         {statCards.map((card) => {
           const style = themeStyles[card.theme];
           return (
@@ -163,7 +181,7 @@ export default function Dashboard() {
           <h2 className="text-base font-bold text-slate-800 mb-5">Quick Actions</h2>
           <div className="space-y-3 flex-1 flex flex-col justify-center">
             <Link
-              to={isAdmin ? '/admin/participants/add' : '/airline/enrollment/new'}
+              to={primaryTo}
               className="flex items-center gap-4 p-4 rounded-xl border border-slate-100 hover:border-blue-100 hover:bg-blue-50/20 transition-all duration-300 group shadow-sm hover:shadow-md"
             >
               <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center transition-colors group-hover:bg-blue-100/50 flex-shrink-0">
@@ -171,10 +189,10 @@ export default function Dashboard() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-slate-700 group-hover:text-blue-700 transition-colors">
-                  {isAdmin ? 'Add Participant' : 'New Enrollment'}
+                  {isAdmin ? 'Add Participant' : primaryLabel}
                 </p>
                 <p className="text-xs text-slate-400 mt-0.5 truncate">
-                  {isAdmin ? 'Create a new training record' : 'Submit a new training enrollment'}
+                  {isAdmin ? 'Create a new training record' : primaryDesc}
                 </p>
               </div>
               <HiOutlineArrowRight className="w-4 h-4 text-slate-300 group-hover:text-blue-600 transition-all duration-300 transform group-hover:translate-x-1 flex-shrink-0" />
@@ -197,7 +215,7 @@ export default function Dashboard() {
             )}
 
             <Link
-              to={isAdmin ? '/admin/airlines' : '/airline/submissions'}
+              to={listTo}
               className="flex items-center gap-4 p-4 rounded-xl border border-slate-100 hover:border-purple-100 hover:bg-purple-50/20 transition-all duration-300 group shadow-sm hover:shadow-md"
             >
               <div className="w-10 h-10 bg-purple-50 rounded-xl flex items-center justify-center transition-colors group-hover:bg-purple-100/50 flex-shrink-0">
@@ -205,10 +223,10 @@ export default function Dashboard() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-slate-700 group-hover:text-purple-700 transition-colors">
-                  {isAdmin ? 'View Airlines' : 'My Submissions'}
+                  {listLabel}
                 </p>
                 <p className="text-xs text-slate-400 mt-0.5 truncate">
-                  {isAdmin ? 'Browse all airline submissions' : 'View your submitted enrollments'}
+                  {listDesc}
                 </p>
               </div>
               <HiOutlineArrowRight className="w-4 h-4 text-slate-300 group-hover:text-purple-600 transition-all duration-300 transform group-hover:translate-x-1 flex-shrink-0" />
@@ -220,10 +238,10 @@ export default function Dashboard() {
         <motion.div variants={item} className="bg-white rounded-2xl border border-slate-100 p-5 sm:p-6 lg:col-span-2 shadow-sm overflow-hidden flex flex-col h-full">
           <div className="flex items-center justify-between mb-5">
             <h2 className="text-base font-bold text-slate-800">
-              {isAdmin ? 'Recent Records' : 'My Recent Submissions'}
+              {recentTitle}
             </h2>
-            <Link 
-              to={isAdmin ? '/admin/participants' : '/airline/submissions'} 
+            <Link
+              to={isAdmin ? '/admin/participants' : listTo}
               className="text-xs font-semibold text-blue-600 hover:text-blue-700 transition-all duration-200 flex items-center gap-1 group/link"
             >
               View All
@@ -273,7 +291,7 @@ export default function Dashboard() {
                 {recentRecords.length === 0 && (
                   <TableRow className="hover:bg-transparent">
                     <TableCell colSpan={4} className="py-12 text-center text-sm text-slate-400 font-medium">
-                      {isAdmin ? 'No records found. Add your first participant.' : 'No submissions yet. Start by adding a new enrollment.'}
+                      {emptyText}
                     </TableCell>
                   </TableRow>
                 )}

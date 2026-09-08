@@ -23,7 +23,7 @@ import {
 import { FaPlaneDeparture } from 'react-icons/fa';
 import { getParticipants, getNotifications } from '../api';
 import { useAuth } from '../context/AuthContext';
-import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { SimpleTooltip } from '@/components/ui/tooltip';
 import {
@@ -454,12 +454,19 @@ export default function Header({ sidebarOpen, setSidebarOpen }) {
         <DropdownMenu open={profileOpen} onOpenChange={(open) => { setProfileOpen(open); if (open) setNotifOpen(false); }}>
           <DropdownMenuTrigger asChild>
             <button className="flex items-center gap-2.5 p-1 rounded-full hover:opacity-90 transition-all outline-none focus:outline-none cursor-pointer">
-              <Avatar className="w-9 h-9">
-                {!isAdmin && admin?.logo_url && <AvatarImage src={admin.logo_url} alt={admin.airlineName} />}
-                <AvatarFallback className="bg-[#0B132B] text-white font-bold text-xs">
-                  {!isAdmin && admin?.airlineName ? admin.airlineName.charAt(0).toUpperCase() : initials}
-                </AvatarFallback>
-              </Avatar>
+              {!isAdmin && admin?.logo_url ? (
+                <img
+                  src={admin.logo_url}
+                  alt={admin.airlineName || 'Logo'}
+                  className="h-9 w-auto max-w-[140px] object-contain flex-shrink-0"
+                />
+              ) : (
+                <Avatar className="w-9 h-9">
+                  <AvatarFallback className="bg-[#0B132B] text-white font-bold text-xs">
+                    {!isAdmin && admin?.airlineName ? admin.airlineName.charAt(0).toUpperCase() : initials}
+                  </AvatarFallback>
+                </Avatar>
+              )}
               <div className="hidden md:block text-left leading-tight">
                 <p className="text-sm font-bold text-slate-900 leading-tight">
                   {isAdmin ? (admin?.name || 'Admin') : (admin?.name || admin?.airlineName || 'Airline')}

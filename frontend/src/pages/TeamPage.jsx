@@ -4,7 +4,8 @@ import toast from 'react-hot-toast';
 import {
   HiOutlineUserGroup, HiOutlinePlusCircle, HiOutlinePencil, HiOutlineTrash,
   HiOutlineX, HiOutlineShieldCheck, HiOutlineOfficeBuilding, HiOutlineUsers,
-  HiOutlineCheck, HiOutlineInformationCircle,
+  HiOutlineCheck, HiOutlineInformationCircle, HiOutlineEye, HiOutlineEyeOff,
+  HiOutlineMail,
 } from 'react-icons/hi';
 import { FaPlaneDeparture } from 'react-icons/fa';
 import { ShieldCheck, Building2, Users, CheckCircle2, Sliders, Info, Layers } from 'lucide-react';
@@ -15,6 +16,36 @@ import {
 } from '../api';
 import { useConfirm } from '@/hooks/use-confirm';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
+
+const DEFAULT_PERM_LABELS = {
+  'participants.view': 'View Participants',
+  'participants.add': 'Add Participants',
+  'participants.edit': 'Edit Participants',
+  'participants.delete': 'Delete Participants',
+  'exams.manage': 'Create & Edit Exams',
+  'exams.assign': 'Assign Exams',
+  'exams.grade': 'Grade Exam Attempts',
+  'attendance.view': 'View Attendance',
+  'attendance.manage': 'Manage Attendance',
+  'attendance.checklist': 'Attendance Checklist',
+  'airline.manage': 'Manage Airline Details',
+  'certificates.view': 'View Certificates',
+  'certificates.release': 'Release Certificates',
+  'analytics.view': 'View Analytics',
+};
+
+const formatPermLabel = (key, customLabels = {}) => {
+  if (customLabels[key]) return customLabels[key];
+  if (DEFAULT_PERM_LABELS[key]) return DEFAULT_PERM_LABELS[key];
+  const parts = key.split('.');
+  if (parts.length === 2) {
+    const [domain, action] = parts;
+    const cleanAction = action.charAt(0).toUpperCase() + action.slice(1);
+    const cleanDomain = domain.charAt(0).toUpperCase() + domain.slice(1);
+    return `${cleanAction} ${cleanDomain}`;
+  }
+  return key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+};
 
 // Flatten { group: [{key,label}] } → [{key,label,group}]
 const flatten = (groups) =>
@@ -127,6 +158,7 @@ export default function TeamPage() {
   const [members, setMembers] = useState({ subAdmins: [], departments: [] });
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null);    // { mode:'create'|'edit', ... }
+  const [showPassword, setShowPassword] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
 
   const load = async () => {
@@ -151,18 +183,24 @@ export default function TeamPage() {
     [members],
   );
 
-  const openCreate = (scope) => setModal({
-    mode: 'create', scope,
-    name: '', email: '', password: '',
-    permissions: [], parentAirlineId: airlines[0]?._id || '', department_name: '',
-  });
-  const openEdit = (m) => setModal({
-    mode: 'edit', id: m._id || m.id, scope: m.memberScope,
-    name: m.name || '', email: m.email || '', password: '',
-    permissions: m.permissions || [],
-    account_status: m.account_status || 'active',
-    department_name: m.department_name || '',
-  });
+  const openCreate = (scope) => {
+    setShowPassword(false);
+    setModal({
+      mode: 'create', scope,
+      name: '', email: '', password: '',
+      permissions: [], parentAirlineId: airlines[0]?._id || '', department_name: '',
+    });
+  };
+  const openEdit = (m) => {
+    setShowPassword(false);
+    setModal({
+      mode: 'edit', id: m._id || m.id, scope: m.memberScope,
+      name: m.name || '', email: m.email || '', password: '',
+      permissions: m.permissions || [],
+      account_status: m.account_status || 'active',
+      department_name: m.department_name || '',
+    });
+  };
 
   const save = async () => {
     const m = modal;
@@ -292,61 +330,87 @@ export default function TeamPage() {
               return (
                 <div
                   key={m._id || m.id}
-                  className={`bg-white rounded-2xl border transition-all duration-200 p-5 flex flex-col justify-between gap-4 shadow-2xs hover:shadow-md ${isDisabled ? 'border-slate-200/60 opacity-80' : 'border-slate-200/90'
-                    }`}
+                  className={`bg-white rounded-3xl border transition-all duration-200 p-5 sm:p-6 flex flex-col justify-between gap-4 shadow-2xs hover:shadow-md ${
+                    isDisabled ? 'border-slate-200/60 opacity-80 bg-slate-50/40' : 'border-slate-200/90 hover:border-slate-300'
+                  }`}
                 >
                   {/* Card Header & Identity */}
-                  <div className="space-y-3.5">
-                    <div className="flex items-start justify-between gap-2.5">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 shadow-2xs ${isAdminScope
-                            ? 'bg-violet-50 text-violet-600 border border-violet-100'
-                            : 'bg-blue-50 text-blue-600 border border-blue-100'
-                          }`}>
-                          {isAdminScope
-                            ? <HiOutlineShieldCheck className="w-5 h-5" />
-                            : <FaPlaneDeparture className="w-4 h-4" />}
+                  <div className="space-y-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-3.5 min-w-0">
+                        <div
+                          className={`w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-2xs ${
+                            isAdminScope
+                              ? 'bg-violet-50 text-violet-600 border border-violet-100'
+                              : 'bg-blue-50 text-blue-600 border border-blue-100'
+                          }`}
+                        >
+                          {isAdminScope ? (
+                            <HiOutlineShieldCheck className="w-5 h-5" />
+                          ) : (
+                            <FaPlaneDeparture className="w-4 h-4" />
+                          )}
                         </div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <h3 className="text-sm font-bold text-slate-900 truncate">{m.name}</h3>
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${isAdminScope
-                                ? 'bg-violet-50 text-violet-700 border-violet-200'
-                                : 'bg-blue-50 text-blue-700 border-blue-200'
-                              }`}>
-                              {isAdminScope ? 'ADMIN' : (m.department_name || 'DEPARTMENT')}
+
+                        <div className="min-w-0 space-y-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="text-sm sm:text-base font-extrabold text-slate-900 truncate">
+                              {m.name}
+                            </h3>
+                            <span
+                              className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border tracking-wide uppercase ${
+                                isAdminScope
+                                  ? 'bg-violet-50 text-violet-700 border-violet-200'
+                                  : 'bg-blue-50 text-blue-700 border-blue-200'
+                              }`}
+                            >
+                              {isAdminScope ? 'Sub-Admin' : m.department_name || 'Department'}
                             </span>
                           </div>
-                          <p className="text-xs text-slate-500 truncate mt-0.5">{m.email}</p>
+
+                          <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium truncate">
+                            <HiOutlineMail className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                            <span className="truncate">{m.email}</span>
+                          </div>
                         </div>
                       </div>
 
                       {/* Status indicator badge */}
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border flex-shrink-0 ${isDisabled
-                          ? 'bg-rose-50 text-rose-700 border-rose-200'
-                          : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                        }`}>
+                      <span
+                        className={`inline-flex items-center gap-1.5 text-[10px] font-black px-2.5 py-1 rounded-full border flex-shrink-0 shadow-2xs tracking-wider uppercase ${
+                          isDisabled
+                            ? 'bg-slate-100 text-slate-500 border-slate-200'
+                            : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        }`}
+                      >
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full ${
+                            isDisabled ? 'bg-slate-400' : 'bg-emerald-500 animate-pulse'
+                          }`}
+                        />
                         {isDisabled ? 'DISABLED' : 'ACTIVE'}
                       </span>
                     </div>
 
-                    {/* Permissions List */}
-                    <div className="pt-2.5 border-t border-slate-100">
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                          Permissions ({perms.length})
+                    {/* Permissions Section */}
+                    <div className="pt-3 border-t border-slate-100 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">
+                          Granted Permissions ({perms.length})
                         </span>
                       </div>
+
                       {perms.length === 0 ? (
-                        <p className="text-xs text-slate-400 italic">No powers granted</p>
+                        <p className="text-xs text-slate-400 italic py-1">No permissions assigned</p>
                       ) : (
-                        <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto pr-1">
+                        <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto pr-1 scrollbar-thin">
                           {perms.map((p) => (
                             <span
                               key={p}
-                              className="text-[11px] font-medium px-2 py-0.5 rounded-lg bg-slate-50 text-slate-700 border border-slate-200/80"
+                              className="text-[11px] font-medium px-2.5 py-1 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200/80 transition-colors inline-flex items-center gap-1"
                             >
-                              {permLabels[p] || p}
+                              <HiOutlineCheck className="w-3 h-3 text-blue-600 stroke-[3]" />
+                              <span>{formatPermLabel(p, permLabels)}</span>
                             </span>
                           ))}
                         </div>
@@ -355,12 +419,17 @@ export default function TeamPage() {
                   </div>
 
                   {/* Card Footer Actions */}
-                  <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2 mt-auto">
+                  <div className="pt-3.5 border-t border-slate-100 flex items-center justify-between gap-2 mt-auto">
                     <div>
-                      {m.memberScope === 'airline' && (
-                        <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-slate-400">
-                          <HiOutlineUsers className="w-3.5 h-3.5" />
-                          Keeps its own participant list
+                      {m.memberScope === 'airline' ? (
+                        <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-500 bg-slate-50 border border-slate-200/80 px-2.5 py-1 rounded-xl">
+                          <HiOutlineUsers className="w-3.5 h-3.5 text-blue-500" />
+                          <span>Isolated Directory</span>
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-violet-700 bg-violet-50 border border-violet-200/80 px-2.5 py-1 rounded-xl">
+                          <HiOutlineShieldCheck className="w-3.5 h-3.5 text-violet-600" />
+                          <span>Sub-Admin Account</span>
                         </span>
                       )}
                     </div>
@@ -369,10 +438,11 @@ export default function TeamPage() {
                       <button
                         type="button"
                         onClick={() => toggleStatus(m)}
-                        className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold border transition-colors cursor-pointer shadow-2xs ${isDisabled
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer shadow-2xs ${
+                          isDisabled
                             ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
-                            : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-                          }`}
+                            : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                        }`}
                       >
                         {isDisabled ? 'Enable' : 'Disable'}
                       </button>
@@ -380,7 +450,7 @@ export default function TeamPage() {
                         type="button"
                         onClick={() => openEdit(m)}
                         title="Edit member"
-                        className="p-1.5 rounded-xl bg-slate-50 border border-slate-200 hover:border-blue-300 hover:bg-blue-50 text-slate-500 hover:text-blue-600 transition-all cursor-pointer shadow-2xs"
+                        className="p-2 rounded-xl bg-slate-50 border border-slate-200 hover:border-blue-300 hover:bg-blue-50 text-slate-600 hover:text-blue-600 transition-all cursor-pointer shadow-2xs"
                       >
                         <HiOutlinePencil className="w-3.5 h-3.5" />
                       </button>
@@ -388,7 +458,7 @@ export default function TeamPage() {
                         type="button"
                         onClick={() => remove(m)}
                         title="Remove member"
-                        className="p-1.5 rounded-xl bg-slate-50 border border-slate-200 hover:border-red-300 hover:bg-red-50 text-slate-500 hover:text-red-600 transition-all cursor-pointer shadow-2xs"
+                        className="p-2 rounded-xl bg-slate-50 border border-slate-200 hover:border-rose-300 hover:bg-rose-50 text-slate-600 hover:text-rose-600 transition-all cursor-pointer shadow-2xs"
                       >
                         <HiOutlineTrash className="w-3.5 h-3.5" />
                       </button>
@@ -502,13 +572,23 @@ export default function TeamPage() {
                 <span className="text-xs font-semibold text-slate-700">
                   {modal.mode === 'create' ? 'Password' : 'New password (leave blank to keep)'}
                 </span>
-                <input
-                  type="password"
-                  value={modal.password}
-                  onChange={(e) => setModal({ ...modal, password: e.target.value })}
-                  placeholder={modal.mode === 'create' ? '••••••••' : 'Leave empty to keep current password'}
-                  className="w-full border border-slate-200 rounded-xl px-3.5 py-2 text-xs sm:text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
-                />
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={modal.password}
+                    onChange={(e) => setModal({ ...modal, password: e.target.value })}
+                    placeholder={modal.mode === 'create' ? '••••••••' : 'Leave empty to keep current password'}
+                    className="w-full border border-slate-200 rounded-xl px-3.5 py-2 pr-10 text-xs sm:text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    title={showPassword ? 'Hide password' : 'Show password'}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 transition-colors"
+                  >
+                    {showPassword ? <HiOutlineEyeOff className="w-4 h-4" /> : <HiOutlineEye className="w-4 h-4" />}
+                  </button>
+                </div>
               </label>
 
               {modal.mode === 'edit' && (

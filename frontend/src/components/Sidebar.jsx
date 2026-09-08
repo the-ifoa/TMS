@@ -29,7 +29,7 @@ const adminNavigation = [
   { name: 'Exam Results', href: '/admin/exam-results',     icon: HiOutlineClipboardList,       perm: ['examResults.view', 'examResults.manage'] },
   { name: 'Exam System',  href: '/admin/exams',            icon: HiOutlineAcademicCap,         perm: 'exams.author' },
   { name: 'DGR CBTA',     href: '/admin/dgr',              icon: HiOutlineShieldExclamation,   perm: ['dgr.view', 'dgr.manage'] },
-  { name: 'Team',         href: '/admin/team',             icon: HiOutlineUserGroup,           team: true },
+  { name: 'Sub-users',    href: '/admin/team',             icon: HiOutlineUserGroup,           team: true },
   { name: 'Profile',      href: '/admin/profile',          icon: HiOutlineUserCircle },
 ];
 

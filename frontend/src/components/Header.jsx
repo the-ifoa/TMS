@@ -168,8 +168,11 @@ export default function Header({ sidebarOpen, setSidebarOpen }) {
   const debounceRef = useRef(null);
 
   const { isAdmin, isSubAdmin } = useAuth();
-  // Secondary line under the user's name: prioritise department, then airline.
-  const airlineSubLabel = admin?.department_name || admin?.airlineName || 'Airline User';
+  // Secondary line under the user's name. Use the airline name — never
+  // department_name here: that field is free text set by whoever created the
+  // department and can hold anything (e.g. the creator's email). The account's
+  // own email is shown on its own line below.
+  const airlineSubLabel = admin?.airlineName || 'Airline User';
   const adminSubLabel   = isSubAdmin ? 'Sub-admin' : 'Administrator';
   const initials = admin?.name
     ? admin.name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)

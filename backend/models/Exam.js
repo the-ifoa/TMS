@@ -133,7 +133,7 @@ const examSchema = new mongoose.Schema(
     status: { type: String, enum: ['draft', 'published', 'archived'], default: 'draft' },
 
     duration_minutes: { type: Number, default: 30 },
-    pass_percentage:  { type: Number, default: 60 },
+    pass_percentage:  { type: Number, default: 75 },
     max_attempts:     { type: Number, default: 1 },
     shuffle_questions: { type: Boolean, default: false },
     shuffle_options:   { type: Boolean, default: false },

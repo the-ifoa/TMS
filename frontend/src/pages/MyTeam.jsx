@@ -5,7 +5,7 @@ import {
   HiOutlineUsers, HiOutlineSearch, HiOutlinePlus, HiOutlineMail,
   HiOutlinePencil, HiOutlineTrash, HiOutlineCheck, HiOutlineX, HiOutlineChartBar,
 } from 'react-icons/hi';
-import { getParticipants, createCandidate, updateParticipant, deleteParticipant } from '../api';
+import { getParticipants, createCandidate, updateParticipant, updateParticipantEmail, deleteParticipant } from '../api';
 import { useAuth } from '../context/AuthContext';
 import { useConfirm } from '@/hooks/use-confirm';
 
@@ -29,6 +29,9 @@ export default function MyTeam() {
   const [form, setForm] = useState({ first_name: '', last_name: '', email: '' });
   const [edit, setEdit] = useState(null); // { id, first_name, last_name, email }
   const [busyId, setBusyId] = useState(null);
+  const [bulkEmail, setBulkEmail] = useState(false);
+  const [emailDrafts, setEmailDrafts] = useState({});
+  const [savingEmails, setSavingEmails] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -91,6 +94,41 @@ export default function MyTeam() {
     }
   };
 
+  const enterBulk = () => {
+    const d = {};
+    rows.forEach((r) => { d[r.id || r._id] = r.email || ''; });
+    setEmailDrafts(d);
+    setEdit(null);
+    setBulkEmail(true);
+  };
+
+  const saveAllEmails = async () => {
+    const changed = rows.filter((r) => {
+      const id = r.id || r._id;
+      return emailDrafts[id] !== undefined && (emailDrafts[id].trim() || '') !== (r.email || '');
+    });
+    const bad = changed.find((r) => {
+      const v = emailDrafts[r.id || r._id].trim();
+      return v && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+    });
+    if (bad) { toast.error('One or more emails are invalid'); return; }
+    if (changed.length === 0) { setBulkEmail(false); toast('No email changes to save.', { icon: 'ℹ️' }); return; }
+    setSavingEmails(true);
+    let ok = 0, fail = 0;
+    for (const r of changed) {
+      const id = r.id || r._id;
+      try {
+        await updateParticipantEmail(id, emailDrafts[id].trim());
+        ok++;
+        setRows((prev) => prev.map((x) => (x.id || x._id) === id ? { ...x, email: emailDrafts[id].trim() } : x));
+      } catch { fail++; }
+    }
+    setSavingEmails(false);
+    setBulkEmail(false);
+    if (fail === 0) toast.success(`${ok} email${ok !== 1 ? 's' : ''} saved.`);
+    else toast.error(`${ok} saved, ${fail} failed.`);
+  };
+
   const remove = async (r) => {
     const id = r.id || r._id;
     if (!(await confirm(`Remove ${r.participant_name || 'this candidate'} from your team?`, {
@@ -113,14 +151,36 @@ export default function MyTeam() {
       {/* Header */}
       <div className="sticky top-0 z-20 w-full bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-2xs">
         <div className="w-full max-w-5xl mx-auto px-3.5 sm:px-6 lg:px-8 py-3">
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="w-7 h-7 rounded-lg bg-slate-900 text-white flex items-center justify-center shadow-2xs flex-shrink-0">
-              <HiOutlineUsers className="w-4 h-4" />
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="w-7 h-7 rounded-lg bg-slate-900 text-white flex items-center justify-center shadow-2xs flex-shrink-0">
+                <HiOutlineUsers className="w-4 h-4" />
+              </div>
+              <h1 className="text-sm font-extrabold text-slate-900 tracking-tight leading-none">My Team</h1>
+              <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-100 text-[11px] font-bold flex-shrink-0">
+                {rows.length}
+              </span>
             </div>
-            <h1 className="text-sm font-extrabold text-slate-900 tracking-tight leading-none">My Team</h1>
-            <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-100 text-[11px] font-bold flex-shrink-0">
-              {rows.length}
-            </span>
+
+            {canEdit && rows.length > 0 && (
+              bulkEmail ? (
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <button type="button" onClick={saveAllEmails} disabled={savingEmails}
+                    className="inline-flex items-center gap-1 h-7 px-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-2xs disabled:opacity-60 whitespace-nowrap">
+                    <HiOutlineCheck className="w-3.5 h-3.5" />{savingEmails ? 'Saving…' : 'Save All'}
+                  </button>
+                  <button type="button" onClick={() => setBulkEmail(false)} disabled={savingEmails}
+                    className="inline-flex items-center h-7 px-2.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-xs font-semibold whitespace-nowrap">
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button type="button" onClick={enterBulk}
+                  className="inline-flex items-center gap-1 h-7 px-2.5 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-xs font-semibold shadow-2xs whitespace-nowrap flex-shrink-0">
+                  <HiOutlineMail className="w-3.5 h-3.5 text-slate-500" /> Manage Emails
+                </button>
+              )
+            )}
           </div>
           <p className="text-[11px] text-slate-400 mt-1">Add the people in your department — name and email. Used to invite them to exams.</p>
         </div>
@@ -208,9 +268,17 @@ export default function MyTeam() {
                     <>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-slate-800 truncate">{r.participant_name || '—'}</p>
-                        <p className="text-[11px] text-slate-400 truncate inline-flex items-center gap-1">
-                          <HiOutlineMail className="w-3 h-3" />{r.email || <span className="italic">no email</span>}
-                        </p>
+                        {bulkEmail ? (
+                          <input type="email"
+                            value={emailDrafts[id] ?? (r.email || '')}
+                            onChange={(e) => setEmailDrafts((p) => ({ ...p, [id]: e.target.value }))}
+                            placeholder="candidate@email.com"
+                            className="mt-1 w-full max-w-xs h-7 px-2.5 text-xs border border-blue-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/25 bg-blue-50/30" />
+                        ) : (
+                          <p className="text-[11px] text-slate-400 truncate inline-flex items-center gap-1">
+                            <HiOutlineMail className="w-3 h-3" />{r.email || <span className="italic">no email</span>}
+                          </p>
+                        )}
                       </div>
                       <Link to={`/airline/participants/${id}/performance`}
                         title="Performance"

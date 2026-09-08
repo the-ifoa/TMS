@@ -86,9 +86,12 @@ exports.list = async (req, res) => {
       });
     }
 
-    // airline caller — its own departments
-    const depts = await Airline.find({ parent_airline: s.topAirlineId })
-      .sort({ createdAt: -1 });
+    // airline caller — a top-level airline sees every department in its tree; a
+    // department with team.manage sees only the sub-users IT created.
+    const deptQ = s.isTopLevel
+      ? { parent_airline: s.topAirlineId }
+      : { parent_airline: s.topAirlineId, created_by_airline: s.selfId };
+    const depts = await Airline.find(deptQ).sort({ createdAt: -1 });
     return res.json({
       subAdmins: [],
       departments: depts.map((a) => ({ ...a.toJSON(), memberScope: 'airline' })),
@@ -214,7 +217,11 @@ async function findManaged(req, id) {
       if (!s.isSuperAdmin && String(air.created_by_admin) !== String(s.adminId)) return null;
     } else {
       if (String(air.parent_airline) !== String(s.topAirlineId)) return null;
-      if (!s.isTopLevel && !(s.permissions || []).includes('team.manage')) return null;
+      if (!s.isTopLevel) {
+        if (!(s.permissions || []).includes('team.manage')) return null;
+        // a department may only manage the sub-users it created itself
+        if (String(air.created_by_airline) !== String(s.selfId)) return null;
+      }
     }
     return { doc: air, scope: 'airline' };
   }

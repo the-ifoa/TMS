@@ -7,6 +7,9 @@ import {
 import { uploadExamImage, deleteExamImage } from '../../api';
 import ImageLightbox from '../ImageLightbox';
 import { compressImageFile } from '../../utils/compressImage';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 
 export const QUESTION_TYPES = [
   { value: 'mcq',            label: 'Multiple Choice' },
@@ -26,6 +29,53 @@ export const QUESTION_TYPES = [
 ];
 
 const uid = () => `new-${Math.random().toString(36).slice(2, 10)}`;
+
+const CHOICE_TYPES = ['mcq', 'multi_response', 'select_list'];
+
+// Switch an existing question to another type. Keeps the stem (prompt, images),
+// scoring meta (points, time, section, explanation) and — between choice-style
+// types — the answer options. Type-specific answer data that can't carry over is
+// reset to the new type's blank scaffolding.
+export function convertQuestionType(q, newType) {
+  if (!newType || q.type === newType) return q;
+  const base = createEmptyQuestion(newType);
+  const merged = {
+    ...q,          // keep extras (e.g. bank_id)
+    ...base,       // fresh scaffolding for the target type
+    _id: q._id,
+    type: newType,
+    prompt: q.prompt ?? '',
+    points: q.points ?? 1,
+    time_limit_seconds: q.time_limit_seconds ?? null,
+    order: q.order ?? 0,
+    section: q.section ?? '',
+    explanation: q.explanation ?? '',
+    image_url: q.image_url || '',
+    image_public_id: q.image_public_id || '',
+    images: q.images || [],
+  };
+
+  // Carry answer options between choice-style types.
+  if (CHOICE_TYPES.includes(newType) && Array.isArray(q.options) && q.options.length) {
+    let opts = q.options.map((o) => ({ ...o }));
+    if (newType === 'mcq' || newType === 'select_list') {
+      // single-correct types: keep at most the first marked-correct option
+      const first = opts.findIndex((o) => o.is_correct);
+      opts = opts.map((o, i) => ({ ...o, is_correct: i === first }));
+    }
+    merged.options = opts;
+  }
+
+  // choice -> short answer: seed accepted answers from the old correct options
+  if (newType === 'short_answer' && Array.isArray(q.options)) {
+    const correct = q.options
+      .filter((o) => o.is_correct && (o.text || '').trim())
+      .map((o) => o.text.trim());
+    if (correct.length) merged.correct_text = correct;
+  }
+
+  return merged;
+}
 
 export function createEmptyQuestion(type) {
   return {
@@ -580,10 +630,21 @@ function DragDropEditor({ q, set }) {
         <div key={idx} className="flex items-center gap-2">
           <input value={it.label} onChange={(e) => setItems(items.map((v, i) => (i === idx ? { ...v, label: e.target.value } : v)))}
             placeholder="Item label" className={inputCls} />
-          <select value={it.correct_target_index} onChange={(e) => setItems(items.map((v, i) => (i === idx ? { ...v, correct_target_index: Number(e.target.value) } : v)))}
-            className={inputCls + ' w-40'}>
-            {targets.map((t, ti) => <option key={ti} value={ti}>{t.label || `Zone ${ti + 1}`}</option>)}
-          </select>
+          <Select
+            value={String(it.correct_target_index ?? 0)}
+            onValueChange={(val) => setItems(items.map((v, i) => (i === idx ? { ...v, correct_target_index: Number(val) } : v)))}
+          >
+            <SelectTrigger className="h-9 w-40 text-xs bg-white rounded-xl">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {targets.map((t, ti) => (
+                <SelectItem key={ti} value={String(ti)} className="text-xs">
+                  {t.label || `Zone ${ti + 1}`}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <button type="button" onClick={() => setItems(items.filter((_, i) => i !== idx))} className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors">
             <HiOutlineTrash className="w-4 h-4" />
           </button>
@@ -638,17 +699,29 @@ function EssayEditor({ q, set }) {
 export default function QuestionEditor({
   question: q, index, onChange, onDelete, onMoveUp, onMoveDown, isFirst, isLast, sectionNames = [], onMoveToSection,
   isSelected = false, onToggleSelect, onSendToBank,
+  isCollapsed: controlledCollapsed, onToggleCollapse, defaultCollapsed = false,
 }) {
+  const [internalCollapsed, setInternalCollapsed] = useState(defaultCollapsed);
+  const isCollapsed = controlledCollapsed !== undefined ? controlledCollapsed : internalCollapsed;
+
+  const handleToggleCollapse = (e) => {
+    e?.stopPropagation?.();
+    if (onToggleCollapse) {
+      onToggleCollapse();
+    } else {
+      setInternalCollapsed((prev) => !prev);
+    }
+  };
+
   const set = (key, value) => onChange({ ...q, [key]: value });
-  const typeLabel = QUESTION_TYPES.find((t) => t.value === q.type)?.label || q.type;
 
   return (
-    <div className={`bg-white border rounded-2xl p-4 sm:p-5 shadow-2xs hover:shadow-xs transition-all space-y-4 ${
+    <div className={`bg-white border rounded-2xl p-4 sm:p-5 shadow-2xs hover:shadow-xs transition-all space-y-3.5 ${
       isSelected ? 'border-blue-500 ring-2 ring-blue-500/20 bg-blue-50/10' : 'border-slate-200/80'
     }`}>
       {/* ── Top Horizontal Header Bar: Question Number, Type, Points & Actions ── */}
-      <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
-        <div className="flex items-center gap-2.5">
+      <div className={`flex flex-wrap items-center justify-between gap-3 ${!isCollapsed ? 'pb-3 border-b border-slate-100' : ''}`}>
+        <div className="flex items-center gap-2.5 flex-wrap">
           {onToggleSelect && (
             <input
               type="checkbox"
@@ -661,9 +734,24 @@ export default function QuestionEditor({
           <span className="w-7 h-7 rounded-xl bg-slate-900 text-white font-extrabold text-xs flex items-center justify-center shadow-2xs flex-shrink-0">
             {index + 1}
           </span>
-          <span className="text-xs font-bold text-slate-700 bg-slate-100 border border-slate-200/80 px-2.5 py-1 rounded-lg">
-            {typeLabel}
-          </span>
+          <Select
+            value={q.type}
+            onValueChange={(val) => onChange(convertQuestionType(q, val))}
+          >
+            <SelectTrigger
+              title="Change question type — the prompt and compatible options are kept"
+              className="h-8 w-auto min-w-[140px] text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200/80 border border-slate-200/80 px-2.5 py-1 rounded-lg gap-2 focus:ring-2 focus:ring-slate-900/10"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="max-h-72">
+              {QUESTION_TYPES.map((t) => (
+                <SelectItem key={t.value} value={t.value} className="text-xs font-medium py-1.5">
+                  {t.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <div className="flex items-center gap-1.5 ml-1 bg-slate-50 border border-slate-200/80 px-2.5 py-1 rounded-lg">
             <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Points</span>
             <input
@@ -690,19 +778,25 @@ export default function QuestionEditor({
           {sectionNames.length > 0 && (
             <div className="flex items-center gap-1.5 ml-1 bg-slate-50 border border-slate-200/80 px-2.5 py-1 rounded-lg">
               <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Section</span>
-              <select
-                value={q.section || ''}
-                onChange={(e) => onMoveToSection?.(e.target.value)}
-                className="text-xs font-bold text-slate-900 bg-transparent border-none outline-none p-0 focus:ring-0 cursor-pointer"
+              <Select
+                value={q.section || '__ungrouped__'}
+                onValueChange={(val) => onMoveToSection?.(val === '__ungrouped__' ? '' : val)}
               >
-                <option value="">Ungrouped</option>
-                {sectionNames.map((s) => <option key={s} value={s}>{s}</option>)}
-              </select>
+                <SelectTrigger className="h-5 w-auto min-w-[90px] text-xs font-bold text-slate-900 bg-transparent border-none p-0 focus:ring-0 shadow-none gap-1">
+                  <SelectValue placeholder="Ungrouped" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__ungrouped__" className="text-xs font-medium">Ungrouped</SelectItem>
+                  {sectionNames.map((s) => (
+                    <SelectItem key={s} value={s} className="text-xs font-medium">{s}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           )}
         </div>
 
-        <div className="flex items-center gap-2 ml-auto sm:ml-0">
+        <div className="flex items-center gap-2 ml-auto">
           {/* Reorder Up/Down */}
           <div className="flex items-center gap-0.5 bg-slate-50 border border-slate-200/80 rounded-lg p-0.5">
             <button
@@ -747,75 +841,134 @@ export default function QuestionEditor({
             <HiOutlineTrash className="w-3.5 h-3.5" />
             <span>Delete</span>
           </button>
+
+          {/* Collapse / Expand Toggle Button */}
+          <button
+            type="button"
+            onClick={handleToggleCollapse}
+            title={isCollapsed ? 'Expand question' : 'Collapse question'}
+            className={`flex items-center gap-1 px-3 py-1.5 text-xs font-bold rounded-lg transition-all shadow-2xs cursor-pointer ${
+              isCollapsed
+                ? 'text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200/80'
+                : 'text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 border border-slate-200/80'
+            }`}
+          >
+            {isCollapsed ? (
+              <>
+                <HiOutlineChevronDown className="w-3.5 h-3.5 text-blue-600" />
+                <span>Expand</span>
+              </>
+            ) : (
+              <>
+                <HiOutlineChevronUp className="w-3.5 h-3.5 text-slate-600" />
+                <span>Collapse</span>
+              </>
+            )}
+          </button>
         </div>
       </div>
 
-      {/* ── Main Content: Prompt, Image, Options, Explanation ── */}
-      <div className="space-y-3.5">
-        <div>
-          <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">
-            Question
-          </label>
-          <textarea
-            value={q.prompt}
-            onChange={(e) => set('prompt', e.target.value)}
-            rows={2}
-            placeholder="Enter the question here..."
-            className={inputCls}
-          />
+      {/* ── Collapsed Preview ── */}
+      {isCollapsed && (
+        <div
+          onClick={handleToggleCollapse}
+          className="group cursor-pointer rounded-xl bg-slate-50/80 hover:bg-slate-100/90 border border-slate-200/60 px-3.5 py-2.5 flex items-center justify-between gap-3 transition-colors select-none"
+        >
+          <div className="flex items-center gap-2.5 min-w-0 text-xs">
+            <span className="font-bold text-slate-400 uppercase tracking-wider text-[10px] flex-shrink-0">Prompt:</span>
+            <span className="truncate text-slate-700 font-medium group-hover:text-slate-900">
+              {q.prompt?.trim() ? q.prompt : <span className="italic text-slate-400">Empty question text — click to edit</span>}
+            </span>
+          </div>
+          <span className="text-[11px] font-bold text-blue-600 group-hover:underline flex-shrink-0">
+            Click to expand
+          </span>
         </div>
+      )}
 
-        {q.type === 'hotspot' || q.type === 'drag_drop' ? (
-          // These types need exactly ONE image — regions/drop-zones are
-          // defined as coordinates against it, so multi-image doesn't apply.
-          <ImageField
-            url={q.image_url}
-            publicId={q.image_public_id}
-            label="Add question image"
-            onChange={({ url, publicId }) => onChange({ ...q, image_url: url, image_public_id: publicId })}
-          />
-        ) : (
-          <ImageGalleryField
-            images={q.images || []}
-            onChange={(next) => onChange({ ...q, images: next })}
-          />
-        )}
+      {/* ── Main Content: Prompt, Image, Options, Explanation (when expanded) ── */}
+      {!isCollapsed && (
+        <div className="space-y-3.5">
+          <div>
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+              Question
+            </label>
+            <textarea
+              value={q.prompt}
+              onChange={(e) => set('prompt', e.target.value)}
+              rows={2}
+              placeholder="Enter the question here..."
+              className={inputCls}
+            />
+          </div>
 
-        <div className="pt-1">
-          {q.type === 'mcq' && <ChoiceOptionsEditor q={q} set={set} />}
-          {q.type === 'select_list' && <ChoiceOptionsEditor q={q} set={set} />}
-          {q.type === 'multi_response' && <ChoiceOptionsEditor q={q} set={set} multi />}
-          {q.type === 'true_false' && <ChoiceOptionsEditor q={q} set={set} locked />}
-          {q.type === 'short_answer' && <ShortAnswerEditor q={q} set={set} />}
-          {q.type === 'numeric' && <NumericEditor q={q} set={set} />}
-          {q.type === 'sequence' && <SequenceEditor q={q} set={set} />}
-          {q.type === 'matching' && <MatchingEditor q={q} set={set} />}
-          {q.type === 'fill_blank' && <FillBlankEditor q={q} set={set} />}
-          {q.type === 'drag_words' && <DragWordsEditor q={q} set={set} />}
-          {q.type === 'hotspot' && <HotspotEditor q={q} set={set} />}
-          {q.type === 'drag_drop' && <DragDropEditor q={q} set={set} />}
-          {q.type === 'likert' && <LikertEditor q={q} set={set} />}
-          {q.type === 'essay' && <EssayEditor q={q} set={set} />}
+          {q.type === 'hotspot' || q.type === 'drag_drop' ? (
+            // These types need exactly ONE image — regions/drop-zones are
+            // defined as coordinates against it, so multi-image doesn't apply.
+            <ImageField
+              url={q.image_url}
+              publicId={q.image_public_id}
+              label="Add question image"
+              onChange={({ url, publicId }) => onChange({ ...q, image_url: url, image_public_id: publicId })}
+            />
+          ) : (
+            <ImageGalleryField
+              images={q.images || []}
+              onChange={(next) => onChange({ ...q, images: next })}
+            />
+          )}
+
+          <div className="pt-1">
+            {q.type === 'mcq' && <ChoiceOptionsEditor q={q} set={set} />}
+            {q.type === 'select_list' && <ChoiceOptionsEditor q={q} set={set} />}
+            {q.type === 'multi_response' && <ChoiceOptionsEditor q={q} set={set} multi />}
+            {q.type === 'true_false' && <ChoiceOptionsEditor q={q} set={set} locked />}
+            {q.type === 'short_answer' && <ShortAnswerEditor q={q} set={set} />}
+            {q.type === 'numeric' && <NumericEditor q={q} set={set} />}
+            {q.type === 'sequence' && <SequenceEditor q={q} set={set} />}
+            {q.type === 'matching' && <MatchingEditor q={q} set={set} />}
+            {q.type === 'fill_blank' && <FillBlankEditor q={q} set={set} />}
+            {q.type === 'drag_words' && <DragWordsEditor q={q} set={set} />}
+            {q.type === 'hotspot' && <HotspotEditor q={q} set={set} />}
+            {q.type === 'drag_drop' && <DragDropEditor q={q} set={set} />}
+            {q.type === 'likert' && <LikertEditor q={q} set={set} />}
+            {q.type === 'essay' && <EssayEditor q={q} set={set} />}
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+              Explanation (Optional - shown after grading)
+            </label>
+            <textarea
+              ref={(el) => { if (el) { el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px`; } }}
+              value={q.explanation}
+              onChange={(e) => {
+                set('explanation', e.target.value);
+                e.target.style.height = 'auto';
+                e.target.style.height = `${e.target.scrollHeight}px`;
+              }}
+              rows={1}
+              placeholder="Provide answer rationale or feedback..."
+              className={inputCls + ' text-slate-600 bg-slate-50/20 resize-none overflow-hidden'}
+            />
+          </div>
+
+          {/* Bottom collapse action bar */}
+          <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+            <span className="text-[11px] font-semibold text-slate-400">
+              Question #{index + 1} • {q.points} pt{q.points !== 1 ? 's' : ''}
+            </span>
+            <button
+              type="button"
+              onClick={handleToggleCollapse}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 border border-slate-200/80 rounded-xl transition-all shadow-2xs cursor-pointer"
+            >
+              <HiOutlineChevronUp className="w-4 h-4 text-slate-600" />
+              <span>Collapse Question</span>
+            </button>
+          </div>
         </div>
-
-        <div>
-          <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">
-            Explanation (Optional - shown after grading)
-          </label>
-          <textarea
-            ref={(el) => { if (el) { el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px`; } }}
-            value={q.explanation}
-            onChange={(e) => {
-              set('explanation', e.target.value);
-              e.target.style.height = 'auto';
-              e.target.style.height = `${e.target.scrollHeight}px`;
-            }}
-            rows={1}
-            placeholder="Provide answer rationale or feedback..."
-            className={inputCls + ' text-slate-600 bg-slate-50/20 resize-none overflow-hidden'}
-          />
-        </div>
-      </div>
+      )}
     </div>
   );
 }

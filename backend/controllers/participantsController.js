@@ -217,8 +217,12 @@ exports.getParticipant = async (req, res) => {
     if (!participant) return res.status(404).json({ error: 'Participant not found' });
 
     if (req.admin.role === 'airline') {
+      const isDept = !!(req.scope && req.scope.isDepartment);
       const ownedById   = participant.submitted_by && String(participant.submitted_by) === String(req.admin.id);
-      const ownedByName = !participant.submitted_by && participant.airline_name === req.admin.airlineName;
+      // Legacy name fallback only for a top-level airline — a department has no
+      // legacy records (its roster is always explicitly owned) and must not read
+      // the parent airline's unowned records via the shared airlineName.
+      const ownedByName = !isDept && !participant.submitted_by && participant.airline_name === req.admin.airlineName;
       if (!ownedById && !ownedByName) {
         return res.status(403).json({ error: 'Access denied.' });
       }

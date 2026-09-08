@@ -784,12 +784,21 @@ async function sendContractEmail({ toEmail, clientName, pdfBuffer, message }) {
 }
 
 // ─── Send exam invitation email (passwordless take link) ──────────────────────
-async function sendExamInviteEmail({ toEmail, participantName, examTitle, durationMinutes, maxAttempts, link }) {
+async function sendExamInviteEmail({ toEmail, participantName, examTitle, durationMinutes, maxAttempts, link, expiresAt }) {
   const transporter = getTransporter();
   if (!transporter) throw new Error('SMTP not configured — cannot send exam invite.');
 
   const name = participantName || 'Candidate';
   const durationLine = durationMinutes ? `${durationMinutes} minutes` : 'No time limit';
+  const deadlineLine = expiresAt
+    ? new Date(expiresAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+    : '';
+  const deadlineRow = deadlineLine
+    ? `<tr>
+                  <td style="padding:5px 0;font-size:13px;color:#6b7280;border-top:1px solid #f1f5f9">Complete by</td>
+                  <td style="padding:5px 0;font-size:13px;color:#b91c1c;font-weight:700;border-top:1px solid #f1f5f9">${deadlineLine}</td>
+                </tr>`
+    : '';
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -838,6 +847,7 @@ async function sendExamInviteEmail({ toEmail, participantName, examTitle, durati
                   <td style="padding:5px 0;font-size:13px;color:#6b7280;border-top:1px solid #f1f5f9">Attempts allowed</td>
                   <td style="padding:5px 0;font-size:13px;color:#111827;font-weight:600;border-top:1px solid #f1f5f9">${maxAttempts || 1}</td>
                 </tr>
+                ${deadlineRow}
               </table>
             </td></tr>
           </table>
@@ -894,6 +904,7 @@ async function sendExamInviteEmail({ toEmail, participantName, examTitle, durati
     `You have been invited to complete the exam: ${examTitle}`,
     `Time allowed: ${durationLine}`,
     `Attempts allowed: ${maxAttempts || 1}`,
+    ...(deadlineLine ? [`Complete by: ${deadlineLine} (the link stops working after this)`] : []),
     '',
     'Start the exam using this personal link (do not share it):',
     link,

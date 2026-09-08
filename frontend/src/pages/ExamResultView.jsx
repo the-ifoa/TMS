@@ -244,17 +244,25 @@ export default function ExamResultView() {
   });
 
   return (
-    <div className="w-full min-h-screen pb-20 p-4 sm:p-6 lg:p-8 bg-slate-50/60">
-      <div className="w-full max-w-6xl mx-auto space-y-6">
+    <div className="w-full min-h-screen pb-20 p-4 sm:p-6 lg:p-8 bg-slate-50/60 text-slate-800">
+      <div className="w-full max-w-7xl mx-auto space-y-6">
 
         {/* ── Top Bar Action Header ── */}
         <div className="print:hidden flex items-center justify-between">
           <button
-            onClick={() => navigate('/airline/exams')}
+            onClick={() => navigate(-1)}
             className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold transition-all border border-slate-200/90 shadow-2xs"
           >
             <HiOutlineArrowLeft className="w-4 h-4 text-slate-500" />
             <span>Back to Dashboard</span>
+          </button>
+
+          <button
+            onClick={() => window.print()}
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold transition-all border border-slate-200/90 shadow-2xs"
+          >
+            <HiOutlinePrinter className="w-4 h-4 text-slate-500" />
+            <span>Print Report</span>
           </button>
         </div>
 
@@ -273,165 +281,135 @@ export default function ExamResultView() {
           </div>
         </div>
 
-        {/* ── TWO-COLUMN HERO & KPI SECTION (Matching Reference Layout) ── */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
-          
-          {/* LEFT COLUMN: Hero Banner + KPI Row (lg:col-span-8) */}
-          <div className="lg:col-span-8 flex flex-col justify-between gap-4">
+        {/* ── 1. UNIFIED EXECUTIVE DARK HERO CARD (Matching Reference Layout) ── */}
+        <div className="bg-slate-900 text-white rounded-3xl p-6 sm:p-7 shadow-xl border border-slate-800 space-y-5 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none" />
+
+          {/* Top Section: Exam Title & Score Donut Badge */}
+          <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
             
-            {/* Hero Card */}
-            <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-3xl p-6 sm:p-7 shadow-xl relative overflow-hidden flex-1 flex flex-col justify-center">
-              <div className="absolute top-0 right-0 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
-              <div className="relative z-10 space-y-3">
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/15 text-[11px] font-extrabold uppercase tracking-widest text-indigo-300">
-                  <HiOutlineChartBar className="w-3.5 h-3.5" /> Assessment Result Analytics
+            {/* Left Info */}
+            <div className="space-y-3">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/15 text-[10px] font-black uppercase tracking-widest text-indigo-300">
+                <HiOutlineChartBar className="w-3.5 h-3.5" /> Assessment Result Analytics
+              </div>
+
+              <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight leading-tight">
+                {attempt.exam_title_snapshot || 'Performance Dashboard'}
+              </h1>
+
+              <div className="flex flex-wrap items-center gap-4 text-xs font-medium text-slate-400">
+                <div className="flex items-center gap-1.5">
+                  <HiOutlineCalendar className="w-4 h-4 text-indigo-400" />
+                  <span>{dateFormatted} at {timeFormatted}</span>
                 </div>
-
-                <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight leading-tight">
-                  {attempt.exam_title_snapshot || 'Performance Dashboard'}
-                </h1>
-
-                <div className="flex flex-wrap items-center gap-4 text-xs font-medium text-slate-300">
-                  <div className="flex items-center gap-1.5">
-                    <HiOutlineCalendar className="w-4 h-4 text-indigo-400" />
-                    <span>{dateFormatted} at {timeFormatted}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <HiOutlineClock className="w-4 h-4 text-indigo-400" />
-                    <span>Time Taken: {durationStr}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <HiOutlineClipboardList className="w-4 h-4 text-indigo-400" />
-                    <span>{totalQuestions} Total Questions</span>
-                  </div>
+                <div className="flex items-center gap-1.5">
+                  <HiOutlineClock className="w-4 h-4 text-indigo-400" />
+                  <span>Time Taken: <strong className="text-slate-200">{durationStr}</strong></span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <HiOutlineClipboardList className="w-4 h-4 text-indigo-400" />
+                  <span><strong className="text-slate-200">{totalQuestions}</strong> Total Questions</span>
                 </div>
               </div>
             </div>
 
-            {/* KPI Metrics Row (4 Unique Metrics) */}
-            {!isPending && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5 w-full">
-                {/* Metric 1: Accuracy */}
-                <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-2xs space-y-1 hover:border-indigo-200 hover:shadow-xs transition-all min-w-0">
-                  <div className="flex items-center justify-between gap-1">
-                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 truncate">Accuracy Rate</span>
-                    <div className="p-1.5 rounded-xl bg-indigo-50/80 border border-indigo-100/80 text-indigo-600 flex-shrink-0">
-                      <HiOutlineChartBar className="w-3.5 h-3.5" />
-                    </div>
-                  </div>
-                  <div className="text-2xl font-black text-slate-900 tracking-tight">{accuracyPct}%</div>
-                  <p className="text-[11px] font-semibold text-slate-500 truncate">{correctCount} of {scoredCount} Questions</p>
-                </div>
-
-                {/* Metric 2: Correct Answers */}
-                <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-2xs space-y-1 hover:border-emerald-200 hover:shadow-xs transition-all min-w-0">
-                  <div className="flex items-center justify-between gap-1">
-                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 truncate">Correct</span>
-                    <div className="p-1.5 rounded-xl bg-emerald-50/80 border border-emerald-100/80 text-emerald-600 flex-shrink-0">
-                      <HiOutlineCheckCircle className="w-3.5 h-3.5" />
-                    </div>
-                  </div>
-                  <div className="text-2xl font-black text-emerald-600 tracking-tight">{correctCount}</div>
-                  <p className="text-[11px] font-semibold text-slate-500 truncate">Out of {totalQuestions} Items</p>
-                </div>
-
-                {/* Metric 3: Incorrect Answers */}
-                <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-2xs space-y-1 hover:border-rose-200 hover:shadow-xs transition-all min-w-0">
-                  <div className="flex items-center justify-between gap-1">
-                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 truncate">Incorrect</span>
-                    <div className="p-1.5 rounded-xl bg-rose-50/80 border border-rose-100/80 text-rose-600 flex-shrink-0">
-                      <HiOutlineXCircle className="w-3.5 h-3.5" />
-                    </div>
-                  </div>
-                  <div className="text-2xl font-black text-rose-600 tracking-tight">{incorrectCount}</div>
-                  <p className="text-[11px] font-semibold text-slate-500 truncate">Requires Review</p>
-                </div>
-
-                {/* Metric 4: Pace / Avg Time */}
-                <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-2xs space-y-1 hover:border-purple-200 hover:shadow-xs transition-all min-w-0">
-                  <div className="flex items-center justify-between gap-1">
-                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 truncate">Avg Pace</span>
-                    <div className="p-1.5 rounded-xl bg-purple-50/80 border border-purple-100/80 text-purple-600 flex-shrink-0">
-                      <HiOutlineClock className="w-3.5 h-3.5" />
-                    </div>
-                  </div>
-                  <div className="text-2xl font-black text-slate-900 tracking-tight">{avgTimeStr}</div>
-                  <p className="text-[11px] font-semibold text-slate-500 truncate">Time / Question</p>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* RIGHT COLUMN: Standalone Score Donut Card (lg:col-span-4) */}
-          <div className="lg:col-span-4 h-full">
-            <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white rounded-3xl p-6 shadow-xl border border-indigo-900/40 flex flex-col items-center justify-center text-center h-full space-y-4 relative overflow-hidden min-h-[260px]">
-              <div className="absolute inset-0 bg-indigo-500/5 pointer-events-none" />
-
+            {/* Right Score Gauge Glassmorphism Block */}
+            <div className="flex items-center gap-4 bg-slate-800/80 backdrop-blur-md px-5 py-4 rounded-2xl border border-slate-700/80 flex-shrink-0 shadow-inner">
               {!isPending ? (
-                <div className="relative z-10 flex flex-col items-center space-y-3 w-full">
-                  <span className="text-[10px] font-black uppercase tracking-widest text-indigo-300">
-                    Assessment Performance
-                  </span>
-
-                  {/* SVG Donut Gauge */}
-                  <div className="relative w-32 h-32 flex items-center justify-center my-1">
-                    <svg className="w-32 h-32 transform -rotate-90">
+                <>
+                  {/* Circular Score Ring */}
+                  <div className="relative w-16 h-16 flex items-center justify-center flex-shrink-0">
+                    <svg className="w-16 h-16 transform -rotate-90">
                       <circle
-                        cx="64"
-                        cy="64"
-                        r="50"
+                        cx="32"
+                        cy="32"
+                        r="26"
                         stroke="rgba(255, 255, 255, 0.12)"
-                        strokeWidth="8"
+                        strokeWidth="5"
                         fill="transparent"
                       />
                       <circle
-                        cx="64"
-                        cy="64"
-                        r="50"
+                        cx="32"
+                        cy="32"
+                        r="26"
                         stroke={attempt.passed ? '#10b981' : '#f43f5e'}
-                        strokeWidth="8"
-                        strokeDasharray={2 * Math.PI * 50}
-                        strokeDashoffset={2 * Math.PI * 50 - (percentage / 100) * (2 * Math.PI * 50)}
+                        strokeWidth="5"
+                        strokeDasharray={2 * Math.PI * 26}
+                        strokeDashoffset={2 * Math.PI * 26 - (percentage / 100) * (2 * Math.PI * 26)}
                         strokeLinecap="round"
                         fill="transparent"
                         className="transition-all duration-1000 ease-out"
                       />
                     </svg>
                     <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                      <span className="text-2xl font-black text-white leading-none">{attempt.percentage}%</span>
-                      <span className="text-[9px] font-extrabold uppercase text-slate-300 mt-1">SCORE</span>
+                      <span className="text-sm font-black text-white leading-none">{attempt.percentage}%</span>
+                      <span className="text-[8px] font-extrabold uppercase text-slate-400 mt-0.5">SCORE</span>
                     </div>
                   </div>
 
-                  {/* Verdict Info */}
-                  <div className="space-y-1 flex flex-col items-center">
-                    <span className={`inline-flex items-center gap-1.5 px-4 py-1 rounded-full text-xs font-black uppercase tracking-wider ${
-                      attempt.passed
-                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                        : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
-                    }`}>
-                      {attempt.passed ? <HiOutlineCheck className="w-3.5 h-3.5 stroke-[3]" /> : <HiOutlineX className="w-3.5 h-3.5 stroke-[3]" />}
-                      {attempt.passed ? 'PASSED' : 'NOT PASSED'}
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider block">
+                      Performance Verdict
                     </span>
-                    <p className="text-[11px] text-slate-300 font-semibold">
+                    <div className="flex items-center gap-2">
+                      <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider border ${
+                        attempt.passed
+                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                          : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                      }`}>
+                        {attempt.passed ? <HiOutlineCheck className="w-3 h-3 stroke-[3]" /> : <HiOutlineX className="w-3 h-3 stroke-[3]" />}
+                        {attempt.passed ? 'PASSED' : 'NOT PASSED'}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 font-medium">
                       {attempt.score != null && attempt.max_score != null
                         ? `${attempt.score} of ${attempt.max_score} Total Points`
                         : `${correctCount} of ${totalQuestions} Correct`}
                     </p>
                   </div>
-                </div>
+                </>
               ) : (
-                <div className="px-4 py-3 bg-amber-500/20 border border-amber-500/40 rounded-2xl text-amber-200 text-xs font-bold flex items-center gap-2">
+                <div className="flex items-center gap-2 text-amber-300 text-xs font-bold py-2">
                   <HiOutlineClock className="w-5 h-5 text-amber-400 animate-pulse" />
                   <span>Pending Review</span>
                 </div>
               )}
             </div>
+
           </div>
 
+          {/* Bottom KPI Metrics Strip */}
+          {!isPending && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-5 border-t border-slate-800 text-xs">
+              <div className="bg-slate-800/50 border border-slate-800 p-3 rounded-2xl space-y-0.5">
+                <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider block">Accuracy Rate</span>
+                <div className="text-xl font-black text-white">{accuracyPct}%</div>
+                <p className="text-[10px] text-slate-400">{correctCount} of {scoredCount} Questions</p>
+              </div>
+
+              <div className="bg-slate-800/50 border border-slate-800 p-3 rounded-2xl space-y-0.5">
+                <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider block">Correct</span>
+                <div className="text-xl font-black text-emerald-400">{correctCount}</div>
+                <p className="text-[10px] text-slate-400">Out of {totalQuestions} Items</p>
+              </div>
+
+              <div className="bg-slate-800/50 border border-slate-800 p-3 rounded-2xl space-y-0.5">
+                <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider block">Incorrect</span>
+                <div className="text-xl font-black text-rose-400">{incorrectCount}</div>
+                <p className="text-[10px] text-slate-400">Requires Review</p>
+              </div>
+
+              <div className="bg-slate-800/50 border border-slate-800 p-3 rounded-2xl space-y-0.5">
+                <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider block">Avg Pace</span>
+                <div className="text-xl font-black text-indigo-300">{avgTimeStr}</div>
+                <p className="text-[10px] text-slate-400">Time / Question</p>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* ── TWO-COLUMN ANALYTICAL HUB ── */}
+        {/* ── 2. TWO-COLUMN MAIN ANALYTICAL DASHBOARD (Matching Reference Layout) ── */}
         {!isPending && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             
@@ -442,10 +420,10 @@ export default function ExamResultView() {
               <div className="bg-white rounded-3xl border border-slate-200/90 p-6 shadow-2xs space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-100 gap-2">
                   <div>
-                    <h2 className="text-base font-extrabold text-slate-900 tracking-tight">
+                    <h2 className="text-sm font-extrabold text-slate-900 tracking-tight">
                       Accuracy Breakdown by Question Type
                     </h2>
-                    <p className="text-xs text-slate-500 font-medium">Performance categorized by item format</p>
+                    <p className="text-[11px] text-slate-400 font-medium">Performance categorized by item format</p>
                   </div>
 
                   {/* Highlights Bar */}
@@ -463,21 +441,21 @@ export default function ExamResultView() {
                   )}
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1 max-h-[340px] overflow-y-auto pr-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                   {typeBreakdown.map((t) => {
                     const c = accuracyStatusColor(t.pct);
                     return (
-                      <div key={t.type} className="space-y-1.5 bg-slate-50/70 border border-slate-200/70 p-3 rounded-xl hover:border-slate-300 transition-all">
+                      <div key={t.type} className="space-y-2 bg-slate-50/70 border border-slate-200/70 p-3.5 rounded-2xl hover:border-slate-300 transition-all">
                         <div className="flex items-center justify-between text-xs gap-2">
                           <span className="font-extrabold text-slate-800 truncate">{t.label}</span>
                           <div className="flex items-center gap-1.5 flex-shrink-0">
                             <span className="text-[10px] font-bold text-slate-400">{t.correct}/{t.total}</span>
-                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-black ${c.bg} ${c.text}`}>
+                            <span className={`px-2 py-0.5 rounded-md text-[10px] font-black ${c.bg} ${c.text}`}>
                               {t.pct}%
                             </span>
                           </div>
                         </div>
-                        <div className="h-1.5 rounded-full bg-slate-200/80 overflow-hidden">
+                        <div className="h-2 rounded-full bg-slate-200/80 overflow-hidden">
                           <div
                             className={`h-full rounded-full transition-all duration-700 ease-out ${c.bar}`}
                             style={{ width: `${t.pct}%` }}
@@ -491,45 +469,72 @@ export default function ExamResultView() {
 
             </div>
 
-            {/* SECONDARY STICKY SIDEBAR (Right lg:col-span-4) */}
-            <div className="lg:col-span-4 space-y-4 sticky top-6">
+            {/* SECONDARY SIDEBAR: Verdict & Overview (Right lg:col-span-4) */}
+            <div className="lg:col-span-4 space-y-6">
               
-              {/* Clean Non-Redundant Attempt Overview & Recommendation Card */}
-              <div className="bg-white rounded-3xl border border-slate-200/90 p-5 shadow-2xs space-y-4">
-                <h3 className="text-xs font-black uppercase text-slate-400 tracking-wider">
-                  Attempt Overview
-                </h3>
-
-                <div className="space-y-2.5 divide-y divide-slate-100 text-xs">
-                  <div className="flex items-center justify-between pt-1 first:pt-0">
-                    <span className="font-semibold text-slate-500">Submitted On</span>
-                    <span className="font-bold text-slate-800">{dateFormatted}</span>
+              {/* Assessment Verdict Card (Matching Image 2 Style) */}
+              <div className="bg-white rounded-3xl border border-slate-200/90 p-6 shadow-2xs space-y-5">
+                <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+                  <div className="w-7 h-7 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 flex-shrink-0">
+                    <HiOutlineAcademicCap className="w-4 h-4" />
                   </div>
-
-                  <div className="flex items-center justify-between pt-2.5">
-                    <span className="font-semibold text-slate-500">Total Duration</span>
-                    <span className="font-bold text-slate-800">{durationStr}</span>
-                  </div>
-
-                  <div className="flex items-center justify-between pt-2.5">
-                    <span className="font-semibold text-slate-500">Total Questions</span>
-                    <span className="font-bold text-slate-800">{totalQuestions} items</span>
-                  </div>
+                  <h3 className="text-xs font-black uppercase text-slate-900 tracking-wider">
+                    Assessment Verdict
+                  </h3>
                 </div>
 
-                {/* Recommendation Callout Integrated */}
-                <div className="pt-2">
-                  <div className="bg-gradient-to-br from-indigo-50 to-blue-50/60 rounded-2xl border border-indigo-100 p-4 space-y-1.5">
-                    <div className="flex items-center gap-1.5 text-indigo-700 font-extrabold text-xs">
-                      <HiOutlineAcademicCap className="w-4 h-4" /> Administrative Recommendation
-                    </div>
-                    <p className="text-xs text-slate-600 leading-relaxed font-medium">
+                {/* Candidate Condition Callout */}
+                <div className="space-y-1.5">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Candidate Condition</span>
+                  <div className="bg-slate-50 border border-slate-200/80 p-3.5 rounded-2xl space-y-1">
+                    <h4 className="text-xs font-extrabold text-slate-900">
+                      {attempt.passed ? 'Demonstrated Proficiency' : 'Requires Targeted Attention'}
+                    </h4>
+                    <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
                       {attempt.passed
-                        ? 'Candidate has demonstrated required proficiency across all tested material.'
-                        : 'Candidate requires attention. Review weaker areas and consider scheduling a retake or supplementary training.'}
+                        ? 'Candidate has satisfied all required proficiency thresholds for this assessment.'
+                        : 'Candidate did not meet passing score requirements. Supplementary training or a retake is recommended.'}
                     </p>
                   </div>
                 </div>
+
+                {/* Weakest Assessment Area Callout (if below 70%) */}
+                {weakestType && weakestType.pct < 70 && (
+                  <div className="space-y-1.5">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-rose-500 block">Weakest Assessment Area</span>
+                    <div className="bg-rose-50/50 border border-rose-200/80 p-3.5 rounded-2xl space-y-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-extrabold text-rose-900">{weakestType.label}</span>
+                        <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-rose-100 text-rose-700 border border-rose-200">
+                          {weakestType.pct}% Accuracy
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-rose-700/90 font-medium leading-relaxed">
+                        Candidate requires focused retraining in this area prior to re-assessment.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Attempt Overview Details */}
+                <div className="space-y-1.5 pt-2 border-t border-slate-100">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Attempt Overview</span>
+                  <div className="space-y-2 text-xs divide-y divide-slate-100">
+                    <div className="flex items-center justify-between pt-1">
+                      <span className="font-semibold text-slate-500">Submitted On</span>
+                      <span className="font-bold text-slate-800">{dateFormatted}</span>
+                    </div>
+                    <div className="flex items-center justify-between pt-2">
+                      <span className="font-semibold text-slate-500">Total Duration</span>
+                      <span className="font-bold text-slate-800">{durationStr}</span>
+                    </div>
+                    <div className="flex items-center justify-between pt-2">
+                      <span className="font-semibold text-slate-500">Total Questions</span>
+                      <span className="font-bold text-slate-800">{totalQuestions} items</span>
+                    </div>
+                  </div>
+                </div>
+
               </div>
 
             </div>
@@ -537,22 +542,22 @@ export default function ExamResultView() {
           </div>
         )}
 
-        {/* ── ANSWER REVIEW DETAILED SECTION ── */}
+        {/* ── 3. DETAILED ANSWER REVIEW SECTION ── */}
         {!isPending && (
           <div className="bg-white rounded-3xl border border-slate-200/90 shadow-2xs overflow-hidden">
             
-            {/* Sticky Header & Filter Tabs */}
-            <div className="sticky top-0 bg-white/95 backdrop-blur-md z-20 px-6 sm:px-8 py-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            {/* Header & Filter Tabs */}
+            <div className="px-6 sm:px-8 py-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white">
               <div>
-                <h2 className="text-xl font-black text-slate-900 tracking-tight">Answer Review</h2>
-                <p className="text-xs font-semibold text-slate-500 mt-0.5">Detailed responses and explanations per question</p>
+                <h2 className="text-base font-extrabold text-slate-900 tracking-tight">Answer Review</h2>
+                <p className="text-xs font-medium text-slate-400">Detailed responses and explanations per question</p>
               </div>
 
               {/* Filter Tabs Toggle */}
               <div className="inline-flex p-1 bg-slate-100 rounded-2xl border border-slate-200/80 self-start sm:self-auto">
                 <button
                   onClick={() => setFilter('all')}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition-all ${
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
                     filter === 'all'
                       ? 'bg-white text-slate-900 shadow-2xs border border-slate-200'
                       : 'text-slate-500 hover:text-slate-900'
@@ -562,7 +567,7 @@ export default function ExamResultView() {
                 </button>
                 <button
                   onClick={() => setFilter('incorrect')}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition-all ${
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
                     filter === 'incorrect'
                       ? 'bg-rose-600 text-white shadow-2xs'
                       : 'text-slate-500 hover:text-rose-600'
@@ -572,7 +577,7 @@ export default function ExamResultView() {
                 </button>
                 <button
                   onClick={() => setFilter('correct')}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition-all ${
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
                     filter === 'correct'
                       ? 'bg-emerald-600 text-white shadow-2xs'
                       : 'text-slate-500 hover:text-emerald-600'
@@ -583,8 +588,8 @@ export default function ExamResultView() {
               </div>
             </div>
 
-            {/* Scrollable Questions Review List with Fixed Max Height */}
-            <div className="p-6 sm:p-8 max-h-[580px] overflow-y-auto space-y-4 divide-y-0">
+            {/* Questions Review List */}
+            <div className="p-6 sm:p-8 space-y-4">
               {filteredAnswers.map((a, idx) => {
                 const q = questionById[String(a.question_id)];
                 if (!q) return null;
@@ -596,12 +601,12 @@ export default function ExamResultView() {
                 return (
                   <div
                     key={idx}
-                    className={`rounded-2xl border transition-all overflow-hidden ${
+                    className={`rounded-2xl border transition-all overflow-hidden bg-white ${
                       isCorrect === true
-                        ? 'bg-white border-slate-200/90 hover:border-emerald-300'
+                        ? 'border-slate-200/90 hover:border-emerald-300'
                         : isCorrect === false
-                        ? 'bg-white border-slate-200/90 hover:border-rose-300'
-                        : 'bg-white border-slate-200/90'
+                        ? 'border-slate-200/90 hover:border-rose-300'
+                        : 'border-slate-200/90'
                     }`}
                   >
                     <div className="p-5 space-y-3.5">
@@ -703,32 +708,6 @@ export default function ExamResultView() {
 
           </div>
         )}
-
-        {/* ── Bottom Callout Banner ── */}
-        <div className="print:hidden bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-3xl p-6 sm:p-8 flex flex-col sm:flex-row items-center justify-between gap-6 shadow-md">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-white/10 text-white flex items-center justify-center flex-shrink-0 border border-white/15">
-              <HiOutlineAcademicCap className="w-6 h-6 text-indigo-300" />
-            </div>
-            <div>
-              <h3 className="text-base font-extrabold text-white">
-                {attempt.passed ? 'Candidate Assessment Complete' : 'Candidate Needs Attention'}
-              </h3>
-              <p className="text-xs text-slate-300 mt-0.5 max-w-md leading-relaxed">
-                {attempt.passed
-                  ? 'Candidate has successfully met all passing proficiency requirements for this assessment.'
-                  : 'Candidate did not meet passing requirements. Review performance metrics and assign targeted remediation or re-examination as needed.'}
-              </p>
-            </div>
-          </div>
-
-          <button
-            onClick={() => navigate('/airline/exams')}
-            className="w-full sm:w-auto px-6 py-2.5 bg-white hover:bg-slate-100 text-slate-900 rounded-xl text-xs font-black transition-all shadow-sm whitespace-nowrap"
-          >
-            Back to Exam System
-          </button>
-        </div>
 
       </div>
     </div>

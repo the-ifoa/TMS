@@ -5,7 +5,7 @@ import {
   HiOutlineArrowLeft, HiOutlinePlusCircle, HiOutlineSave, HiOutlineEye,
   HiOutlinePencilAlt, HiOutlineTrash, HiOutlineCheck, HiOutlineX,
   HiOutlineCollection, HiOutlineSearch, HiOutlineCalendar, HiOutlineClock,
-  HiOutlineDuplicate,
+  HiOutlineDuplicate, HiOutlineChevronUp, HiOutlineChevronDown,
 } from 'react-icons/hi';
 import { getExam, createExam, updateExam, listQuestionBankGroups, listQuestionBankItems, getQuestionBankTopics, createQuestionBankItem } from '../api';
 import { useAuth } from '../context/AuthContext';
@@ -40,7 +40,7 @@ function stripTempIds(value) {
 }
 
 const emptyExam = () => ({
-  title: '', description: '', duration_minutes: 30, pass_percentage: 60,
+  title: '', description: '', duration_minutes: 30, pass_percentage: 75,
   max_attempts: 1, shuffle_questions: false, shuffle_options: false,
   lockdown_enabled: true, max_violations: 4, questions: [], sections: [],
   opens_at: null, closes_at: null, section_settings: [],
@@ -545,8 +545,26 @@ export default function ExamBuilder() {
   const { confirm, ConfirmDialog } = useConfirm();
 
   const [selectedQIds, setSelectedQIds] = useState(() => new Set());
+  const [collapsedQKeys, setCollapsedQKeys] = useState(() => new Set());
   const rightSidebarRef = useRef(null);
   const getQKey = (q, idx) => q._id || idx;
+
+  const toggleCollapseQuestion = (qKey) => {
+    setCollapsedQKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(qKey)) next.delete(qKey);
+      else next.add(qKey);
+      return next;
+    });
+  };
+
+  const collapseAllQuestions = () => {
+    setCollapsedQKeys(new Set(exam.questions.map((q, idx) => getQKey(q, idx))));
+  };
+
+  const expandAllQuestions = () => {
+    setCollapsedQKeys(new Set());
+  };
 
   useEffect(() => {
     if (selectedQIds.size > 0 && rightSidebarRef.current) {
@@ -1127,9 +1145,9 @@ export default function ExamBuilder() {
                 </span>
               </div>
 
-              {/* Existing sections list - fixed height container so adding items never expands the card */}
+              {/* Existing sections list - dynamic height so items appear one by one without artificial empty space */}
               {orderedSectionNames.length > 0 && (
-                <div className="h-48 overflow-y-auto pr-1 space-y-1.5 scrollbar-thin">
+                <div className="max-h-72 overflow-y-auto pr-1 space-y-2 scrollbar-thin">
                   {orderedSectionNames.map((name) => {
                     const count = groupFor(name).length;
                     const setting = getSectionSetting(name);
@@ -1279,26 +1297,45 @@ export default function ExamBuilder() {
 
           {/* QUESTIONS LIST (Left column on desktop, 8 cols width - independent scrolling) */}
           <div className="order-2 lg:order-1 lg:col-span-8 h-full overflow-y-auto pr-3 space-y-4 scrollbar-thin">
-            <div className="flex items-center justify-between px-1 pb-1">
+            <div className="flex flex-wrap items-center justify-between gap-2 px-1 pb-1">
               <h2 className="text-sm font-extrabold text-slate-900 uppercase tracking-wider">
                 Exam Questions ({exam.questions.length})
               </h2>
               {exam.questions.length > 0 && (
-                <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200/80 px-3 py-1.5 rounded-xl shadow-2xs transition-all select-none">
-                  <input
-                    type="checkbox"
-                    checked={selectedQIds.size > 0 && selectedQIds.size === exam.questions.length}
-                    onChange={selectAllQuestions}
-                    className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer"
-                  />
-                  <span>
-                    {selectedQIds.size === exam.questions.length
-                      ? 'Deselect All'
-                      : selectedQIds.size > 0
-                      ? `Selected (${selectedQIds.size}/${exam.questions.length})`
-                      : 'Select All'}
-                  </span>
-                </label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={collapsedQKeys.size === exam.questions.length ? expandAllQuestions : collapseAllQuestions}
+                    className="flex items-center gap-1.5 cursor-pointer text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200/80 px-3 py-1.5 rounded-xl shadow-2xs transition-all select-none"
+                  >
+                    {collapsedQKeys.size === exam.questions.length ? (
+                      <>
+                        <HiOutlineChevronDown className="w-3.5 h-3.5 text-slate-500" />
+                        <span>Expand All</span>
+                      </>
+                    ) : (
+                      <>
+                        <HiOutlineChevronUp className="w-3.5 h-3.5 text-slate-500" />
+                        <span>Collapse All</span>
+                      </>
+                    )}
+                  </button>
+                  <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200/80 px-3 py-1.5 rounded-xl shadow-2xs transition-all select-none">
+                    <input
+                      type="checkbox"
+                      checked={selectedQIds.size > 0 && selectedQIds.size === exam.questions.length}
+                      onChange={selectAllQuestions}
+                      className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer"
+                    />
+                    <span>
+                      {selectedQIds.size === exam.questions.length
+                        ? 'Deselect All'
+                        : selectedQIds.size > 0
+                        ? `Selected (${selectedQIds.size}/${exam.questions.length})`
+                        : 'Select All'}
+                    </span>
+                  </label>
+                </div>
               )}
             </div>
 
@@ -1339,6 +1376,8 @@ export default function ExamBuilder() {
                         isSelected={selectedQIds.has(getQKey(q, idx))}
                         onToggleSelect={() => toggleSelectQuestion(getQKey(q, idx))}
                         onSendToBank={isAdmin ? () => setSendToBankQuestion(q) : undefined}
+                        isCollapsed={collapsedQKeys.has(getQKey(q, idx))}
+                        onToggleCollapse={() => toggleCollapseQuestion(getQKey(q, idx))}
                       />
                     ))}
                   </div>
@@ -1397,6 +1436,8 @@ export default function ExamBuilder() {
                       isSelected={selectedQIds.has(getQKey(q, idx))}
                       onToggleSelect={() => toggleSelectQuestion(getQKey(q, idx))}
                       onSendToBank={isAdmin ? () => setSendToBankQuestion(q) : undefined}
+                      isCollapsed={collapsedQKeys.has(getQKey(q, idx))}
+                      onToggleCollapse={() => toggleCollapseQuestion(getQKey(q, idx))}
                     />
                   ))}
                 </div>

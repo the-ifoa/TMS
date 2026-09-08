@@ -150,69 +150,6 @@ exports.airlineResults = async (req, res) => {
   }
 };
 
-// ─── GET /exams/department-results — airline main account / department: exam
-//     invite + score status across every department in scope, grouped-ready ────
-exports.departmentResults = async (req, res) => {
-  try {
-    const s = req.scope;
-    if (isAdmin(req) || !s || s.kind !== 'airline')
-      return res.status(403).json({ error: 'Airline access required.' });
-
-    const perms = s.permissions || [];
-    if (s.isDepartment && !perms.includes('results.viewOwn') && !perms.includes('results.viewAll'))
-      return res.status(403).json({ error: 'You do not have permission to view results.' });
-
-    // Who may see the whole tree's results (main account + every department)?
-    //  • department  → needs the results.viewAll grant
-    //  • top-level   → needs an admin to enable can_view_all_results
-    // Everyone else is limited to their own account's results.
-    let ids;
-    if (s.canViewAllResults) {
-      ids = [s.topAirlineId, ...(s.departmentIds || [])];
-    } else if (s.isDepartment) {
-      ids = [s.selfId];
-    } else {
-      ids = [s.topAirlineId];
-    }
-
-    const invites = await ExamInvite.find({ airline_id: { $in: ids } }).sort({ created_at: -1 });
-
-    const attemptIds = invites.map((i) => i.attempt_id).filter(Boolean);
-    const attempts = await ExamAttempt.find({ _id: { $in: attemptIds } })
-      .select('score max_score percentage passed status submitted_at time_taken_seconds');
-    const attemptById = Object.fromEntries(attempts.map((a) => [String(a._id), a]));
-
-    // Resolve a readable department label for every airline_id we surfaced.
-    const airlineDocs = await Airline.find({ _id: { $in: ids } })
-      .select('department_name airlineName parent_airline is_department');
-    const labelById = {};
-    airlineDocs.forEach((a) => {
-      labelById[String(a._id)] = a.is_department
-        ? (a.department_name || a.name || 'Department')
-        : `${a.airlineName} (main account)`;
-    });
-
-    res.json(invites.map((i) => {
-      const json = i.toJSON();
-      const att = i.attempt_id && attemptById[String(i.attempt_id)];
-      json.department_id = String(i.airline_id || '');
-      json.department_label = labelById[String(i.airline_id)] || i.airline_name || 'Unknown';
-      json.attempt = att
-        ? {
-            id: String(att._id),
-            score: att.score, max_score: att.max_score, percentage: att.percentage,
-            passed: att.passed, status: att.status, submitted_at: att.submitted_at,
-            time_taken_seconds: att.time_taken_seconds,
-          }
-        : null;
-      return json;
-    }));
-  } catch (err) {
-    console.error('GET /exams/department-results error:', err.message);
-    res.status(500).json({ error: err.message });
-  }
-};
-
 // ─── GET /exams/assigned — airline: exams assigned to their participants ─────────
 exports.listAssigned = async (req, res) => {
   try {
@@ -473,7 +410,7 @@ exports.gradeAttempt = async (req, res) => {
     const attempt = await ExamAttempt.findById(req.params.attemptId);
     if (!attempt) return res.status(404).json({ error: 'Attempt not found.' });
     if (!isAdmin(req)) {
-      const ownerExam = await Exam.findById(attempt.exam_id).select('owner_airline');
+      const ownerExam = await Exam.findById(attempt.exam_id).select('owner_airline owner_department');
       if (!ownerExam || !ownsExam(req, ownerExam)) return res.status(403).json({ error: 'Access denied.' });
     }
     // Admin can grade a pending attempt AND override points on an already
@@ -522,7 +459,7 @@ exports.gradeAttempt = async (req, res) => {
 
     attempt.score = score;
     attempt.percentage = percentage;
-    attempt.passed = attempt.percentage >= (exam ? exam.pass_percentage : 60);
+    attempt.passed = attempt.percentage >= (exam ? exam.pass_percentage : 75);
     attempt.status = 'graded';
     attempt.graded_by = req.admin.id;
     attempt.graded_at = new Date();
@@ -598,10 +535,21 @@ exports.listExams = async (req, res) => {
         }));
       }
       return res.json(exams.map((e) => e.toJSON()));
+    } else if (req.scope && req.scope.isDepartment) {
+      // A plain department manages ONLY the exams it authored itself. It must not
+      // see the parent airline's own exams or sibling departments' exams (both
+      // carry owner_airline = topAirlineId). It still sees published exams
+      // assigned to its own team so it can monitor / assign them.
+      const selfId = String(req.admin.id);
+      exams = await Exam.find({
+        $or: [
+          { owner_department: selfId },
+          { status: 'published', 'assignments.airline_id': selfId },
+        ],
+      }).sort({ created_at: -1 });
     } else {
-      // Airline sees: exams it owns (any status) + published exams assigned to it.
-      // A top-level airline's scope also covers every department it owns; a plain
-      // department's scope is just itself.
+      // Top-level airline: exams it owns (any status, which covers every exam its
+      // departments authored) + published exams assigned anywhere in its tree.
       const visibleIds = (req.scope && req.scope.visibleAirlineIds) || [req.admin.id];
       exams = await Exam.find({
         $or: [
@@ -740,8 +688,23 @@ exports.sendInvites = async (req, res) => {
     if (!canAssignExam(req, exam)) return res.status(403).json({ error: 'Access denied.' });
     if (exam.status !== 'published') return res.status(400).json({ error: 'Publish the exam before sending invites.' });
 
-    const { participant_ids = [] } = req.body;
+    const { participant_ids = [], valid_days, expires_at } = req.body;
     if (participant_ids.length === 0) return res.status(400).json({ error: 'Select at least one participant.' });
+
+    // Optional validity window: an explicit ISO cutoff, or "valid for N days"
+    // from now. When neither is supplied on this send, existing invites keep
+    // whatever expiry they already had.
+    const expiryProvided = valid_days != null || expires_at != null;
+    let expiresAt = null;
+    if (expires_at != null && expires_at !== '') {
+      const d = new Date(expires_at);
+      if (isNaN(d.getTime())) return res.status(400).json({ error: 'Invalid expiry date.' });
+      expiresAt = d;
+    } else if (valid_days != null && valid_days !== '') {
+      const n = Number(valid_days);
+      if (!Number.isFinite(n) || n <= 0) return res.status(400).json({ error: 'Validity period must be a positive number of days.' });
+      expiresAt = new Date(Date.now() + n * 24 * 60 * 60 * 1000);
+    }
 
     const query = { _id: { $in: participant_ids } };
     // An airline can only invite participants within its own scope (a department:
@@ -778,6 +741,7 @@ exports.sendInvites = async (req, res) => {
           airline_id: p.submitted_by,
           airline_name: airlineName(p.submitted_by),
           batch_id: batchId,
+          expires_at: expiresAt,
         });
       } else {
         invite.participant_email = p.email;
@@ -786,6 +750,7 @@ exports.sendInvites = async (req, res) => {
         invite.sent_at = new Date();
         invite.sent_count = (invite.sent_count || 1) + 1;
         invite.batch_id = batchId; // re-sending moves it into the new batch
+        if (expiryProvided) invite.expires_at = expiresAt; // null clears it
       }
       await invite.save();
 
@@ -797,6 +762,7 @@ exports.sendInvites = async (req, res) => {
           durationMinutes: exam.duration_minutes,
           maxAttempts: exam.max_attempts,
           link: `${frontendUrl}/exam/${invite.token}`,
+          expiresAt: invite.expires_at,
         });
         sent.push({ id: String(p._id), name: p.participant_name, email: p.email });
       } catch (mailErr) {
@@ -846,7 +812,7 @@ exports.listInvites = async (req, res) => {
 // ─── GET /exams/:id/analytics — admin: per-question miss rate + pass-rate over time ──
 exports.getAnalytics = async (req, res) => {
   try {
-    const exam = await Exam.findById(req.params.id).select('questions title owner_airline');
+    const exam = await Exam.findById(req.params.id).select('questions title owner_airline owner_department');
     if (!exam) return res.status(404).json({ error: 'Exam not found.' });
     if (!isAdmin(req) && !ownsExam(req, exam)) return res.status(403).json({ error: 'Access denied.' });
 

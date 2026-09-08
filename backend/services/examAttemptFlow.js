@@ -56,7 +56,7 @@ async function finalizeAttempt(attempt) {
     attempt.status = 'submitted';
     attempt.score = score;
     attempt.percentage = percentage;
-    attempt.passed = attempt.percentage >= (exam ? exam.pass_percentage : 60);
+    attempt.passed = attempt.percentage >= (exam ? exam.pass_percentage : 75);
   }
 }
 

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Clock, CheckCircle2, Building2, GraduationCap, Users2, BarChart2, ShieldCheck } from 'lucide-react';
+import { Clock, CheckCircle2, Building2, GraduationCap, Users2, ShieldCheck } from 'lucide-react';
 import LogoAvatar from '../components/LogoAvatar';
 import {
   HiOutlineUsers,
@@ -1088,10 +1088,10 @@ export default function Airlines() {
   const [downloadingDhlId, setDownloadingDhlId] = useState(null);
   const [dhlRowPreview, setDhlRowPreview] = useState(null);
   // Admin edit-airline modal: { open, id, airlineName, address }
-  const [editAirline, setEditAirline] = useState({ open: false, id: null, airlineName: '', address: '', can_author_exams: false, can_create_subusers: false, can_view_all_results: false });
+  const [editAirline, setEditAirline] = useState({ open: false, id: null, airlineName: '', address: '', can_author_exams: false, can_create_subusers: false });
   const [savingAirline, setSavingAirline] = useState(false);
   // Admin create-airline modal (registers an airline on its behalf — no OTP)
-  const EMPTY_CREATE_AIRLINE = { open: false, name: '', airlineName: '', email: '', password: '', confirm: '', address: '', can_author_exams: false, can_create_subusers: false, can_view_all_results: false };
+  const EMPTY_CREATE_AIRLINE = { open: false, name: '', airlineName: '', email: '', password: '', confirm: '', address: '', can_author_exams: false, can_create_subusers: false };
   const [createAirline, setCreateAirline] = useState(EMPTY_CREATE_AIRLINE);
   const [creatingAirline, setCreatingAirline] = useState(false);
   const [createLogoFile, setCreateLogoFile] = useState(null);
@@ -1548,10 +1548,9 @@ export default function Airlines() {
       address: airline.address || '',
       can_author_exams: !!airline.can_author_exams,
       can_create_subusers: !!airline.can_create_subusers,
-      can_view_all_results: !!airline.can_view_all_results,
     });
   };
-  const closeEditAirline = () => setEditAirline({ open: false, id: null, airlineName: '', address: '', can_author_exams: false, can_create_subusers: false, can_view_all_results: false });
+  const closeEditAirline = () => setEditAirline({ open: false, id: null, airlineName: '', address: '', can_author_exams: false, can_create_subusers: false });
   const saveEditAirline = async () => {
     const name = editAirline.airlineName.trim();
     if (!name) { toast.error('Airline name cannot be empty'); return; }
@@ -1562,13 +1561,12 @@ export default function Airlines() {
         address: editAirline.address.trim(),
         can_author_exams: editAirline.can_author_exams,
         can_create_subusers: editAirline.can_create_subusers,
-        can_view_all_results: editAirline.can_view_all_results,
       });
       const updated = res.data.airline;
       // Patch in-memory data so the change shows immediately without a full reload
       setData(prev => prev.map(d =>
         airlineKey(d.airline) === String(editAirline.id)
-          ? { ...d, airline: { ...d.airline, airlineName: updated.airlineName, address: updated.address, can_author_exams: updated.can_author_exams, can_create_subusers: updated.can_create_subusers, can_view_all_results: updated.can_view_all_results } }
+          ? { ...d, airline: { ...d.airline, airlineName: updated.airlineName, address: updated.address, can_author_exams: updated.can_author_exams, can_create_subusers: updated.can_create_subusers } }
           : d
       ));
       toast.success('Airline updated');
@@ -1621,7 +1619,6 @@ export default function Airlines() {
         address: createAirline.address.trim(),
         can_author_exams: createAirline.can_author_exams,
         can_create_subusers: createAirline.can_create_subusers,
-        can_view_all_results: createAirline.can_view_all_results,
       });
       toast.success(`Airline "${airlineName}" created`);
       closeCreateAirline();
@@ -2121,15 +2118,6 @@ export default function Airlines() {
                         checked={editAirline.can_create_subusers}
                         onChange={val => setEditAirline(prev => ({ ...prev, can_create_subusers: val }))}
                       />
-                      <PermissionToggleCard
-                        icon={BarChart2}
-                        iconColor="text-emerald-600"
-                        iconBg="bg-emerald-50 border-emerald-200/80"
-                        title="Allow this airline to see its departments' exam results"
-                        description="Off by default — the main account then sees only its own results on the 'Department Results' page, not other departments'."
-                        checked={editAirline.can_view_all_results}
-                        onChange={val => setEditAirline(prev => ({ ...prev, can_view_all_results: val }))}
-                      />
                     </div>
                   </div>
                 </div>
@@ -2296,15 +2284,6 @@ export default function Airlines() {
                         description="Adds a 'Team' area where the airline creates department logins and grants each a subset of powers."
                         checked={createAirline.can_create_subusers}
                         onChange={val => setCreateAirline(prev => ({ ...prev, can_create_subusers: val }))}
-                      />
-                      <PermissionToggleCard
-                        icon={BarChart2}
-                        iconColor="text-emerald-600"
-                        iconBg="bg-emerald-50 border-emerald-200/80"
-                        title="Allow this airline to see its departments' exam results"
-                        description="Off by default — the main account then sees only its own results on the 'Department Results' page."
-                        checked={createAirline.can_view_all_results}
-                        onChange={val => setCreateAirline(prev => ({ ...prev, can_view_all_results: val }))}
                       />
                     </div>
                   </div>

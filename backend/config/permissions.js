@@ -17,8 +17,8 @@ const PERMISSIONS = {
   'exams.assign':        { label: 'Assign exams to people',       group: 'Exams',        scopes: ['admin', 'airline'] },
   'exams.grade':         { label: 'Grade exam attempts',          group: 'Exams',        scopes: ['admin', 'airline'] },
 
-  'attendance.view':     { label: 'View attendance',              group: 'Attendance',   scopes: ['admin', 'airline'] },
-  'attendance.manage':   { label: 'Manage attendance sheets',     group: 'Attendance',   scopes: ['admin', 'airline'] },
+  'attendance.view':     { label: 'View attendance',              group: 'Attendance',   scopes: ['admin'] },
+  'attendance.manage':   { label: 'Manage attendance sheets',     group: 'Attendance',   scopes: ['admin'] },
 
   // ── Admin-only areas ──────────────────────────────────────────────────────
   'airlines.view':       { label: 'View airlines & submissions',  group: 'Airlines',      scopes: ['admin'] },
@@ -33,10 +33,6 @@ const PERMISSIONS = {
 
   'dgr.view':            { label: 'View DGR CBTA forms',           group: 'DGR CBTA',      scopes: ['admin'] },
   'dgr.manage':          { label: 'Create / edit / delete DGR forms', group: 'DGR CBTA',   scopes: ['admin'] },
-
-  // Results visibility for airline departments only.
-  'results.viewOwn':     { label: 'See own exam results',         group: 'Results',      scopes: ['airline'] },
-  'results.viewAll':     { label: "See every department's results", group: 'Results',    scopes: ['airline'] },
 
   // Sub-user administration.
   'team.manage':         { label: 'Create & manage sub-users',    group: 'Team',         scopes: ['admin', 'airline'] },

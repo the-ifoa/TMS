@@ -759,14 +759,17 @@ export default function ExamAttempts() {
   };
 
   const load = () => {
-    Promise.all([getExam(id), listExamAttempts({ exam_id: id }), getExamAnalytics(id)])
-      .then(([examRes, attemptsRes, analyticsRes]) => {
+    Promise.all([getExam(id), listExamAttempts({ exam_id: id })])
+      .then(([examRes, attemptsRes]) => {
         setExam(examRes.data);
         setAttempts(attemptsRes.data);
-        setAnalytics(analyticsRes.data);
       })
       .catch(() => toast.error('Failed to load results.'))
       .finally(() => setLoading(false));
+    // Analytics is a secondary panel — a failure here must not blank the page.
+    getExamAnalytics(id)
+      .then((res) => setAnalytics(res.data))
+      .catch(() => setAnalytics(null));
   };
 
   useEffect(() => {

@@ -15,7 +15,6 @@ import {
   HiOutlineLogout,
   HiOutlineCollection,
   HiOutlineUserGroup,
-  HiOutlineChartSquareBar,
 } from 'react-icons/hi';
 import { FaPlaneDeparture } from 'react-icons/fa';
 import { useAuth } from '../context/AuthContext';
@@ -41,8 +40,7 @@ const airlineNavigation = [
   { name: 'New Enrollment', href: '/airline/enrollment/new', icon: HiOutlinePlusCircle,         perm: 'participants.create' },
   { name: 'DGR CBTA',       href: '/airline/dgr',           icon: HiOutlineShieldExclamation,   perm: 'dgr.view' },
   { name: 'Exam Results',   href: '/airline/exams',         icon: HiOutlineClipboardCheck },
-  { name: 'Department Results', href: '/airline/results',   icon: HiOutlineChartSquareBar,      resultsTab: true },
-  { name: 'Team',           href: '/airline/team',          icon: HiOutlineUserGroup,           team: true },
+  { name: 'Departments',    href: '/airline/team',          icon: HiOutlineUserGroup,           team: true },
   { name: 'Profile',        href: '/airline/profile',       icon: HiOutlineUserCircle },
 ];
 
@@ -52,8 +50,7 @@ const departmentNavigation = [
   { name: 'Dashboard',        href: '/airline',            icon: HiOutlineHome },
   { name: 'My Team',          href: '/airline/my-team',    icon: HiOutlineUsers,             perm: 'participants.view' },
   { name: 'Exam Results',     href: '/airline/exams',      icon: HiOutlineClipboardCheck },
-  { name: 'Department Results', href: '/airline/results',  icon: HiOutlineChartSquareBar,    resultsTab: true },
-  { name: 'Team',             href: '/airline/team',       icon: HiOutlineUserGroup,         team: true },
+  { name: 'Departments',      href: '/airline/team',       icon: HiOutlineUserGroup,         team: true },
   { name: 'Profile',          href: '/airline/profile',    icon: HiOutlineUserCircle },
 ];
 
@@ -77,7 +74,6 @@ export default function Sidebar({ open, setOpen }) {
   // Hide entries the current user (a sub-user / department) has no power for.
   navigation = navigation.filter((item) => {
     if (item.team) return canManageTeam;
-    if (item.resultsTab) return can('results.viewOwn') || can('results.viewAll');
     if (item.perm) return (Array.isArray(item.perm) ? item.perm : [item.perm]).some(can);
     return true;
   });

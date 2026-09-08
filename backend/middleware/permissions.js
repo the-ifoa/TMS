@@ -13,8 +13,8 @@
 //   • top-level airline (no parent_airline)                     → every
 //                     airline-scoped permission, and sees all its departments
 //   • department (airline sub-user)                             → only its
-//                     granted `permissions`, sees only its own data (results
-//                     of other departments only with results.viewAll)
+//                     granted `permissions`, sees only its own data; never
+//                     another account's exam results
 // ─────────────────────────────────────────────────────────────────────────────
 const Airline = require('../models/Airline');
 const Admin = require('../models/Admin');
@@ -73,14 +73,11 @@ async function loadScope(req, _res, next) {
       .lean();
     const departmentIds = siblings.map((d) => String(d._id));
 
-    // A top-level airline may only manage sub-users / see all department results
-    // if an admin granted it.
+    // A top-level airline may only manage sub-users if an admin granted it.
     let topCanCreateSubusers = false;
-    let topCanViewAllResults = false;
     if (!isDepartment) {
-      const me = await Airline.findById(c.id).select('can_create_subusers can_view_all_results').lean();
+      const me = await Airline.findById(c.id).select('can_create_subusers').lean();
       topCanCreateSubusers = !!me?.can_create_subusers;
-      topCanViewAllResults = !!me?.can_view_all_results;
       // A top-level airline that already has departments can always view/manage
       // its own team, even if the flag was never explicitly set.
       if (!topCanCreateSubusers && departmentIds.length > 0) topCanCreateSubusers = true;
@@ -89,9 +86,6 @@ async function loadScope(req, _res, next) {
     let visibleAirlineIds;
     if (!isDepartment) {
       // Top-level account: its own data + every department's data.
-      visibleAirlineIds = [topAirlineId, ...departmentIds];
-    } else if (permissions.includes('results.viewAll')) {
-      // Department granted cross-department visibility: the whole airline tree.
       visibleAirlineIds = [topAirlineId, ...departmentIds];
     } else {
       // Plain department: its own data + the shared parent airline account's
@@ -109,12 +103,6 @@ async function loadScope(req, _res, next) {
       permissions,
       visibleAirlineIds,
       topCanCreateSubusers,
-      // Can this request see exam results beyond its own account?
-      //  • department  → only with the results.viewAll grant
-      //  • top-level   → only when an admin flipped can_view_all_results on
-      canViewAllResults: isDepartment
-        ? permissions.includes('results.viewAll')
-        : topCanViewAllResults,
       canManageTeam: isDepartment
         ? permissions.includes('team.manage')
         : topCanCreateSubusers,

@@ -541,7 +541,7 @@ exports.adminCreateAirline = async (req, res) => {
   try {
     const {
       name, airlineName, email, password, address, logo_url,
-      can_author_exams, can_create_subusers, can_view_all_results,
+      can_author_exams, can_create_subusers,
     } = req.body;
 
     if (!name || !airlineName || !email || !password)
@@ -568,7 +568,6 @@ exports.adminCreateAirline = async (req, res) => {
       existing.otpAttempts    = 0;
       if (typeof can_author_exams === 'boolean')     existing.can_author_exams = can_author_exams;
       if (typeof can_create_subusers === 'boolean')  existing.can_create_subusers = can_create_subusers;
-      if (typeof can_view_all_results === 'boolean') existing.can_view_all_results = can_view_all_results;
       await existing.save();
       airline = existing;
     } else {
@@ -582,7 +581,6 @@ exports.adminCreateAirline = async (req, res) => {
         emailVerified:  true,
         can_author_exams:     typeof can_author_exams === 'boolean' ? can_author_exams : false,
         can_create_subusers:  typeof can_create_subusers === 'boolean' ? can_create_subusers : false,
-        can_view_all_results: typeof can_view_all_results === 'boolean' ? can_view_all_results : false,
       });
     }
 
@@ -606,7 +604,7 @@ exports.adminUpdateAirline = async (req, res) => {
     const airline = await Airline.findById(req.params.id);
     if (!airline) return res.status(404).json({ error: 'Airline not found.' });
 
-    const { airlineName, address, can_author_exams, can_create_subusers, can_view_all_results } = req.body;
+    const { airlineName, address, can_author_exams, can_create_subusers } = req.body;
     if (airlineName !== undefined) {
       if (!airlineName.trim()) return res.status(400).json({ error: 'Airline name cannot be empty.' });
       airline.airlineName = airlineName.trim();
@@ -614,7 +612,6 @@ exports.adminUpdateAirline = async (req, res) => {
     if (address !== undefined) airline.address = (address || '').trim();
     if (typeof can_author_exams === 'boolean') airline.can_author_exams = can_author_exams;
     if (typeof can_create_subusers === 'boolean') airline.can_create_subusers = can_create_subusers;
-    if (typeof can_view_all_results === 'boolean') airline.can_view_all_results = can_view_all_results;
 
     await airline.save();
     res.json({ message: 'Airline updated.', airline: airline.toJSON() });

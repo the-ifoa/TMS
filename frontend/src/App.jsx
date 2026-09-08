@@ -30,7 +30,6 @@ import PublicExam from './pages/PublicExam';
 import ParticipantExamPerformance from './pages/ParticipantExamPerformance';
 import QuestionBank, { QuestionBankDetail } from './pages/QuestionBank';
 import TeamPage from './pages/TeamPage';
-import DepartmentResults from './pages/DepartmentResults';
 
 // Requires any authenticated user (admin or airline)
 function ProtectedRoute({ children }) {
@@ -161,9 +160,6 @@ function App() {
           <Route path="exams/:id/attempts" element={<ExamAuthorRoute><ExamAttempts /></ExamAuthorRoute>} />
           <Route path="exams/:examId/result/:attemptId" element={<ExamResultView />} />
           <Route path="team" element={<TeamRoute><TeamPage /></TeamRoute>} />
-          <Route path="results" element={
-            <PermRoute perms={['results.viewOwn', 'results.viewAll']}><DepartmentResults /></PermRoute>
-          } />
           <Route path="profile" element={<Profile />} />
         </Route>
       </Routes>

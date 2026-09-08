@@ -181,10 +181,9 @@ export const deleteQuestionBankItem   = (id)          => api.delete(`/question-b
 export const updateParticipantEmail = (id, email) => api.patch(`/participants/${id}/email`, { email });
 
 // ── Exam invites (email a passwordless take-link to participants) ─────────────
-export const sendExamInvites       = (examId, participantIds) => api.post(`/exams/${examId}/send-invites`, { participant_ids: participantIds });
+export const sendExamInvites       = (examId, participantIds, opts = {}) => api.post(`/exams/${examId}/send-invites`, { participant_ids: participantIds, ...opts });
 export const getExamInvites        = (examId)                 => api.get(`/exams/${examId}/invites`);
 export const getAirlineExamResults = ()                       => api.get('/exams/airline-results');
-export const getDepartmentExamResults = ()                    => api.get('/exams/department-results');
 
 // ── Team / sub-user management ──────────────────────────────────────────────
 export const getTeamCatalog  = ()         => api.get('/team/catalog');

@@ -13,9 +13,6 @@ router.get('/airlines', examsController.listAirlines);
 // Defined BEFORE `GET /exams/:id` so the literal path isn't captured as an :id.
 router.get('/airline-results', examsController.airlineResults);
 
-// ─── GET /exams/department-results — airline main account / department results ──
-router.get('/department-results', examsController.departmentResults);
-
 // ─── GET /exams/assigned — airline: exams assigned to their participants ─────────
 router.get('/assigned', examsController.listAssigned);
 

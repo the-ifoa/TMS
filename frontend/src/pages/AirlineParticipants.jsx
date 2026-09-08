@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   HiOutlineUsers, HiOutlineSearch, HiOutlineMail, HiOutlineCheck, HiOutlineX,
-  HiOutlineFilter, HiOutlineCheckCircle, HiOutlineClock, HiOutlineChartBar, HiOutlinePlus,
+  HiOutlineFilter, HiOutlineChartBar, HiOutlinePlus,
   HiOutlinePencil, HiOutlineTrash,
 } from 'react-icons/hi';
 import { getParticipants, updateParticipantEmail, deleteParticipant } from '../api';
@@ -282,19 +282,6 @@ export default function AirlineParticipants() {
                         className="w-full px-2.5 py-1 text-xs border border-blue-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/25 bg-blue-50/30" />
                     ) : (
                       <EmailCell rec={r} />
-                    )}
-                  </div>
-
-                  {/* Status */}
-                  <div className="w-24 shrink-0">
-                    {r.cert_released ? (
-                      <span className="w-full justify-center inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/70">
-                        <HiOutlineCheckCircle className="w-3.5 h-3.5 shrink-0" /> Certified
-                      </span>
-                    ) : (
-                      <span className="w-full justify-center inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold bg-amber-50 text-amber-600 border border-amber-200/60">
-                        <HiOutlineClock className="w-3.5 h-3.5 shrink-0" /> Pending
-                      </span>
                     )}
                   </div>
 

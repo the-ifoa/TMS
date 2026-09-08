@@ -65,6 +65,11 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onSubmit, onRe
   const [awaitingFsGesture, setAwaitingFsGesture] = useState(false);
   const finishedRef = useRef(false);
   const violationLockRef = useRef(false);
+  // Entering fullscreen the first time is a required SETUP STEP, not a
+  // violation. Until the candidate has been in fullscreen at least once, no
+  // fullscreen/tab-switch violations are counted — they're just prompted to
+  // click to enter the lockdown.
+  const hasEnteredFsRef = useRef(false);
 
   // ── Per-section time budgets (soft, client-side pacing on top of the exam's
   // overall duration_minutes deadline above). A section's clock only starts
@@ -163,10 +168,20 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onSubmit, onRe
     };
     const onFullscreenChange = () => {
       if (finishedRef.current) return;
-      if (isFullscreen()) { pendingReenter = false; setAwaitingFsGesture(false); }
-      else { reportViolation('fullscreen_exit'); requestFullscreen(document.documentElement).catch(() => armReenter()); }
+      if (isFullscreen()) {
+        hasEnteredFsRef.current = true;
+        pendingReenter = false;
+        setAwaitingFsGesture(false);
+      } else {
+        // Only a genuine EXIT (after the candidate has entered once) is a
+        // violation. The initial "not yet in fullscreen" state is just setup.
+        if (hasEnteredFsRef.current) reportViolation('fullscreen_exit');
+        requestFullscreen(document.documentElement).catch(() => armReenter());
+      }
     };
-    const onVisibilityChange = () => { if (document.hidden && !finishedRef.current) reportViolation('tab_switch'); };
+    const onVisibilityChange = () => {
+      if (document.hidden && !finishedRef.current && hasEnteredFsRef.current) reportViolation('tab_switch');
+    };
     const blockDefault = (e) => e.preventDefault();
     const blockKeys = (e) => {
       const k = (e.key || '').toUpperCase();
@@ -391,7 +406,7 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onSubmit, onRe
       {warning && (
         <div className="bg-amber-50 border-b border-amber-200 text-amber-900 px-4 sm:px-6 py-2 text-xs font-medium flex items-center justify-center gap-2 flex-shrink-0">
           <HiOutlineExclamationCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
-          <span><strong>Warning {warning.count}/{maxViolations}:</strong> {warning.message} {warning.remaining > 0 ? `${warning.remaining} more will auto-submit your exam.` : ''}</span>
+          <span><strong>Warning {warning.count}/{maxViolations}:</strong> {warning.message} {warning.remaining > 0 ? `${warning.remaining} more will auto submit your exam.` : ''}</span>
         </div>
       )}
       {currentQuestionLocked && (
@@ -418,7 +433,7 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onSubmit, onRe
           <div className="md:hidden bg-white border border-slate-200/80 rounded-xl p-3 shadow-2xs flex flex-col gap-2.5 flex-shrink-0">
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">QUESTIONS ({index + 1}/{questions.length})</span>
-              <span className="text-[10px] font-extrabold text-blue-700 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-full">{Math.round((answeredCount / questions.length) * 100)}% Completed</span>
+              <span className="text-[10px] font-extrabold text-slate-700 bg-slate-100 border border-slate-200/80 px-2 py-0.5 rounded-full">{Math.round((answeredCount / questions.length) * 100)}% Completed</span>
             </div>
             {hasSections && (
               <div className="flex items-center gap-1.5 overflow-x-auto pb-1.5 scrollbar-none border-b border-slate-100">
@@ -427,11 +442,23 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onSubmit, onRe
                   const isCurrentSection = group.items.some((qq) => qq._index === index);
                   return (
                     <button key={gi} onClick={() => setIndex(group.items[0]._index)}
-                      className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-extrabold transition-all border flex items-center gap-1.5 ${isCurrentSection ? 'bg-[#002eff] text-white border-[#002eff] shadow-2xs' : 'bg-blue-50 text-[#002eff] border-blue-200/90 hover:bg-blue-100'}`}>
+                      className={`flex-shrink-0 px-3 py-1.5 rounded-xl text-[11px] font-bold transition-all border flex items-center gap-1.5 ${
+                        isCurrentSection
+                          ? 'bg-slate-900 text-white border-slate-900 shadow-2xs'
+                          : 'bg-slate-50 text-slate-700 border-slate-200/90 hover:bg-slate-100 hover:text-slate-900'
+                      }`}>
                       <span>{group.section || 'Ungrouped'}</span>
-                      <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-extrabold ${isCurrentSection ? 'bg-blue-800 text-white' : 'bg-blue-100 text-blue-900'}`}>{answeredInSec}/{group.items.length}</span>
+                      <span className={`text-[9px] px-1.5 py-0.5 rounded-md font-black ${
+                        isCurrentSection ? 'bg-white/20 text-white' : 'bg-slate-200/80 text-slate-700'
+                      }`}>{answeredInSec}/{group.items.length}</span>
                       {sectionTimeLimits[group.section || ''] != null && (
-                        <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-semibold ${lockedSections.has(group.section || '') ? 'bg-rose-600 text-white' : isCurrentSection ? 'bg-blue-900 text-blue-100' : 'bg-blue-200 text-blue-900'}`}>
+                        <span className={`text-[9px] px-1.5 py-0.5 rounded-md font-semibold ${
+                          lockedSections.has(group.section || '')
+                            ? 'bg-rose-600 text-white'
+                            : isCurrentSection
+                            ? 'bg-white/20 text-white'
+                            : 'bg-slate-200/80 text-slate-700'
+                        }`}>
                           {lockedSections.has(group.section || '') ? 'Locked' : formatTime(sectionRemaining(group.section || ''))}
                         </span>
                       )}
@@ -448,7 +475,7 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onSubmit, onRe
                 const i = qq._index;
                 const isAnswered = answers[qq._id] !== undefined && answers[qq._id] !== null && answers[qq._id] !== '';
                 let btnCls = 'bg-slate-100 text-slate-600';
-                if (i === index) btnCls = 'bg-[#002eff] text-white font-bold ring-2 ring-[#002eff]/30';
+                if (i === index) btnCls = 'bg-slate-900 text-white font-bold ring-2 ring-slate-900/20 shadow-2xs';
                 else if (marked.has(qq._id)) btnCls = 'bg-amber-500 text-white font-bold';
                 else if (isAnswered) btnCls = 'bg-emerald-500 text-white font-bold';
                 return <button key={qq._id} onClick={() => setIndex(i)} className={`w-8 h-8 rounded-full text-xs font-bold transition-all flex items-center justify-center flex-shrink-0 ${btnCls}`}>{i + 1}</button>;
@@ -461,25 +488,37 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onSubmit, onRe
             <div className="space-y-4">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <span className="text-xs font-extrabold text-slate-500 uppercase tracking-wider">QUESTIONS</span>
-                <span className="text-xs font-extrabold text-[#002eff] bg-blue-50 border border-blue-100 px-2.5 py-0.5 rounded-full">{Math.round((answeredCount / questions.length) * 100)}%</span>
+                <span className="text-xs font-extrabold text-slate-700 bg-slate-100 border border-slate-200/80 px-2.5 py-0.5 rounded-full">{Math.round((answeredCount / questions.length) * 100)}%</span>
               </div>
               {hasSections && (
                 <div className="space-y-2 border-b border-slate-100 pb-3">
                   <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">SECTIONS</span>
-                  <div className="flex flex-wrap gap-1.5">
+                  <div className="flex flex-wrap gap-2">
                     {sectionGroups.map((group, gi) => {
                       const answeredInSec = group.items.filter((qq) => answers[qq._id] !== undefined && answers[qq._id] !== null && answers[qq._id] !== '').length;
                       const isCurrentSection = group.items.some((qq) => qq._index === index);
                       return (
                         <button key={gi} type="button" onClick={() => setIndex(group.items[0]._index)}
-                          className={`px-3.5 py-1.5 rounded-full text-xs font-extrabold transition-all border flex items-center gap-1.5 ${isCurrentSection ? 'bg-[#002eff] text-white border-[#002eff] shadow-2xs ring-2 ring-[#002eff]/20' : 'bg-blue-50 text-[#002eff] border-blue-200/90 hover:bg-blue-100'}`}>
+                          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-2 cursor-pointer ${
+                            isCurrentSection
+                              ? 'bg-slate-900 text-white border-slate-900 shadow-2xs'
+                              : 'bg-slate-50 text-slate-700 border-slate-200/90 hover:bg-slate-100 hover:text-slate-900 hover:border-slate-300'
+                          }`}>
                           <span className="truncate max-w-[130px]">{group.section || 'Ungrouped'}</span>
                           {sectionTimeLimits[group.section || ''] != null && (
-                            <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-semibold ${lockedSections.has(group.section || '') ? 'bg-rose-600 text-white' : isCurrentSection ? 'bg-blue-900 text-blue-100' : 'bg-blue-200 text-blue-900'}`}>
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-semibold ${
+                              lockedSections.has(group.section || '')
+                                ? 'bg-rose-600 text-white'
+                                : isCurrentSection
+                                ? 'bg-white/20 text-white'
+                                : 'bg-slate-200/80 text-slate-700'
+                            }`}>
                               {lockedSections.has(group.section || '') ? 'Locked' : formatTime(sectionRemaining(group.section || ''))}
                             </span>
                           )}
-                          <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-extrabold ${isCurrentSection ? 'bg-blue-800 text-white' : 'bg-blue-100 text-blue-900'}`}>{answeredInSec}/{group.items.length}</span>
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-black ${
+                            isCurrentSection ? 'bg-white/20 text-white' : 'bg-slate-200/80 text-slate-700'
+                          }`}>{answeredInSec}/{group.items.length}</span>
                         </button>
                       );
                     })}
@@ -495,7 +534,7 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onSubmit, onRe
                         const i = qq._index;
                         const isAnswered = answers[qq._id] !== undefined && answers[qq._id] !== null && answers[qq._id] !== '';
                         let btnCls = 'bg-slate-100 text-slate-600 hover:bg-slate-200';
-                        if (i === index) btnCls = 'bg-[#002eff] text-white font-bold shadow-2xs ring-2 ring-[#002eff]/30';
+                        if (i === index) btnCls = 'bg-slate-900 text-white font-bold shadow-2xs ring-2 ring-slate-900/20';
                         else if (marked.has(qq._id)) btnCls = 'bg-amber-500 text-white font-bold shadow-2xs';
                         else if (isAnswered) btnCls = 'bg-emerald-500 text-white font-bold shadow-2xs';
                         return <button key={qq._id} onClick={() => setIndex(i)} className={`w-9 h-9 rounded-full text-xs font-bold transition-all flex items-center justify-center ${btnCls}`}>{i + 1}</button>;
@@ -508,7 +547,7 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onSubmit, onRe
             <div className="border-t border-slate-100 pt-4 space-y-2 text-[11px] font-semibold text-slate-600">
               <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500 flex-shrink-0" /><span>Answered</span></div>
               <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-amber-500 flex-shrink-0" /><span>Marked for review</span></div>
-              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#002eff] flex-shrink-0" /><span>Current</span></div>
+              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-slate-900 flex-shrink-0" /><span>Current</span></div>
             </div>
           </aside>
 
@@ -516,7 +555,7 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onSubmit, onRe
           <section className="md:col-span-8 lg:col-span-8 bg-white border border-slate-200/80 rounded-2xl shadow-2xs flex flex-col h-full overflow-hidden min-h-0">
             <div className="px-4 sm:px-6 py-2.5 sm:py-3 border-b border-slate-100 flex items-center justify-between flex-shrink-0 bg-white rounded-t-2xl z-10">
               <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-                {q.section && <span className="text-[10px] sm:text-[11px] font-extrabold text-white bg-[#002eff] px-3 py-1 rounded-full shadow-2xs">{q.section}</span>}
+                {q.section && <span className="text-[10px] sm:text-[11px] font-bold text-slate-700 bg-slate-100 border border-slate-200/80 px-2.5 py-0.5 rounded-lg shadow-2xs">{q.section}</span>}
                 <span className="text-xs font-extrabold text-slate-700 uppercase tracking-wider">QUESTION {index + 1} <span className="text-slate-400 font-semibold">OF {questions.length}</span></span>
                 <span className="text-[10px] sm:text-xs font-semibold text-slate-400 border-l border-slate-200 pl-2 sm:pl-3">1 mark</span>
                 {questionTimeLimits[q._id] != null && (

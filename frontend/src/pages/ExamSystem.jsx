@@ -82,7 +82,7 @@ function SendInviteModal({ exam, onClose, onSent }) {
     try {
       const res = await sendExamInvites(exam.id, [...selected], opts);
       const { sent = [], skipped = [] } = res.data || {};
-      if (sent.length) toast.success(`${sent.length} participant${sent.length > 1 ? 's' : ''} assigned — exam link${sent.length > 1 ? 's' : ''} emailed.`);
+      if (sent.length) toast.success(`${sent.length} participant${sent.length > 1 ? 's' : ''} assigned, exam link${sent.length > 1 ? 's' : ''} emailed.`);
       if (skipped.length) toast(`${skipped.length} skipped (${skipped[0].reason}${skipped.length > 1 ? ', …' : ''}).`, { icon: 'ℹ️' });
       setSelected(new Set());
       load();

@@ -5,6 +5,7 @@ import {
   HiOutlineClock, HiOutlineExclamationCircle,
   HiOutlineCheckCircle, HiOutlineAcademicCap, HiOutlineLockClosed,
   HiOutlineArrowsExpand, HiOutlineShieldExclamation,
+  HiOutlineCheck, HiOutlineX,
 } from 'react-icons/hi';
 import {
   getPublicExam, startPublicExam, savePublicAnswer, submitPublicExam,
@@ -115,7 +116,7 @@ function Landing({ info, onBegin, starting, onViewResult }) {
           {exam.lockdown_enabled && (
             <div className="rounded-2xl bg-amber-50 border border-amber-200/80 p-4 space-y-1.5 text-xs text-amber-900">
               <p className="flex items-start gap-2 font-bold"><HiOutlineLockClosed className="w-4 h-4 flex-shrink-0 mt-0.5" /> This exam runs in a locked fullscreen session.</p>
-              <p className="flex items-start gap-2"><HiOutlineShieldExclamation className="w-4 h-4 flex-shrink-0 mt-0.5 text-amber-600" /> Exiting fullscreen or switching tabs is recorded as a violation, and too many will auto-submit your exam.</p>
+              <p className="flex items-start gap-2"><HiOutlineShieldExclamation className="w-4 h-4 flex-shrink-0 mt-0.5 text-amber-600" /> Exiting fullscreen or switching tabs is recorded as a violation, and too many will auto submit your exam.</p>
             </div>
           )}
 
@@ -193,53 +194,116 @@ function ResultSummary({ token, attemptId }) {
   const correct = attempt?.answers?.filter((a) => a.is_correct === true).length || 0;
   const incorrect = attempt?.answers?.filter((a) => a.is_correct === false).length || 0;
 
+  const rawPct = attempt?.percentage != null
+    ? Number(attempt.percentage)
+    : (attempt?.max_score ? (attempt.score / attempt.max_score) * 100 : 0);
+  const percentage = Math.min(100, Math.max(0, Math.round(rawPct * 10) / 10));
+  const displayPercentage = Number.isInteger(percentage) ? percentage : percentage.toFixed(1);
+
   return (
-    <div className="fixed inset-0 bg-gray-100 overflow-y-auto">
+    <div className="fixed inset-0 bg-slate-100/90 overflow-y-auto">
       <div className="min-h-full flex items-center justify-center p-4 sm:p-6">
-        <div className="w-full max-w-md bg-white rounded-3xl border border-slate-200/80 shadow-xl p-6 sm:p-8 text-center space-y-5">
+        <div className="w-full max-w-md bg-white rounded-3xl border border-slate-200/80 shadow-xl p-7 sm:p-8 text-center space-y-6">
           <img src={logoImg} alt="IFOA" className="h-9 w-auto mx-auto" />
+
           {!attempt ? (
-            <>
-              <div className="w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto"><HiOutlineCheckCircle className="w-7 h-7" /></div>
+            <div className="space-y-3 py-4">
+              <div className="w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto">
+                <HiOutlineCheckCircle className="w-7 h-7" />
+              </div>
               <h1 className="text-xl font-black text-slate-900">Exam Submitted</h1>
-              <p className="text-sm text-slate-500">Your responses have been recorded. Thank you.</p>
-            </>
+              <p className="text-xs text-slate-500 font-medium">Your responses have been recorded successfully. Thank you.</p>
+            </div>
           ) : pending ? (
-            <>
-              <div className="w-14 h-14 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto"><HiOutlineClock className="w-7 h-7" /></div>
+            <div className="space-y-3 py-4">
+              <div className="w-14 h-14 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto">
+                <HiOutlineClock className="w-7 h-7" />
+              </div>
               <h1 className="text-xl font-black text-slate-900">Submitted for Review</h1>
-              <p className="text-sm text-slate-500">Your exam includes questions that require manual grading. Your final score will be available after review.</p>
-            </>
+              <p className="text-xs text-slate-500 font-medium">Your exam contains questions that require instructor review. Your final score will be published once grading is complete.</p>
+            </div>
           ) : (
-            <>
-              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mx-auto ${attempt.passed ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
-                {attempt.passed ? <HiOutlineCheckCircle className="w-7 h-7" /> : <HiOutlineExclamationCircle className="w-7 h-7" />}
+            <div className="space-y-6">
+              {/* Score Circular Gauge */}
+              <div className="relative w-28 h-28 mx-auto flex items-center justify-center select-none">
+                <svg className="w-28 h-28 transform -rotate-90" viewBox="0 0 100 100">
+                  <circle
+                    cx="50"
+                    cy="50"
+                    r="42"
+                    stroke="#f1f5f9"
+                    strokeWidth="7"
+                    fill="transparent"
+                  />
+                  <circle
+                    cx="50"
+                    cy="50"
+                    r="42"
+                    stroke={attempt.passed ? '#10b981' : '#f43f5e'}
+                    strokeWidth="7"
+                    strokeDasharray={2 * Math.PI * 42}
+                    strokeDashoffset={2 * Math.PI * 42 - (percentage / 100) * (2 * Math.PI * 42)}
+                    strokeLinecap="round"
+                    fill="transparent"
+                    className="transition-all duration-1000 ease-out"
+                  />
+                </svg>
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
+                  <span className={`${String(displayPercentage).length > 4 ? 'text-xl' : 'text-2xl'} font-black text-slate-900 leading-none tracking-tight`}>
+                    {displayPercentage}%
+                  </span>
+                  <span className="text-[9px] font-black uppercase text-slate-400 mt-1 tracking-wider">
+                    SCORE
+                  </span>
+                </div>
               </div>
-              <div>
-                <h1 className="text-3xl font-black text-slate-900">{attempt.percentage}%</h1>
-                <p className="text-xs font-bold text-slate-400 mt-0.5">{attempt.score} / {attempt.max_score} points</p>
+
+              {/* Status and Points */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-center">
+                  <span className={`inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full text-xs font-black uppercase tracking-wider border shadow-2xs ${
+                    attempt.passed
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      : 'bg-rose-50 text-rose-700 border-rose-200'
+                  }`}>
+                    {attempt.passed ? (
+                      <HiOutlineCheck className="w-3.5 h-3.5 stroke-[3]" />
+                    ) : (
+                      <HiOutlineX className="w-3.5 h-3.5 stroke-[3]" />
+                    )}
+                    {attempt.passed ? 'PASSED' : 'NOT PASSED'}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400 font-medium">
+                  {attempt.score != null && attempt.max_score != null
+                    ? `${attempt.score} of ${attempt.max_score} Total Points`
+                    : `${correct} of ${total} Questions Correct`}
+                </p>
               </div>
-              <span className={`inline-flex items-center gap-1.5 px-4 py-1 rounded-full text-sm font-black ${attempt.passed ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-                {attempt.passed ? 'Passed' : 'Not Passed'}
-              </span>
-              <div className="grid grid-cols-3 gap-3 pt-2">
-                <Stat label="Total" value={total} />
-                <Stat label="Correct" value={correct} color="text-emerald-600" />
-                <Stat label="Incorrect" value={incorrect} color="text-rose-600" />
+
+              {/* KPI Performance Tiles */}
+              <div className="grid grid-cols-3 gap-2.5 pt-1">
+                <div className="rounded-2xl bg-slate-50 border border-slate-200/80 p-3 text-center">
+                  <p className="text-lg font-black text-slate-900">{total}</p>
+                  <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mt-0.5">Total</p>
+                </div>
+                <div className="rounded-2xl bg-emerald-50/50 border border-emerald-200/70 p-3 text-center">
+                  <p className="text-lg font-black text-emerald-600">{correct}</p>
+                  <p className="text-[10px] font-extrabold text-emerald-600/80 uppercase tracking-wider mt-0.5">Correct</p>
+                </div>
+                <div className="rounded-2xl bg-rose-50/50 border border-rose-200/70 p-3 text-center">
+                  <p className="text-lg font-black text-rose-600">{incorrect}</p>
+                  <p className="text-[10px] font-extrabold text-rose-600/80 uppercase tracking-wider mt-0.5">Incorrect</p>
+                </div>
               </div>
-            </>
+            </div>
           )}
-          <p className="text-xs text-slate-400 pt-2">You may now close this window.</p>
+
+          <div className="pt-3 border-t border-slate-100 flex items-center justify-center gap-1.5 text-xs text-slate-400 font-medium">
+            <span>You may now close this window.</span>
+          </div>
         </div>
       </div>
-    </div>
-  );
-}
-function Stat({ label, value, color = 'text-slate-900' }) {
-  return (
-    <div className="rounded-2xl border border-slate-200/80 p-3">
-      <p className={`text-xl font-black ${color}`}>{value}</p>
-      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">{label}</p>
     </div>
   );
 }

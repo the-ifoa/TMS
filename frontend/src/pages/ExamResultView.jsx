@@ -3,7 +3,6 @@ import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   HiOutlineArrowLeft,
-  HiOutlinePrinter,
   HiOutlineCheck,
   HiOutlineX,
   HiOutlineClock,
@@ -210,6 +209,30 @@ export default function ExamResultView() {
   const weakestType = typeBreakdown[0];
   const strongestType = typeBreakdown[typeBreakdown.length - 1];
 
+  // Per-section breakdown (only meaningful when the exam is split into sections)
+  const sectionStats = {};
+  (attempt.answers || []).forEach((a) => {
+    if (a.is_correct == null) return;
+    const q = questionById[String(a.question_id)];
+    if (!q) return;
+    const name = (q.section || '').trim();
+    if (!name) return;
+    const bucket = sectionStats[name] || { correct: 0, total: 0 };
+    bucket.total += 1;
+    if (a.is_correct) bucket.correct += 1;
+    sectionStats[name] = bucket;
+  });
+  const sectionBreakdown = Object.entries(sectionStats)
+    .map(([section, s]) => ({
+      section,
+      correct: s.correct,
+      total: s.total,
+      pct: Math.round((s.correct / s.total) * 100),
+    }))
+    .sort((a, b) => a.pct - b.pct);
+  const weakestSection = sectionBreakdown[0];
+  const strongestSection = sectionBreakdown[sectionBreakdown.length - 1];
+
   // Time calculations
   let totalSeconds = null;
   if (attempt.time_taken_seconds != null) {
@@ -231,10 +254,11 @@ export default function ExamResultView() {
   const timeFormatted = compDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 
   // Gauge setup
-  const circleRadius = 70;
-  const circumference = 2 * Math.PI * circleRadius;
-  const percentage = Math.min(100, Math.max(0, attempt.percentage || 0));
-  const strokeOffset = circumference - (percentage / 100) * circumference;
+  const rawPct = attempt.percentage != null
+    ? Number(attempt.percentage)
+    : (attempt.max_score ? (attempt.score / attempt.max_score) * 100 : 0);
+  const percentage = Math.min(100, Math.max(0, Math.round(rawPct * 10) / 10));
+  const displayPercentage = Number.isInteger(percentage) ? percentage : percentage.toFixed(1);
 
   // Filtered answers list
   const filteredAnswers = (attempt.answers || []).filter((a) => {
@@ -255,14 +279,6 @@ export default function ExamResultView() {
           >
             <HiOutlineArrowLeft className="w-4 h-4 text-slate-500" />
             <span>Back to Dashboard</span>
-          </button>
-
-          <button
-            onClick={() => window.print()}
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold transition-all border border-slate-200/90 shadow-2xs"
-          >
-            <HiOutlinePrinter className="w-4 h-4 text-slate-500" />
-            <span>Print Report</span>
           </button>
         </div>
 
@@ -319,32 +335,34 @@ export default function ExamResultView() {
               {!isPending ? (
                 <>
                   {/* Circular Score Ring */}
-                  <div className="relative w-16 h-16 flex items-center justify-center flex-shrink-0">
-                    <svg className="w-16 h-16 transform -rotate-90">
+                  <div className="relative w-[70px] h-[70px] flex items-center justify-center flex-shrink-0 select-none">
+                    <svg className="w-[70px] h-[70px] transform -rotate-90" viewBox="0 0 70 70">
                       <circle
-                        cx="32"
-                        cy="32"
-                        r="26"
+                        cx="35"
+                        cy="35"
+                        r="29"
                         stroke="rgba(255, 255, 255, 0.12)"
                         strokeWidth="5"
                         fill="transparent"
                       />
                       <circle
-                        cx="32"
-                        cy="32"
-                        r="26"
+                        cx="35"
+                        cy="35"
+                        r="29"
                         stroke={attempt.passed ? '#10b981' : '#f43f5e'}
                         strokeWidth="5"
-                        strokeDasharray={2 * Math.PI * 26}
-                        strokeDashoffset={2 * Math.PI * 26 - (percentage / 100) * (2 * Math.PI * 26)}
+                        strokeDasharray={2 * Math.PI * 29}
+                        strokeDashoffset={2 * Math.PI * 29 - (percentage / 100) * (2 * Math.PI * 29)}
                         strokeLinecap="round"
                         fill="transparent"
                         className="transition-all duration-1000 ease-out"
                       />
                     </svg>
-                    <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                      <span className="text-sm font-black text-white leading-none">{attempt.percentage}%</span>
-                      <span className="text-[8px] font-extrabold uppercase text-slate-400 mt-0.5">SCORE</span>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none px-1">
+                      <span className={`${String(displayPercentage).length > 4 ? 'text-[11px]' : String(displayPercentage).length > 3 ? 'text-xs' : 'text-sm'} font-black text-white leading-none tracking-tight`}>
+                        {displayPercentage}%
+                      </span>
+                      <span className="text-[8px] font-extrabold uppercase text-slate-400 mt-0.5 tracking-wider">SCORE</span>
                     </div>
                   </div>
 
@@ -466,6 +484,57 @@ export default function ExamResultView() {
                   })}
                 </div>
               </div>
+
+              {/* Per-Section Accuracy Breakdown */}
+              {sectionBreakdown.length > 0 && (
+                <div className="bg-white rounded-3xl border border-slate-200/90 p-6 shadow-2xs space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-100 gap-2">
+                    <div>
+                      <h2 className="text-sm font-extrabold text-slate-900 tracking-tight">
+                        Accuracy Breakdown by Section
+                      </h2>
+                      <p className="text-[11px] text-slate-400 font-medium">Performance per exam section</p>
+                    </div>
+                    {sectionBreakdown.length > 1 && (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2.5 py-1 rounded-xl">
+                          Strongest: {strongestSection.section} ({strongestSection.pct}%)
+                        </span>
+                        {weakestSection && weakestSection.pct < 50 && (
+                          <span className="text-[10px] font-extrabold text-rose-700 bg-rose-50 border border-rose-200/80 px-2.5 py-1 rounded-xl">
+                            Focus: {weakestSection.section} ({weakestSection.pct}%)
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                    {sectionBreakdown.map((s) => {
+                      const c = accuracyStatusColor(s.pct);
+                      return (
+                        <div key={s.section} className="space-y-2 bg-slate-50/70 border border-slate-200/70 p-3.5 rounded-2xl hover:border-slate-300 transition-all">
+                          <div className="flex items-center justify-between text-xs gap-2">
+                            <span className="font-extrabold text-slate-800 truncate">{s.section}</span>
+                            <div className="flex items-center gap-1.5 flex-shrink-0">
+                              <span className="text-[10px] font-bold text-slate-400">{s.correct}/{s.total}</span>
+                              <span className={`px-2 py-0.5 rounded-md text-[10px] font-black ${c.bg} ${c.text}`}>
+                                {s.pct}%
+                              </span>
+                            </div>
+                          </div>
+                          <div className="h-2 rounded-full bg-slate-200/80 overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all duration-700 ease-out ${c.bar}`}
+                              style={{ width: `${s.pct}%` }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
             </div>
 

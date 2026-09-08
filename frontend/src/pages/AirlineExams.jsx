@@ -44,28 +44,40 @@ export default function AirlineExams() {
       .finally(() => setLoading(false));
   }, []);
 
-  // Group invites into batches. Legacy invites with no batch_id fall back to
-  // one bucket per exam + send-day so they still show up sensibly.
+  // One card per EXAM — every invite ever sent for that exam rolls up together,
+  // regardless of which send-batch it came from. If a student was re-invited,
+  // keep just their most recent invite (a completed one always wins).
   const batches = useMemo(() => {
     const map = new Map();
+    const when = (r) => new Date(r.sent_at || r.created_at || 0).getTime();
     results.forEach((r) => {
-      const key = r.batch_id || `${r.exam_id}::${(r.sent_at || r.created_at || '').slice(0, 10)}`;
+      const key = r.exam_id;
       if (!map.has(key)) {
         map.set(key, {
           key,
           exam_id: r.exam_id,
           exam_title: r.exam_title_snapshot,
           sent_at: r.sent_at || r.created_at,
-          students: [],
+          byStudent: new Map(),
         });
       }
       const b = map.get(key);
-      b.students.push(r);
-      if (new Date(r.sent_at || r.created_at) > new Date(b.sent_at)) b.sent_at = r.sent_at || r.created_at;
+      const pid = String(r.participant_id || r.id);
+      const prev = b.byStudent.get(pid);
+      const rank = (x) => (x.status === 'completed' ? 2 : 1);          // completed beats anything
+      const better = !prev
+        || rank(r) > rank(prev)
+        || (rank(r) === rank(prev) && when(r) >= when(prev));           // same status → keep newest
+      if (better) b.byStudent.set(pid, r);
+      if (when(r) > when({ sent_at: b.sent_at })) b.sent_at = r.sent_at || r.created_at;
     });
-    let arr = [...map.values()];
-    arr.forEach((b) => {
-      b.completed = b.students.filter((s) => s.status === 'completed').length;
+    let arr = [...map.values()].map((b) => {
+      const students = [...b.byStudent.values()];
+      return {
+        ...b,
+        students,
+        completed: students.filter((s) => s.status === 'completed').length,
+      };
     });
     arr.sort((a, b) => (sortDir === 'newest' ? new Date(b.sent_at) - new Date(a.sent_at) : new Date(a.sent_at) - new Date(b.sent_at)));
     return arr;
@@ -92,7 +104,7 @@ export default function AirlineExams() {
             <div className="min-w-0">
               <h1 className="text-sm sm:text-base font-bold text-slate-900 tracking-tight leading-none truncate">Exam Results</h1>
               <p className="text-[11px] font-medium text-slate-400 mt-0.5 truncate hidden sm:block">
-                Exams sent to your students, grouped by batch
+                Exams sent to your students, grouped by exam
               </p>
             </div>
           </div>
@@ -113,7 +125,7 @@ export default function AirlineExams() {
           <Card className="p-12 text-center rounded-2xl">
             <HiOutlineMail className="w-10 h-10 text-slate-300 mx-auto mb-3" />
             <p className="text-sm font-semibold text-slate-600">No exam invitations yet</p>
-            <p className="text-xs text-slate-400 mt-1">Once IFOA emails exam links to your students, batches will appear here.</p>
+            <p className="text-xs text-slate-400 mt-1">Once IFOA emails exam links to your students, results will appear here.</p>
           </Card>
         ) : (
           <>
@@ -138,7 +150,7 @@ export default function AirlineExams() {
 
             {/* Batch cards */}
             {filteredBatches.length === 0 ? (
-              <Card className="p-10 text-center text-sm text-slate-400 font-medium rounded-2xl">No batches match your search.</Card>
+              <Card className="p-10 text-center text-sm text-slate-400 font-medium rounded-2xl">No exams match your search.</Card>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {filteredBatches.map((b) => (

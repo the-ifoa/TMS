@@ -32,10 +32,13 @@ function ownsExam(req, exam) {
   return exam.owner_airline && String(exam.owner_airline) === me;
 }
 
-// True when the caller may assign / send / view invites for this exam. Same as
-// ownsExam, but a department may also do this for exams owned by its parent
-// airline (assigning them to its own team roster only).
+// True when the caller may assign / send / view invites for this exam.
+//  • IFOA admin        → any global (admin-owned) exam
+//  • owning airline    → its own exams
+//  • department        → its own exams, plus exams owned by its parent airline
+//    (assigning them to its own team roster only)
 function canAssignExam(req, exam) {
+  if (isAdmin(req)) return !exam.owner_airline;
   if (ownsExam(req, exam)) return true;
   const s = req.scope;
   return !!(s && s.isDepartment && exam.owner_airline

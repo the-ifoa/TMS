@@ -1081,7 +1081,7 @@ export default function ExamAttempts() {
                           ) : (
                             <HiOutlineXCircle className="w-4 h-4 text-rose-600 stroke-[2.5]" />
                           )}
-                          <span>{a.percentage}%</span>
+                          <span>{Number.isInteger(Number(a.percentage)) ? a.percentage : Number(Number(a.percentage).toFixed(1))}%</span>
                         </div>
                       )}
 

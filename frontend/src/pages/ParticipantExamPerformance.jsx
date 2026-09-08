@@ -681,6 +681,63 @@ export default function ParticipantExamPerformance() {
 
             </div>
 
+            {/* Per-Section Performance (across all graded attempts) */}
+            {(() => {
+              const rows = (section_breakdown || [])
+                .filter((s) => (s.section || '').trim() && s.total > 0)
+                .map((s) => ({ ...s, pct: s.accuracy == null ? 0 : Math.round(s.accuracy) }))
+                .sort((a, b) => a.pct - b.pct);
+              if (rows.length === 0) return null;
+              const tier = (p) => p >= 80
+                ? { bg: 'bg-emerald-100', text: 'text-emerald-700', bar: 'bg-emerald-500' }
+                : p >= 60
+                ? { bg: 'bg-amber-100', text: 'text-amber-700', bar: 'bg-amber-500' }
+                : { bg: 'bg-rose-100', text: 'text-rose-700', bar: 'bg-rose-500' };
+              const strong = rows[rows.length - 1];
+              const weak = rows[0];
+              return (
+                <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-2xs space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-3 gap-2">
+                    <div>
+                      <h3 className="text-sm font-extrabold text-slate-900 tracking-tight">Accuracy Breakdown by Section</h3>
+                      <p className="text-[11px] text-slate-400 font-medium">Aggregated across every graded attempt</p>
+                    </div>
+                    {rows.length > 1 && (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2.5 py-1 rounded-xl">
+                          Strongest: {strong.section} ({strong.pct}%)
+                        </span>
+                        {weak.pct < 50 && (
+                          <span className="text-[10px] font-extrabold text-rose-700 bg-rose-50 border border-rose-200/80 px-2.5 py-1 rounded-xl">
+                            Focus: {weak.section} ({weak.pct}%)
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                    {rows.map((s) => {
+                      const c = tier(s.pct);
+                      return (
+                        <div key={s.section} className="space-y-2 bg-slate-50/70 border border-slate-200/70 p-3.5 rounded-2xl">
+                          <div className="flex items-center justify-between text-xs gap-2">
+                            <span className="font-extrabold text-slate-800 truncate">{s.section}</span>
+                            <div className="flex items-center gap-1.5 flex-shrink-0">
+                              <span className="text-[10px] font-bold text-slate-400">{s.correct}/{s.total}</span>
+                              <span className={`px-2 py-0.5 rounded-md text-[10px] font-black ${c.bg} ${c.text}`}>{s.pct}%</span>
+                            </div>
+                          </div>
+                          <div className="h-2 rounded-full bg-slate-200/80 overflow-hidden">
+                            <div className={`h-full rounded-full transition-all duration-700 ease-out ${c.bar}`} style={{ width: `${s.pct}%` }} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* Complete Attempt Log Table */}
             <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-2xs space-y-4">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">

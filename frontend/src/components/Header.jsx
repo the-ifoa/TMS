@@ -458,10 +458,10 @@ export default function Header({ sidebarOpen, setSidebarOpen }) {
                 <img
                   src={admin.logo_url}
                   alt={admin.airlineName || 'Logo'}
-                  className="h-9 w-auto max-w-[140px] object-contain flex-shrink-0"
+                  className="h-8 max-h-8 sm:h-9 sm:max-h-9 w-auto max-w-[120px] object-contain flex-shrink-0"
                 />
               ) : (
-                <Avatar className="w-9 h-9">
+                <Avatar className="w-9 h-9 border border-slate-200/80 shadow-2xs flex-shrink-0">
                   <AvatarFallback className="bg-[#0B132B] text-white font-bold text-xs">
                     {!isAdmin && admin?.airlineName ? admin.airlineName.charAt(0).toUpperCase() : initials}
                   </AvatarFallback>

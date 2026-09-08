@@ -43,6 +43,7 @@ exports.listParticipants = async (req, res) => {
   try {
     const { search, training_type, company } = req.query;
     const filter = {};
+    const andClauses = [];
 
     // Airlines see ONLY their own submissions
     if (req.admin.role === 'airline') {
@@ -50,6 +51,7 @@ exports.listParticipants = async (req, res) => {
         // No ID in token — cannot safely identify ownership, return nothing
         return res.json([]);
       }
+      const isDept = !!(req.scope && req.scope.isDepartment);
 
       // PRIMARY filter: match by submitted_by (MongoDB _id of the airline account).
       // This is the ONLY safe filter — two airline accounts with the same airlineName
@@ -57,18 +59,16 @@ exports.listParticipants = async (req, res) => {
       // A department sees ONLY its own records; a top-level airline sees only its
       // own — NOT its departments' (each department keeps a separate list).
       const visibleIds = visibleOwnerIds(req) || [req.admin.id];
-      const airlineFilters = [{ submitted_by: { $in: visibleIds } }];
+      const ownerClauses = [{ submitted_by: { $in: visibleIds } }];
 
       // LEGACY fallback: for old records that were created before submitted_by existed
       // (submitted_by === null), also match by airline_name/company name.
       // The submitted_by: null condition ensures a record owned by another airline
       // (which has a different submitted_by ObjectId) is never accidentally included.
-      // Departments are excluded — a legacy record has no owner, so it belongs to
-      // the main airline list, never a department's private list.
-      if (req.admin.airlineName && !(req.scope && req.scope.isDepartment)) {
+      if (req.admin.airlineName && !isDept) {
         const escaped = req.admin.airlineName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const airlineRegex = new RegExp(`^${escaped}$`, 'i');
-        airlineFilters.push({
+        ownerClauses.push({
           submitted_by: null,
           $or: [
             { airline_name: airlineRegex },
@@ -76,13 +76,57 @@ exports.listParticipants = async (req, res) => {
           ],
         });
       }
+      andClauses.push({ $or: ownerClauses });
 
-      filter.$or = airlineFilters;
+      // A top-level airline must NEVER see records that belong to one of its
+      // departments — a department candidate carries the parent airline's name
+      // (departments inherit `airlineName`), so without this guard a
+      // department's people would leak into the main list via the legacy
+      // name-match above. Exclude both by owner id and by the department's
+      // name (covers legacy department candidates whose submitted_by is null).
+      if (!isDept) {
+        const deptIds = (req.scope && req.scope.departmentIds) || [];
+        if (deptIds.length) {
+          const deptDocs = await Airline.find({ _id: { $in: deptIds } })
+            .select('department_name name').lean();
+          const deptNames = [...new Set(
+            deptDocs.flatMap((d) => [d.department_name, d.name]).filter(Boolean),
+          )];
+          andClauses.push({ submitted_by: { $nin: deptIds } });
+          if (deptNames.length) {
+            andClauses.push({
+              $or: [
+                { submitted_by: { $ne: null } },       // owned records already filtered above
+                { department: { $nin: deptNames } },    // unowned: must not carry a department's name
+              ],
+            });
+          }
+        }
+      }
+    } else {
+      // Admin: sees every IFOA-level participant, but NOT the private rosters
+      // that belong to airline departments — those are managed entirely by each
+      // department and surface through the exam / results flows instead.
+      const deptDocs = await Airline.find({ parent_airline: { $ne: null } })
+        .select('department_name name').lean();
+      const deptIds = deptDocs.map((d) => d._id);
+      const deptNames = [...new Set(
+        deptDocs.flatMap((d) => [d.department_name, d.name]).filter(Boolean),
+      )];
+      if (deptIds.length) andClauses.push({ submitted_by: { $nin: deptIds } });
+      if (deptNames.length) {
+        andClauses.push({
+          $or: [
+            { submitted_by: { $ne: null } },
+            { department: { $nin: deptNames } },
+          ],
+        });
+      }
     }
 
     if (search) {
       const regex = new RegExp(search, 'i');
-      const searchOr = {
+      andClauses.push({
         $or: [
           { participant_name: regex },
           { first_name: regex },
@@ -90,15 +134,12 @@ exports.listParticipants = async (req, res) => {
           { company: regex },
           { department: regex },
         ],
-      };
-      // If filter already has $or (airline filtering), combine with AND
-      if (filter.$or) {
-        filter.$and = [{ $or: filter.$or }, searchOr];
-        delete filter.$or;
-      } else {
-        Object.assign(filter, searchOr);
-      }
+      });
     }
+
+    if (andClauses.length === 1) Object.assign(filter, andClauses[0]);
+    else if (andClauses.length > 1) filter.$and = andClauses;
+
     if (training_type) filter.training_type = training_type;
     if (company) filter.company = company;
 
@@ -155,13 +196,19 @@ exports.listByAirline = async (req, res) => {
       return res.status(403).json({ error: 'Admin access required.' });
     }
 
-    // Only top-level airline accounts appear as cards here — department
-    // sub-users (parent_airline set) are managed from the Team page instead.
-    // Their participants still roll up under the parent airline's card.
-    const airlines        = await Airline.find({ parent_airline: null }).sort({ airlineName: 1 });
-    const departments     = await Airline.find({ parent_airline: { $ne: null } }).select('parent_airline').lean();
-    const parentByDept    = new Map(departments.map(d => [String(d._id), String(d.parent_airline)]));
-    const participantDocs = await Participant.find({}).sort({ created_at: -1 });
+    // Only top-level airline accounts appear as cards here. Department sub-users
+    // (parent_airline set) keep a fully separate roster managed from the Team
+    // page — their participants are NOT shown on this admin view at all.
+    const airlines    = await Airline.find({ parent_airline: null }).sort({ airlineName: 1 });
+    const deptDocs    = await Airline.find({ parent_airline: { $ne: null } })
+      .select('department_name name').lean();
+    const deptIdSet   = new Set(deptDocs.map((d) => String(d._id)));
+    const deptNameSet = new Set(deptDocs.flatMap((d) => [d.department_name, d.name]).filter(Boolean));
+    const participantDocs = (await Participant.find({}).sort({ created_at: -1 }))
+      .filter((p) => {
+        if (p.submitted_by) return !deptIdSet.has(String(p.submitted_by));
+        return !(p.department && deptNameSet.has(p.department));
+      });
 
     // Attach DHL ST-001 extra-cert status — lives in its own collection, so
     // it's merged in here rather than being a field on Participant itself.
@@ -178,10 +225,7 @@ exports.listByAirline = async (req, res) => {
     const result = airlines.map((a) => ({
       airline: a.toJSON(),
       participants: participants.filter((p) => {
-        if (p.submitted_by) {
-          const owner = String(p.submitted_by);
-          return owner === String(a._id) || parentByDept.get(owner) === String(a._id);
-        }
+        if (p.submitted_by) return String(p.submitted_by) === String(a._id);
         return p.company === a.airlineName || p.airline_name === a.airlineName;
       }),
     }));
@@ -218,12 +262,28 @@ exports.getParticipant = async (req, res) => {
 
     if (req.admin.role === 'airline') {
       const isDept = !!(req.scope && req.scope.isDepartment);
-      const ownedById   = participant.submitted_by && String(participant.submitted_by) === String(req.admin.id);
-      // Legacy name fallback only for a top-level airline — a department has no
-      // legacy records (its roster is always explicitly owned) and must not read
-      // the parent airline's unowned records via the shared airlineName.
-      const ownedByName = !isDept && !participant.submitted_by && participant.airline_name === req.admin.airlineName;
-      if (!ownedById && !ownedByName) {
+      const ownedById = participant.submitted_by && String(participant.submitted_by) === String(req.admin.id);
+
+      // A top-level airline must never reach a record that belongs to one of its
+      // departments — not by owner id, and not via the legacy name-match below
+      // (a department candidate carries the parent's airline_name).
+      const deptIds = (req.scope && req.scope.departmentIds) || [];
+      const ownedByDept = participant.submitted_by
+        && deptIds.some((d) => String(d) === String(participant.submitted_by));
+      let belongsToDept = ownedByDept;
+      if (!isDept && !participant.submitted_by && deptIds.length && participant.department) {
+        const deptDocs = await Airline.find({ _id: { $in: deptIds } })
+          .select('department_name name').lean();
+        const deptNames = new Set(deptDocs.flatMap((d) => [d.department_name, d.name]).filter(Boolean));
+        if (deptNames.has(participant.department)) belongsToDept = true;
+      }
+
+      // Legacy name fallback only for a top-level airline, and only for records
+      // that don't belong to a department.
+      const ownedByName = !isDept && !belongsToDept
+        && !participant.submitted_by && participant.airline_name === req.admin.airlineName;
+
+      if (belongsToDept || (!ownedById && !ownedByName)) {
         return res.status(403).json({ error: 'Access denied.' });
       }
     }
@@ -320,7 +380,13 @@ exports.createCandidate = async (req, res) => {
     }
     if (!fName) return res.status(400).json({ error: 'First name is required.' });
 
-    const me = await Airline.findById(req.admin.id).select('airlineName department_name name');
+    // Canonical department id from the resolved scope — never fall back to a
+    // value that could resolve to the parent airline, or the record would leak
+    // into the main airline's list.
+    const ownerId = s.selfId || req.admin.id;
+    if (!ownerId) return res.status(400).json({ error: 'Could not resolve the department account.' });
+
+    const me = await Airline.findById(ownerId).select('airlineName department_name name');
     const company    = me?.airlineName || req.admin.airlineName || 'Airline';
     const department = me?.department_name || me?.name || 'Department';
 
@@ -334,7 +400,7 @@ exports.createCandidate = async (req, res) => {
       training_type:    null,
       training_date:    null,
       airline_name:     company,
-      submitted_by:     req.admin.id,   // department owns its own roster
+      submitted_by:     ownerId,   // department owns its own roster
       locked:           true,
     });
 

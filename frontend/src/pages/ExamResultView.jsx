@@ -290,8 +290,8 @@ export default function ExamResultView() {
             
             {/* Left Info */}
             <div className="space-y-3">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/15 text-[10px] font-black uppercase tracking-widest text-indigo-300">
-                <HiOutlineChartBar className="w-3.5 h-3.5" /> Assessment Result Analytics
+              <div className="inline-flex items-center px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/15 text-[10px] font-black uppercase tracking-widest text-indigo-300">
+                Assessment Result Analytics
               </div>
 
               <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight leading-tight">
@@ -315,7 +315,7 @@ export default function ExamResultView() {
             </div>
 
             {/* Right Score Gauge Glassmorphism Block */}
-            <div className="flex items-center gap-4 bg-slate-800/80 backdrop-blur-md px-5 py-4 rounded-2xl border border-slate-700/80 flex-shrink-0 shadow-inner">
+            <div className="flex items-center gap-5 bg-slate-800/80 backdrop-blur-md px-6 py-5 rounded-2xl border border-slate-700/80 flex-shrink-0 shadow-inner">
               {!isPending ? (
                 <>
                   {/* Circular Score Ring */}
@@ -348,21 +348,21 @@ export default function ExamResultView() {
                     </div>
                   </div>
 
-                  <div className="space-y-1">
-                    <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider block">
+                  <div className="flex flex-col justify-center space-y-1.5">
+                    <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">
                       Performance Verdict
                     </span>
-                    <div className="flex items-center gap-2">
-                      <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider border ${
+                    <div className="flex items-center">
+                      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider border ${
                         attempt.passed
                           ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
                           : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
                       }`}>
-                        {attempt.passed ? <HiOutlineCheck className="w-3 h-3 stroke-[3]" /> : <HiOutlineX className="w-3 h-3 stroke-[3]" />}
+                        {attempt.passed ? <HiOutlineCheck className="w-3.5 h-3.5 stroke-[3]" /> : <HiOutlineX className="w-3.5 h-3.5 stroke-[3]" />}
                         {attempt.passed ? 'PASSED' : 'NOT PASSED'}
                       </span>
                     </div>
-                    <p className="text-[10px] text-slate-400 font-medium">
+                    <p className="text-[11px] text-slate-400 font-medium">
                       {attempt.score != null && attempt.max_score != null
                         ? `${attempt.score} of ${attempt.max_score} Total Points`
                         : `${correctCount} of ${totalQuestions} Correct`}

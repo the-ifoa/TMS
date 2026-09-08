@@ -4,6 +4,7 @@ const bcrypt = require('bcryptjs');
 const Admin = require('../models/Admin');
 const Airline = require('../models/Airline');
 const { sendPasswordResetEmail, sendOtpEmail } = require('../services/emailService');
+const { frontendLink } = require('../config/appUrls');
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) throw new Error('JWT_SECRET environment variable is required');
@@ -480,9 +481,8 @@ exports.airlineForgotPassword = async (req, res) => {
     airline.resetPasswordExpiry = expiry;
     await airline.save();
 
-    // Build reset URL — points to the frontend
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-    const resetUrl    = `${frontendUrl}/reset-password?token=${token}&email=${encodeURIComponent(airline.email)}`;
+    // Build reset URL — points to the frontend (FRONTEND_URL from the environment)
+    const resetUrl = frontendLink(`/reset-password?token=${token}&email=${encodeURIComponent(airline.email)}`);
 
     await sendPasswordResetEmail({
       toEmail:     airline.email,

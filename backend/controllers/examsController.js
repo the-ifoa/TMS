@@ -8,6 +8,7 @@ const { examImageUpload, deleteCloudinaryImage } = require('../services/upload')
 const { sanitizeQuestionForTaking, computeAttemptScore } = require('../services/examGrading');
 const { finalizeAttempt, schedulingError } = require('../services/examAttemptFlow');
 const { sendExamInviteEmail } = require('../services/emailService');
+const { frontendLink } = require('../config/appUrls');
 
 function isAdmin(req) {
   return req.admin?.role === 'admin' || req.admin?.role === 'Administrator';
@@ -715,7 +716,6 @@ exports.sendInvites = async (req, res) => {
     const participants = await Participant.find(query);
     const airlines = await Airline.find({});
     const airlineName = (id) => airlines.find((a) => String(a._id) === String(id))?.airlineName || '';
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
 
     const sent = [];
     const skipped = [];
@@ -761,7 +761,7 @@ exports.sendInvites = async (req, res) => {
           examTitle: exam.title,
           durationMinutes: exam.duration_minutes,
           maxAttempts: exam.max_attempts,
-          link: `${frontendUrl}/exam/${invite.token}`,
+          link: frontendLink(`/exam/${invite.token}`),
           expiresAt: invite.expires_at,
         });
         sent.push({ id: String(p._id), name: p.participant_name, email: p.email });

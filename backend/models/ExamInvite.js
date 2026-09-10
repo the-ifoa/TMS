@@ -33,6 +33,12 @@ const examInviteSchema = new mongoose.Schema(
 
     attempt_id:  { type: mongoose.Schema.Types.ObjectId, ref: 'ExamAttempt', default: null },
 
+    // Extra attempts granted on top of exam.max_attempts, e.g. when an admin
+    // reassigns the exam so a participant who already finished can take it again.
+    // Each reassign adds one; the public take-flow gates on
+    // max_attempts + bonus_attempts.
+    bonus_attempts: { type: Number, default: 0 },
+
     // A "batch" is one admin send action — every invite dispatched together in
     // a single Send Links click shares this id, so the airline can view its
     // students grouped by the batch they were sent in.

@@ -1211,14 +1211,53 @@ export default function Participants() {
           <div className="min-w-0 flex items-center gap-2.5">
             <h1 className="text-base sm:text-xl font-bold text-slate-900 tracking-tight truncate">Participants</h1>
             <span className="hidden xs:inline-block px-2.5 py-0.5 rounded-full bg-slate-100 border border-slate-200 text-[10px] sm:text-[11px] font-bold text-slate-700 flex-shrink-0">Roster</span>
+            {records.length > 0 && (
+              <span className="hidden sm:inline-block px-2.5 py-0.5 rounded-full bg-blue-50 border border-blue-200/70 text-[10px] sm:text-[11px] font-bold text-blue-700 flex-shrink-0">
+                {records.filter(r => r.email).length}/{records.length} with email
+              </span>
+            )}
           </div>
-          <Link
-            to="/admin/participants/add"
-            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl transition-all font-semibold text-xs shadow-xs whitespace-nowrap flex-shrink-0"
-          >
-            <HiOutlinePlusCircle className="w-4 h-4" />
-            <span>Add Participant</span>
-          </Link>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {activeTab === 'participants' && (
+              bulkEmail ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={saveAllEmails}
+                    disabled={savingEmails}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs transition-all disabled:opacity-60 whitespace-nowrap"
+                  >
+                    <HiOutlineCheck className="w-4 h-4" />
+                    {savingEmails ? 'Saving…' : 'Save All Emails'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBulkEmail(false)}
+                    disabled={savingEmails}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-xs font-bold transition-all whitespace-nowrap"
+                  >
+                    Cancel
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={enterBulkEmail}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-xs font-bold shadow-xs transition-all whitespace-nowrap"
+                >
+                  <HiOutlineMail className="w-4 h-4 text-slate-500" />
+                  <span>Manage Emails</span>
+                </button>
+              )
+            )}
+            <Link
+              to="/admin/participants/add"
+              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl transition-all font-semibold text-xs shadow-xs whitespace-nowrap"
+            >
+              <HiOutlinePlusCircle className="w-4 h-4" />
+              <span>Add Participant</span>
+            </Link>
+          </div>
         </div>
 
         {/* Tab Toggle (Natural width pill layout) */}
@@ -1438,7 +1477,7 @@ export default function Participants() {
                 if (!(atTop && e.deltaY < 0) && !(atBottom && e.deltaY > 0)) e.stopPropagation();
               }}
             >
-              <table className="w-full min-w-[600px] border-collapse">
+              <table className="w-full min-w-[760px] border-collapse">
                 <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200/90 shadow-2xs">
                   <tr>
                     <th className="text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider px-5 py-3 bg-slate-50">Participant Name</th>
@@ -1446,13 +1485,14 @@ export default function Participants() {
                     <th className="text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider px-5 py-3 hidden md:table-cell bg-slate-50">Department</th>
                     <th className="text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider px-5 py-3 bg-slate-50">Training</th>
                     <th className="text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider px-5 py-3 hidden sm:table-cell bg-slate-50">Date</th>
+                    <th className="text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider px-5 py-3 bg-slate-50">Email</th>
                     <th className="text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider px-5 py-3 bg-slate-50">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {loading ? (
                     <tr>
-                      <td colSpan={6} className="px-6 py-12 text-center">
+                      <td colSpan={7} className="px-6 py-12 text-center">
                         <div className="flex items-center justify-center gap-2 text-slate-400">
                           <div className="w-5 h-5 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" />
                           <span className="text-sm font-medium">Loading records…</span>
@@ -1461,7 +1501,7 @@ export default function Participants() {
                     </tr>
                   ) : visibleRecords.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-6 py-12 text-center text-sm text-slate-400 font-medium">No records found.</td>
+                      <td colSpan={7} className="px-6 py-12 text-center text-sm text-slate-400 font-medium">No records found.</td>
                     </tr>
                   ) : (
                     visibleRecords.map(record => (
@@ -1479,6 +1519,19 @@ export default function Participants() {
                         <td className="px-5 py-3.5 text-sm text-slate-600 hidden md:table-cell">{record.department}</td>
                         <td className="px-5 py-3.5">{typeBadge(record.training_type)}</td>
                         <td className="px-5 py-3.5 text-sm text-slate-600 hidden sm:table-cell font-medium">{fmtDate(record.training_date)}</td>
+                        <td className="px-5 py-3.5" onClick={e => e.stopPropagation()}>
+                          {bulkEmail ? (
+                            <input
+                              type="email"
+                              value={emailDrafts[record.id || record._id] ?? (record.email || '')}
+                              onChange={e => setEmailDraft(record.id || record._id, e.target.value)}
+                              placeholder="candidate@email.com"
+                              className="w-48 px-2.5 py-1 text-[11px] border border-blue-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/25"
+                            />
+                          ) : (
+                            <EmailInlineEditor rec={record} />
+                          )}
+                        </td>
                         <td className="px-5 py-3.5" onClick={e => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-1.5">
                             <Link to={`/admin/participants/${record.id}/performance`}

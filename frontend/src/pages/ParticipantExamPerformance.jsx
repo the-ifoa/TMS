@@ -155,7 +155,7 @@ function PerformanceLineChart({ attempts, onSelectAttempt }) {
               {p.val != null ? `${p.val}%` : ''}
             </text>
 
-            <circle cx={p.x} cy={p.y} r="8" fill="white" stroke="#4f46e5" strokeWidth="3.5" className="transition-transform group-hover:scale-125" />
+            <circle cx={p.x} cy={p.y} r="8" fill="white" stroke="#4f46e5" strokeWidth="3.5" className="transition-transform [transform-box:fill-box] [transform-origin:center] group-hover:scale-125" />
             <circle cx={p.x} cy={p.y} r="3" fill="#4f46e5" />
 
             {/* X-Axis Date Label: Large High Contrast Dark Slate */}
@@ -174,10 +174,10 @@ function ScoreDistributionDonut({ attempts }) {
   const scored = attempts.filter(a => a.percentage != null);
 
   const brackets = [
-    { label: '90 – 100%', min: 90, max: 100, color: '#10b981', count: 0 },
-    { label: '80 – 89%',  min: 80, max: 89.9, color: '#3b82f6', count: 0 },
-    { label: '70 – 79%',  min: 70, max: 79.9, color: '#f59e0b', count: 0 },
-    { label: 'Below 70%', min: 0,  max: 69.9, color: '#f43f5e', count: 0 },
+    { label: '90 – 100%', tag: 'High', color: '#10b981', count: 0 },
+    { label: '80 – 89%',  tag: 'Good', color: '#3b82f6', count: 0 },
+    { label: '70 – 79%',  tag: 'Pass', color: '#f59e0b', count: 0 },
+    { label: 'Below 70%', tag: 'Review', color: '#f43f5e', count: 0 },
   ];
 
   scored.forEach(a => {
@@ -192,10 +192,10 @@ function ScoreDistributionDonut({ attempts }) {
 
   // Calculate SVG Donut Slices
   let cumulativeAngle = 0;
-  const radius = 64;
-  const strokeWidth = 18;
-  const cx = 80;
-  const cy = 80;
+  const radius = 58;
+  const strokeWidth = 14;
+  const cx = 75;
+  const cy = 75;
   const circumference = 2 * Math.PI * radius;
 
   const slices = brackets.map(b => {
@@ -209,8 +209,8 @@ function ScoreDistributionDonut({ attempts }) {
   return (
     <div className="flex flex-col sm:flex-row items-center justify-between gap-6 py-2">
       {/* SVG Donut Ring */}
-      <div className="relative flex-shrink-0 w-40 h-40 flex items-center justify-center">
-        <svg width="160" height="160" viewBox="0 0 160 160" className="transform -rotate-90">
+      <div className="relative flex-shrink-0 w-36 h-36 flex items-center justify-center">
+        <svg width="150" height="150" viewBox="0 0 150 150" className="transform -rotate-90">
           <circle cx={cx} cy={cy} r={radius} stroke="#f1f5f9" strokeWidth={strokeWidth} fill="transparent" />
           {total > 0 && slices.map((s, i) => (
             s.count > 0 && (
@@ -223,6 +223,7 @@ function ScoreDistributionDonut({ attempts }) {
                 strokeWidth={strokeWidth}
                 strokeDasharray={s.strokeDasharray}
                 strokeDashoffset={s.strokeDashoffset}
+                strokeLinecap={slices.filter(x => x.count > 0).length === 1 ? 'butt' : 'round'}
                 fill="transparent"
                 className="transition-all duration-700 ease-out"
               />
@@ -230,21 +231,38 @@ function ScoreDistributionDonut({ attempts }) {
           ))}
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-          <span className="text-2xl font-black text-slate-900 leading-none">{total}</span>
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">Exams</span>
+          <span className="text-3xl font-black text-slate-900 leading-none">{total}</span>
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Exams</span>
         </div>
       </div>
 
-      {/* Sleek Dot-Free Legend List */}
-      <div className="flex-1 space-y-2.5 w-full">
+      {/* Sleek Structured Legend List */}
+      <div className="flex-1 space-y-2 w-full">
         {brackets.map((b, i) => {
           const pct = total > 0 ? Math.round((b.count / total) * 100) : 0;
+          const isActive = b.count > 0;
           return (
-            <div key={i} className="flex items-center justify-between text-xs border-l-2 pl-2.5" style={{ borderColor: b.color }}>
-              <span className="font-extrabold text-slate-800">{b.label}</span>
-              <div className="flex items-center gap-2 text-slate-500 font-semibold text-[11px]">
-                <span className="font-black text-slate-900">{b.count}</span>
-                <span className="text-slate-400">({pct}%)</span>
+            <div
+              key={i}
+              className={`flex items-center justify-between text-xs px-3.5 py-2 rounded-xl border transition-all ${
+                isActive
+                  ? 'bg-slate-50/70 hover:bg-slate-50 border-slate-200/80 shadow-2xs'
+                  : 'bg-transparent border-transparent opacity-40'
+              }`}
+            >
+              <div className="flex items-center gap-2.5 min-w-0">
+                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: b.color }} />
+                <span className={`font-bold truncate ${isActive ? 'text-slate-800' : 'text-slate-400'}`}>
+                  {b.label}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 flex-shrink-0 text-right">
+                <span className={`font-extrabold ${isActive ? 'text-slate-900' : 'text-slate-400'}`}>
+                  {b.count}
+                </span>
+                <span className="text-[11px] font-medium text-slate-400">
+                  ({pct}%)
+                </span>
               </div>
             </div>
           );
@@ -672,9 +690,14 @@ export default function ParticipantExamPerformance() {
 
               {/* Right Chart: Score Distribution Donut */}
               <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-2xs space-y-4 flex flex-col justify-between">
-                <div className="border-b border-slate-100 pb-3">
-                  <h3 className="text-sm font-extrabold text-slate-900 tracking-tight">Score Brackets</h3>
-                  <p className="text-[11px] text-slate-400 font-medium">Distribution across performance tiers</p>
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <div>
+                    <h3 className="text-sm font-extrabold text-slate-900 tracking-tight">Score Brackets</h3>
+                    <p className="text-[11px] text-slate-400 font-medium">Distribution across performance tiers</p>
+                  </div>
+                  <span className="text-[10px] font-extrabold text-slate-600 bg-slate-50 border border-slate-200/80 px-2.5 py-1 rounded-xl">
+                    Tiers
+                  </span>
                 </div>
                 <ScoreDistributionDonut attempts={attempts} />
               </div>
@@ -686,49 +709,77 @@ export default function ParticipantExamPerformance() {
               const rows = (section_breakdown || [])
                 .filter((s) => (s.section || '').trim() && s.total > 0)
                 .map((s) => ({ ...s, pct: s.accuracy == null ? 0 : Math.round(s.accuracy) }))
-                .sort((a, b) => a.pct - b.pct);
+                .sort((a, b) => b.pct - a.pct);
               if (rows.length === 0) return null;
               const tier = (p) => p >= 80
-                ? { bg: 'bg-emerald-100', text: 'text-emerald-700', bar: 'bg-emerald-500' }
+                ? { badge: 'bg-emerald-50 border-emerald-200/80', text: 'text-emerald-700', bar: 'bg-gradient-to-r from-emerald-500 to-teal-400', label: 'High Accuracy' }
                 : p >= 60
-                ? { bg: 'bg-amber-100', text: 'text-amber-700', bar: 'bg-amber-500' }
-                : { bg: 'bg-rose-100', text: 'text-rose-700', bar: 'bg-rose-500' };
-              const strong = rows[rows.length - 1];
-              const weak = rows[0];
+                ? { badge: 'bg-amber-50 border-amber-200/80', text: 'text-amber-700', bar: 'bg-gradient-to-r from-amber-500 to-orange-400', label: 'Moderate' }
+                : { badge: 'bg-rose-50 border-rose-200/80', text: 'text-rose-700', bar: 'bg-gradient-to-r from-rose-500 to-red-400', label: 'Needs Practice' };
+              const strong = rows[0];
+              const weak = rows[rows.length - 1];
               return (
-                <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-2xs space-y-4">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-3 gap-2">
-                    <div>
-                      <h3 className="text-sm font-extrabold text-slate-900 tracking-tight">Accuracy Breakdown by Section</h3>
-                      <p className="text-[11px] text-slate-400 font-medium">Aggregated across every graded attempt</p>
+                <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-2xs space-y-5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 flex-shrink-0 shadow-2xs">
+                        <HiOutlineChartBar className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-bold text-slate-900 tracking-tight">Accuracy Breakdown by Section</h3>
+                        <p className="text-xs text-slate-400 font-medium">Aggregated across every graded attempt</p>
+                      </div>
                     </div>
                     {rows.length > 1 && (
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2.5 py-1 rounded-xl">
-                          Strongest: {strong.section} ({strong.pct}%)
+                        <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-emerald-800 bg-emerald-50/90 border border-emerald-200/80 px-3 py-1 rounded-xl shadow-2xs">
+                          <span className="font-extrabold text-slate-700">Strongest:</span> {strong.section} ({strong.pct}%)
                         </span>
-                        {weak.pct < 50 && (
-                          <span className="text-[10px] font-extrabold text-rose-700 bg-rose-50 border border-rose-200/80 px-2.5 py-1 rounded-xl">
-                            Focus: {weak.section} ({weak.pct}%)
+                        {weak.pct < 60 && (
+                          <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-rose-800 bg-rose-50/90 border border-rose-200/80 px-3 py-1 rounded-xl shadow-2xs">
+                            <span className="font-extrabold text-slate-700">Focus:</span> {weak.section} ({weak.pct}%)
                           </span>
                         )}
                       </div>
                     )}
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                    {rows.map((s) => {
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    {rows.map((s, idx) => {
                       const c = tier(s.pct);
                       return (
-                        <div key={s.section} className="space-y-2 bg-slate-50/70 border border-slate-200/70 p-3.5 rounded-2xl">
-                          <div className="flex items-center justify-between text-xs gap-2">
-                            <span className="font-extrabold text-slate-800 truncate">{s.section}</span>
-                            <div className="flex items-center gap-1.5 flex-shrink-0">
-                              <span className="text-[10px] font-bold text-slate-400">{s.correct}/{s.total}</span>
-                              <span className={`px-2 py-0.5 rounded-md text-[10px] font-black ${c.bg} ${c.text}`}>{s.pct}%</span>
+                        <div
+                          key={s.section}
+                          className="group relative bg-slate-50/40 hover:bg-slate-50/80 border border-slate-200/80 hover:border-slate-300 rounded-2xl p-4 transition-all duration-200 shadow-2xs hover:shadow-xs flex flex-col justify-between gap-3"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <span className="w-6 h-6 rounded-lg bg-white border border-slate-200 text-slate-500 text-[10px] font-black flex items-center justify-center flex-shrink-0 shadow-2xs">
+                                {String(idx + 1).padStart(2, '0')}
+                              </span>
+                              <span className="font-bold text-slate-800 text-xs sm:text-sm truncate" title={s.section}>
+                                {s.section}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              <span className="text-[11px] font-semibold text-slate-400">
+                                {s.correct}/{s.total} <span className="text-[10px] text-slate-300">pts</span>
+                              </span>
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-black border ${c.badge} ${c.text}`}>
+                                {s.pct}%
+                              </span>
                             </div>
                           </div>
-                          <div className="h-2 rounded-full bg-slate-200/80 overflow-hidden">
-                            <div className={`h-full rounded-full transition-all duration-700 ease-out ${c.bar}`} style={{ width: `${s.pct}%` }} />
+                          <div className="space-y-1">
+                            <div className="h-2 w-full rounded-full bg-slate-200/60 overflow-hidden p-[0.5px]">
+                              <div
+                                className={`h-full rounded-full transition-all duration-700 ease-out ${c.bar}`}
+                                style={{ width: `${s.pct}%` }}
+                              />
+                            </div>
+                            <div className="flex items-center justify-between text-[10px] text-slate-400 font-medium px-0.5">
+                              <span>{c.label}</span>
+                              <span>{s.pct}% accuracy</span>
+                            </div>
                           </div>
                         </div>
                       );

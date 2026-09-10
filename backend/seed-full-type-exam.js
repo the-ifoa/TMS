@@ -21,7 +21,7 @@ require('dotenv').config();
 const mongoose = require('mongoose');
 const Exam = require('./models/Exam');
 
-const EXAM_TITLE = 'All Question Types — Sample Exam';
+const EXAM_TITLE = 'All Question Types - Sample Exam';
 
 // Stable placeholder images (picsum.photos, seeded for reproducibility)
 const IMG = (seed, w = 600, h = 400) => `https://picsum.photos/seed/${seed}/${w}/${h}`;

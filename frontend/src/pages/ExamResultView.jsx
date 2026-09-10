@@ -62,9 +62,9 @@ const TYPE_LABELS = {
 };
 
 function accuracyStatusColor(pct) {
-  if (pct >= 80) return { bar: 'bg-emerald-500', text: 'text-emerald-700', bg: 'bg-emerald-50' };
-  if (pct >= 50) return { bar: 'bg-amber-500', text: 'text-amber-700', bg: 'bg-amber-50' };
-  return { bar: 'bg-rose-500', text: 'text-rose-700', bg: 'bg-rose-50' };
+  if (pct >= 80) return { bar: 'bg-gradient-to-r from-emerald-500 to-teal-400', text: 'text-emerald-700', badge: 'bg-emerald-50 border-emerald-200/80', label: 'High Accuracy' };
+  if (pct >= 50) return { bar: 'bg-gradient-to-r from-amber-500 to-orange-400', text: 'text-amber-700', badge: 'bg-amber-50 border-amber-200/80', label: 'Moderate' };
+  return { bar: 'bg-gradient-to-r from-rose-500 to-red-400', text: 'text-rose-700', badge: 'bg-rose-50 border-rose-200/80', label: 'Needs Practice' };
 }
 
 function responseText(q, response) {
@@ -487,47 +487,70 @@ export default function ExamResultView() {
 
               {/* Per-Section Accuracy Breakdown */}
               {sectionBreakdown.length > 0 && (
-                <div className="bg-white rounded-3xl border border-slate-200/90 p-6 shadow-2xs space-y-4">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-100 gap-2">
-                    <div>
-                      <h2 className="text-sm font-extrabold text-slate-900 tracking-tight">
-                        Accuracy Breakdown by Section
-                      </h2>
-                      <p className="text-[11px] text-slate-400 font-medium">Performance per exam section</p>
+                <div className="bg-white rounded-3xl border border-slate-200/90 p-6 shadow-2xs space-y-5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 flex-shrink-0 shadow-2xs">
+                        <HiOutlineChartBar className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h2 className="text-sm font-bold text-slate-900 tracking-tight">
+                          Accuracy Breakdown by Section
+                        </h2>
+                        <p className="text-xs text-slate-400 font-medium">Performance per exam section</p>
+                      </div>
                     </div>
                     {sectionBreakdown.length > 1 && (
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2.5 py-1 rounded-xl">
-                          Strongest: {strongestSection.section} ({strongestSection.pct}%)
+                        <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-emerald-800 bg-emerald-50/90 border border-emerald-200/80 px-3 py-1 rounded-xl shadow-2xs">
+                          <span className="font-extrabold text-slate-700">Strongest:</span> {strongestSection.section} ({strongestSection.pct}%)
                         </span>
-                        {weakestSection && weakestSection.pct < 50 && (
-                          <span className="text-[10px] font-extrabold text-rose-700 bg-rose-50 border border-rose-200/80 px-2.5 py-1 rounded-xl">
-                            Focus: {weakestSection.section} ({weakestSection.pct}%)
+                        {weakestSection && weakestSection.pct < 60 && (
+                          <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-rose-800 bg-rose-50/90 border border-rose-200/80 px-3 py-1 rounded-xl shadow-2xs">
+                            <span className="font-extrabold text-slate-700">Focus:</span> {weakestSection.section} ({weakestSection.pct}%)
                           </span>
                         )}
                       </div>
                     )}
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                    {sectionBreakdown.map((s) => {
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    {sectionBreakdown.map((s, idx) => {
                       const c = accuracyStatusColor(s.pct);
                       return (
-                        <div key={s.section} className="space-y-2 bg-slate-50/70 border border-slate-200/70 p-3.5 rounded-2xl hover:border-slate-300 transition-all">
-                          <div className="flex items-center justify-between text-xs gap-2">
-                            <span className="font-extrabold text-slate-800 truncate">{s.section}</span>
-                            <div className="flex items-center gap-1.5 flex-shrink-0">
-                              <span className="text-[10px] font-bold text-slate-400">{s.correct}/{s.total}</span>
-                              <span className={`px-2 py-0.5 rounded-md text-[10px] font-black ${c.bg} ${c.text}`}>
+                        <div
+                          key={s.section}
+                          className="group relative bg-slate-50/40 hover:bg-slate-50/80 border border-slate-200/80 hover:border-slate-300 rounded-2xl p-4 transition-all duration-200 shadow-2xs hover:shadow-xs flex flex-col justify-between gap-3"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <span className="w-6 h-6 rounded-lg bg-white border border-slate-200 text-slate-500 text-[10px] font-black flex items-center justify-center flex-shrink-0 shadow-2xs">
+                                {String(idx + 1).padStart(2, '0')}
+                              </span>
+                              <span className="font-bold text-slate-800 text-xs sm:text-sm truncate" title={s.section}>
+                                {s.section}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              <span className="text-[11px] font-semibold text-slate-400">
+                                {s.correct}/{s.total} <span className="text-[10px] text-slate-300">pts</span>
+                              </span>
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-black border ${c.badge} ${c.text}`}>
                                 {s.pct}%
                               </span>
                             </div>
                           </div>
-                          <div className="h-2 rounded-full bg-slate-200/80 overflow-hidden">
-                            <div
-                              className={`h-full rounded-full transition-all duration-700 ease-out ${c.bar}`}
-                              style={{ width: `${s.pct}%` }}
-                            />
+                          <div className="space-y-1">
+                            <div className="h-2 w-full rounded-full bg-slate-200/60 overflow-hidden p-[0.5px]">
+                              <div
+                                className={`h-full rounded-full transition-all duration-700 ease-out ${c.bar}`}
+                                style={{ width: `${s.pct}%` }}
+                              />
+                            </div>
+                            <div className="flex items-center justify-between text-[10px] text-slate-400 font-medium px-0.5">
+                              <span>{c.label}</span>
+                              <span>{s.pct}% accuracy</span>
+                            </div>
                           </div>
                         </div>
                       );

@@ -182,6 +182,9 @@ export const updateParticipantEmail = (id, email) => api.patch(`/participants/${
 
 // ── Exam invites (email a passwordless take-link to participants) ─────────────
 export const sendExamInvites       = (examId, participantIds, opts = {}) => api.post(`/exams/${examId}/send-invites`, { participant_ids: participantIds, ...opts });
+// Reassign — grants one fresh attempt on top of max_attempts and re-emails the
+// same link, so a participant who already finished can take the exam again.
+export const reassignExamInvites   = (examId, participantIds, opts = {}) => api.post(`/exams/${examId}/send-invites`, { participant_ids: participantIds, reassign: true, ...opts });
 export const getExamInvites        = (examId)                 => api.get(`/exams/${examId}/invites`);
 export const getAirlineExamResults = ()                       => api.get('/exams/airline-results');
 

@@ -555,11 +555,11 @@ export default function TeamPage() {
                         <SelectItem
                           key={a._id}
                           value={a._id}
-                          className="rounded-xl px-3 py-2 text-xs sm:text-sm font-medium text-slate-800 hover:bg-slate-50 cursor-pointer focus:bg-blue-50 focus:text-blue-900"
+                          className="rounded-xl py-2 pl-8 pr-3 text-xs sm:text-sm font-medium text-slate-800 hover:bg-slate-50 cursor-pointer focus:bg-blue-50 focus:text-blue-900"
                         >
                           <div className="flex items-center gap-2">
                             <span className="font-semibold text-slate-900">{a.airlineName}</span>
-                            <span className="text-slate-400 text-xs">— {a.email}</span>
+                            <span className="text-slate-400 text-xs">· {a.email}</span>
                           </div>
                         </SelectItem>
                       ))}

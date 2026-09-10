@@ -692,7 +692,7 @@ exports.sendInvites = async (req, res) => {
     if (!canAssignExam(req, exam)) return res.status(403).json({ error: 'Access denied.' });
     if (exam.status !== 'published') return res.status(400).json({ error: 'Publish the exam before sending invites.' });
 
-    const { participant_ids = [], valid_days, expires_at } = req.body;
+    const { participant_ids = [], valid_days, expires_at, reassign = false } = req.body;
     if (participant_ids.length === 0) return res.status(400).json({ error: 'Select at least one participant.' });
 
     // Optional validity window: an explicit ISO cutoff, or "valid for N days"
@@ -733,6 +733,14 @@ exports.sendInvites = async (req, res) => {
       if (!alreadyAssigned) exam.assignments.push({ participant_id: p._id, airline_id: p.submitted_by });
 
       let invite = await ExamInvite.findOne({ exam_id: exam._id, participant_id: p._id });
+
+      // Reassign only makes sense for someone already invited — it grants a
+      // fresh attempt on top of max_attempts and reopens the same link.
+      if (reassign && !invite) {
+        skipped.push({ id: String(p._id), name: p.participant_name, reason: 'not yet assigned' });
+        continue;
+      }
+
       if (!invite) {
         invite = new ExamInvite({
           token: crypto.randomBytes(24).toString('hex'),
@@ -754,6 +762,13 @@ exports.sendInvites = async (req, res) => {
         invite.sent_count = (invite.sent_count || 1) + 1;
         invite.batch_id = batchId; // re-sending moves it into the new batch
         if (expiryProvided) invite.expires_at = expiresAt; // null clears it
+        if (reassign) {
+          invite.bonus_attempts = (invite.bonus_attempts || 0) + 1;
+          invite.status = 'sent';
+          invite.attempt_id = null;
+          invite.completed_at = null;
+          invite.opened_at = null;
+        }
       }
       await invite.save();
 

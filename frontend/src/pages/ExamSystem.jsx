@@ -7,10 +7,10 @@ import {
   HiOutlineUserAdd, HiOutlineClipboardCheck,
   HiOutlineSearch, HiOutlineX, HiOutlineUserGroup, HiChevronRight,
   HiOutlineClock, HiOutlineDocumentText, HiOutlineMail, HiOutlineCheckCircle,
-  HiOutlinePaperAirplane, HiOutlineCollection,
+  HiOutlinePaperAirplane, HiOutlineCollection, HiOutlineRefresh,
 } from 'react-icons/hi';
 import { FaPlaneDeparture } from 'react-icons/fa';
-import { listExams, deleteExam, publishExam, getExamAirlines, updateExam, sendExamInvites, getExamInvites } from '../api';
+import { listExams, deleteExam, publishExam, getExamAirlines, updateExam, sendExamInvites, reassignExamInvites, getExamInvites } from '../api';
 import { useAuth } from '../context/AuthContext';
 import QuestionBankList from './QuestionBank';
 import { DateTimeInputCard } from './ExamBuilder';
@@ -44,6 +44,7 @@ function SendInviteModal({ exam, onClose, onSent }) {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(new Set());
   const [sending, setSending] = useState(false);
+  const [reassigningPid, setReassigningPid] = useState(null);
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState(new Set());
   // Validity window for the emailed link. 'none' = never expires; a number = days
@@ -67,17 +68,41 @@ function SendInviteModal({ exam, onClose, onSent }) {
   const toggle = (id) => setSelected((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const toggleExpand = (id) => setExpanded((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
+  // Resolve the "link valid for" dropdown into API opts. Returns null on a bad
+  // custom date (after toasting).
+  const resolveOpts = () => {
+    if (validityMode === 'custom') {
+      if (!customExpiry) { toast.error('Pick an expiry date.'); return null; }
+      const d = new Date(customExpiry);
+      if (isNaN(d.getTime()) || d.getTime() <= Date.now()) { toast.error('Expiry must be in the future.'); return null; }
+      return { expires_at: d.toISOString() };
+    }
+    if (validityMode !== 'none') return { valid_days: Number(validityMode) };
+    return {};
+  };
+
+  const reassign = async (pid, name) => {
+    const opts = resolveOpts();
+    if (opts === null) return;
+    setReassigningPid(pid);
+    try {
+      const res = await reassignExamInvites(exam.id, [pid], opts);
+      const { sent = [], skipped = [] } = res.data || {};
+      if (sent.length) toast.success(`${name} reassigned — a fresh exam link was emailed.`);
+      else toast.error(`Reassign failed (${skipped[0]?.reason || 'unknown'}).`);
+      load();
+      onSent?.();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to reassign.');
+    } finally {
+      setReassigningPid(null);
+    }
+  };
+
   const send = async () => {
     if (selected.size === 0) return;
-    let opts = {};
-    if (validityMode === 'custom') {
-      if (!customExpiry) { toast.error('Pick an expiry date.'); return; }
-      const d = new Date(customExpiry);
-      if (isNaN(d.getTime()) || d.getTime() <= Date.now()) { toast.error('Expiry must be in the future.'); return; }
-      opts = { expires_at: d.toISOString() };
-    } else if (validityMode !== 'none') {
-      opts = { valid_days: Number(validityMode) };
-    }
+    const opts = resolveOpts();
+    if (opts === null) return;
     setSending(true);
     try {
       const res = await sendExamInvites(exam.id, [...selected], opts);
@@ -114,7 +139,7 @@ function SendInviteModal({ exam, onClose, onSent }) {
               Assign &ldquo;{exam.title}&rdquo; to participants
             </DialogTitle>
           </div>
-          <p className="text-xs text-slate-500">Each assigned participant gets a personal, passwordless exam link by email. Participants without an email can't be assigned.</p>
+          <p className="text-xs text-slate-500">Each assigned participant gets a personal, passwordless exam link by email. Participants without an email can't be assigned. Use <span className="font-semibold text-slate-700">Reassign</span> on someone who already finished to grant a fresh attempt and re-send their link.</p>
 
           <div className="flex flex-wrap items-center gap-2 pt-2">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Link valid for</span>
@@ -239,6 +264,23 @@ function SendInviteModal({ exam, onClose, onSent }) {
                                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${inv.attempt.passed ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
                                       {inv.attempt.percentage}%
                                     </span>
+                                  )}
+                                  {inv?.bonus_attempts > 0 && (
+                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold border bg-slate-100 text-slate-600 border-slate-200" title="Extra attempts granted via reassign">
+                                      +{inv.bonus_attempts}
+                                    </span>
+                                  )}
+                                  {email && inv && (inv.status === 'completed' || inv.attempt) && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => { e.stopPropagation(); reassign(p._id, p.participant_name); }}
+                                      disabled={reassigningPid === p._id}
+                                      title="Email a fresh link and let this participant take the exam again"
+                                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors disabled:opacity-50"
+                                    >
+                                      <HiOutlineRefresh className={`w-3 h-3 ${reassigningPid === p._id ? 'animate-spin' : ''}`} />
+                                      {reassigningPid === p._id ? 'Reassigning…' : 'Reassign'}
+                                    </button>
                                   )}
                                 </div>
                               </div>

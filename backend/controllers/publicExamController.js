@@ -53,6 +53,7 @@ exports.getLandingInfo = async (req, res) => {
     }
 
     const priorAttempts = await ExamAttempt.countDocuments({ exam_id: exam._id, participant_id: invite.participant_id });
+    const attemptCap = exam.max_attempts + (invite.bonus_attempts || 0);
     const activeAttempt = await ExamAttempt.findOne({
       exam_id: exam._id, participant_id: invite.participant_id, status: 'in_progress',
     }).select('_id');
@@ -77,7 +78,7 @@ exports.getLandingInfo = async (req, res) => {
       },
       status: invite.status,
       attempts_used: priorAttempts,
-      attempts_left: Math.max(0, exam.max_attempts - priorAttempts),
+      attempts_left: Math.max(0, attemptCap - priorAttempts),
       active_attempt_id: activeAttempt ? String(activeAttempt._id) : null,
       last_attempt_id: lastFinished ? String(lastFinished._id) : null,
       // Only blocks starting a NEW attempt — an already-active one may still resume/finish.
@@ -105,7 +106,7 @@ exports.startAttempt = async (req, res) => {
       if (schedErr) return res.status(403).json({ error: schedErr });
 
       const priorAttempts = await ExamAttempt.countDocuments({ exam_id: exam._id, participant_id: invite.participant_id });
-      if (priorAttempts >= exam.max_attempts) {
+      if (priorAttempts >= exam.max_attempts + (invite.bonus_attempts || 0)) {
         return res.status(400).json({ error: 'You have used all your attempts for this exam.' });
       }
       let questions = exam.questions.map((q) => q.toObject());

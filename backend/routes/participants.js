@@ -41,6 +41,9 @@ router.post('/bulk', canCreate, participantsController.bulkCreateParticipants);
 // ─── SEND SUBMISSION CONFIRMATION EMAIL (airline only) ───────────────────────
 router.post('/send-confirmation', participantsController.sendConfirmation);
 
+// ─── EMAIL airlines a certificate-expiry reminder (admin only) ────────────────
+router.post('/expiry-reminder', canEdit, participantsController.sendExpiryReminder);
+
 // ─── PATCH participant email — airline (owner) or admin ──────────────────────
 router.patch('/:id/email', canEdit, participantsController.updateEmail);
 

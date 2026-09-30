@@ -8,6 +8,7 @@ const { examImageUpload, deleteCloudinaryImage } = require('../services/upload')
 const { sanitizeQuestionForTaking, computeAttemptScore } = require('../services/examGrading');
 const { finalizeAttempt, schedulingError } = require('../services/examAttemptFlow');
 const { sendExamInviteEmail } = require('../services/emailService');
+const { brandingResolver } = require('../services/emailBranding');
 const { frontendLink } = require('../config/appUrls');
 
 function isAdmin(req) {
@@ -721,6 +722,7 @@ exports.sendInvites = async (req, res) => {
     const airlineName = (id) => airlines.find((a) => String(a._id) === String(id))?.airlineName || '';
 
     const sent = [];
+    const brandingFor = brandingResolver();
     const skipped = [];
     // One batch per send action — every invite dispatched in this call shares it.
     const batchId = crypto.randomBytes(8).toString('hex');
@@ -773,6 +775,7 @@ exports.sendInvites = async (req, res) => {
       await invite.save();
 
       try {
+        const branding = await brandingFor(p.submitted_by || exam.owner_department || exam.owner_airline);
         await sendExamInviteEmail({
           toEmail: p.email,
           participantName: p.participant_name,
@@ -781,6 +784,7 @@ exports.sendInvites = async (req, res) => {
           maxAttempts: exam.max_attempts,
           link: frontendLink(`/exam/${invite.token}`),
           expiresAt: invite.expires_at,
+          branding,
         });
         sent.push({ id: String(p._id), name: p.participant_name, email: p.email });
       } catch (mailErr) {

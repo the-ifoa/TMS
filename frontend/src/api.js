@@ -49,6 +49,8 @@ export const updateProfile = (data) => api.put('/auth/profile', data);
 
 // Admin: edit an airline's name + address
 export const updateAirline = (id, data) => api.patch(`/auth/admin/airline/${id}`, data);
+export const getAirlineSettings = () => api.get('/auth/admin/airlines/settings');
+export const bulkUpdateAirlineSettings = (updates) => api.patch('/auth/admin/airlines/settings', { updates });
 
 // Admin: create an airline account on the airline's behalf (no email verification)
 export const adminCreateAirline = (data) => api.post('/auth/admin/airline', data);
@@ -91,6 +93,20 @@ export const uploadAirlineLogo = (file) => {
   });
 };
 
+// ─── Internal (airline-uploaded) certificates — stored in Cloudflare R2 ──────
+export const listAllInternalCertificates = () => api.get('/internal-certificates');
+export const listInternalCertificates  = (participantId) => api.get(`/internal-certificates/participant/${participantId}`);
+export const uploadInternalCertificate = (participantId, file, meta = {}) => {
+  const fd = new FormData();
+  fd.append('file', file);
+  Object.entries(meta).forEach(([k, v]) => { if (v) fd.append(k, v); });
+  return api.post(`/internal-certificates/participant/${participantId}`, fd, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+};
+export const getInternalCertificateFile = (id) => api.get(`/internal-certificates/${id}/file`, { responseType: 'blob' });
+export const deleteInternalCertificate  = (id) => api.delete(`/internal-certificates/${id}`);
+
 // ── Participants ────────────────────────────────────────────────────────────
 export const getParticipantsByAirline = () => api.get('/participants/by-airline');
 export const getAirlinesList          = () => api.get('/participants/airlines');
@@ -111,6 +127,7 @@ export const updateFdrHours           = (id, fdr_hours) => api.patch(`/participa
 export const revokeCertificate        = (id)            => api.patch(`/participants/${id}/revoke-cert`);
 export const revokeDhlCertificate     = (id)            => api.patch(`/participants/${id}/revoke-dhl-cert`);
 export const updateValidity           = (id, cert_validity) => api.patch(`/participants/${id}/validity`, { cert_validity });
+export const sendExpiryReminder       = (participantIds, message = '') => api.post('/participants/expiry-reminder', { participantIds, message });
 export const sendSubmissionConfirmation = (data) => api.post('/participants/send-confirmation', data);
 export const getCertCounters          = () => api.get('/certificates/counters');
 export const resetCertCounter         = (training_type, startFrom = 0) => api.post('/certificates/counters/reset', { training_type, startFrom, mode: 'hard' });

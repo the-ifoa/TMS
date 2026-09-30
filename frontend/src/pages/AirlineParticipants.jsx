@@ -4,11 +4,13 @@ import toast from 'react-hot-toast';
 import {
   HiOutlineUsers, HiOutlineSearch, HiOutlineMail, HiOutlineCheck, HiOutlineX,
   HiOutlineFilter, HiOutlineChartBar, HiOutlinePlus,
-  HiOutlinePencil, HiOutlineTrash,
+  HiOutlinePencil, HiOutlineTrash, HiOutlineDocumentText, HiOutlineUpload,
 } from 'react-icons/hi';
 import { getParticipants, updateParticipantEmail, deleteParticipant } from '../api';
 import { useAuth } from '../context/AuthContext';
 import { useConfirm } from '@/hooks/use-confirm';
+import InternalCertificatesDialog, { useInternalCertCounts } from '../components/InternalCertificatesDialog';
+import ValidityBadge from '../components/ValidityBadge';
 import { Card } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -70,11 +72,16 @@ function EmailCell({ rec }) {
 // Airline participants directory — flat, searchable/filterable list of all the
 // airline's participants with details and inline email editing.
 export default function AirlineParticipants() {
-  const { can } = useAuth();
+  const { can, admin } = useAuth();
   const navigate = useNavigate();
   const { confirm, ConfirmDialog } = useConfirm();
   const canEdit = !can || can('participants.edit');
   const canDelete = !can || can('participants.delete');
+  // Admin-enabled for this airline: internal certificate PDFs per candidate.
+  const internalCertsOn = !!admin?.can_upload_internal_certs;
+  const canUploadCerts = can('internalCerts.manage');
+  const [certsFor, setCertsFor] = useState(null); // { participant, mode: 'upload' | 'view' }
+  const [certCounts, , certExpiries, reloadCerts] = useInternalCertCounts(internalCertsOn);
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState(null);
@@ -185,6 +192,12 @@ export default function AirlineParticipants() {
               </div>
             ) : (
               <div className="flex items-center gap-1.5 flex-shrink-0">
+                {internalCertsOn && (
+                  <Link to="/airline/certificates"
+                  className="inline-flex items-center gap-1 h-7 px-2.5 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-xs font-semibold shadow-2xs whitespace-nowrap">
+                  <HiOutlineDocumentText className="w-3.5 h-3.5 text-slate-500" /> All Certificates
+                </Link>
+                )}
                 <button type="button" onClick={enterBulk}
                   className="inline-flex items-center gap-1 h-7 px-2.5 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-xs font-semibold shadow-2xs whitespace-nowrap">
                   <HiOutlineMail className="w-3.5 h-3.5 text-slate-500" /> Manage Emails
@@ -293,6 +306,27 @@ export default function AirlineParticipants() {
                     </Link>
                   </div>
 
+                  {/* Internal certificates */}
+                  {internalCertsOn && (
+                    <div className="shrink-0 flex items-center gap-1">
+                      {canUploadCerts && (
+                        <button type="button" onClick={() => setCertsFor({ participant: r, mode: 'upload' })}
+                          title="Upload a new certificate"
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-blue-50 border border-blue-200 hover:bg-blue-100 text-blue-700 transition-all whitespace-nowrap">
+                          <HiOutlineUpload className="w-3.5 h-3.5 shrink-0" /> Upload
+                        </button>
+                      )}
+                      <button type="button" onClick={() => setCertsFor({ participant: r, mode: 'view' })}
+                        disabled={!certCounts[r.id || r._id]}
+                        title={certCounts[r.id || r._id] ? 'View uploaded certificates' : 'No certificates uploaded yet'}
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-slate-50 border border-slate-200 hover:border-blue-300 hover:bg-blue-50 text-slate-600 hover:text-blue-600 transition-all whitespace-nowrap disabled:opacity-40 disabled:pointer-events-none">
+                        <HiOutlineDocumentText className="w-3.5 h-3.5 shrink-0" /> Certificates
+                        <span className="ml-0.5 px-1.5 rounded-md bg-white border border-slate-200 text-[10px] font-bold text-slate-500">{certCounts[r.id || r._id] || 0}</span>
+                      </button>
+                      {certCounts[r.id || r._id] > 0 && <ValidityBadge expiry={certExpiries[r.id || r._id] ?? null} showDate={false} />}
+                    </div>
+                  )}
+
                   {/* Edit / Delete */}
                   {(canEdit || canDelete) && (
                     <div className="shrink-0 flex items-center gap-1">
@@ -329,6 +363,8 @@ export default function AirlineParticipants() {
         )}
       </div>
       {ConfirmDialog}
+      <InternalCertificatesDialog participant={certsFor?.participant} mode={certsFor?.mode}
+        onClose={() => setCertsFor((c) => c && { ...c, participant: null })} onChange={reloadCerts} />
     </div>
   );
 }

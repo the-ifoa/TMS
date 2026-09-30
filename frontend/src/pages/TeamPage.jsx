@@ -125,15 +125,19 @@ function PermissionChecklist({ groups, value, onChange }) {
                       key={i.key}
                       type="button"
                       onClick={() => toggle(i.key)}
-                      className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs text-left transition-all cursor-pointer border ${checked
-                          ? 'bg-white border-blue-300/90 text-blue-800 font-semibold shadow-2xs'
+                      className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs text-left transition-all cursor-pointer border ${
+                        checked
+                          ? 'bg-white border-blue-500/60 text-slate-900 font-semibold shadow-2xs ring-1 ring-blue-500/20'
                           : 'bg-white/60 border-slate-200/70 text-slate-600 hover:bg-white hover:border-slate-300'
-                        }`}
+                      }`}
                     >
-                      <div className={`w-4 h-4 rounded-md flex items-center justify-center flex-shrink-0 transition-colors border ${checked
-                          ? 'bg-blue-600 border-blue-600 text-white'
-                          : 'border-slate-300 bg-white'
-                        }`}>
+                      <div
+                        className={`w-4 h-4 rounded-md flex items-center justify-center flex-shrink-0 transition-colors border ${
+                          checked
+                            ? 'bg-blue-600 border-blue-600 text-white shadow-2xs'
+                            : 'border-slate-300 bg-white'
+                        }`}
+                      >
                         {checked && <HiOutlineCheck className="w-3 h-3 stroke-[3]" />}
                       </div>
                       <span className="truncate flex-1">{i.label}</span>
@@ -199,6 +203,7 @@ export default function TeamPage() {
       permissions: m.permissions || [],
       account_status: m.account_status || 'active',
       department_name: m.department_name || '',
+      parentAirlineId: m.parent_airline ? String(m.parent_airline) : '',
     });
   };
 
@@ -259,7 +264,20 @@ export default function TeamPage() {
     }
   };
 
-  const modalGroups = modal ? (catalog[modal.scope] || {}) : {};
+  // Internal certificate upload is only grantable to a department whose parent
+  // airline has the admin switch on. (An airline caller's catalog is already
+  // filtered server-side; this covers an admin picking the parent.)
+  const modalGroups = useMemo(() => {
+    const groups = modal ? (catalog[modal.scope] || {}) : {};
+    if (!modal || modal.scope !== 'airline' || !isAdmin) return groups;
+    const parent = airlines.find((a) => String(a._id) === String(modal.parentAirlineId));
+    if (parent?.can_upload_internal_certs) return groups;
+    return Object.fromEntries(
+      Object.entries(groups)
+        .map(([g, items]) => [g, items.filter((i) => i.key !== 'internalCerts.manage')])
+        .filter(([, items]) => items.length),
+    );
+  }, [modal, catalog, airlines, isAdmin]);
   const permLabels = useMemo(() => {
     const all = [...flatten(catalog.admin), ...flatten(catalog.airline)];
     return Object.fromEntries(all.map((i) => [i.key, i.label]));
@@ -330,45 +348,35 @@ export default function TeamPage() {
               return (
                 <div
                   key={m._id || m.id}
-                  className={`bg-white rounded-3xl border transition-all duration-200 p-5 sm:p-6 flex flex-col justify-between gap-4 shadow-2xs hover:shadow-md ${
-                    isDisabled ? 'border-slate-200/60 opacity-80 bg-slate-50/40' : 'border-slate-200/90 hover:border-slate-300'
+                  className={`bg-white rounded-3xl border overflow-hidden transition-all duration-200 flex flex-col justify-between shadow-2xs hover:shadow-md group ${
+                    isDisabled
+                      ? 'border-slate-200/60 opacity-80 bg-slate-50/40 border-dashed'
+                      : 'border-slate-200/90 hover:border-slate-300 hover:-translate-y-0.5'
                   }`}
                 >
-                  {/* Card Header & Identity */}
-                  <div className="space-y-4">
+                  {/* Card Top Header - Black Background */}
+                  <div className="bg-slate-900 text-white p-5 sm:p-6 space-y-3">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-start gap-3.5 min-w-0">
-                        <div
-                          className={`w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-2xs ${
-                            isAdminScope
-                              ? 'bg-violet-50 text-violet-600 border border-violet-100'
-                              : 'bg-blue-50 text-blue-600 border border-blue-100'
-                          }`}
-                        >
+                        <div className="w-11 h-11 rounded-2xl bg-white/10 text-white border border-white/15 flex items-center justify-center flex-shrink-0 shadow-2xs backdrop-blur-xs">
                           {isAdminScope ? (
-                            <HiOutlineShieldCheck className="w-5 h-5" />
+                            <HiOutlineShieldCheck className="w-5 h-5 text-white" />
                           ) : (
-                            <FaPlaneDeparture className="w-4 h-4" />
+                            <FaPlaneDeparture className="w-4 h-4 text-white" />
                           )}
                         </div>
 
                         <div className="min-w-0 space-y-1">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <h3 className="text-sm sm:text-base font-extrabold text-slate-900 truncate">
+                            <h3 className="text-sm sm:text-base font-extrabold text-white truncate">
                               {m.name}
                             </h3>
-                            <span
-                              className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border tracking-wide uppercase ${
-                                isAdminScope
-                                  ? 'bg-violet-50 text-violet-700 border-violet-200'
-                                  : 'bg-blue-50 text-blue-700 border-blue-200'
-                              }`}
-                            >
+                            <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-white/15 text-slate-100 border border-white/20 tracking-wide uppercase">
                               {isAdminScope ? 'Sub-Admin' : m.department_name || 'Department'}
                             </span>
                           </div>
 
-                          <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium truncate">
+                          <div className="flex items-center gap-1.5 text-xs text-slate-300 font-medium truncate">
                             <HiOutlineMail className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
                             <span className="truncate">{m.email}</span>
                           </div>
@@ -377,91 +385,101 @@ export default function TeamPage() {
 
                       {/* Status indicator badge */}
                       <span
-                        className={`inline-flex items-center gap-1.5 text-[10px] font-black px-2.5 py-1 rounded-full border flex-shrink-0 shadow-2xs tracking-wider uppercase ${
+                        className={`inline-flex items-center text-[10px] font-extrabold px-2.5 py-1 rounded-full border flex-shrink-0 tracking-wider uppercase ${
                           isDisabled
-                            ? 'bg-slate-100 text-slate-500 border-slate-200'
-                            : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            ? 'bg-white/10 text-slate-300 border-white/20'
+                            : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
                         }`}
                       >
-                        <span
-                          className={`w-1.5 h-1.5 rounded-full ${
-                            isDisabled ? 'bg-slate-400' : 'bg-emerald-500 animate-pulse'
-                          }`}
-                        />
                         {isDisabled ? 'DISABLED' : 'ACTIVE'}
                       </span>
                     </div>
+                  </div>
 
+                  {/* Card Body - Light Background */}
+                  <div className="p-5 sm:p-6 space-y-4 flex flex-col flex-1 justify-between">
                     {/* Permissions Section */}
-                    <div className="pt-3 border-t border-slate-100 space-y-2">
+                    <div className="space-y-2.5">
                       <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">
-                          Granted Permissions ({perms.length})
+                        <span className="text-[10px] font-extrabold uppercase text-slate-400 tracking-wider flex items-center gap-1.5">
+                          <HiOutlineShieldCheck className="w-3.5 h-3.5 text-slate-400" />
+                          Granted Permissions
+                        </span>
+                        <span className="px-2 py-0.5 text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200/80 rounded-full">
+                          {perms.length}
                         </span>
                       </div>
 
                       {perms.length === 0 ? (
-                        <p className="text-xs text-slate-400 italic py-1">No permissions assigned</p>
+                        <div className="py-3 px-3 rounded-2xl bg-slate-50/60 border border-dashed border-slate-200 text-center">
+                          <p className="text-xs text-slate-400 italic">No permissions assigned</p>
+                        </div>
                       ) : (
-                        <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto pr-1 scrollbar-thin">
-                          {perms.map((p) => (
-                            <span
-                              key={p}
-                              className="text-[11px] font-medium px-2.5 py-1 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200/80 transition-colors inline-flex items-center gap-1"
-                            >
-                              <HiOutlineCheck className="w-3 h-3 text-blue-600 stroke-[3]" />
-                              <span>{formatPermLabel(p, permLabels)}</span>
-                            </span>
-                          ))}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-2 max-h-36 overflow-y-auto pr-1 scrollbar-thin">
+                          {perms.map((p) => {
+                            const label = formatPermLabel(p, permLabels);
+                            return (
+                              <div
+                                key={p}
+                                title={label}
+                                className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-slate-50/90 hover:bg-slate-100/90 border border-slate-200/80 transition-colors min-w-0"
+                              >
+                                <span className="w-1.5 h-1.5 rounded-full bg-slate-400 flex-shrink-0" />
+                                <span className="text-[11px] font-medium text-slate-700 truncate">
+                                  {label}
+                                </span>
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
-                  </div>
 
-                  {/* Card Footer Actions */}
-                  <div className="pt-3.5 border-t border-slate-100 flex items-center justify-between gap-2 mt-auto">
-                    <div>
-                      {m.memberScope === 'airline' ? (
-                        <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-500 bg-slate-50 border border-slate-200/80 px-2.5 py-1 rounded-xl">
-                          <HiOutlineUsers className="w-3.5 h-3.5 text-blue-500" />
-                          <span>Isolated Directory</span>
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-violet-700 bg-violet-50 border border-violet-200/80 px-2.5 py-1 rounded-xl">
-                          <HiOutlineShieldCheck className="w-3.5 h-3.5 text-violet-600" />
-                          <span>Sub-Admin Account</span>
-                        </span>
-                      )}
-                    </div>
+                    {/* Card Footer Actions */}
+                    <div className="pt-3.5 border-t border-slate-100 flex items-center justify-between gap-2 mt-auto">
+                      <div>
+                        {m.memberScope === 'airline' ? (
+                          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-600 bg-slate-50 border border-slate-200/80 px-2.5 py-1 rounded-xl">
+                            <HiOutlineUsers className="w-3.5 h-3.5 text-slate-600" />
+                            <span>Isolated Directory</span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-700 bg-slate-50 border border-slate-200/80 px-2.5 py-1 rounded-xl">
+                            <HiOutlineShieldCheck className="w-3.5 h-3.5 text-slate-700" />
+                            <span>Sub-Admin Account</span>
+                          </span>
+                        )}
+                      </div>
 
-                    <div className="flex items-center gap-1.5 ml-auto">
-                      <button
-                        type="button"
-                        onClick={() => toggleStatus(m)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer shadow-2xs ${
-                          isDisabled
-                            ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
-                            : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-                        }`}
-                      >
-                        {isDisabled ? 'Enable' : 'Disable'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => openEdit(m)}
-                        title="Edit member"
-                        className="p-2 rounded-xl bg-slate-50 border border-slate-200 hover:border-blue-300 hover:bg-blue-50 text-slate-600 hover:text-blue-600 transition-all cursor-pointer shadow-2xs"
-                      >
-                        <HiOutlinePencil className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => remove(m)}
-                        title="Remove member"
-                        className="p-2 rounded-xl bg-slate-50 border border-slate-200 hover:border-rose-300 hover:bg-rose-50 text-slate-600 hover:text-rose-600 transition-all cursor-pointer shadow-2xs"
-                      >
-                        <HiOutlineTrash className="w-3.5 h-3.5" />
-                      </button>
+                      <div className="flex items-center gap-1.5 ml-auto">
+                        <button
+                          type="button"
+                          onClick={() => toggleStatus(m)}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer shadow-2xs ${
+                            isDisabled
+                              ? 'bg-slate-900 border-slate-900 text-white hover:bg-slate-800'
+                              : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-900 hover:text-white hover:border-slate-900'
+                          }`}
+                        >
+                          {isDisabled ? 'Enable' : 'Disable'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openEdit(m)}
+                          title="Edit member"
+                          className="p-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-900 hover:text-white hover:border-slate-900 text-slate-600 transition-all cursor-pointer shadow-2xs"
+                        >
+                          <HiOutlinePencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => remove(m)}
+                          title="Remove member"
+                          className="p-2 rounded-xl bg-white border border-slate-200 hover:bg-rose-600 hover:text-white hover:border-rose-600 text-slate-600 transition-all cursor-pointer shadow-2xs"
+                        >
+                          <HiOutlineTrash className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -480,9 +498,12 @@ export default function TeamPage() {
             {/* Modal Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
               <div className="flex items-center gap-2.5 min-w-0">
-                <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${modal.scope === 'admin' ? 'bg-violet-50 text-violet-600 border border-violet-100' : 'bg-blue-50 text-blue-600 border border-blue-100'
-                  }`}>
-                  {modal.scope === 'admin' ? <HiOutlineShieldCheck className="w-5 h-5" /> : <FaPlaneDeparture className="w-4 h-4" />}
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 bg-slate-900 text-white shadow-2xs">
+                  {modal.scope === 'admin' ? (
+                    <HiOutlineShieldCheck className="w-5 h-5 text-white" />
+                  ) : (
+                    <FaPlaneDeparture className="w-4 h-4 text-white" />
+                  )}
                 </div>
                 <div className="min-w-0">
                   <h2 className="text-base font-bold text-slate-900 leading-tight truncate">

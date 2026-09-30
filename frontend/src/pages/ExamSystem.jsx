@@ -411,27 +411,30 @@ export default function ExamSystem() {
         <div className="space-y-3.5">
           {/* Header */}
           <div className="flex items-start justify-between gap-3">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-10 h-10 rounded-2xl bg-slate-900 text-white flex items-center justify-center flex-shrink-0 shadow-2xs group-hover:scale-105 transition-transform">
+            <div className="flex items-start gap-3 min-w-0 flex-1">
+              <div className="w-10 h-10 rounded-2xl bg-slate-900 text-white flex items-center justify-center flex-shrink-0 shadow-2xs group-hover:scale-105 transition-transform mt-0.5">
                 <HiOutlineAcademicCap className="w-5 h-5 text-white" />
               </div>
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <h2 className="text-sm sm:text-base font-extrabold text-slate-900 break-words leading-snug group-hover:text-blue-600 transition-colors" title={exam.title}>
                   {exam.title}
                 </h2>
-                <p className="text-[11px] font-medium text-slate-400 mt-0.5">
-                  {exam.questions?.length || 0} Questions · {exam.duration_minutes} Mins
-                </p>
+                <div className="text-[11px] font-medium text-slate-400 mt-1 flex items-center gap-1.5 flex-wrap">
+                  <span>{exam.questions?.length || 0} Questions · {exam.duration_minutes} Mins</span>
+                  {isAdmin && airlineOwned && (
+                    <span
+                      className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200/80 truncate max-w-full"
+                      title={`Created by ${exam.owner_airline_name || 'Airline'}${exam.owner_department_name ? ` · ${exam.owner_department_name}` : ''}`}
+                    >
+                      {exam.owner_airline_name || 'Airline'}
+                      {exam.owner_department_name ? ` · ${exam.owner_department_name}` : ''}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
 
             <div className="flex items-center gap-1 flex-shrink-0">
-              {isAdmin && airlineOwned && (
-                <Badge variant="default" className="font-bold text-[10px] px-2.5 py-0.5 rounded-full" title="Created by an airline">
-                  {exam.owner_airline_name || 'Airline'}
-                  {exam.owner_department_name ? ` · ${exam.owner_department_name}` : ''}
-                </Badge>
-              )}
               <Badge
                 variant={STATUS_VARIANT[exam.status]}
                 className="capitalize font-bold text-[10px] px-2.5 py-0.5 rounded-full"
@@ -439,16 +442,16 @@ export default function ExamSystem() {
                 {exam.status}
               </Badge>
               {canManage && (
-              <SimpleTooltip label="Delete exam">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"
-                  onClick={() => handleDelete(exam)}
-                >
-                  <HiOutlineTrash className="w-3.5 h-3.5" />
-                </Button>
-              </SimpleTooltip>
+                <SimpleTooltip label="Delete exam">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"
+                    onClick={() => handleDelete(exam)}
+                  >
+                    <HiOutlineTrash className="w-3.5 h-3.5" />
+                  </Button>
+                </SimpleTooltip>
               )}
             </div>
           </div>

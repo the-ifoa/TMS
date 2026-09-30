@@ -75,12 +75,18 @@ async function loadScope(req, _res, next) {
 
     // A top-level airline may only manage sub-users if an admin granted it.
     let topCanCreateSubusers = false;
+    // Admin-granted on the top-level airline; the ceiling for the whole tree.
+    let topCanUploadInternalCerts = false;
     if (!isDepartment) {
-      const me = await Airline.findById(c.id).select('can_create_subusers').lean();
+      const me = await Airline.findById(c.id).select('can_create_subusers can_upload_internal_certs').lean();
       topCanCreateSubusers = !!me?.can_create_subusers;
+      topCanUploadInternalCerts = !!me?.can_upload_internal_certs;
       // A top-level airline that already has departments can always view/manage
       // its own team, even if the flag was never explicitly set.
       if (!topCanCreateSubusers && departmentIds.length > 0) topCanCreateSubusers = true;
+    } else {
+      const top = await Airline.findById(topAirlineId).select('can_upload_internal_certs').lean();
+      topCanUploadInternalCerts = !!top?.can_upload_internal_certs;
     }
 
     let visibleAirlineIds;
@@ -103,6 +109,7 @@ async function loadScope(req, _res, next) {
       permissions,
       visibleAirlineIds,
       topCanCreateSubusers,
+      topCanUploadInternalCerts,
       canManageTeam: isDepartment
         ? permissions.includes('team.manage')
         : topCanCreateSubusers,
@@ -115,16 +122,25 @@ async function loadScope(req, _res, next) {
   }
 }
 
+// Airline permission keys that also need an admin switch on the top-level
+// airline. Without it, neither the airline nor its departments hold the key.
+const ADMIN_GATED_AIRLINE_KEYS = {
+  'internalCerts.manage': 'topCanUploadInternalCerts',
+};
+
 // Does the current request satisfy at least one of `keys`?
 function hasPermission(req, keys) {
   const s = req.scope || {};
-  const list = Array.isArray(keys) ? keys : [keys];
+  let list = Array.isArray(keys) ? keys : [keys];
+  if (s.kind === 'airline') {
+    list = list.filter((k) => !ADMIN_GATED_AIRLINE_KEYS[k] || s[ADMIN_GATED_AIRLINE_KEYS[k]]);
+  }
   if (s.kind === 'admin') {
     if (s.isSuperAdmin) return true;
     return list.some((k) => (s.permissions || []).includes(k));
   }
   if (s.kind === 'airline') {
-    if (s.isTopLevel) return true; // implicit full airline access
+    if (s.isTopLevel) return list.length > 0; // implicit full airline access
     return list.some((k) => (s.permissions || []).includes(k));
   }
   return false;
@@ -148,4 +164,7 @@ function requireTeamAccess(req, res, next) {
   return res.status(403).json({ error: 'Sub-user management is not enabled for your account.' });
 }
 
-module.exports = { loadScope, requirePermission, requireTeamAccess, hasPermission, isAdminRole };
+module.exports = {
+  loadScope, requirePermission, requireTeamAccess, hasPermission, isAdminRole,
+  ADMIN_GATED_AIRLINE_KEYS,
+};

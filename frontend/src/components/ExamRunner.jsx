@@ -9,6 +9,9 @@ import QuestionPlayer from './examPlayers/QuestionPlayer';
 import { Button } from '@/components/ui/button';
 import logoImg from '../assets/logo.png';
 
+// How often buffered answers are flushed to the server (VITE_EXAM_AUTOSAVE_SECONDS, default 10s).
+const AUTOSAVE_SECONDS = Math.max(1, Number(import.meta.env.VITE_EXAM_AUTOSAVE_SECONDS) || 10);
+
 // ─── Shared exam runner ───────────────────────────────────────────────────────
 // The single presentational + anti-cheat engine used by BOTH the airline-driven
 // flow (ExamTake) and the emailed public-link flow (PublicExam) so their layout
@@ -18,7 +21,7 @@ import logoImg from '../assets/logo.png';
 // Props:
 //   attempt          — { id, questions_snapshot, answers, started_at, violation_count }
 //   exam             — { title, duration_minutes, lockdown_enabled, max_violations }
-//   onSaveAnswer(qId, response)  — autosave one answer (fire-and-forget)
+//   onSaveAnswer(qId, response)  — persist one answer; may return a promise (rejects → retried next autosave tick)
 //   onSubmit()                   — async: persist final submission server-side
 //   onReportViolation(type)      — async → { violation_count, auto_submitted_now }
 //   onFinished()                 — called after a successful submit / auto-submit
@@ -63,7 +66,17 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onSubmit, onRe
   const [violationCount, setViolationCount] = useState(attempt.violation_count || 0);
   const [warning, setWarning] = useState(null);
   const [awaitingFsGesture, setAwaitingFsGesture] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [saveState, setSaveState] = useState('idle'); // idle | saving | saved | error
+  const [lastSavedAt, setLastSavedAt] = useState(null);
   const finishedRef = useRef(false);
+  // Answers changed since the last flush, keyed by question id (latest response wins).
+  const pendingRef = useRef(new Map());
+  const flushPromiseRef = useRef(null);
+  // Callers pass an inline onSaveAnswer; keep it in a ref so flushAnswers (and the
+  // autosave interval) stay stable across the per-second timer re-renders.
+  const onSaveAnswerRef = useRef(onSaveAnswer);
+  onSaveAnswerRef.current = onSaveAnswer;
   const violationLockRef = useRef(false);
   // Entering fullscreen the first time is a required SETUP STEP, not a
   // violation. Until the candidate has been in fullscreen at least once, no
@@ -114,11 +127,64 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onSubmit, onRe
   const lockdownEnabled = exam.lockdown_enabled && !previewMode;
   const maxViolations = exam.max_violations || 4;
 
-  const handleSubmit = useMemo(() => async () => {
+  // Push every buffered answer to the server. Failed saves are re-queued so the
+  // next tick retries them. Resolves true when nothing is left pending.
+  const flushAnswers = useCallback(() => {
+    if (flushPromiseRef.current) return flushPromiseRef.current;
+    if (pendingRef.current.size === 0) return Promise.resolve(true);
+    const batch = [...pendingRef.current.entries()];
+    pendingRef.current.clear();
+    setSaveState('saving');
+    const p = Promise.allSettled(batch.map(([qId, response]) => Promise.resolve(onSaveAnswerRef.current(qId, response))))
+      .then((results) => {
+        let failed = false;
+        results.forEach((r, i) => {
+          if (r.status !== 'rejected') return;
+          // 4xx (attempt submitted, question missing…) won't succeed on retry — drop it.
+          const status = r.reason?.response?.status;
+          if (status && status < 500) return;
+          failed = true;
+          const [qId, response] = batch[i];
+          if (!pendingRef.current.has(qId)) pendingRef.current.set(qId, response);
+        });
+        setSaveState(failed ? 'error' : 'saved');
+        if (!failed) setLastSavedAt(Date.now());
+        return !failed;
+      })
+      .finally(() => { flushPromiseRef.current = null; });
+    flushPromiseRef.current = p;
+    return p;
+  }, []);
+
+  useEffect(() => {
+    const id = setInterval(() => { if (!finishedRef.current) flushAnswers(); }, AUTOSAVE_SECONDS * 1000);
+    const onHide = () => { if (document.visibilityState === 'hidden') flushAnswers(); };
+    document.addEventListener('visibilitychange', onHide);
+    window.addEventListener('pagehide', flushAnswers);
+    return () => {
+      clearInterval(id);
+      flushAnswers(); // leaving the runner (e.g. Back) — push anything still buffered
+      document.removeEventListener('visibilitychange', onHide);
+      window.removeEventListener('pagehide', flushAnswers);
+    };
+  }, [flushAnswers]);
+
+  // manual=true → candidate confirmed submit; abort if answers can't be saved.
+  // Timer-driven auto-submits pass nothing and always go through.
+  const handleSubmit = useMemo(() => async ({ manual = false } = {}) => {
     if (finishedRef.current) return;
     finishedRef.current = true;
     setSubmitting(true);
     try {
+      let saved = await flushAnswers();
+      if (!saved) saved = await flushAnswers();
+      if (!saved && manual) {
+        toast.error('Some answers could not be saved. Check your connection and try again.');
+        finishedRef.current = false;
+        setSubmitting(false);
+        return;
+      }
+      setConfirmOpen(false);
       if (isFullscreen()) await exitFullscreen().catch(() => { });
       await onSubmit();
       onFinished();
@@ -127,12 +193,14 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onSubmit, onRe
       finishedRef.current = false;
       setSubmitting(false);
     }
-  }, [onSubmit, onFinished]);
+  }, [onSubmit, onFinished, flushAnswers]);
 
   const reportViolation = useCallback(async (type) => {
     if (finishedRef.current || violationLockRef.current) return;
     violationLockRef.current = true;
     try {
+      // Server may auto-submit on this violation — make sure answers are stored first.
+      await flushAnswers();
       const res = await onReportViolation(type);
       const count = res?.violation_count ?? 0;
       setViolationCount(count);
@@ -147,7 +215,7 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onSubmit, onRe
     } catch { /* ignore network errors */ } finally {
       setTimeout(() => { violationLockRef.current = false; }, 1200);
     }
-  }, [onReportViolation, onFinished, maxViolations]);
+  }, [onReportViolation, onFinished, maxViolations, flushAnswers]);
 
   // ── Lockdown listeners ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -335,7 +403,7 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onSubmit, onRe
     if (currentQuestionLocked) { toast.error("Time's up for this question — answer is locked."); return; }
     if (currentSectionLocked) { toast.error("Time's up for this section — answers are locked."); return; }
     setAnswers((prev) => ({ ...prev, [q._id]: response }));
-    onSaveAnswer(q._id, response);
+    pendingRef.current.set(q._id, response);
   };
   const toggleMarked = (qId) => setMarked((prev) => { const n = new Set(prev); n.has(qId) ? n.delete(qId) : n.add(qId); return n; });
   const answeredCount = questions.filter((qq) => answers[qq._id] !== undefined && answers[qq._id] !== null && answers[qq._id] !== '').length;
@@ -387,13 +455,18 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onSubmit, onRe
           {/* Timer Clock Badge */}
           <div
             className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-mono font-bold transition-all border shadow-2xs ${secondsLeft < 120
-                ? 'bg-rose-600 text-white border-rose-500 animate-pulse'
-                : 'bg-slate-800/90 text-white border-slate-700/80'
+              ? 'bg-rose-600 text-white border-rose-500 animate-pulse'
+              : 'bg-slate-800/90 text-white border-slate-700/80'
               }`}
           >
             <HiOutlineClock className="w-4 h-4 text-blue-400 flex-shrink-0" />
             <span>{formatTime(secondsLeft)}</span>
           </div>
+
+          <button type="button" onClick={() => setConfirmOpen(true)} disabled={submitting}
+            className="px-3 sm:px-4 py-1.5 rounded-xl text-xs font-bold border border-slate-600 text-slate-200 hover:bg-slate-800 hover:text-white transition-colors disabled:opacity-50">
+            {submitting ? 'Submitting…' : 'Finish Exam'}
+          </button>
         </div>
       </header>
 
@@ -442,23 +515,20 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onSubmit, onRe
                   const isCurrentSection = group.items.some((qq) => qq._index === index);
                   return (
                     <button key={gi} onClick={() => setIndex(group.items[0]._index)}
-                      className={`flex-shrink-0 px-3 py-1.5 rounded-xl text-[11px] font-bold transition-all border flex items-center gap-1.5 ${
-                        isCurrentSection
+                      className={`flex-shrink-0 px-3 py-1.5 rounded-xl text-[11px] font-bold transition-all border flex items-center gap-1.5 ${isCurrentSection
                           ? 'bg-slate-900 text-white border-slate-900 shadow-2xs'
                           : 'bg-slate-50 text-slate-700 border-slate-200/90 hover:bg-slate-100 hover:text-slate-900'
-                      }`}>
+                        }`}>
                       <span>{group.section || 'Ungrouped'}</span>
-                      <span className={`text-[9px] px-1.5 py-0.5 rounded-md font-black ${
-                        isCurrentSection ? 'bg-white/20 text-white' : 'bg-slate-200/80 text-slate-700'
-                      }`}>{answeredInSec}/{group.items.length}</span>
+                      <span className={`text-[9px] px-1.5 py-0.5 rounded-md font-black ${isCurrentSection ? 'bg-white/20 text-white' : 'bg-slate-200/80 text-slate-700'
+                        }`}>{answeredInSec}/{group.items.length}</span>
                       {sectionTimeLimits[group.section || ''] != null && (
-                        <span className={`text-[9px] px-1.5 py-0.5 rounded-md font-semibold ${
-                          lockedSections.has(group.section || '')
+                        <span className={`text-[9px] px-1.5 py-0.5 rounded-md font-semibold ${lockedSections.has(group.section || '')
                             ? 'bg-rose-600 text-white'
                             : isCurrentSection
-                            ? 'bg-white/20 text-white'
-                            : 'bg-slate-200/80 text-slate-700'
-                        }`}>
+                              ? 'bg-white/20 text-white'
+                              : 'bg-slate-200/80 text-slate-700'
+                          }`}>
                           {lockedSections.has(group.section || '') ? 'Locked' : formatTime(sectionRemaining(group.section || ''))}
                         </span>
                       )}
@@ -499,26 +569,23 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onSubmit, onRe
                       const isCurrentSection = group.items.some((qq) => qq._index === index);
                       return (
                         <button key={gi} type="button" onClick={() => setIndex(group.items[0]._index)}
-                          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-2 cursor-pointer ${
-                            isCurrentSection
+                          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-2 cursor-pointer ${isCurrentSection
                               ? 'bg-slate-900 text-white border-slate-900 shadow-2xs'
                               : 'bg-slate-50 text-slate-700 border-slate-200/90 hover:bg-slate-100 hover:text-slate-900 hover:border-slate-300'
-                          }`}>
+                            }`}>
                           <span className="truncate max-w-[130px]">{group.section || 'Ungrouped'}</span>
                           {sectionTimeLimits[group.section || ''] != null && (
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-semibold ${
-                              lockedSections.has(group.section || '')
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-semibold ${lockedSections.has(group.section || '')
                                 ? 'bg-rose-600 text-white'
                                 : isCurrentSection
-                                ? 'bg-white/20 text-white'
-                                : 'bg-slate-200/80 text-slate-700'
-                            }`}>
+                                  ? 'bg-white/20 text-white'
+                                  : 'bg-slate-200/80 text-slate-700'
+                              }`}>
                               {lockedSections.has(group.section || '') ? 'Locked' : formatTime(sectionRemaining(group.section || ''))}
                             </span>
                           )}
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-black ${
-                            isCurrentSection ? 'bg-white/20 text-white' : 'bg-slate-200/80 text-slate-700'
-                          }`}>{answeredInSec}/{group.items.length}</span>
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-black ${isCurrentSection ? 'bg-white/20 text-white' : 'bg-slate-200/80 text-slate-700'
+                            }`}>{answeredInSec}/{group.items.length}</span>
                         </button>
                       );
                     })}
@@ -577,29 +644,59 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onSubmit, onRe
             </div>
             <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-slate-100 flex items-center justify-between gap-2 flex-shrink-0 bg-white rounded-b-2xl z-10">
               <div className="flex items-center gap-1.5 text-[11px] sm:text-xs font-medium text-slate-400">
-                <HiOutlineCheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-500" /><span className="hidden xs:inline">Autosave enabled</span>
+                {saveState === 'error' ? (
+                  <><HiOutlineExclamationCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-rose-500" /><span className="hidden xs:inline text-rose-500">Save failed — retrying</span></>
+                ) : (
+                  <><HiOutlineCheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-500" />
+                    <span className="hidden xs:inline">
+                      {saveState === 'saving' ? 'Saving…' : lastSavedAt ? `Saved at ${new Date(lastSavedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}` : `Autosaves every ${AUTOSAVE_SECONDS}s`}
+                    </span></>
+                )}
               </div>
               <div className="flex items-center gap-2 sm:gap-3">
                 <Button variant="outline" size="sm" onClick={() => setIndex((i) => Math.max(0, i - 1))} disabled={index === 0}
                   className="rounded-xl px-3 sm:px-5 border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold text-xs">
                   <HiOutlineChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-0.5 sm:mr-1" /> PREV
                 </Button>
-                {index < questions.length - 1 ? (
-                  <Button size="sm" onClick={() => setIndex((i) => Math.min(questions.length - 1, i + 1))}
-                    className="rounded-xl px-4 sm:px-6 bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-2xs text-xs">
-                    NEXT <HiOutlineChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 ml-0.5 sm:ml-1" />
-                  </Button>
-                ) : (
-                  <Button size="sm" onClick={handleSubmit} disabled={submitting}
-                    className="rounded-xl px-5 sm:px-7 bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-2xs text-xs">
-                    {submitting ? 'Submitting…' : 'SUBMIT'}
-                  </Button>
-                )}
+                <Button size="sm" onClick={() => setIndex((i) => Math.min(questions.length - 1, i + 1))} disabled={index >= questions.length - 1}
+                  className="rounded-xl px-4 sm:px-6 bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-2xs text-xs">
+                  NEXT <HiOutlineChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 ml-0.5 sm:ml-1" />
+                </Button>
               </div>
             </div>
           </section>
         </div>
       </main>
+
+      {confirmOpen && (() => {
+        const unanswered = questions.length - answeredCount;
+        const markedCount = questions.filter((qq) => marked.has(qq._id)).length;
+        return (
+          <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4" role="dialog" aria-modal="true">
+            <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-6">
+              <h2 className="text-base font-black text-slate-900">Submit exam?</h2>
+              <p className="mt-1 text-sm text-slate-500">Once submitted, you cannot change your answers.</p>
+              <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+                <div className="rounded-xl bg-emerald-50 py-3"><div className="text-lg font-black text-emerald-700">{answeredCount}</div><div className="text-[11px] font-semibold text-emerald-700/80">Answered</div></div>
+                <div className={`rounded-xl py-3 ${unanswered ? 'bg-rose-50' : 'bg-slate-50'}`}><div className={`text-lg font-black ${unanswered ? 'text-rose-600' : 'text-slate-500'}`}>{unanswered}</div><div className="text-[11px] font-semibold text-slate-500">Unanswered</div></div>
+                <div className="rounded-xl bg-amber-50 py-3"><div className="text-lg font-black text-amber-600">{markedCount}</div><div className="text-[11px] font-semibold text-amber-700/80">For review</div></div>
+              </div>
+              {unanswered > 0 && (
+                <p className="mt-3 text-xs font-semibold text-rose-600">You have {unanswered} unanswered question{unanswered === 1 ? '' : 's'}.</p>
+              )}
+              <div className="mt-6 flex justify-end gap-2">
+                <Button variant="outline" size="sm" onClick={() => setConfirmOpen(false)} disabled={submitting} className="rounded-xl px-4 text-xs font-semibold">
+                  Continue Exam
+                </Button>
+                <Button size="sm" onClick={() => handleSubmit({ manual: true })} disabled={submitting}
+                  className="rounded-xl px-5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs">
+                  {submitting ? 'Submitting…' : 'Yes, Submit'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

@@ -24,6 +24,14 @@ const airlineSchema = new mongoose.Schema({
   permissions:      { type: [String], default: [] },
   // Admin-granted to a TOP-LEVEL airline: may it create its own departments?
   can_create_subusers: { type: Boolean, default: false },
+  // Admin-granted to a TOP-LEVEL airline: may it upload its own internal
+  // certificate PDFs (Cloudflare R2)? Also the ceiling for its departments'
+  // `internalCerts.manage` permission — off here means off for the whole tree.
+  can_upload_internal_certs: { type: Boolean, default: false },
+  // Admin-granted to a TOP-LEVEL airline: emails sent on its behalf (exam
+  // invites, enrollment confirmations, expiry reminders — incl. its departments')
+  // show the airline's logo instead of IFOA's. See services/emailBranding.js.
+  email_use_airline_logo: { type: Boolean, default: false },
   // Who created this account: an admin (admin-made airline user) or null (self
   // signup / airline-made department carries created_by_airline instead).
   created_by_admin:   { type: mongoose.Schema.Types.ObjectId, ref: 'Admin',   default: null },

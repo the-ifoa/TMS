@@ -24,12 +24,15 @@ import {
   HiOutlineMail,
   HiOutlineCheck,
   HiOutlineChartBar,
+  HiOutlineUpload,
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import { getParticipants, deleteParticipant, downloadIssuedCertificate, downloadDhlCertificate, listAttendanceSheets, getAttendanceSheet, updateParticipantEmail, API_BASE } from '../api';
 import AttendanceChecklistModal from '../components/AttendanceChecklistModal';
 import { buildAttendanceMap, generateAttendancePdf } from '../utils/generateAttendancePdf';
 import { useConfirm } from '@/hooks/use-confirm';
+import InternalCertificatesDialog, { useInternalCertCounts } from '../components/InternalCertificatesDialog';
+import ValidityBadge from '../components/ValidityBadge';
 
 const TRAINING_TYPES = [
   { value: 'FDI', label: 'Flight Dispatch Initial',      color: 'bg-slate-100 text-slate-800 border-slate-300/80 font-bold' },
@@ -199,7 +202,7 @@ function EmailInlineEditor({ rec }) {
   );
 }
 
-function SubmissionGroup({ groupKey, records, open, onToggle, focusId, attendanceSheets = [], onViewSheet, onAddSheet, bulkEmail = false, emailDrafts = {}, onEmailDraft }) {
+function SubmissionGroup({ groupKey, records, open, onToggle, focusId, attendanceSheets = [], onViewSheet, onAddSheet, bulkEmail = false, emailDrafts = {}, onEmailDraft, showInternalCerts = false, internalCertCounts = {}, internalCertExpiries = {}, onViewInternalCerts, canUploadInternalCerts = false, onUploadInternalCert, certView = 'ifoa' }) {
   const [downloading, setDownloading] = useState(null);
   const [preview, setPreview]       = useState(null);
   const [downloadingDhl, setDownloadingDhl] = useState(null);
@@ -476,6 +479,7 @@ function SubmissionGroup({ groupKey, records, open, onToggle, focusId, attendanc
                     ) : (
                       <EmailInlineEditor rec={rec} />
                     )}
+                    {certView === 'ifoa' && (<>
                     {rec.cert_released ? (
                       <div className="flex items-center gap-1">
                         <button
@@ -483,11 +487,12 @@ function SubmissionGroup({ groupKey, records, open, onToggle, focusId, attendanc
                           className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl border border-blue-200/80 bg-blue-50/80 text-[11px] font-semibold text-blue-700 hover:bg-blue-100/80 transition-all"
                         >
                           <HiOutlineEye className="w-3.5 h-3.5" />
-                          <span>Preview</span>
+                          <span>IFOA Certificate</span>
                         </button>
                         <button
                           onClick={() => handleDownload(rec)}
                           disabled={downloading === (rec.id || rec._id)}
+                          title="Download IFOA certificate PDF"
                           className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl border border-emerald-200/80 bg-emerald-50/80 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100/80 disabled:opacity-60 transition-all"
                         >
                           {downloading === (rec.id || rec._id) ? (
@@ -500,9 +505,11 @@ function SubmissionGroup({ groupKey, records, open, onToggle, focusId, attendanc
                       </div>
                     ) : (
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-600 border border-amber-200/60">
-                        <HiOutlineClock className="w-3 h-3" /> Pending
+                        <HiOutlineClock className="w-3 h-3" /> IFOA Pending
                       </span>
                     )}
+
+                    <ValidityBadge participant={rec} showDate={false} />
 
                     {rec.dhl_cert_released && (
                       <div className="flex items-center gap-1">
@@ -527,6 +534,41 @@ function SubmissionGroup({ groupKey, records, open, onToggle, focusId, attendanc
                         </button>
                       </div>
                     )}
+                    </>)}
+
+                    {/* Airline's own (uploaded) internal certificates */}
+                    {showInternalCerts && certView === 'internal' && (() => {
+                      const n = internalCertCounts[rec.id || rec._id] || 0;
+                      return (
+                        <div className="flex items-center gap-1">
+                        {canUploadInternalCerts && (
+                          <button
+                            type="button"
+                            onClick={() => onUploadInternalCert?.(rec)}
+                            title="Upload an internal certificate PDF"
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-slate-900 text-[11px] font-semibold text-white hover:bg-slate-800 transition-all"
+                          >
+                            <HiOutlineUpload className="w-3.5 h-3.5" />
+                            <span>Upload</span>
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => onViewInternalCerts?.(rec)}
+                          disabled={!n}
+                          title={n ? 'View internal certificates uploaded by your airline' : 'No internal certificates uploaded yet'}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl border border-slate-200/80 bg-white text-[11px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                        >
+                          <HiOutlineDocumentText className="w-3.5 h-3.5" />
+                          <span>Internal Certificate</span>
+                          <span className="ml-0.5 px-1.5 rounded-md bg-slate-100 border border-slate-200 text-[10px] font-bold text-slate-500">{n}</span>
+                        </button>
+                        {n > 0 && (
+                          <ValidityBadge expiry={internalCertExpiries[rec.id || rec._id] ?? null} showDate={false} />
+                        )}
+                        </div>
+                      );
+                    })()}
 
                     {/* Locked badge */}
                     <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-slate-100 border border-slate-200/80 text-slate-600">
@@ -749,7 +791,22 @@ function ParticipantModal({ record, onClose }) {
 }
 
 export default function Participants() {
-  const { isAdmin } = useAuth();
+  const { isAdmin, admin, can } = useAuth();
+  // Airline side: its own uploaded certificate PDFs, shown next to the IFOA one.
+  const [internalCertCounts, , internalCertExpiries, reloadInternalCerts] = useInternalCertCounts(!isAdmin);
+  const internalCertsOn = !isAdmin && !!admin?.can_upload_internal_certs;
+  const canUploadInternalCerts = internalCertsOn && can('internalCerts.manage');
+  const [internalCertsFor, setInternalCertsFor] = useState(null);
+  // Which certificate set the rows show: the IFOA-issued one or the airline's own uploads.
+  const hasInternalCerts = internalCertsOn || Object.values(internalCertCounts).some(Boolean);
+  const [certViewPref, setCertViewPref] = useState(() => {
+    try { return localStorage.getItem('submissions_cert_view') || 'ifoa'; } catch { return 'ifoa'; }
+  });
+  const certView = hasInternalCerts ? certViewPref : 'ifoa';
+  const changeCertView = (v) => {
+    setCertViewPref(v);
+    try { localStorage.setItem('submissions_cert_view', v); } catch { /* ignore */ }
+  }; // { participant, mode: 'upload' | 'view' }
   const [records, setRecords]               = useState([]);
   const [attendanceSheets, setAttendanceSheets] = useState([]);
   const [activeSheet, setActiveSheet]       = useState(null);
@@ -937,6 +994,8 @@ export default function Participants() {
   if (!isAdmin) {
     return (
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+        <InternalCertificatesDialog participant={internalCertsFor?.participant} mode={internalCertsFor?.mode}
+          onClose={() => setInternalCertsFor(c => c && { ...c, participant: null })} onChange={reloadInternalCerts} />
         {activeSheet && (
           <AttendanceChecklistModal
             participants={activeSheet.participants || []}
@@ -1049,6 +1108,29 @@ export default function Participants() {
                 ] },
               ]}
             />
+
+            {/* Certificate view toggle — IFOA-issued vs airline's own uploads */}
+            {hasInternalCerts && (
+              <div className="inline-flex items-center p-0.5 rounded-xl bg-slate-100 border border-slate-200/80 flex-shrink-0" role="tablist" aria-label="Certificate type">
+                {[
+                  { value: 'ifoa', label: 'IFOA Certificate' },
+                  { value: 'internal', label: 'Internal Certificate' },
+                ].map(o => (
+                  <button
+                    key={o.value}
+                    type="button"
+                    role="tab"
+                    aria-selected={certView === o.value}
+                    onClick={() => changeCertView(o.value)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${
+                      certView === o.value ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+            )}
 
             {/* Bulk email manager — airline only */}
             {!isAdmin && (
@@ -1164,6 +1246,13 @@ export default function Participants() {
                   bulkEmail={bulkEmail}
                   emailDrafts={emailDrafts}
                   onEmailDraft={setEmailDraft}
+                  showInternalCerts={internalCertsOn || recs.some(r => internalCertCounts[r.id || r._id])}
+                  internalCertCounts={internalCertCounts}
+                  internalCertExpiries={internalCertExpiries}
+                  onViewInternalCerts={rec => setInternalCertsFor({ participant: rec, mode: 'view' })}
+                  canUploadInternalCerts={canUploadInternalCerts}
+                  onUploadInternalCert={rec => setInternalCertsFor({ participant: rec, mode: 'upload' })}
+                  certView={certView}
                 />
               );
             })}

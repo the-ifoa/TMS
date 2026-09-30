@@ -132,6 +132,7 @@ const publicExamRouter      = require('./routes/publicExam');
 const questionBankRouter    = require('./routes/questionBank');
 const clientLogsRouter      = require('./routes/clientLogs');
 const teamRouter            = require('./routes/team');
+const internalCertsRouter   = require('./routes/internalCertificates');
 
 app.use('/api/auth', authRouter);
 app.use('/api/participants', participantsRouter);
@@ -146,6 +147,7 @@ app.use('/api/public-exam', publicExamRouter);
 app.use('/api/question-bank', questionBankRouter);
 app.use('/api/client-logs', clientLogsRouter);
 app.use('/api/team', teamRouter);
+app.use('/api/internal-certificates', internalCertsRouter);
 
 // Frontend is served separately (localhost in dev, or its own host in prod).
 // The backend is API-only — do NOT serve static files from here.

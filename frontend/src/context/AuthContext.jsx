@@ -58,9 +58,13 @@ export function AuthProvider({ children }) {
 
   // can(perm) — a top-level admin or top-level airline implicitly has everything
   // in their own realm; sub-users are limited to their granted permission keys.
+  // Airline keys that also need an admin switch on the (parent) airline — for a
+  // department, /me reports the parent's switch in the same field.
+  const ADMIN_GATED = { 'internalCerts.manage': 'can_upload_internal_certs' };
   const can = (perm) => {
     if (!admin) return false;
     if (isSuperAdmin) return true;
+    if (isAirline && ADMIN_GATED[perm] && !admin[ADMIN_GATED[perm]]) return false;
     if (isTopLevelAirline) return true;
     return permissions.includes(perm);
   };

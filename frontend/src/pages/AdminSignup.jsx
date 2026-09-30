@@ -141,9 +141,10 @@ export default function AdminSignup() {
               Already have an admin account?{' '}
               <Link to="/admin-login" className="text-[#0000ff] font-semibold hover:underline transition-colors">Sign in</Link>
             </p>
-            <p className="text-xs text-center text-slate-500 bg-slate-50 border border-slate-100 rounded-xl p-3 leading-relaxed">
-              🔒 This page is for authorised IFOA administrators only.
-            </p>
+            <div className="flex items-center justify-center gap-1.5 text-xs text-slate-500 bg-slate-50 border border-slate-100 rounded-xl p-3 leading-relaxed">
+              <HiOutlineLockClosed className="w-4 h-4 text-slate-400 shrink-0" />
+              <span>This page is for authorised IFOA administrators only.</span>
+            </div>
           </div>
         </div>
       </motion.div>

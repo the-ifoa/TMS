@@ -141,6 +141,26 @@ async function generateDhlCertificate(participant, sequence) {
     });
   }
 
+  // ── 3b. Compliance reference line — the template bakes in "In accordance
+  //      with ICAO doc 10106, ICAO doc 9868 and Bahrain ANTR CAP 26" as
+  //      artwork at x=192.4-637.3, y=217.3-234.5 (bold, ~12pt, measured via
+  //      `pdftotext -bbox`). Mask it out and redraw the replacement text at
+  //      the same position/size/weight.
+  const complianceText = 'In accordance with Flight Control Procedures Manual Section 6.3.1';
+  const complianceSize = 12;
+  const complianceWidth = helveticaBold.widthOfTextAtSize(complianceText, complianceSize);
+  // Mask must cover the ORIGINAL baked text's bbox (192.4-637.3), which is
+  // wider than the replacement — sizing the mask to the new text would leave
+  // the old text peeking out at the edges.
+  page.drawRectangle({
+    x: 188, y: 216, width: 453, height: 19, color: rgb(1, 1, 1),
+  });
+  page.drawText(complianceText, {
+    x: ADDRESS_BLOCK_CENTER_X - complianceWidth / 2,
+    y: 218,
+    size: complianceSize, font: helveticaBold, color: black,
+  });
+
   // ── 4. Instructor (default: Kenneth Kronborg) + signature image ─────────
   const sig = FIELD.instructorSig;
   const instructorName = 'Kenneth Kronborg';

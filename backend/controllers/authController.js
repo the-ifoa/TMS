@@ -338,10 +338,12 @@ exports.airlineLogin = async (req, res) => {
     const token = signAirlineToken(airline);
 
     const adminOut = { ...airline.toJSON(), role: 'airline' };
-    // A department with no logo of its own inherits the parent airline's.
-    if (!adminOut.logo_url && airline.parent_airline) {
-      const parent = await Airline.findById(airline.parent_airline).select('logo_url');
-      if (parent?.logo_url) { adminOut.logo_url = parent.logo_url; adminOut.logo_inherited = true; }
+    if (airline.parent_airline) {
+      const parent = await Airline.findById(airline.parent_airline).select('logo_url can_upload_internal_certs');
+      // A department with no logo of its own inherits the parent airline's.
+      if (!adminOut.logo_url && parent?.logo_url) { adminOut.logo_url = parent.logo_url; adminOut.logo_inherited = true; }
+      // Internal cert upload is gated by the admin switch on the parent airline.
+      adminOut.can_upload_internal_certs = !!parent?.can_upload_internal_certs;
     }
     // Self-heal: a top-level airline that already has departments must be able to
     // see & manage its own team.
@@ -370,10 +372,12 @@ exports.getMe = async (req, res) => {
       const airline = await Airline.findById(req.admin.id);
       if (!airline) return res.status(404).json({ error: 'Airline user not found.' });
       const out = { ...airline.toJSON(), role: 'airline' };
-      // A department with no logo of its own inherits the parent airline's.
-      if (!out.logo_url && airline.parent_airline) {
-        const parent = await Airline.findById(airline.parent_airline).select('logo_url');
-        if (parent?.logo_url) { out.logo_url = parent.logo_url; out.logo_inherited = true; }
+      if (airline.parent_airline) {
+        const parent = await Airline.findById(airline.parent_airline).select('logo_url can_upload_internal_certs');
+        // A department with no logo of its own inherits the parent airline's.
+        if (!out.logo_url && parent?.logo_url) { out.logo_url = parent.logo_url; out.logo_inherited = true; }
+        // Internal cert upload is gated by the admin switch on the parent airline.
+        out.can_upload_internal_certs = !!parent?.can_upload_internal_certs;
       }
       // Self-heal: a top-level airline that already has departments (e.g. an admin
       // created them) must be able to see & manage its own team.
@@ -541,7 +545,7 @@ exports.adminCreateAirline = async (req, res) => {
   try {
     const {
       name, airlineName, email, password, address, logo_url,
-      can_author_exams, can_create_subusers,
+      can_author_exams, can_create_subusers, can_upload_internal_certs, email_use_airline_logo,
     } = req.body;
 
     if (!name || !airlineName || !email || !password)
@@ -568,6 +572,8 @@ exports.adminCreateAirline = async (req, res) => {
       existing.otpAttempts    = 0;
       if (typeof can_author_exams === 'boolean')     existing.can_author_exams = can_author_exams;
       if (typeof can_create_subusers === 'boolean')  existing.can_create_subusers = can_create_subusers;
+      if (typeof can_upload_internal_certs === 'boolean') existing.can_upload_internal_certs = can_upload_internal_certs;
+      if (typeof email_use_airline_logo === 'boolean') existing.email_use_airline_logo = email_use_airline_logo;
       await existing.save();
       airline = existing;
     } else {
@@ -581,6 +587,8 @@ exports.adminCreateAirline = async (req, res) => {
         emailVerified:  true,
         can_author_exams:     typeof can_author_exams === 'boolean' ? can_author_exams : false,
         can_create_subusers:  typeof can_create_subusers === 'boolean' ? can_create_subusers : false,
+        can_upload_internal_certs: typeof can_upload_internal_certs === 'boolean' ? can_upload_internal_certs : false,
+        email_use_airline_logo: typeof email_use_airline_logo === 'boolean' ? email_use_airline_logo : false,
       });
     }
 
@@ -604,7 +612,7 @@ exports.adminUpdateAirline = async (req, res) => {
     const airline = await Airline.findById(req.params.id);
     if (!airline) return res.status(404).json({ error: 'Airline not found.' });
 
-    const { airlineName, address, can_author_exams, can_create_subusers } = req.body;
+    const { airlineName, address, can_author_exams, can_create_subusers, can_upload_internal_certs, email_use_airline_logo } = req.body;
     if (airlineName !== undefined) {
       if (!airlineName.trim()) return res.status(400).json({ error: 'Airline name cannot be empty.' });
       airline.airlineName = airlineName.trim();
@@ -612,11 +620,73 @@ exports.adminUpdateAirline = async (req, res) => {
     if (address !== undefined) airline.address = (address || '').trim();
     if (typeof can_author_exams === 'boolean') airline.can_author_exams = can_author_exams;
     if (typeof can_create_subusers === 'boolean') airline.can_create_subusers = can_create_subusers;
+    if (typeof can_upload_internal_certs === 'boolean') airline.can_upload_internal_certs = can_upload_internal_certs;
+    if (typeof email_use_airline_logo === 'boolean') airline.email_use_airline_logo = email_use_airline_logo;
 
     await airline.save();
     res.json({ message: 'Airline updated.', airline: airline.toJSON() });
   } catch (err) {
     console.error('PATCH /admin/airline error:', err.message);
     res.status(500).json({ error: err.message || 'Server error updating airline.' });
+  }
+};
+
+// ─────────────────────────────────────────────
+//  ADMIN: BULK AIRLINE SETTINGS
+//  GET   /api/auth/admin/airlines/settings — every top-level airline + its flags
+//  PATCH /api/auth/admin/airlines/settings — Body: { updates: [{ id, <flag>: bool, … }] }
+//  Only the admin-granted feature flags below can be changed here.
+// ─────────────────────────────────────────────
+const AIRLINE_SETTING_KEYS = ['can_author_exams', 'can_create_subusers', 'can_upload_internal_certs', 'email_use_airline_logo'];
+
+exports.adminListAirlineSettings = async (req, res) => {
+  try {
+    const airlines = await Airline.find({ parent_airline: null, emailVerified: true })
+      .sort({ airlineName: 1 })
+      .select(`airlineName email logo_url ${AIRLINE_SETTING_KEYS.join(' ')}`)
+      .lean();
+    const deptCounts = await Airline.aggregate([
+      { $match: { parent_airline: { $ne: null } } },
+      { $group: { _id: '$parent_airline', n: { $sum: 1 } } },
+    ]);
+    const deptById = Object.fromEntries(deptCounts.map((d) => [String(d._id), d.n]));
+    res.json({
+      airlines: airlines.map((a) => ({
+        _id: String(a._id),
+        airlineName: a.airlineName,
+        email: a.email,
+        logo_url: a.logo_url || null,
+        department_count: deptById[String(a._id)] || 0,
+        ...Object.fromEntries(AIRLINE_SETTING_KEYS.map((k) => [k, !!a[k]])),
+      })),
+    });
+  } catch (err) {
+    console.error('GET /admin/airlines/settings error:', err.message);
+    res.status(500).json({ error: err.message || 'Server error loading airline settings.' });
+  }
+};
+
+exports.adminBulkUpdateAirlineSettings = async (req, res) => {
+  try {
+    const { updates } = req.body;
+    if (!Array.isArray(updates) || updates.length === 0)
+      return res.status(400).json({ error: 'updates array required.' });
+
+    const ops = [];
+    for (const u of updates) {
+      if (!u?.id || !/^[a-f0-9]{24}$/i.test(String(u.id))) continue;
+      const $set = {};
+      AIRLINE_SETTING_KEYS.forEach((k) => { if (typeof u[k] === 'boolean') $set[k] = u[k]; });
+      if (Object.keys($set).length) {
+        ops.push({ updateOne: { filter: { _id: u.id, parent_airline: null }, update: { $set } } });
+      }
+    }
+    if (!ops.length) return res.status(400).json({ error: 'No valid changes supplied.' });
+
+    const result = await Airline.bulkWrite(ops);
+    res.json({ message: `Updated ${result.modifiedCount} airline(s).`, modified: result.modifiedCount });
+  } catch (err) {
+    console.error('PATCH /admin/airlines/settings error:', err.message);
+    res.status(500).json({ error: err.message || 'Server error saving airline settings.' });
   }
 };

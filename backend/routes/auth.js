@@ -44,4 +44,8 @@ router.post('/admin/airline', authMiddleware, adminOnly, loadScope, requirePermi
 // ─── ADMIN: UPDATE AIRLINE — PATCH /api/auth/admin/airline/:id ───────────────
 router.patch('/admin/airline/:id', authMiddleware, adminOnly, loadScope, requirePermission('airlines.manage'), authController.adminUpdateAirline);
 
+// ─── ADMIN: BULK AIRLINE SETTINGS — GET/PATCH /api/auth/admin/airlines/settings ─
+router.get('/admin/airlines/settings', authMiddleware, adminOnly, loadScope, requirePermission('airlines.manage'), authController.adminListAirlineSettings);
+router.patch('/admin/airlines/settings', authMiddleware, adminOnly, loadScope, requirePermission('airlines.manage'), authController.adminBulkUpdateAirlineSettings);
+
 module.exports = router;

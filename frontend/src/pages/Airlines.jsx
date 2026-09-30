@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Clock, CheckCircle2, Building2, GraduationCap, Users2, ShieldCheck } from 'lucide-react';
+import { Clock, CheckCircle2, Building2, GraduationCap, Users2, ShieldCheck, FileText, Mail, Settings2 } from 'lucide-react';
 import LogoAvatar from '../components/LogoAvatar';
+import AirlineSettingsDialog from '../components/AirlineSettingsDialog';
 import {
   HiOutlineUsers,
   HiOutlineChevronDown,
@@ -37,6 +38,9 @@ import {
 import { compressImageFile } from '../utils/compressImage';
 import ModuleSelector from '../components/ModuleSelector';
 import AttendanceChecklistModal from '../components/AttendanceChecklistModal';
+import ValidityBadge from '../components/ValidityBadge';
+import ExpiryReminderDialog from '../components/ExpiryReminderDialog';
+import { certExpiry } from '../utils/certValidity';
 import { useConfirm } from '@/hooks/use-confirm';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem, SelectGroup, SelectLabel } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -150,7 +154,8 @@ function VariantModal({ open, variant, setVariant, validity, setValidity, onConf
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed -inset-20 z-50 bg-black/40 backdrop-blur-sm pointer-events-none"
+        transition={{ duration: 0.15, ease: 'easeOut' }}
+        className="fixed inset-0 z-50 bg-slate-900/60 pointer-events-none"
       />
       <div
         key="layout"
@@ -159,11 +164,11 @@ function VariantModal({ open, variant, setVariant, validity, setValidity, onConf
       >
         <motion.div
           key="card"
-          initial={{ opacity: 0, scale: 0.95, y: 10 }}
+          initial={{ opacity: 0, scale: 0.96, y: 6 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: 10 }}
-          transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-          className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden"
+          exit={{ opacity: 0, scale: 0.96, y: 6 }}
+          transition={{ duration: 0.15, ease: 'easeOut' }}
+          className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden will-change-transform"
           onClick={e => e.stopPropagation()}
         >
           <div className="flex items-center justify-between px-5 py-4 border-b border-primary-100">
@@ -245,7 +250,8 @@ function CertResultModal({ results, onClose }) {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed -inset-20 z-50 bg-black/40 backdrop-blur-sm pointer-events-none"
+        transition={{ duration: 0.15, ease: 'easeOut' }}
+        className="fixed inset-0 z-50 bg-slate-900/60 pointer-events-none"
       />
       <div
         key="layout"
@@ -254,11 +260,11 @@ function CertResultModal({ results, onClose }) {
       >
         <motion.div
           key="card"
-          initial={{ opacity: 0, scale: 0.95, y: 10 }}
+          initial={{ opacity: 0, scale: 0.96, y: 6 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: 10 }}
-          transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-          className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden"
+          exit={{ opacity: 0, scale: 0.96, y: 6 }}
+          transition={{ duration: 0.15, ease: 'easeOut' }}
+          className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden will-change-transform"
           onClick={e => e.stopPropagation()}
         >
           <div className="flex items-center justify-between px-5 py-4 border-b border-primary-100">
@@ -323,7 +329,8 @@ function CounterResetModal({ open, onClose, counters, ALL_TYPES, resetting, onRe
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed -inset-20 z-50 bg-black/40 backdrop-blur-sm pointer-events-none"
+        transition={{ duration: 0.15, ease: 'easeOut' }}
+        className="fixed inset-0 z-50 bg-slate-900/60 pointer-events-none"
       />
       {/* Layout wrapper */}
       <div
@@ -333,11 +340,11 @@ function CounterResetModal({ open, onClose, counters, ALL_TYPES, resetting, onRe
       >
         <motion.div
           key="card"
-          initial={{ opacity: 0, scale: 0.95, y: 10 }}
+          initial={{ opacity: 0, scale: 0.96, y: 6 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: 10 }}
-          transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-          className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col my-auto"
+          exit={{ opacity: 0, scale: 0.96, y: 6 }}
+          transition={{ duration: 0.15, ease: 'easeOut' }}
+          className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col my-auto will-change-transform"
           onClick={e => e.stopPropagation()}
         >
 
@@ -413,7 +420,7 @@ function CounterResetModal({ open, onClose, counters, ALL_TYPES, resetting, onRe
 }
 
 // ─── Mobile participant card (replaces table row on small screens) ─────────────
-function ParticipantCard({ p, checked, onCheck, onPreview, onDownload, onEdit, onDelete, downloadingId, certEdits, onStartEdit, onCancelEdit, onSaveEdit, setCertEdits, ndgScores, setNdgScores, onNdgScoreSave, fdrHours, setFdrHours, onFdrHoursSave, onFdrHoursToggle }) {
+function ParticipantCard({ p, checked, onCheck, onPreview, onDownload, onEdit, onDelete, downloadingId, certEdits, onStartEdit, onCancelEdit, onSaveEdit, setCertEdits, ndgScores, setNdgScores, onNdgScoreSave, fdrHours, setFdrHours, onFdrHoursSave, onFdrHoursToggle, onRemind }) {
   const pid      = p.id || p._id;
   const fullName = p.participant_name || `${p.first_name || ''} ${p.last_name || ''}`.trim();
   const isCk     = checked.has(pid);
@@ -582,6 +589,13 @@ function ParticipantCard({ p, checked, onCheck, onPreview, onDownload, onEdit, o
               {downloadingId === pid ? <Spin cls="w-3.5 h-3.5 border-2 border-emerald-300 border-t-emerald-600" /> : <HiOutlineDocumentDownload className="w-3.5 h-3.5" />}
               PDF
             </button>
+            <ValidityBadge participant={p} showDate={false} className="self-center" />
+            {certExpiry(p)?.expiresOn && (
+              <button onClick={() => onRemind(p)} title="Email the airline an expiry reminder"
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-amber-200 text-xs font-medium text-amber-700 bg-amber-50 hover:bg-amber-100">
+                <HiOutlineMail className="w-3.5 h-3.5" /> Remind
+              </button>
+            )}
           </>
         )}
         <Link to={`/admin/participants/edit/${pid}`}
@@ -645,6 +659,7 @@ const AirlineCardGroup = React.memo(function AirlineCardGroup({
   initialOpen,
   airlineCardRefs,
   participantRowRefs,
+  onRemind,
 }) {
   const isFilterActive = Boolean(filterKey && filterKey !== '__');
   const [open, setOpen] = useState(() => initialOpen);
@@ -769,22 +784,24 @@ const AirlineCardGroup = React.memo(function AirlineCardGroup({
                       onCancelEdit={cancelCertEdit} onSaveEdit={saveCertEdit}
                       setCertEdits={setCertEdits}
                       ndgScores={ndgScores} setNdgScores={setNdgScores} onNdgScoreSave={handleNdgScoreSave}
-                      fdrHours={fdrHours} setFdrHours={setFdrHours} onFdrHoursSave={handleFdrHoursSave} onFdrHoursToggle={handleFdrHoursToggle} />
+                      fdrHours={fdrHours} setFdrHours={setFdrHours} onFdrHoursSave={handleFdrHoursSave} onFdrHoursToggle={handleFdrHoursToggle}
+                      onRemind={onRemind} />
                   </div>
                 ))}
               </div>
 
               {/* Desktop: table */}
               <div className="hidden sm:block">
-                <table className="w-full min-w-[850px] border-collapse">
+                <table className="w-full min-w-[980px] border-collapse">
                   <colgroup>
                     <col className="w-10" />
-                    <col className="w-[24%]" />
+                    <col className="w-[22%]" />
+                    <col className="w-[10%]" />
+                    <col className="w-[14%]" />
+                    <col className="w-[9%]" />
+                    <col className="w-[9%]" />
                     <col className="w-[12%]" />
-                    <col className="w-[16%]" />
-                    <col className="w-[10%]" />
-                    <col className="w-[10%]" />
-                    <col className="w-[28%]" />
+                    <col className="w-[24%]" />
                   </colgroup>
                   <thead>
                     <tr className="bg-primary-50/60 border-b border-primary-100">
@@ -794,6 +811,7 @@ const AirlineCardGroup = React.memo(function AirlineCardGroup({
                       <th className="text-left text-[10px] font-bold text-primary-500 uppercase tracking-wider px-3 py-2.5">Training</th>
                       <th className="text-left text-[10px] font-bold text-primary-500 uppercase tracking-wider px-3 py-2.5">Start</th>
                       <th className="text-left text-[10px] font-bold text-primary-500 uppercase tracking-wider px-3 py-2.5">End</th>
+                      <th className="text-left text-[10px] font-bold text-primary-500 uppercase tracking-wider px-3 py-2.5">Validity</th>
                       <th className="text-center text-[10px] font-bold text-primary-500 uppercase tracking-wider px-3 py-2.5">Actions</th>
                     </tr>
                   </thead>
@@ -958,6 +976,9 @@ const AirlineCardGroup = React.memo(function AirlineCardGroup({
                           <td className="px-3 py-3.5 align-middle text-xs font-medium text-primary-600 whitespace-nowrap">{fmtDate(p.training_date)}</td>
                           <td className="px-3 py-3.5 align-middle text-xs font-medium text-primary-600 whitespace-nowrap">{fmtDate(p.end_date)}</td>
                           <td className="px-3 py-3.5 align-middle">
+                            <ValidityBadge participant={p} fallback={<span className="text-xs text-primary-300">—</span>} />
+                          </td>
+                          <td className="px-3 py-3.5 align-middle">
                             <div className="flex items-center justify-end gap-1.5 flex-nowrap whitespace-nowrap">
                               {!p.cert_sequence ? (
                                 <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-medium bg-amber-50 text-amber-600 border border-amber-200"><HiOutlineClock className="w-3 h-3" /> Pending</span>
@@ -979,6 +1000,12 @@ const AirlineCardGroup = React.memo(function AirlineCardGroup({
                                     {downloadingId === pid ? <Spin cls="w-3.5 h-3.5 border-2 border-emerald-300 border-t-emerald-600" /> : <HiOutlineDocumentDownload className="w-3.5 h-3.5" />}
                                     PDF
                                   </button>
+                                  {certExpiry(p)?.expiresOn && (
+                                    <button onClick={() => onRemind(p)} title="Email the airline an expiry reminder"
+                                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-amber-200 text-xs font-medium text-amber-700 bg-amber-50 hover:bg-amber-100">
+                                      <HiOutlineMail className="w-3.5 h-3.5" /> Remind
+                                    </button>
+                                  )}
                                 </>
                               )}
                               {eligibleForDhlExtra(p) && p.dhl_cert_released && (
@@ -1087,11 +1114,13 @@ export default function Airlines() {
   const [revokingDhlId, setRevokingDhlId] = useState(null);
   const [downloadingDhlId, setDownloadingDhlId] = useState(null);
   const [dhlRowPreview, setDhlRowPreview] = useState(null);
+  const [reminderFor, setReminderFor] = useState(null); // participants to email an expiry reminder about
+  const openReminder = useCallback(p => setReminderFor([p]), []);
   // Admin edit-airline modal: { open, id, airlineName, address }
-  const [editAirline, setEditAirline] = useState({ open: false, id: null, airlineName: '', address: '', can_author_exams: false, can_create_subusers: false });
+  const [editAirline, setEditAirline] = useState({ open: false, id: null, airlineName: '', address: '', can_author_exams: false, can_create_subusers: false, can_upload_internal_certs: false, email_use_airline_logo: false });
   const [savingAirline, setSavingAirline] = useState(false);
   // Admin create-airline modal (registers an airline on its behalf — no OTP)
-  const EMPTY_CREATE_AIRLINE = { open: false, name: '', airlineName: '', email: '', password: '', confirm: '', address: '', can_author_exams: false, can_create_subusers: false };
+  const EMPTY_CREATE_AIRLINE = { open: false, name: '', airlineName: '', email: '', password: '', confirm: '', address: '', can_author_exams: false, can_create_subusers: false, can_upload_internal_certs: false, email_use_airline_logo: false };
   const [createAirline, setCreateAirline] = useState(EMPTY_CREATE_AIRLINE);
   const [creatingAirline, setCreatingAirline] = useState(false);
   const [createLogoFile, setCreateLogoFile] = useState(null);
@@ -1119,6 +1148,7 @@ export default function Airlines() {
   // in-place action (revoke, delete, generate, ...) so the already-rendered
   // list doesn't unmount/remount, which was collapsing expanded cards and
   // resetting scroll position back to the top of the page on every update.
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const fetchData = useCallback(async ({ silent = false } = {}) => {
     try {
       if (!silent) setLoading(true);
@@ -1548,9 +1578,11 @@ export default function Airlines() {
       address: airline.address || '',
       can_author_exams: !!airline.can_author_exams,
       can_create_subusers: !!airline.can_create_subusers,
+      can_upload_internal_certs: !!airline.can_upload_internal_certs,
+      email_use_airline_logo: !!airline.email_use_airline_logo,
     });
   };
-  const closeEditAirline = () => setEditAirline({ open: false, id: null, airlineName: '', address: '', can_author_exams: false, can_create_subusers: false });
+  const closeEditAirline = () => setEditAirline({ open: false, id: null, airlineName: '', address: '', can_author_exams: false, can_create_subusers: false, can_upload_internal_certs: false, email_use_airline_logo: false });
   const saveEditAirline = async () => {
     const name = editAirline.airlineName.trim();
     if (!name) { toast.error('Airline name cannot be empty'); return; }
@@ -1561,12 +1593,14 @@ export default function Airlines() {
         address: editAirline.address.trim(),
         can_author_exams: editAirline.can_author_exams,
         can_create_subusers: editAirline.can_create_subusers,
+        can_upload_internal_certs: editAirline.can_upload_internal_certs,
+        email_use_airline_logo: editAirline.email_use_airline_logo,
       });
       const updated = res.data.airline;
       // Patch in-memory data so the change shows immediately without a full reload
       setData(prev => prev.map(d =>
         airlineKey(d.airline) === String(editAirline.id)
-          ? { ...d, airline: { ...d.airline, airlineName: updated.airlineName, address: updated.address, can_author_exams: updated.can_author_exams, can_create_subusers: updated.can_create_subusers } }
+          ? { ...d, airline: { ...d.airline, airlineName: updated.airlineName, address: updated.address, can_author_exams: updated.can_author_exams, can_create_subusers: updated.can_create_subusers, can_upload_internal_certs: updated.can_upload_internal_certs, email_use_airline_logo: updated.email_use_airline_logo } }
           : d
       ));
       toast.success('Airline updated');
@@ -1619,6 +1653,8 @@ export default function Airlines() {
         address: createAirline.address.trim(),
         can_author_exams: createAirline.can_author_exams,
         can_create_subusers: createAirline.can_create_subusers,
+        can_upload_internal_certs: createAirline.can_upload_internal_certs,
+        email_use_airline_logo: createAirline.email_use_airline_logo,
       });
       toast.success(`Airline "${airlineName}" created`);
       closeCreateAirline();
@@ -2027,7 +2063,8 @@ export default function Airlines() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed -inset-20 z-50 bg-black/40 backdrop-blur-sm pointer-events-none"
+              transition={{ duration: 0.15, ease: 'easeOut' }}
+              className="fixed inset-0 z-50 bg-slate-900/60 pointer-events-none"
             />
             <div
               key="layout"
@@ -2036,11 +2073,11 @@ export default function Airlines() {
             >
               <motion.div
                 key="card"
-                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                initial={{ opacity: 0, scale: 0.96, y: 6 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-                className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden my-auto border border-slate-200/80"
+                exit={{ opacity: 0, scale: 0.96, y: 6 }}
+                transition={{ duration: 0.15, ease: 'easeOut' }}
+                className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden my-auto border border-slate-200/80 will-change-transform"
                 onClick={e => e.stopPropagation()}
               >
                 {/* Header */}
@@ -2118,6 +2155,24 @@ export default function Airlines() {
                         checked={editAirline.can_create_subusers}
                         onChange={val => setEditAirline(prev => ({ ...prev, can_create_subusers: val }))}
                       />
+                      <PermissionToggleCard
+                        icon={FileText}
+                        iconColor="text-emerald-600"
+                        iconBg="bg-emerald-50 border-emerald-200/80"
+                        title="Allow this airline to upload its own internal certificates"
+                        description="Adds a 'Certificates' button per candidate to upload the airline's own PDFs. The airline can pass this power on to its departments."
+                        checked={editAirline.can_upload_internal_certs}
+                        onChange={val => setEditAirline(prev => ({ ...prev, can_upload_internal_certs: val }))}
+                      />
+                      <PermissionToggleCard
+                        icon={Mail}
+                        iconColor="text-sky-600"
+                        iconBg="bg-sky-50 border-sky-200/80"
+                        title="Show this airline's logo in emails instead of IFOA's"
+                        description="Exam invites, enrollment confirmations and expiry reminders sent for this airline or its departments carry the airline's logo (a department uses its own logo if it has one). Falls back to IFOA if no logo is uploaded."
+                        checked={editAirline.email_use_airline_logo}
+                        onChange={val => setEditAirline(prev => ({ ...prev, email_use_airline_logo: val }))}
+                      />
                     </div>
                   </div>
                 </div>
@@ -2147,6 +2202,8 @@ export default function Airlines() {
         )}
       </AnimatePresence>
 
+      <AirlineSettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} onSaved={() => fetchData({ silent: true })} />
+
       {/* ── Admin: Create Airline Modal (registers on the airline's behalf — no email verification) ── */}
       <AnimatePresence>
         {createAirline.open && (
@@ -2156,7 +2213,8 @@ export default function Airlines() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed -inset-20 z-50 bg-black/40 backdrop-blur-sm pointer-events-none"
+              transition={{ duration: 0.15, ease: 'easeOut' }}
+              className="fixed inset-0 z-50 bg-slate-900/60 pointer-events-none"
             />
             <div
               key="layout"
@@ -2165,11 +2223,11 @@ export default function Airlines() {
             >
               <motion.div
                 key="card"
-                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                initial={{ opacity: 0, scale: 0.96, y: 6 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-                className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden my-auto border border-slate-200/80"
+                exit={{ opacity: 0, scale: 0.96, y: 6 }}
+                transition={{ duration: 0.15, ease: 'easeOut' }}
+                className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden my-auto border border-slate-200/80 will-change-transform"
                 onClick={e => e.stopPropagation()}
               >
                 {/* Header */}
@@ -2285,6 +2343,24 @@ export default function Airlines() {
                         checked={createAirline.can_create_subusers}
                         onChange={val => setCreateAirline(prev => ({ ...prev, can_create_subusers: val }))}
                       />
+                      <PermissionToggleCard
+                        icon={FileText}
+                        iconColor="text-emerald-600"
+                        iconBg="bg-emerald-50 border-emerald-200/80"
+                        title="Allow this airline to upload its own internal certificates"
+                        description="Adds a 'Certificates' button per candidate to upload the airline's own PDFs. The airline can pass this power on to its departments."
+                        checked={createAirline.can_upload_internal_certs}
+                        onChange={val => setCreateAirline(prev => ({ ...prev, can_upload_internal_certs: val }))}
+                      />
+                      <PermissionToggleCard
+                        icon={Mail}
+                        iconColor="text-sky-600"
+                        iconBg="bg-sky-50 border-sky-200/80"
+                        title="Show this airline's logo in emails instead of IFOA's"
+                        description="Exam invites, enrollment confirmations and expiry reminders sent for this airline or its departments carry the airline's logo (a department uses its own logo if it has one). Falls back to IFOA if no logo is uploaded."
+                        checked={createAirline.email_use_airline_logo}
+                        onChange={val => setCreateAirline(prev => ({ ...prev, email_use_airline_logo: val }))}
+                      />
                     </div>
                   </div>
                 </div>
@@ -2319,7 +2395,8 @@ export default function Airlines() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="fixed -inset-20 z-50 bg-black/50 backdrop-blur-sm pointer-events-none"
+                transition={{ duration: 0.15, ease: 'easeOut' }}
+                className="fixed inset-0 z-50 bg-slate-900/60 pointer-events-none"
               />
               <div
                 key="layout"
@@ -2328,10 +2405,11 @@ export default function Airlines() {
               >
                 <motion.div
                   key="card"
-                  initial={{ opacity: 0, scale: 0.95 }}
+                  initial={{ opacity: 0, scale: 0.96 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden"
+                  exit={{ opacity: 0, scale: 0.96 }}
+                  transition={{ duration: 0.15, ease: 'easeOut' }}
+                  className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden will-change-transform"
                   onClick={e => e.stopPropagation()}
                 >
                 <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-primary-200">
@@ -2372,7 +2450,8 @@ export default function Airlines() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="fixed -inset-20 z-50 bg-black/50 backdrop-blur-sm pointer-events-none"
+                transition={{ duration: 0.15, ease: 'easeOut' }}
+                className="fixed inset-0 z-50 bg-slate-900/60 pointer-events-none"
               />
               <div
                 key="dhl-layout"
@@ -2381,10 +2460,11 @@ export default function Airlines() {
               >
                 <motion.div
                   key="dhl-card"
-                  initial={{ opacity: 0, scale: 0.95 }}
+                  initial={{ opacity: 0, scale: 0.96 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden"
+                  exit={{ opacity: 0, scale: 0.96 }}
+                  transition={{ duration: 0.15, ease: 'easeOut' }}
+                  className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden will-change-transform"
                   onClick={e => e.stopPropagation()}
                 >
                 <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-primary-200">
@@ -2426,6 +2506,11 @@ export default function Airlines() {
           <p className="text-xs text-primary-400 mt-0.5 hidden sm:block">View airline submissions, generate and manage certificates</p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
+          <button type="button" onClick={() => setSettingsOpen(true)} title="Manage settings for all airlines"
+            className="btn-outline flex items-center justify-center gap-1.5 text-xs px-3 py-1.5 sm:px-4 sm:py-2 whitespace-nowrap">
+            <Settings2 className="w-4 h-4" />
+            <span className="hidden sm:inline">Settings</span>
+          </button>
           <button type="button" onClick={openCreateAirline}
             className="btn-outline flex items-center justify-center gap-1.5 text-xs px-3 py-1.5 sm:px-4 sm:py-2 whitespace-nowrap">
             <HiOutlinePlusCircle className="w-4 h-4" />
@@ -2609,6 +2694,13 @@ export default function Airlines() {
                     )}
 
                     <DropdownMenuSeparator />
+
+                    {allParticipants.some(p => checked.has(p.id || p._id) && certExpiry(p)?.expiresOn) && (
+                      <DropdownMenuItem onClick={() => setReminderFor(allParticipants.filter(p => checked.has(p.id || p._id)))}>
+                        <HiOutlineMail className="w-4 h-4 text-amber-600" />
+                        <span>Send Expiry Reminder ({checked.size})</span>
+                      </DropdownMenuItem>
+                    )}
 
                     {checked.size > 0 && (
                       <DropdownMenuItem onClick={handleAddAttendance} disabled={addingAttendance}>
@@ -2803,6 +2895,7 @@ export default function Airlines() {
             fetchData={fetchData}
             eligibleForDhlExtra={eligibleForDhlExtra}
             setDhlRowPreview={setDhlRowPreview}
+            onRemind={openReminder}
             handleDownloadDhlIssued={handleDownloadDhlIssued}
             downloadingDhlId={downloadingDhlId}
             filterKey={filterKey}
@@ -2814,6 +2907,7 @@ export default function Airlines() {
       })}
 
       </div> {/* end padded content wrapper */}
+      <ExpiryReminderDialog participants={reminderFor} onClose={() => setReminderFor(null)} />
       {ConfirmDialog}
     </motion.div>
   );

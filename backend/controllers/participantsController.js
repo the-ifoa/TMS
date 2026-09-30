@@ -1,7 +1,9 @@
 const Participant = require('../models/Participant');
 const Airline = require('../models/Airline');
 const DhlCertificate = require('../models/DhlCertificate');
-const { sendSubmissionConfirmation } = require('../services/emailService');
+const { sendSubmissionConfirmation, sendCertExpiryReminderEmail } = require('../services/emailService');
+const { resolveEmailBranding, brandingResolver } = require('../services/emailBranding');
+const { certExpiry } = require('../services/certValidity');
 
 // Owner (`submitted_by`) for a newly created participant.
 //   admin              → null
@@ -510,7 +512,7 @@ exports.sendConfirmation = async (req, res) => {
     if (!airlineDoc?.email) {
       return res.status(404).json({ error: 'Airline email not found.' });
     }
-    sendSubmissionConfirmation({
+    resolveEmailBranding(airlineDoc._id).catch(() => null).then((branding) => sendSubmissionConfirmation({
       toEmail:     airlineDoc.email,
       airlineName: airlineDoc.airlineName,
       contactName: req.admin.name,
@@ -518,7 +520,8 @@ exports.sendConfirmation = async (req, res) => {
       trainingType,
       trainingDate,
       endDate: endDate || null,
-    });
+      branding,
+    }));
     res.json({ message: 'Confirmation email queued.' });
   } catch (err) {
     console.error('POST /send-confirmation error:', err.message);
@@ -829,6 +832,89 @@ exports.updateValidity = async (req, res) => {
     if (!doc) return res.status(404).json({ error: 'Participant not found' });
     res.json(doc);
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// ─── POST /expiry-reminder (admin only) ──────────────────────────────────────
+// Emails each owning airline a list of its selected candidates whose IFOA
+// certificate is expiring / expired. Body: { participantIds: [], message? }.
+// Candidates owned by a department go to the department, cc the main airline.
+exports.sendExpiryReminder = async (req, res) => {
+  try {
+    if (!req.scope || req.scope.kind !== 'admin') return res.status(403).json({ error: 'Admins only' });
+    const { participantIds, message } = req.body || {};
+    if (!Array.isArray(participantIds) || participantIds.length === 0) {
+      return res.status(400).json({ error: 'participantIds array required.' });
+    }
+
+    const docs = await Participant.find({ _id: { $in: participantIds } }).lean();
+    const skipped = [];
+    const groups = new Map(); // recipient key -> { airline, parent, rows }
+
+    const ownerIds = [...new Set(docs.map((p) => p.submitted_by).filter(Boolean).map(String))];
+    const owners = await Airline.find({ _id: { $in: ownerIds } })
+      .select('email airlineName department_name is_department parent_airline').lean();
+    const ownerById = Object.fromEntries(owners.map((o) => [String(o._id), o]));
+    const parentIds = owners.filter((o) => o.parent_airline).map((o) => o.parent_airline);
+    const parents = await Airline.find({ _id: { $in: parentIds } }).select('email airlineName').lean();
+    const parentById = Object.fromEntries(parents.map((o) => [String(o._id), o]));
+
+    for (const p of docs) {
+      const exp = certExpiry(p);
+      if (!exp) { skipped.push({ id: p._id, name: p.participant_name, reason: 'No released certificate with a limited validity' }); continue; }
+
+      let airline = p.submitted_by ? ownerById[String(p.submitted_by)] : null;
+      if (!airline) {
+        // Legacy record with no owner id — match the top-level airline by name.
+        const name = p.airline_name || p.company;
+        if (name) {
+          const rx = new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
+          airline = await Airline.findOne({ airlineName: rx, parent_airline: null }).select('email airlineName').lean();
+        }
+      }
+      if (!airline?.email) { skipped.push({ id: p._id, name: p.participant_name, reason: 'No airline email on file' }); continue; }
+
+      const key = String(airline._id);
+      if (!groups.has(key)) {
+        groups.set(key, { airline, parent: airline.parent_airline ? parentById[String(airline.parent_airline)] : null, rows: [] });
+      }
+      const year = p.cert_year_override || new Date(String(p.end_date || p.training_date).slice(0, 10)).getFullYear();
+      groups.get(key).rows.push({
+        name: p.participant_name || `${p.first_name || ''} ${p.last_name || ''}`.trim(),
+        trainingType: p.training_type,
+        certNo: p.cert_sequence ? `${p.training_type}-${String(p.cert_sequence).padStart(5, '0')}-${year}` : '',
+        ...exp,
+      });
+    }
+
+    const sent = [];
+    const failed = [];
+    const brandingFor = brandingResolver();
+    for (const { airline, parent, rows } of groups.values()) {
+      rows.sort((a, b) => a.daysLeft - b.daysLeft);
+      const label = airline.is_department
+        ? `${parent?.airlineName || airline.airlineName} — ${airline.department_name || 'Department'}`
+        : airline.airlineName;
+      try {
+        await sendCertExpiryReminderEmail({
+          toEmail: airline.email,
+          cc: parent?.email && parent.email !== airline.email ? [parent.email] : [],
+          airlineName: label,
+          rows,
+          message: typeof message === 'string' ? message.trim().slice(0, 2000) : '',
+          branding: await brandingFor(airline._id),
+        });
+        sent.push({ airline: label, email: airline.email, count: rows.length });
+      } catch (err) {
+        console.error('Expiry reminder email failed:', airline.email, err.message);
+        failed.push({ airline: label, email: airline.email, error: err.message });
+      }
+    }
+
+    res.json({ sent, failed, skipped });
+  } catch (err) {
+    console.error('POST /participants/expiry-reminder error:', err.message);
     res.status(500).json({ error: err.message });
   }
 };

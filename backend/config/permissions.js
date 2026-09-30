@@ -17,6 +17,12 @@ const PERMISSIONS = {
   'exams.assign':        { label: 'Assign exams to people',       group: 'Exams',        scopes: ['admin', 'airline'] },
   'exams.grade':         { label: 'Grade exam attempts',          group: 'Exams',        scopes: ['admin', 'airline'] },
 
+  // Upload the airline's OWN internal certificate PDFs per candidate (stored in
+  // Cloudflare R2). Only effective when an admin has switched on
+  // `can_upload_internal_certs` for the top-level airline — see
+  // INTERNAL_CERT_KEY in middleware/permissions.js.
+  'internalCerts.manage': { label: 'Upload internal certificates',  group: 'Internal Certificates', scopes: ['airline'] },
+
   'attendance.view':     { label: 'View attendance',              group: 'Attendance',   scopes: ['admin'] },
   'attendance.manage':   { label: 'Manage attendance sheets',     group: 'Attendance',   scopes: ['admin'] },
 

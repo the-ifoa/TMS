@@ -166,7 +166,7 @@ function TakeShell({ token, initial, onFinished, setResultAttempt }) {
     <ExamRunner
       attempt={attempt}
       exam={exam}
-      onSaveAnswer={(qId, response) => savePublicAnswer(token, attemptId, qId, response).catch(() => {})}
+      onSaveAnswer={(qId, response) => savePublicAnswer(token, attemptId, qId, response)}
       onSubmit={() => submitPublicExam(token, attemptId)}
       onReportViolation={(type) => reportPublicViolation(token, attemptId, type).then((r) => r.data)}
       onFinished={() => { setResultAttempt(attemptId); onFinished(); }}

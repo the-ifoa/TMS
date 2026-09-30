@@ -40,7 +40,7 @@ export default function ExamTake() {
     <ExamRunner
       attempt={attempt}
       exam={exam}
-      onSaveAnswer={(qId, response) => saveExamAnswer(attemptId, qId, response).catch(() => {})}
+      onSaveAnswer={(qId, response) => saveExamAnswer(attemptId, qId, response)}
       onSubmit={() => submitExamAttempt(attemptId)}
       onReportViolation={(type) => reportExamViolation(attemptId, type).then((r) => r.data)}
       onFinished={() => navigate(`/airline/exams/${examId}/result/${attemptId}`, { replace: true })}

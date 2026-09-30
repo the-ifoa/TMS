@@ -12,15 +12,20 @@
 const Admin = require('../models/Admin');
 const Airline = require('../models/Airline');
 const { catalogForScope, clampPermissions, keysForScope } = require('../config/permissions');
+const { ADMIN_GATED_AIRLINE_KEYS } = require('../middleware/permissions');
 
 // Effective permission ceiling for the caller, per target scope.
 // Returns null when unrestricted (super admin / top-level airline).
+// An airline caller never gets to hand out an admin-gated key (e.g. internal
+// certificate upload) that the admin hasn't switched on for its airline.
 function ceilingFor(req, targetScope) {
   const s = req.scope;
   if (s.kind === 'admin') return s.isSuperAdmin ? null : (s.permissions || []);
   // airline caller
-  if (s.isTopLevel) return null;
-  return s.permissions || [];
+  const base = s.isTopLevel ? keysForScope('airline') : (s.permissions || []);
+  const blocked = Object.keys(ADMIN_GATED_AIRLINE_KEYS).filter((k) => !s[ADMIN_GATED_AIRLINE_KEYS[k]]);
+  if (s.isTopLevel && blocked.length === 0) return null;
+  return base.filter((k) => !blocked.includes(k));
 }
 
 function canManage(req, targetScope) {
@@ -61,7 +66,7 @@ exports.airlines = async (req, res) => {
   if (req.scope.kind !== 'admin')
     return res.status(403).json({ error: 'Admin only.' });
   const airlines = await Airline.find({ parent_airline: null, emailVerified: true })
-    .select('_id airlineName email can_create_subusers')
+    .select('_id airlineName email can_create_subusers can_upload_internal_certs')
     .sort({ airlineName: 1 })
     .lean();
   res.json(airlines.map((a) => ({ ...a, _id: String(a._id) })));

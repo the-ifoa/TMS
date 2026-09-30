@@ -13,6 +13,7 @@ import Dashboard from './pages/Dashboard';
 import Participants from './pages/Participants';
 import AirlineParticipants from './pages/AirlineParticipants';
 import MyTeam from './pages/MyTeam';
+import InternalCertificates from './pages/InternalCertificates';
 import AddParticipant from './pages/AddParticipant';
 import EditParticipant from './pages/EditParticipant';
 import Airlines from './pages/Airlines';
@@ -149,6 +150,7 @@ function App() {
           <Route path="submissions" element={<PermRoute perms={['participants.view']}><Participants /></PermRoute>} />
           <Route path="participants" element={<PermRoute perms={['participants.view']}><AirlineParticipants /></PermRoute>} />
           <Route path="my-team" element={<PermRoute perms={['participants.view']}><MyTeam /></PermRoute>} />
+          <Route path="certificates" element={<PermRoute perms={['participants.view', 'internalCerts.manage']}><InternalCertificates /></PermRoute>} />
           <Route path="participants/:participantId/performance" element={<ParticipantExamPerformance />} />
           <Route path="enrollment/new" element={<PermRoute perms={['participants.create']}><AddParticipant /></PermRoute>} />
           <Route path="enrollment/:id/edit" element={<PermRoute perms={['participants.edit']}><EditParticipant /></PermRoute>} />

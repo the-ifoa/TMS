@@ -38,6 +38,7 @@ const airlineNavigation = [
   { name: 'My Submissions', href: '/airline/submissions',   icon: HiOutlineClipboardList,       perm: 'participants.view' },
   { name: 'Participants',   href: '/airline/participants',  icon: HiOutlineUsers,               perm: 'participants.view' },
   { name: 'New Enrollment', href: '/airline/enrollment/new', icon: HiOutlinePlusCircle,         perm: 'participants.create' },
+  { name: 'Certificates',   href: '/airline/certificates',  icon: HiOutlineDocumentText,        internalCerts: true },
   { name: 'DGR CBTA',       href: '/airline/dgr',           icon: HiOutlineShieldExclamation,   perm: 'dgr.view' },
   { name: 'Exam Results',   href: '/airline/exams',         icon: HiOutlineClipboardCheck },
   { name: 'Departments',    href: '/airline/team',          icon: HiOutlineUserGroup,           team: true },
@@ -49,6 +50,7 @@ const airlineNavigation = [
 const departmentNavigation = [
   { name: 'Dashboard',        href: '/airline',            icon: HiOutlineHome },
   { name: 'My Team',          href: '/airline/my-team',    icon: HiOutlineUsers,             perm: 'participants.view' },
+  { name: 'Certificates',     href: '/airline/certificates', icon: HiOutlineDocumentText,    internalCerts: true },
   { name: 'Exam Results',     href: '/airline/exams',      icon: HiOutlineClipboardCheck },
   { name: 'Departments',      href: '/airline/team',       icon: HiOutlineUserGroup,         team: true },
   { name: 'Profile',          href: '/airline/profile',    icon: HiOutlineUserCircle },
@@ -66,14 +68,17 @@ export default function Sidebar({ open, setOpen }) {
     navigation = adminNavigation;
   } else if (isDepartment) {
     navigation = [...departmentNavigation];
-    if (admin?.can_author_exams) navigation.splice(2, 0, airlineExamAuthorItem); // before "Exam Results"
+    if (admin?.can_author_exams) navigation.splice(3, 0, airlineExamAuthorItem); // before "Exam Results"
   } else {
     navigation = [...airlineNavigation];
-    if (admin?.can_author_exams) navigation.splice(5, 0, airlineExamAuthorItem); // before "Exam Results"
+    if (admin?.can_author_exams) navigation.splice(6, 0, airlineExamAuthorItem); // before "Exam Results"
   }
   // Hide entries the current user (a sub-user / department) has no power for.
   navigation = navigation.filter((item) => {
     if (item.team) return canManageTeam;
+    // Shown once an admin enables internal certificates for the airline.
+    if (item.internalCerts) return !!admin?.can_upload_internal_certs
+      && (can('participants.view') || can('internalCerts.manage'));
     if (item.perm) return (Array.isArray(item.perm) ? item.perm : [item.perm]).some(can);
     return true;
   });

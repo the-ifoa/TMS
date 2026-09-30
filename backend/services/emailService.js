@@ -70,8 +70,19 @@ function getLogoBase64() {
   }
 }
 
-// Build logo attachment only if logo file is available
-function logoAttachment() {
+// Build logo attachment only if logo file is available. With `branding`
+// (see services/emailBranding.js) the airline's logo is attached under the
+// same cid, so templates need no change beyond applyBranding().
+function logoAttachment(branding) {
+  if (branding?.logo) {
+    return [{
+      filename:           'logo',
+      content:            branding.logo.content,
+      cid:                'ifoa_logo',
+      contentDisposition: 'inline',
+      contentType:        branding.logo.contentType,
+    }];
+  }
   const b64 = getLogoBase64();
   if (!b64) return [];
   return [{
@@ -81,6 +92,18 @@ function logoAttachment() {
     contentDisposition: 'inline',
     contentType:        'image/png',
   }];
+}
+
+// Swap the wide IFOA header image for the airline's logo on a white tile
+// (airline logos are often dark and would vanish on the navy header).
+function applyBranding(html, branding) {
+  if (!branding?.logo) return html;
+  const alt = String(branding.name || '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const tile = '<table cellpadding="0" cellspacing="0" align="center" style="margin:0 auto"><tr>'
+    + '<td bgcolor="#ffffff" style="background:#ffffff;border-radius:12px;padding:12px 20px">'
+    + `<img src="cid:ifoa_logo" height="72" alt="${alt}" style="display:block;border:0;height:72px;width:auto;max-width:280px"/>`
+    + '</td></tr></table>';
+  return html.replace(/<img src="cid:ifoa_logo"[^>]*\/>/g, tile);
 }
 
 
@@ -302,7 +325,7 @@ async function sendSubmissionConfirmation(opts) {
   const transporter = getTransporter();
   if (!transporter) return;
 
-  const { toEmail, airlineName, contactName, participants, trainingType, trainingDate, endDate } = opts;
+  const { toEmail, airlineName, contactName, participants, trainingType, trainingDate, endDate, branding } = opts;
   const count     = participants.length;
   const typeLabel = TRAINING_LABELS[trainingType] || trainingType;
   const payload   = { airlineName, contactName, participants, trainingType, trainingDate, endDate, submittedAt: new Date() };
@@ -313,8 +336,8 @@ async function sendSubmissionConfirmation(opts) {
       to:      toEmail,
       subject: `Enrollment Confirmed: ${count} Participant${count !== 1 ? 's' : ''} – ${trainingType} (${typeLabel})`,
       text:    buildConfirmationText(payload),
-      html:    buildConfirmationHtml(payload),
-      attachments: logoAttachment(),
+      html:    applyBranding(buildConfirmationHtml(payload), branding),
+      attachments: logoAttachment(branding),
     });
     console.log(`[email] Confirmation sent to ${toEmail} — messageId: ${info.messageId}`);
   } catch (err) {
@@ -784,7 +807,7 @@ async function sendContractEmail({ toEmail, clientName, pdfBuffer, message }) {
 }
 
 // ─── Send exam invitation email (passwordless take link) ──────────────────────
-async function sendExamInviteEmail({ toEmail, participantName, examTitle, durationMinutes, maxAttempts, link, expiresAt }) {
+async function sendExamInviteEmail({ toEmail, participantName, examTitle, durationMinutes, maxAttempts, link, expiresAt, branding }) {
   const transporter = getTransporter();
   if (!transporter) throw new Error('SMTP not configured — cannot send exam invite.');
 
@@ -916,13 +939,123 @@ async function sendExamInviteEmail({ toEmail, participantName, examTitle, durati
   const info = await transporter.sendMail({
     from:    `"IFOA – International Flight Operations Academy" <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER}>`,
     to:      toEmail,
-    subject: `Exam Invitation: ${examTitle} – IFOA`,
+    subject: `Exam Invitation: ${examTitle} – ${branding?.name || 'IFOA'}`,
     text,
-    html,
-    attachments: logoAttachment(),
+    html:    applyBranding(html, branding),
+    attachments: logoAttachment(branding),
   });
   console.log(`[email] Exam invite sent to ${toEmail} — messageId: ${info.messageId}`);
   return info;
 }
 
-module.exports = { sendSubmissionConfirmation, sendPasswordResetEmail, sendOtpEmail, sendContractEmail, sendExamInviteEmail };
+// ─── Certificate expiry reminder (admin → airline) ────────────────────────────
+// `rows`: [{ name, trainingType, certNo, expiresOn: 'YYYY-MM-DD', daysLeft }]
+async function sendCertExpiryReminderEmail({ toEmail, cc, airlineName, rows, message, branding }) {
+  const transporter = getTransporter();
+  if (!transporter) throw new Error('SMTP not configured — cannot send reminder.');
+
+  const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const leftText = (d) => (d < 0 ? `Expired ${-d} day${d === -1 ? '' : 's'} ago` : d === 0 ? 'Expires today' : `${d} day${d === 1 ? '' : 's'} left`);
+  const leftColor = (d) => (d < 0 ? '#b91c1c' : d <= 30 ? '#c2410c' : d <= 90 ? '#a16207' : '#15803d');
+
+  const tableRows = rows.map((r, i) => `
+                <tr>
+                  <td style="padding:9px 10px;font-size:13px;color:#111827;font-weight:600;${i ? 'border-top:1px solid #f1f5f9;' : ''}">${esc(r.name)}</td>
+                  <td style="padding:9px 10px;font-size:12px;color:#4b5563;${i ? 'border-top:1px solid #f1f5f9;' : ''}">${esc(TRAINING_LABELS[r.trainingType] || r.trainingType)}${r.certNo ? `<br/><span style="font-family:monospace;font-size:11px;color:#6b7280">${esc(r.certNo)}</span>` : ''}</td>
+                  <td style="padding:9px 10px;font-size:12px;color:#111827;white-space:nowrap;${i ? 'border-top:1px solid #f1f5f9;' : ''}">${fmtDate(r.expiresOn)}</td>
+                  <td style="padding:9px 10px;font-size:12px;font-weight:700;color:${leftColor(r.daysLeft)};white-space:nowrap;${i ? 'border-top:1px solid #f1f5f9;' : ''}">${leftText(r.daysLeft)}</td>
+                </tr>`).join('');
+
+  const noteBlock = message
+    ? `<table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border-left:3px solid #2563eb;border-radius:6px;margin-bottom:24px">
+            <tr><td style="padding:12px 16px;font-size:13px;color:#374151;line-height:1.6;white-space:pre-line">${esc(message)}</td></tr>
+          </table>`
+    : '';
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/><title>Certificate Expiry Reminder – IFOA</title></head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:'Segoe UI',Helvetica,Arial,sans-serif">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:40px 16px">
+  <tr><td align="center">
+    <table width="640" cellpadding="0" cellspacing="0" style="max-width:640px;width:100%;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 32px rgba(0,0,0,0.10)">
+      <tr>
+        <td bgcolor="#0c1a2e" style="background:#0c1a2e;padding:28px 40px 24px;text-align:center">
+          <img src="cid:ifoa_logo" width="460" alt="IFOA" style="display:block;margin:0 auto;border:0;width:460px;max-width:100%;height:auto"/>
+          <div style="height:16px"></div>
+          <div style="width:40px;height:2px;background:#2563eb;margin:0 auto 14px"></div>
+          <p style="margin:0 0 4px;font-size:11px;font-weight:600;letter-spacing:2.5px;text-transform:uppercase;color:#94a3b8">International Flight Operations Academy</p>
+          <p style="margin:0;font-size:22px;font-weight:800;color:#ffffff">Certificate Expiry Reminder</p>
+        </td>
+      </tr>
+      <tr><td style="background:linear-gradient(90deg,#2563eb,#3b82f6);height:4px;font-size:0;line-height:0">&nbsp;</td></tr>
+      <tr>
+        <td style="padding:36px 40px 0">
+          <p style="margin:0 0 8px;font-size:16px;font-weight:700;color:#111827">Dear ${esc(airlineName) || 'Training Team'},</p>
+          <p style="margin:0 0 20px;font-size:14px;color:#4b5563;line-height:1.7">
+            The IFOA certificate${rows.length > 1 ? 's' : ''} listed below ${rows.length > 1 ? 'are' : 'is'} due to expire or ${rows.length > 1 ? 'have' : 'has'} already expired.
+            Please arrange recurrent training so your personnel remain certified.
+          </p>
+          ${noteBlock}
+          <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:12px;margin-bottom:28px;border-collapse:separate">
+            <tr style="background:#f8fafc">
+              <th align="left" style="padding:9px 10px;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:1px">Participant</th>
+              <th align="left" style="padding:9px 10px;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:1px">Training</th>
+              <th align="left" style="padding:9px 10px;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:1px">Expires</th>
+              <th align="left" style="padding:9px 10px;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:1px">Status</th>
+            </tr>${tableRows}
+          </table>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:0 40px 32px">
+          <p style="margin:0;font-size:13px;color:#374151;line-height:1.7">
+            Best regards,<br/>
+            <strong style="color:#111827">IFOA Administration Team</strong><br/>
+            <span style="font-size:12px;color:#6b7280">International Flight Operations Academy</span>
+          </p>
+        </td>
+      </tr>
+      <tr>
+        <td bgcolor="#0c1a2e" style="background:#0c1a2e;padding:16px 40px">
+          <p style="margin:0;font-size:11px;color:#64748b;text-align:center">
+            &copy; ${new Date().getFullYear()} International Flight Operations Academy
+          </p>
+        </td>
+      </tr>
+    </table>
+  </td></tr>
+</table>
+</body>
+</html>`;
+
+  const text = [
+    `Dear ${airlineName || 'Training Team'},`,
+    '',
+    'The following IFOA certificates are due to expire or have expired:',
+    ...(message ? ['', message] : []),
+    '',
+    ...rows.map((r) => `- ${r.name} — ${TRAINING_LABELS[r.trainingType] || r.trainingType}${r.certNo ? ` (${r.certNo})` : ''} — expires ${fmtDate(r.expiresOn)} (${leftText(r.daysLeft)})`),
+    '',
+    'Please arrange recurrent training so your personnel remain certified.',
+    '',
+    'Best regards,',
+    'IFOA Administration Team',
+  ].join('\n');
+
+  const info = await transporter.sendMail({
+    from:    `"IFOA – International Flight Operations Academy" <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER}>`,
+    to:      toEmail,
+    ...(cc && cc.length ? { cc } : {}),
+    subject: rows.length === 1
+      ? `Certificate Expiry Reminder: ${rows[0].name} – IFOA`
+      : `Certificate Expiry Reminder: ${rows.length} certificates – IFOA`,
+    text,
+    html:    applyBranding(html, branding),
+    attachments: logoAttachment(branding),
+  });
+  console.log(`[email] Expiry reminder sent to ${toEmail} (${rows.length} certs) — messageId: ${info.messageId}`);
+  return info;
+}
+
+module.exports = { sendSubmissionConfirmation, sendPasswordResetEmail, sendOtpEmail, sendContractEmail, sendExamInviteEmail, sendCertExpiryReminderEmail };

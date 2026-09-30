@@ -39,6 +39,10 @@ const examInviteSchema = new mongoose.Schema(
     // max_attempts + bonus_attempts.
     bonus_attempts: { type: Number, default: 0 },
 
+    // Set by an admin reassign: the exam's closes_at no longer blocks this
+    // participant from starting, so a reassigned link always opens.
+    ignore_close: { type: Boolean, default: false },
+
     // A "batch" is one admin send action — every invite dispatched together in
     // a single Send Links click shares this id, so the airline can view its
     // students grouped by the batch they were sent in.

@@ -4,12 +4,12 @@ const { gradeAnswer, computeAttemptScore } = require('./examGrading');
 // Returns an error message if the exam isn't open for new attempts right now,
 // or null if it's fine to start one. Only gates NEW attempts — an attempt
 // already in progress is unaffected by closes_at passing mid-way.
-function schedulingError(exam) {
+function schedulingError(exam, { ignoreClose = false } = {}) {
   const now = new Date();
   if (exam.opens_at && now < exam.opens_at) {
     return `This exam opens on ${exam.opens_at.toLocaleString()}.`;
   }
-  if (exam.closes_at && now > exam.closes_at) {
+  if (!ignoreClose && exam.closes_at && now > exam.closes_at) {
     return `This exam closed on ${exam.closes_at.toLocaleString()}.`;
   }
   return null;
@@ -60,4 +60,26 @@ async function finalizeAttempt(attempt) {
   }
 }
 
-module.exports = { finalizeAttempt, schedulingError };
+// Closes (grades + submits) a participant's in-progress attempts on an exam so
+// they can never be resumed. `onlyExpired` limits it to attempts whose own
+// duration already ran out — those can't be continued anyway and would
+// otherwise reopen at 0:00 and submit instantly. Returns how many were closed.
+async function closeOpenAttempts(exam, participantId, { onlyExpired = false } = {}) {
+  const ExamAttempt = require('../models/ExamAttempt');
+  const open = await ExamAttempt.find({ exam_id: exam._id, participant_id: participantId, status: 'in_progress' });
+  const now = Date.now();
+  let closed = 0;
+  for (const attempt of open) {
+    if (onlyExpired) {
+      if (!(exam.duration_minutes > 0)) continue;
+      const deadline = new Date(attempt.started_at).getTime() + exam.duration_minutes * 60000;
+      if (now < deadline + 60000) continue; // 1 min grace for a final autosave/submit
+    }
+    await finalizeAttempt(attempt);
+    await attempt.save();
+    closed += 1;
+  }
+  return closed;
+}
+
+module.exports = { finalizeAttempt, schedulingError, closeOpenAttempts };

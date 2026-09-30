@@ -58,9 +58,15 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onSubmit, onRe
   });
   const [marked, setMarked] = useState(new Set());
   const [index, setIndex] = useState(0);
+  // No duration → no overall timer (null), instead of an instant auto-submit.
+  // server_now (when the API sends it) corrects for a skewed device clock, which
+  // would otherwise end the exam early.
+  const hasTimeLimit = exam.duration_minutes > 0;
   const [secondsLeft, setSecondsLeft] = useState(() => {
+    if (!hasTimeLimit) return null;
+    const skew = attempt.server_now ? new Date(attempt.server_now).getTime() - Date.now() : 0;
     const deadline = new Date(attempt.started_at).getTime() + exam.duration_minutes * 60000;
-    return Math.max(0, Math.round((deadline - Date.now()) / 1000));
+    return Math.max(0, Math.round((deadline - (Date.now() + skew)) / 1000));
   });
   const [submitting, setSubmitting] = useState(false);
   const [violationCount, setViolationCount] = useState(attempt.violation_count || 0);
@@ -213,7 +219,7 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onSubmit, onRe
       setWarning({ message: VIOLATION_LABEL[type] || 'Violation detected.', remaining: Math.max(0, maxViolations - count), count });
       setTimeout(() => setWarning((w) => (w?.count === count ? null : w)), 6000);
     } catch { /* ignore network errors */ } finally {
-      setTimeout(() => { violationLockRef.current = false; }, 1200);
+      setTimeout(() => { violationLockRef.current = false; }, 3000);
     }
   }, [onReportViolation, onFinished, maxViolations, flushAnswers]);
 
@@ -238,6 +244,9 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onSubmit, onRe
       if (finishedRef.current) return;
       if (isFullscreen()) {
         hasEnteredFsRef.current = true;
+        // Chrome/Edge: a stray Esc tap no longer drops fullscreen — the
+        // candidate has to press and hold it. No-op in other browsers.
+        navigator.keyboard?.lock?.(['Escape']).catch(() => { });
         pendingReenter = false;
         setAwaitingFsGesture(false);
       } else {
@@ -286,9 +295,24 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onSubmit, onRe
     };
   }, [lockdownEnabled, reportViolation]);
 
-  useEffect(() => () => { if (isFullscreen()) exitFullscreen().catch(() => { }); }, []);
+  // Leave fullscreen when the runner really unmounts. Deferred a tick so React
+  // StrictMode's mount→unmount→mount in dev doesn't exit fullscreen (which the
+  // lockdown listener would then record as a violation at exam start).
+  const mountedRef = useRef(false);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      setTimeout(() => {
+        if (mountedRef.current) return;
+        navigator.keyboard?.unlock?.();
+        if (isFullscreen()) exitFullscreen().catch(() => { });
+      }, 0);
+    };
+  }, []);
 
   useEffect(() => {
+    if (secondsLeft == null) return;
     if (secondsLeft <= 0) { handleSubmit(); return; }
     const t = setInterval(() => setSecondsLeft((s) => s - 1), 1000);
     return () => clearInterval(t);
@@ -453,7 +477,7 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onSubmit, onRe
           )}
 
           {/* Timer Clock Badge */}
-          <div
+          {secondsLeft != null && (<div
             className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-mono font-bold transition-all border shadow-2xs ${secondsLeft < 120
               ? 'bg-rose-600 text-white border-rose-500 animate-pulse'
               : 'bg-slate-800/90 text-white border-slate-700/80'
@@ -461,7 +485,7 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onSubmit, onRe
           >
             <HiOutlineClock className="w-4 h-4 text-blue-400 flex-shrink-0" />
             <span>{formatTime(secondsLeft)}</span>
-          </div>
+          </div>)}
 
           <button type="button" onClick={() => setConfirmOpen(true)} disabled={submitting}
             className="px-3 sm:px-4 py-1.5 rounded-xl text-xs font-bold border border-slate-600 text-slate-200 hover:bg-slate-800 hover:text-white transition-colors disabled:opacity-50">

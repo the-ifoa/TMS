@@ -2,7 +2,7 @@ const Exam = require('../models/Exam');
 const ExamAttempt = require('../models/ExamAttempt');
 const ExamInvite = require('../models/ExamInvite');
 const { sanitizeQuestionForTaking } = require('../services/examGrading');
-const { finalizeAttempt, schedulingError } = require('../services/examAttemptFlow');
+const { finalizeAttempt, schedulingError, closeOpenAttempts } = require('../services/examAttemptFlow');
 
 // ─── Public, passwordless exam-taking flow ────────────────────────────────────
 // Auth is the unguessable invite token in the URL — NO authMiddleware here.
@@ -52,6 +52,7 @@ exports.getLandingInfo = async (req, res) => {
       await invite.save();
     }
 
+    await closeOpenAttempts(exam, invite.participant_id, { onlyExpired: true });
     const priorAttempts = await ExamAttempt.countDocuments({ exam_id: exam._id, participant_id: invite.participant_id });
     const attemptCap = exam.max_attempts + (invite.bonus_attempts || 0);
     const activeAttempt = await ExamAttempt.findOne({
@@ -82,7 +83,7 @@ exports.getLandingInfo = async (req, res) => {
       active_attempt_id: activeAttempt ? String(activeAttempt._id) : null,
       last_attempt_id: lastFinished ? String(lastFinished._id) : null,
       // Only blocks starting a NEW attempt — an already-active one may still resume/finish.
-      scheduling_error: activeAttempt ? null : schedulingError(exam),
+      scheduling_error: activeAttempt ? null : schedulingError(exam, { ignoreClose: invite.ignore_close }),
     });
   } catch (err) {
     console.error('GET /public-exam/:token error:', err.message);
@@ -96,13 +97,15 @@ exports.startAttempt = async (req, res) => {
     const { invite, exam } = req;
     if (exam.status !== 'published') return res.status(400).json({ error: 'This exam is not available.' });
 
-    // Resume an in-progress attempt if one exists.
+    // Resume an in-progress attempt if one exists (a timed-out one is closed
+    // first so the candidate gets a fresh attempt instead of an instant submit).
+    await closeOpenAttempts(exam, invite.participant_id, { onlyExpired: true });
     let attempt = await ExamAttempt.findOne({
       exam_id: exam._id, participant_id: invite.participant_id, status: 'in_progress',
     });
 
     if (!attempt) {
-      const schedErr = schedulingError(exam);
+      const schedErr = schedulingError(exam, { ignoreClose: invite.ignore_close });
       if (schedErr) return res.status(403).json({ error: schedErr });
 
       const priorAttempts = await ExamAttempt.countDocuments({ exam_id: exam._id, participant_id: invite.participant_id });
@@ -131,6 +134,7 @@ exports.startAttempt = async (req, res) => {
 
     const json = attempt.toJSON();
     json.questions_snapshot = attempt.questions_snapshot.map(sanitizeQuestionForTaking);
+    json.server_now = new Date(); // lets the client correct for a skewed clock
     json.answers = (json.answers || []).map((a) => ({ question_id: a.question_id, type: a.type, response: a.response }));
     res.json({
       attempt: json,

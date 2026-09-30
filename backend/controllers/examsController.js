@@ -6,7 +6,7 @@ const Airline = require('../models/Airline');
 const Participant = require('../models/Participant');
 const { examImageUpload, deleteCloudinaryImage } = require('../services/upload');
 const { sanitizeQuestionForTaking, computeAttemptScore } = require('../services/examGrading');
-const { finalizeAttempt, schedulingError } = require('../services/examAttemptFlow');
+const { finalizeAttempt, schedulingError, closeOpenAttempts } = require('../services/examAttemptFlow');
 const { sendExamInviteEmail } = require('../services/emailService');
 const { brandingResolver } = require('../services/emailBranding');
 const { frontendLink } = require('../config/appUrls');
@@ -228,6 +228,7 @@ exports.getAttempt = async (req, res) => {
     if (attempt.status === 'in_progress') {
       json.questions_snapshot = attempt.questions_snapshot.map(sanitizeQuestionForTaking);
       json.answers = json.answers.map((a) => ({ question_id: a.question_id, type: a.type, response: a.response }));
+      json.server_now = new Date(); // lets the client correct for a skewed clock
     }
     res.json(json);
   } catch (err) {
@@ -736,13 +737,6 @@ exports.sendInvites = async (req, res) => {
 
       let invite = await ExamInvite.findOne({ exam_id: exam._id, participant_id: p._id });
 
-      // Reassign only makes sense for someone already invited — it grants a
-      // fresh attempt on top of max_attempts and reopens the same link.
-      if (reassign && !invite) {
-        skipped.push({ id: String(p._id), name: p.participant_name, reason: 'not yet assigned' });
-        continue;
-      }
-
       if (!invite) {
         invite = new ExamInvite({
           token: crypto.randomBytes(24).toString('hex'),
@@ -764,8 +758,28 @@ exports.sendInvites = async (req, res) => {
         invite.sent_count = (invite.sent_count || 1) + 1;
         invite.batch_id = batchId; // re-sending moves it into the new batch
         if (expiryProvided) invite.expires_at = expiresAt; // null clears it
-        if (reassign) {
-          invite.bonus_attempts = (invite.bonus_attempts || 0) + 1;
+      }
+
+      // A reassign is a clean slate: close any attempt still open so the new
+      // link can't resume the previous one or show anything from it.
+      if (reassign) await closeOpenAttempts(exam, p._id);
+
+      const [used, active] = await Promise.all([
+        ExamAttempt.countDocuments({ exam_id: exam._id, participant_id: p._id }),
+        ExamAttempt.exists({ exam_id: exam._id, participant_id: p._id, status: 'in_progress' }),
+      ]);
+      // Re-sending the link to someone who has used every attempt would only
+      // land them on "You have completed this exam" — treat it as a reassign.
+      const exhausted = !active && used >= exam.max_attempts + (invite.bonus_attempts || 0);
+
+      // A reassign must always leave the link startable: at least one attempt
+      // left (even if max_attempts was lowered since), no stale expiry, and the
+      // exam's close date no longer applies to this participant.
+      if (reassign || exhausted) {
+        invite.bonus_attempts = Math.max((invite.bonus_attempts || 0) + 1, used + 1 - exam.max_attempts);
+        invite.ignore_close = true;
+        if (!expiryProvided && invite.expires_at && invite.expires_at < new Date()) invite.expires_at = null;
+        if (!active) {
           invite.status = 'sent';
           invite.attempt_id = null;
           invite.completed_at = null;
@@ -940,6 +954,7 @@ exports.startAttempt = async (req, res) => {
 
     const json = attempt.toJSON();
     json.questions_snapshot = attempt.questions_snapshot.map(sanitizeQuestionForTaking);
+    json.server_now = new Date(); // lets the client correct for a skewed clock
     res.status(201).json(json);
   } catch (err) {
     console.error('POST /exams/:id/attempts error:', err.message);

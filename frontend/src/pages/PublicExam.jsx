@@ -206,6 +206,13 @@ function ResultSummary({ token, attemptId }) {
         <div className="w-full max-w-md bg-white rounded-3xl border border-slate-200/80 shadow-xl p-7 sm:p-8 text-center space-y-6">
           <img src={logoImg} alt="IFOA" className="h-9 w-auto mx-auto" />
 
+          {attempt?.auto_submitted && (
+            <div className="rounded-2xl bg-rose-50 border border-rose-200/80 p-3 text-xs font-semibold text-rose-800 text-left flex items-start gap-2">
+              <HiOutlineExclamationCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+              <span>Your exam was submitted automatically because the lockdown limit was reached (leaving fullscreen or switching tabs {attempt.violation_count || attempt.violations?.length || ''} times).</span>
+            </div>
+          )}
+
           {!attempt ? (
             <div className="space-y-3 py-4">
               <div className="w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto">

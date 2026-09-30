@@ -10,6 +10,7 @@ import {
   HiOutlinePaperAirplane, HiOutlineCollection, HiOutlineRefresh,
 } from 'react-icons/hi';
 import { FaPlaneDeparture } from 'react-icons/fa';
+import LogoAvatar from '../components/LogoAvatar';
 import { listExams, deleteExam, publishExam, getExamAirlines, updateExam, sendExamInvites, reassignExamInvites, getExamInvites } from '../api';
 import { useAuth } from '../context/AuthContext';
 import QuestionBankList from './QuestionBank';
@@ -129,61 +130,76 @@ function SendInviteModal({ exam, onClose, onSent }) {
 
   const sendableInGroup = (parts) => parts.filter(hasEmail);
 
+  // Departments rarely have their own logo — fall back to the parent airline's.
+  const logoById = Object.fromEntries(groups.map((g) => [String(g.airline._id), g.airline.logo_url]));
+  const logoFor = (a) => a.logo_url || (a.parent_airline && logoById[String(a.parent_airline)]) || null;
+  const groupName = (a) => (a.is_department ? (a.department_name || a.name || a.airlineName) : a.airlineName) || '';
+  const initialsOf = (name) => name.split(/\s+/).filter(Boolean).map((w) => w[0]).join('').slice(0, 2).toUpperCase() || '?';
+
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-2xl w-[92vw] h-[85vh] max-h-[750px] flex flex-col p-0 overflow-hidden rounded-2xl border border-slate-200/80 shadow-2xl bg-white">
-        <DialogHeader className="flex-shrink-0 px-6 py-4 border-b border-slate-100 bg-white space-y-1">
-          <div className="flex items-center gap-2">
-            <span className="p-1.5 rounded-lg bg-blue-50 text-blue-600"><HiOutlineMail className="w-5 h-5" /></span>
-            <DialogTitle className="text-base sm:text-lg font-bold text-slate-900 truncate">
-              Assign &ldquo;{exam.title}&rdquo; to participants
-            </DialogTitle>
+      <DialogContent hideClose className="max-w-2xl w-[92vw] h-[85vh] max-h-[750px] flex flex-col p-0 overflow-hidden rounded-2xl border border-slate-200/80 shadow-2xl bg-white">
+        <DialogHeader className="flex-shrink-0 px-6 pt-5 pb-4 border-b border-slate-100 bg-white space-y-0 text-left">
+          <div className="flex items-start gap-3">
+            <span className="p-2 rounded-xl bg-blue-50 text-blue-600 flex-shrink-0"><HiOutlineMail className="w-5 h-5" /></span>
+            <div className="min-w-0 flex-1">
+              <DialogTitle className="text-base sm:text-lg font-bold text-slate-900 leading-snug line-clamp-2">
+                Assign &ldquo;{exam.title}&rdquo; to participants
+              </DialogTitle>
+              <p className="mt-1 text-xs leading-relaxed text-slate-500">Each assigned participant gets a personal, passwordless exam link by email. Participants without an email can't be assigned. Use <span className="font-semibold text-slate-700">Reassign</span> on someone who already finished to grant a fresh attempt and re-send their link.</p>
+            </div>
+            <button type="button" onClick={onClose} aria-label="Close"
+              className="-mr-2 -mt-1 p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors flex-shrink-0">
+              <HiOutlineX className="w-5 h-5" />
+            </button>
           </div>
-          <p className="text-xs text-slate-500">Each assigned participant gets a personal, passwordless exam link by email. Participants without an email can't be assigned. Use <span className="font-semibold text-slate-700">Reassign</span> on someone who already finished to grant a fresh attempt and re-send their link.</p>
 
-          <div className="flex flex-wrap items-center gap-2 pt-2">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Link valid for</span>
-            <Select
-              value={validityMode}
-              onValueChange={(val) => setValidityMode(val)}
-            >
-              <SelectTrigger className="h-8 w-auto min-w-[130px] px-2.5 text-xs font-semibold text-slate-800 bg-slate-50 border border-slate-200/90 rounded-lg outline-none focus:ring-2 focus:ring-slate-900/10 cursor-pointer">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none" className="text-xs font-medium">No expiry</SelectItem>
-                <SelectItem value="1" className="text-xs font-medium">1 day</SelectItem>
-                <SelectItem value="3" className="text-xs font-medium">3 days</SelectItem>
-                <SelectItem value="7" className="text-xs font-medium">7 days</SelectItem>
-                <SelectItem value="14" className="text-xs font-medium">14 days</SelectItem>
-                <SelectItem value="30" className="text-xs font-medium">30 days</SelectItem>
-                <SelectItem value="custom" className="text-xs font-medium">Until a date…</SelectItem>
-              </SelectContent>
-            </Select>
-            {validityMode === 'custom' && (
+          <div className="mt-4 flex flex-col sm:flex-row sm:items-center gap-2.5">
+            <div className="relative flex-1 min-w-0">
+              <HiOutlineSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+              <input
+                type="text" placeholder="Search participant, email or airline…"
+                value={search} onChange={(e) => setSearch(e.target.value)}
+                className="w-full h-9 pl-9 pr-3 bg-slate-50 border border-slate-200/90 rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
+              />
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 whitespace-nowrap">Link valid for</span>
+              <Select
+                value={validityMode}
+                onValueChange={(val) => setValidityMode(val)}
+              >
+                <SelectTrigger className="h-9 w-auto min-w-[130px] px-2.5 text-xs font-semibold text-slate-800 bg-slate-50 border border-slate-200/90 rounded-xl outline-none focus:ring-2 focus:ring-slate-900/10 cursor-pointer">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none" className="text-xs font-medium">No expiry</SelectItem>
+                  <SelectItem value="1" className="text-xs font-medium">1 day</SelectItem>
+                  <SelectItem value="3" className="text-xs font-medium">3 days</SelectItem>
+                  <SelectItem value="7" className="text-xs font-medium">7 days</SelectItem>
+                  <SelectItem value="14" className="text-xs font-medium">14 days</SelectItem>
+                  <SelectItem value="30" className="text-xs font-medium">30 days</SelectItem>
+                  <SelectItem value="custom" className="text-xs font-medium">Until a date…</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          {validityMode === 'custom' && (
+            <div className="mt-2.5 flex flex-wrap items-center gap-2 sm:justify-end">
               <input
                 type="datetime-local"
                 value={customExpiry}
                 onChange={(e) => setCustomExpiry(e.target.value)}
-                className="h-8 px-2.5 text-xs font-semibold text-slate-800 bg-slate-50 border border-slate-200/90 rounded-lg outline-none focus:ring-2 focus:ring-slate-900/10"
+                className="h-9 px-2.5 text-xs font-semibold text-slate-800 bg-slate-50 border border-slate-200/90 rounded-xl outline-none focus:ring-2 focus:ring-slate-900/10"
               />
-            )}
-            {validityMode !== 'none' && (
-              <span className="text-[11px] text-slate-400">after this the exam link stops working</span>
-            )}
-          </div>
-
-          <div className="relative pt-2">
-            <HiOutlineSearch className="absolute left-3 top-1/2 -translate-y-1/2 mt-1 w-4 h-4 text-slate-400 pointer-events-none" />
-            <input
-              type="text" placeholder="Search participant, email or airline…"
-              value={search} onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200/90 rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
-            />
-          </div>
+            </div>
+          )}
+          {validityMode !== 'none' && (
+            <p className="mt-2 text-[11px] text-slate-400 sm:text-right">After this the exam link stops working.</p>
+          )}
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto min-h-0 p-5 space-y-3.5 bg-slate-50/50">
+        <div className="flex-1 overflow-y-auto min-h-0 px-6 py-4 space-y-2.5 bg-slate-50/60">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-12 gap-2 text-slate-400">
               <div className="w-6 h-6 border-2 border-slate-300 border-t-slate-900 rounded-full animate-spin" />
@@ -200,14 +216,14 @@ function SendInviteModal({ exam, onClose, onSent }) {
               const allSel = sendable.length > 0 && sendable.every((p) => selected.has(p._id));
               const isOpen = search.trim() !== '' || expanded.has(airline._id);
               return (
-                <div key={airline._id} className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden">
-                  <div onClick={() => toggleExpand(airline._id)} className="px-4 py-3 bg-slate-50/80 hover:bg-slate-100/70 cursor-pointer flex items-center justify-between gap-4 select-none">
-                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                <div key={airline._id} className="bg-white rounded-xl border border-slate-200/80 shadow-2xs overflow-hidden">
+                  <div onClick={() => toggleExpand(airline._id)} className="px-3.5 py-2.5 hover:bg-slate-50 cursor-pointer flex items-center justify-between gap-3 select-none">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
                       <HiChevronRight className={`w-4 h-4 text-slate-400 flex-shrink-0 transition-transform ${isOpen ? 'rotate-90 text-slate-600' : ''}`} />
-                      <div className="w-7 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-700 shadow-2xs flex-shrink-0">
-                        <FaPlaneDeparture className="w-4 h-4" />
+                      <div className="w-9 h-9 rounded-lg bg-white border border-slate-200 p-0.5 flex items-center justify-center flex-shrink-0">
+                        <LogoAvatar logoUrl={logoFor(airline)} name={groupName(airline)} initials={initialsOf(groupName(airline))} size="w-8 h-8" textSize="text-[10px]" />
                       </div>
-                      <span className="text-sm font-bold text-slate-800 truncate">{airline.is_department ? (airline.department_name || airline.name || airline.airlineName) : airline.airlineName}</span>
+                      <span className="text-sm font-bold text-slate-800 truncate">{groupName(airline)}</span>
                       <span className="px-2 py-0.5 rounded-full bg-slate-200/80 text-slate-700 text-[11px] font-bold">{participants.length}</span>
                     </div>
                     {sendable.length > 0 && (

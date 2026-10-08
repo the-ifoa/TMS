@@ -7,16 +7,37 @@ const { resolveEmailBranding, brandingResolver } = require('../services/emailBra
 const { certExpiry } = require('../services/certValidity');
 
 // Owner (`submitted_by`) for a newly created participant.
-//   admin              → null
+//   admin              → the top-level airline account named in `company`
+//                        (admin enrollments pick the airline by name); null
+//                        when no single account matches
 //   top-level airline  → its own id
 //   department         → ALWAYS its own id. A department keeps a completely
 //                        separate participant list from the main airline; the
 //                        record never lands in the shared main list.
-function resolveOwnerOnCreate(req) {
-  if (req.admin.role !== 'airline') return null;
+async function resolveOwnerOnCreate(req, company) {
+  if (req.admin.role !== 'airline') return findAirlineIdByName(company);
   const s = req.scope;
   if (s && s.isDepartment) return s.selfId;
   return req.admin.id;
+}
+
+// Case/whitespace-insensitive name key for matching airline / department names.
+function normName(s) {
+  return String(s || '').trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+// Case-insensitive exact-match regex for a name (surrounding spaces ignored).
+function exactCI(s) {
+  return new RegExp(`^\\s*${String(s).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`, 'i');
+}
+
+// _id of the one top-level airline account with this name, else null (no match,
+// or several accounts share the name — ambiguous, so leave it unowned).
+async function findAirlineIdByName(name) {
+  if (!name || !String(name).trim()) return null;
+  const matches = await Airline.find({ parent_airline: null, airlineName: exactCI(name) })
+    .select('_id').limit(2).lean();
+  return matches.length === 1 ? matches[0]._id : null;
 }
 
 // Owner ids a caller is allowed to SEE in the participant list.
@@ -111,20 +132,23 @@ exports.listParticipants = async (req, res) => {
       // that belong to airline departments — those are managed entirely by each
       // department and surface through the exam / results flows instead.
       const deptDocs = await Airline.find({ parent_airline: { $ne: null } })
-        .select('department_name name').lean();
+        .select('department_name name airlineName').lean();
       const deptIds = deptDocs.map((d) => d._id);
-      const deptNames = [...new Set(
-        deptDocs.flatMap((d) => [d.department_name, d.name]).filter(Boolean),
-      )];
       if (deptIds.length) andClauses.push({ submitted_by: { $nin: deptIds } });
-      if (deptNames.length) {
-        andClauses.push({
-          $or: [
-            { submitted_by: { $ne: null } },
-            { department: { $nin: deptNames } },
-          ],
-        });
-      }
+      // Unowned (legacy) records: hide only those whose department name matches
+      // a department of the SAME airline — a generic department like "Flight
+      // Dispatch" must not hide another airline's enrollments.
+      const deptRosterClauses = deptDocs.flatMap((d) => {
+        const names = [...new Set([d.department_name, d.name].filter(Boolean))];
+        return names.map((n) => ({
+          submitted_by: null,
+          department: exactCI(n),
+          ...(d.airlineName
+            ? { $or: [{ company: exactCI(d.airlineName) }, { airline_name: exactCI(d.airlineName) }] }
+            : {}),
+        }));
+      });
+      if (deptRosterClauses.length) andClauses.push({ $nor: deptRosterClauses });
     }
 
     if (search) {
@@ -180,7 +204,13 @@ exports.listParticipants = async (req, res) => {
         const oid = String(p.submitted_by || '');
         const info = infoById[oid];
         p.owner_id = oid || null;
-        p.owner_label = info ? info.label : 'Unknown';
+        // Unowned legacy records reach a top-level airline only via its own
+        // airline-name match, so they belong to the main account.
+        p.owner_label = info
+          ? info.label
+          : (!oid && !req.scope.isDepartment && req.admin.airlineName)
+            ? `${req.admin.airlineName} · main account`
+            : 'Unknown';
         p.owner_is_department = info ? info.isDepartment : false;
       });
     }
@@ -204,14 +234,19 @@ exports.listByAirline = async (req, res) => {
     // page — their participants are NOT shown on this admin view at all.
     const airlines    = await Airline.find({ parent_airline: null }).sort({ airlineName: 1 });
     const deptDocs    = await Airline.find({ parent_airline: { $ne: null } })
-      .select('department_name name').lean();
+      .select('department_name name parent_airline').lean();
     const deptIdSet   = new Set(deptDocs.map((d) => String(d._id)));
-    const deptNameSet = new Set(deptDocs.flatMap((d) => [d.department_name, d.name]).filter(Boolean));
+    // Department names per parent airline — an unowned (legacy) record is only
+    // treated as a department's private roster entry when its department name
+    // matches one of THAT airline's departments, not any airline's.
+    const deptNamesByParent = new Map();
+    deptDocs.forEach((d) => {
+      const key = String(d.parent_airline);
+      if (!deptNamesByParent.has(key)) deptNamesByParent.set(key, new Set());
+      [d.department_name, d.name].filter(Boolean).forEach((n) => deptNamesByParent.get(key).add(normName(n)));
+    });
     const participantDocs = (await Participant.find({}).sort({ created_at: -1 }))
-      .filter((p) => {
-        if (p.submitted_by) return !deptIdSet.has(String(p.submitted_by));
-        return !(p.department && deptNameSet.has(p.department));
-      });
+      .filter((p) => !p.submitted_by || !deptIdSet.has(String(p.submitted_by)));
 
     // Attach DHL ST-001 extra-cert status — lives in its own collection, so
     // it's merged in here rather than being a field on Participant itself.
@@ -225,13 +260,22 @@ exports.listByAirline = async (req, res) => {
       return obj;
     });
 
-    const result = airlines.map((a) => ({
-      airline: a.toJSON(),
-      participants: participants.filter((p) => {
-        if (p.submitted_by) return String(p.submitted_by) === String(a._id);
-        return p.company === a.airlineName || p.airline_name === a.airlineName;
-      }),
-    }));
+    const result = airlines.map((a) => {
+      const aName     = normName(a.airlineName);
+      const deptNames = deptNamesByParent.get(String(a._id)) || new Set();
+      return {
+        airline: a.toJSON(),
+        participants: participants.filter((p) => {
+          if (p.submitted_by) return String(p.submitted_by) === String(a._id);
+          // Legacy / unowned record: match by airline name (case-insensitive,
+          // same as the airline's own list) unless it belongs to one of this
+          // airline's department rosters.
+          if (!aName) return false;
+          if (normName(p.company) !== aName && normName(p.airline_name) !== aName) return false;
+          return !(p.department && deptNames.has(normName(p.department)));
+        }),
+      };
+    });
 
     // Return every airline, including ones with zero submissions — the admin UI
     // has a "Empty airlines" toggle that decides whether to show them.
@@ -396,7 +440,7 @@ exports.createParticipant = async (req, res) => {
       // Ownership: an admin → null. A top-level airline → itself. A department →
       // always itself; a department's participants are a separate list, never
       // merged into the main airline's.
-      submitted_by: resolveOwnerOnCreate(req),
+      submitted_by: await resolveOwnerOnCreate(req, company),
       locked: true,
     });
 
@@ -474,7 +518,13 @@ exports.bulkCreateParticipants = async (req, res) => {
     if (!Array.isArray(rows) || rows.length === 0) {
       return res.status(400).json({ error: 'Expected a non-empty array of participants' });
     }
-    const owner = resolveOwnerOnCreate(req);
+    // Rows can name different airlines (admin bulk import) — resolve each once.
+    const ownerByCompany = new Map();
+    const ownerFor = async (company) => {
+      const key = normName(company);
+      if (!ownerByCompany.has(key)) ownerByCompany.set(key, await resolveOwnerOnCreate(req, company));
+      return ownerByCompany.get(key);
+    };
 
     const results = [];
     for (const item of rows) {
@@ -523,7 +573,7 @@ exports.bulkCreateParticipants = async (req, res) => {
           airline_name: req.admin.role === 'airline'
             ? (req.admin.airlineName || company)
             : company,
-          submitted_by: owner,
+          submitted_by: await ownerFor(company),
           locked: true,
         });
 

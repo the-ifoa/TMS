@@ -63,7 +63,7 @@ const emptyRow = (defaultNdgSubtype = 'I', defaultDepartment = '') => ({
 // AttendanceChecklistModal — imported from ../components/AttendanceChecklistModal
 
 // ─── Single-mode form ─────────────────────────────────────────────────────────
-function SingleForm({ isAdmin, isDepartment, departmentLabel, airlineName, airlineOptions, onSuccess }) {
+function SingleForm({ isAdmin, isDepartment, departmentLabel, airlineName, airlineOptions, createExamResult, setCreateExamResult, onSuccess }) {
   const [saving, setSaving] = useState(false);
   const [showChecklist, setShowChecklist] = useState(false);
   const [attendanceSheetId, setAttendanceSheetId] = useState(null);
@@ -104,7 +104,7 @@ function SingleForm({ isAdmin, isDepartment, departmentLabel, airlineName, airli
     }
     try {
       setSaving(true);
-      const saved = await createParticipant({ ...form });
+      const saved = await createParticipant({ ...form, create_exam_result: createExamResult });
       // Send one confirmation email (airline only — fire-and-forget)
       if (!isAdmin) {
         sendSubmissionConfirmation({
@@ -329,6 +329,26 @@ function SingleForm({ isAdmin, isDepartment, departmentLabel, airlineName, airli
         </div>
       )}
 
+      <div className="pt-4 border-t border-primary-200">
+          <label className="flex items-center gap-2 cursor-pointer select-none w-fit">
+            <button
+              type="button"
+              onClick={() => setCreateExamResult(v => !v)}
+              className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${
+                createExamResult ? 'bg-accent-600 border-accent-600' : 'border-primary-300 hover:border-primary-500'
+              }`}
+            >
+              {createExamResult && (
+                <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                </svg>
+              )}
+            </button>
+            <span className="text-sm font-medium text-primary-700">Create exam result</span>
+            <span className="text-xs text-primary-400">(adds to admin Exam Results under this airline)</span>
+          </label>
+        </div>
+
       <div className="flex items-center justify-end gap-3 pt-4 border-t border-primary-200">
         <button
           type="button"
@@ -476,7 +496,7 @@ function BulkRow({ row, idx, onChange, onRemove, result, isNDG, ndgMode, departm
 }
 
 // ─── Bulk mode form ───────────────────────────────────────────────────────────
-function BulkForm({ isAdmin, isDepartment, departmentLabel, airlineName, airlineOptions, onSuccess }) {
+function BulkForm({ isAdmin, isDepartment, departmentLabel, airlineName, airlineOptions, createExamResult, setCreateExamResult, onSuccess }) {
   const [rows, setRows]       = useState([emptyRow('I', ''), emptyRow('I', ''), emptyRow('I', '')]);
   const [company, setCompany]           = useState(isAdmin ? '' : (airlineName || ''));
   const [customCompany, setCustomCompany] = useState('');
@@ -590,6 +610,7 @@ function BulkForm({ isAdmin, isDepartment, departmentLabel, airlineName, airline
           modules:            shared.modules,
           ndg_subtype:        shared.ndg_mode === 'M' ? row.ndg_subtype : shared.ndg_mode,
           online_synchronous: shared.online_synchronous,
+          create_exam_result: createExamResult,
         });
         setResults(prev => ({ ...prev, [row.id]: { status: 'success' } }));
         // Record in local array so we can use it synchronously below
@@ -816,6 +837,27 @@ function BulkForm({ isAdmin, isDepartment, departmentLabel, airlineName, airline
           </div>
         )}
 
+        {/* Exam result — optional */}
+        <div className="pt-2 border-t border-primary-100">
+          <label className="flex items-center gap-2 cursor-pointer select-none w-fit">
+            <button
+              type="button"
+              onClick={() => setCreateExamResult(v => !v)}
+              className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${
+                createExamResult ? 'bg-accent-600 border-accent-600' : 'border-primary-300 hover:border-primary-500'
+              }`}
+            >
+              {createExamResult && (
+                <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                </svg>
+              )}
+            </button>
+            <span className="text-sm font-medium text-primary-700">Create exam result</span>
+            <span className="text-xs text-primary-400">(adds to admin Exam Results under this airline)</span>
+          </label>
+        </div>
+
         {/* Attendance tracking — optional */}
         <div className="pt-2 border-t border-primary-100 space-y-2">
           <label className="flex items-center gap-2 cursor-pointer select-none w-fit">
@@ -968,6 +1010,7 @@ export default function AddParticipant() {
   const airlineName = admin?.airlineName || '';
   const departmentLabel = admin?.department_name || 'this department';
   const [mode, setMode] = useState('bulk'); // 'single' | 'bulk'
+  const [createExamResult, setCreateExamResult] = useState(false);
   const [airlineOptions, setAirlineOptions] = useState([]);
 
   useEffect(() => {
@@ -1037,12 +1080,12 @@ export default function AddParticipant() {
         <AnimatePresence mode="wait">
           {mode === 'single' && (
             <motion.div key="single" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }}>
-              <SingleForm isAdmin={isAdmin} isDepartment={isDepartment} departmentLabel={departmentLabel} airlineName={airlineName} airlineOptions={airlineOptions} onSuccess={handleSuccess} />
+              <SingleForm isAdmin={isAdmin} isDepartment={isDepartment} departmentLabel={departmentLabel} airlineName={airlineName} airlineOptions={airlineOptions} createExamResult={createExamResult} setCreateExamResult={setCreateExamResult} onSuccess={handleSuccess} />
             </motion.div>
           )}
           {mode === 'bulk' && (
             <motion.div key="bulk" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }}>
-              <BulkForm isAdmin={isAdmin} isDepartment={isDepartment} departmentLabel={departmentLabel} airlineName={airlineName} airlineOptions={airlineOptions} onSuccess={handleSuccess} />
+              <BulkForm isAdmin={isAdmin} isDepartment={isDepartment} departmentLabel={departmentLabel} airlineName={airlineName} airlineOptions={airlineOptions} createExamResult={createExamResult} setCreateExamResult={setCreateExamResult} onSuccess={handleSuccess} />
             </motion.div>
           )}
         </AnimatePresence>

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { Fragment, useEffect, useState, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   HiOutlineClipboardList,
@@ -33,6 +33,8 @@ import {
   getExamBatches,
   parseExamResultsExcel,
   importExamResultsExcel,
+  getAirlinesList,
+  getParticipants,
   getExamResultPdf,
 } from '../api';
 import { useAuth } from '../context/AuthContext';
@@ -158,6 +160,54 @@ async function viewPdf(id) {
 }
 
 // ── Import Excel Modal ────────────────────────────────────────────────────────
+// ── Airline dropdown (lists airlines registered on the admin side, with logo) ──
+function AirlineLogo({ logoUrl, name }) {
+  return (
+    <span className="inline-flex w-5 h-5 shrink-0 items-center justify-center overflow-hidden rounded bg-slate-100 align-middle">
+      {logoUrl
+        ? <img src={logoUrl} alt="" className="w-full h-full object-contain bg-white" />
+        : <span className="text-[9px] font-bold text-slate-600">{(name || '?').trim().charAt(0).toUpperCase()}</span>}
+    </span>
+  );
+}
+
+function AirlineSelect({ value, onChange }) {
+  const [airlines, setAirlines] = useState([]);
+  useEffect(() => {
+    getAirlinesList()
+      .then(res => {
+        // one entry per airline name (accounts can share a name); keep a logo if any has one
+        const byName = new Map();
+        (res.data || []).forEach(a => {
+          if (!a.airlineName) return;
+          const cur = byName.get(a.airlineName);
+          if (!cur || (!cur.logo_url && a.logo_url)) byName.set(a.airlineName, { airlineName: a.airlineName, logo_url: a.logo_url || null });
+        });
+        setAirlines([...byName.values()]);
+      })
+      .catch(() => {});
+  }, []);
+  // keep a pre-existing value (e.g. imported / typed earlier) selectable
+  const options = value && !airlines.some(a => a.airlineName === value)
+    ? [{ airlineName: value, logo_url: null }, ...airlines]
+    : airlines;
+  return (
+    <Select value={value || undefined} onValueChange={onChange}>
+      <SelectTrigger className="text-xs font-semibold"><SelectValue placeholder="Select airline" /></SelectTrigger>
+      <SelectContent>
+        {options.map(a => (
+          <SelectItem key={a.airlineName} value={a.airlineName}>
+            <span className="flex items-center gap-2">
+              <AirlineLogo logoUrl={a.logo_url} name={a.airlineName} />
+              {a.airlineName}
+            </span>
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
 function ImportExcelModal({ onClose, onImported }) {
   const fileRef  = useRef(null);
   const [step, setStep]             = useState('upload');
@@ -351,8 +401,7 @@ function ImportExcelModal({ onClose, onImported }) {
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">Company / Airline</label>
-                    <input className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900"
-                      placeholder="Optional" value={company} onChange={e => setCompany(e.target.value)} />
+                    <AirlineSelect value={company} onChange={setCompany} />
                   </div>
                   <div className="sm:col-span-3">
                     <label className="block text-xs font-semibold text-slate-700 mb-1">PDF Header Text (shown below "EXAM RESULTS")</label>
@@ -527,19 +576,56 @@ function ResultFormModal({ initial, onSave, onClose, batches = [] }) {
     return [...seen.values()].sort();
   })();
 
+  const filterBatches = (val) => {
+    const lower = (val || '').trim().toLowerCase();
+    return existingBatchNames.filter(name => name.toLowerCase().includes(lower));
+  };
+
+  // Combobox: opens on focus with every existing batch, narrows as you type,
+  // and offers "Create" for a name that doesn't exist yet.
   const handleBatchNameChange = (val) => {
     set('batch_name', val);
-    if (val.trim().length === 0) {
-      setBatchSuggestions([]);
-      setShowBatchDropdown(false);
-      return;
-    }
-    const lower = val.trim().toLowerCase();
-    const matched = existingBatchNames.filter(name =>
-      name.toLowerCase().includes(lower)
-    );
-    setBatchSuggestions(matched);
-    setShowBatchDropdown(matched.length > 0);
+    setBatchSuggestions(filterBatches(val));
+    setShowBatchDropdown(true);
+  };
+
+  const openBatchDropdown = () => {
+    setBatchSuggestions(filterBatches(form.batch_name));
+    setShowBatchDropdown(true);
+  };
+
+  // ── Participant picker (add mode): participants of the chosen airline ──
+  const [airlineParticipants, setAirlineParticipants] = useState([]);
+  const [loadingParticipants, setLoadingParticipants] = useState(false);
+  const [pickedParticipant, setPickedParticipant] = useState('');
+
+  useEffect(() => {
+    if (initial || !form.company) { setAirlineParticipants([]); return; }
+    let cancelled = false;
+    setLoadingParticipants(true);
+    getParticipants({ company: form.company })
+      .then(res => { if (!cancelled) setAirlineParticipants(res.data || []); })
+      .catch(() => { if (!cancelled) setAirlineParticipants([]); })
+      .finally(() => { if (!cancelled) setLoadingParticipants(false); });
+    return () => { cancelled = true; };
+  }, [form.company, initial]);
+
+  const pickParticipant = (id) => {
+    setPickedParticipant(id);
+    const p = airlineParticipants.find(x => String(x._id || x.id) === id);
+    if (!p) return;
+    const ct = COURSE_TYPES.find(c => c.value === p.training_type);
+    const day = (d) => (d ? String(d).slice(0, 10) : '');
+    setForm(f => ({
+      ...f,
+      first_name: p.first_name || '',
+      last_name: p.last_name || '',
+      company: p.company || f.company,
+      course_type: ct ? ct.value : f.course_type,
+      course_name: f.course_name || (ct ? ct.label.split('–')[1]?.trim() : '') || '',
+      start_date: day(p.training_date) || f.start_date,
+      end_date: day(p.end_date || p.training_date) || f.end_date,
+    }));
   };
 
   const selectBatchSuggestion = (name) => {
@@ -614,6 +700,35 @@ function ResultFormModal({ initial, onSave, onClose, batches = [] }) {
           <div>
             <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3">Student Information</h3>
             <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Company / Airline</label>
+                <AirlineSelect value={form.company} onChange={v => { set('company', v); setPickedParticipant(''); }} />
+              </div>
+              {!initial && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Participant</label>
+                  <Select value={pickedParticipant || undefined} onValueChange={pickParticipant} disabled={!form.company || loadingParticipants}>
+                    <SelectTrigger className="text-xs font-semibold">
+                      <SelectValue placeholder={
+                        !form.company ? 'Select an airline first'
+                          : loadingParticipants ? 'Loading…'
+                          : airlineParticipants.length ? 'Select participant' : 'No participants — enter below'
+                      } />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {airlineParticipants.map(p => {
+                        const id = String(p._id || p.id);
+                        return (
+                          <SelectItem key={id} value={id}>
+                            {p.participant_name || `${p.first_name} ${p.last_name}`}
+                            <span className="text-slate-400"> · {p.training_type}{p.department ? ` · ${p.department}` : ''}</span>
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               {[{ label: 'First Name *', key: 'first_name' }, { label: 'Last Name *', key: 'last_name' }].map(({ label, key }) => (
                 <div key={key}>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">{label}</label>
@@ -621,11 +736,6 @@ function ResultFormModal({ initial, onSave, onClose, batches = [] }) {
                     value={form[key]} onChange={e => set(key, e.target.value)} />
                 </div>
               ))}
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Company / Airline</label>
-                <input className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900"
-                  value={form.company} onChange={e => set('company', e.target.value)} />
-              </div>
             </div>
           </div>
           <div>
@@ -639,12 +749,15 @@ function ResultFormModal({ initial, onSave, onClose, batches = [] }) {
                   placeholder="e.g. NOV-DEC 2024"
                   value={form.batch_name}
                   onChange={e => handleBatchNameChange(e.target.value)}
+                  onFocus={openBatchDropdown}
                   onBlur={() => setTimeout(() => setShowBatchDropdown(false), 200)}
                   autoComplete="off"
                 />
-                {showBatchDropdown && batchSuggestions.length > 0 && (
-                  <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
-                    <p className="px-3 pt-2 pb-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Existing batch — add to it?</p>
+                {showBatchDropdown && (
+                  <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden max-h-56 overflow-y-auto">
+                    {batchSuggestions.length > 0 && (
+                      <p className="px-3 pt-2 pb-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Existing batches</p>
+                    )}
                     {batchSuggestions.map(name => (
                       <button
                         key={name}
@@ -656,6 +769,18 @@ function ResultFormModal({ initial, onSave, onClose, batches = [] }) {
                         <span className="ml-auto text-[10px] text-slate-400">Use existing</span>
                       </button>
                     ))}
+                    {form.batch_name.trim() && !existingBatchNames.some(n => n.toLowerCase() === form.batch_name.trim().toLowerCase()) && (
+                      <button
+                        type="button"
+                        onMouseDown={() => selectBatchSuggestion(form.batch_name.trim())}
+                        className="w-full text-left px-3 py-2 text-xs text-slate-900 hover:bg-slate-50 flex items-center gap-2 border-t border-slate-100 font-bold"
+                      >
+                        <HiOutlinePlus className="w-3.5 h-3.5" /> Create "{form.batch_name.trim()}"
+                      </button>
+                    )}
+                    {batchSuggestions.length === 0 && !form.batch_name.trim() && (
+                      <p className="px-3 py-2 text-xs text-slate-400">No batches yet — type a name to create one.</p>
+                    )}
                   </div>
                 )}
               </div>
@@ -997,6 +1122,8 @@ export default function ExamResults() {
   const [viewStudent, setViewStudent] = useState(null);
 
   const [selected, setSelected]       = useState(new Set());
+  const [sort, setSort] = useState({ key: null, dir: 'asc' }); // Overview sorting
+  const [collapsedGroups, setCollapsedGroups] = useState(new Set()); // Overview accordion
   const [bulkIssuing, setBulkIssuing] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [bulkRevoking, setBulkRevoking] = useState(false);
@@ -1169,6 +1296,34 @@ export default function ExamResults() {
     : filterSheet === 'pending'
       ? results.filter(r => !r.sheet_issued)
       : results.filter(r => r.sheet_issued);
+
+  // Overview: one section per batch + course type (e.g. "OCT-2026 · FDI")
+  const overviewGroups = (() => {
+    const map = new Map();
+    filteredResults.forEach(r => {
+      const key = `${r.batch_name}||${r.course_type}`;
+      if (!map.has(key)) map.set(key, { key, batch_name: r.batch_name, course_type: r.course_type, items: [] });
+      map.get(key).items.push(r);
+    });
+    const GRADE_RANK = { OUTSTANDING: 5, DISTINCTION: 4, MERIT: 3, PASS: 2, FAILED: 1 };
+    const val = {
+      student: r => (r.participant_name || `${r.first_name} ${r.last_name}`).toLowerCase(),
+      marks:   r => (r.final_marks != null ? Number(r.final_marks) : -1),
+      grade:   r => GRADE_RANK[r.overall_grade] || 0,
+      status:  r => (r.sheet_issued ? 1 : 0),
+    };
+    const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+    const sign = sort.dir === 'asc' ? 1 : -1;
+    const groupsArr = [...map.values()];
+    if (sort.key === 'batch') {
+      groupsArr.sort((a, b) => sign * cmp(a.batch_name.toLowerCase(), b.batch_name.toLowerCase()));
+    } else if (val[sort.key]) {
+      groupsArr.forEach(g => g.items.sort((a, b) => sign * cmp(val[sort.key](a), val[sort.key](b))));
+    }
+    return groupsArr;
+  })();
+  const toggleSort = (key) =>
+    setSort(prev => (prev.key === key ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }));
 
   return (
     <div className="w-full space-y-4">
@@ -1350,9 +1505,20 @@ export default function ExamResults() {
                   </div>
                 ) : (
                   <div className="rounded-xl border border-slate-200/80 overflow-hidden">
-                    <div className="overflow-x-auto">
-                    <table className="w-full text-xs">
-                      <thead>
+                    <div className="overflow-auto max-h-[calc(100vh-13rem)] min-h-[28rem]">
+                    <table className="w-full min-w-[900px] table-fixed text-xs">
+                      <colgroup>
+                        {isAdmin && <col style={{ width: '3.5rem' }} />}
+                        <col style={{ width: '3.5rem' }} />
+                        <col style={{ width: '22%' }} />
+                        <col style={{ width: '14%' }} />
+                        <col style={{ width: '9%' }} />
+                        <col style={{ width: '12%' }} />
+                        <col style={{ width: '12%' }} />
+                        <col style={{ width: '13%' }} />
+                        {isAdmin && <col />}
+                      </colgroup>
+                      <thead className="sticky top-0 z-10">
                         <tr className="bg-slate-50 text-left">
                           {isAdmin && (
                             <th className="px-4 py-3">
@@ -1363,13 +1529,67 @@ export default function ExamResults() {
                               />
                             </th>
                           )}
-                          {['#','Student','Batch','Type','Final Marks','Grade','Sheet Status', isAdmin && 'Actions'].filter(Boolean).map(h => (
-                            <th key={h} className="px-4 py-3 font-bold text-slate-500 uppercase tracking-wider text-[11px]">{h}</th>
+                          {[
+                            ['#'], ['Student', 'student'], ['Batch', 'batch'], ['Type'],
+                            ['Final Marks', 'marks'], ['Grade', 'grade'], ['Sheet Status', 'status'],
+                            isAdmin && ['Actions'],
+                          ].filter(Boolean).map(([h, key]) => (
+                            <th key={h} className="px-4 py-3 font-bold text-slate-500 uppercase tracking-wider text-[11px]">
+                              {key ? (
+                                <button type="button" onClick={() => toggleSort(key)}
+                                  className={`inline-flex items-center gap-1 uppercase tracking-wider hover:text-slate-900 ${sort.key === key ? 'text-slate-900' : ''}`}>
+                                  {h}
+                                  <span className="text-[10px] leading-none">
+                                    {sort.key === key ? (sort.dir === 'asc' ? '▲' : '▼') : '↕'}
+                                  </span>
+                                </button>
+                              ) : h}
+                            </th>
                           ))}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {filteredResults.map((r, i) => {
+                        {overviewGroups.map(g => {
+                          const gIds = g.items.map(r => r._id || r.id);
+                          const gAll = gIds.every(id => selected.has(id));
+                          const gSome = gIds.some(id => selected.has(id));
+                          const gCompanies = [...new Set(g.items.map(r => r.company).filter(Boolean))];
+                          const gIssued = g.items.filter(r => r.sheet_issued).length;
+                          const gOpen = !collapsedGroups.has(g.key);
+                          const toggleG = () => setCollapsedGroups(prev => {
+                            const n = new Set(prev);
+                            n.has(g.key) ? n.delete(g.key) : n.add(g.key);
+                            return n;
+                          });
+                          return (
+                          <Fragment key={g.key}>
+                          <tr className="bg-slate-100/70 hover:bg-slate-100 cursor-pointer select-none" onClick={toggleG}>
+                            {isAdmin && (
+                              <td className="px-4 py-2.5" onClick={e => e.stopPropagation()}>
+                                <Checkbox
+                                  checked={gAll ? true : gSome ? 'indeterminate' : false}
+                                  onCheckedChange={() => setSelected(prev => {
+                                    const n = new Set(prev);
+                                    gIds.forEach(id => (gAll ? n.delete(id) : n.add(id)));
+                                    return n;
+                                  })}
+                                  title="Select batch"
+                                />
+                              </td>
+                            )}
+                            <td colSpan={isAdmin ? 8 : 7} className="px-4 py-2.5">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <HiOutlineChevronDown className={`w-4 h-4 text-slate-500 transition-transform ${gOpen ? '' : '-rotate-90'}`} />
+                                <span className="text-xs font-extrabold text-slate-900">{g.batch_name}</span>
+                                <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${courseTypeBadge(g.course_type)}`}>{g.course_type}</span>
+                                {gCompanies.length > 0 && <span className="text-[11px] font-medium text-slate-500">{gCompanies.join(', ')}</span>}
+                                <span className="ml-auto text-[11px] font-semibold text-slate-500">
+                                  {g.items.length} student{g.items.length > 1 ? 's' : ''} · {gIssued} sheet{gIssued !== 1 ? 's' : ''} issued
+                                </span>
+                              </div>
+                            </td>
+                          </tr>
+                          {gOpen && g.items.map((r, i) => {
                           const rid = r._id || r.id;
                           const isSelected = selected.has(rid);
                           return (
@@ -1433,6 +1653,9 @@ export default function ExamResults() {
                               </td>
                             )}
                           </tr>
+                          );
+                          })}
+                          </Fragment>
                           );
                         })}
                       </tbody>

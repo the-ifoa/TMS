@@ -1,5 +1,6 @@
 const Participant = require('../models/Participant');
 const Airline = require('../models/Airline');
+const ExamResult = require('../models/ExamResult');
 const DhlCertificate = require('../models/DhlCertificate');
 const { sendSubmissionConfirmation, sendCertExpiryReminderEmail } = require('../services/emailService');
 const { resolveEmailBranding, brandingResolver } = require('../services/emailBranding');
@@ -249,7 +250,7 @@ exports.listAirlineNames = async (req, res) => {
     if (req.admin.role === 'airline') {
       return res.status(403).json({ error: 'Admin access required.' });
     }
-    const airlines = await Airline.find({}).sort({ airlineName: 1 }).select('airlineName email -_id');
+    const airlines = await Airline.find({ is_department: { $ne: true } }).sort({ airlineName: 1 }).select('airlineName email logo_url -_id');
     res.json(airlines);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -297,6 +298,52 @@ exports.getParticipant = async (req, res) => {
   }
 };
 
+
+// ─── Exam-result sync ─────────────────────────────────────────────────────────
+// When the "create exam result" option is ticked on Add Participant, each new
+// participant also gets a blank ExamResult (company = airline) that shows up on
+// the admin Exam Results page, ready for marks.
+const EXAM_COURSE_NAMES = {
+  FDI: 'Flight Dispatch Initial Training',
+  FDR: 'Flight Dispatch Recurrent Training',
+  FDA: 'Flight Dispatch Advanced Training',
+  FTL: 'Flight Time Limitations',
+  NDG: 'Dangerous Goods No-Carry',
+  HF:  'Human Factors for OCC',
+  GD:  'Ground Operations',
+  TCD: 'Training Competencies Development',
+};
+const MONTHS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+
+function examBatchName(start, end) {
+  const s = new Date(start);
+  if (isNaN(s)) return 'UNASSIGNED';
+  const e = end ? new Date(end) : s;
+  const sm = MONTHS[s.getUTCMonth()];
+  const em = isNaN(e) ? sm : MONTHS[e.getUTCMonth()];
+  return `${sm === em ? sm : `${sm}/${em}`}-${(isNaN(e) ? s : e).getUTCFullYear()}`;
+}
+
+async function createExamResultFor(participant, req) {
+  const start = participant.training_date;
+  const end = participant.end_date || participant.training_date;
+  const courseName = EXAM_COURSE_NAMES[participant.training_type] || participant.training_type;
+  const doc = new ExamResult({
+    first_name: participant.first_name,
+    last_name: participant.last_name,
+    batch_name: examBatchName(start, end),
+    course_name: courseName,
+    result_header_text: courseName,
+    course_type: participant.training_type,
+    start_date: String(start),
+    end_date: String(end),
+    company: participant.airline_name || participant.company || '',
+    created_by: req.admin.role === 'airline' ? null : req.admin.id,
+  });
+  await doc.save();
+  return doc;
+}
+
 // ─── CREATE participant ───────────────────────────────────────────────────────
 exports.createParticipant = async (req, res) => {
   try {
@@ -306,7 +353,7 @@ exports.createParticipant = async (req, res) => {
       company, department,
       training_type, training_date,
       end_date, location, modules,
-      ndg_subtype, online_synchronous,
+      ndg_subtype, online_synchronous, create_exam_result,
     } = req.body;
 
     const fName = (first_name || '').trim()
@@ -355,6 +402,10 @@ exports.createParticipant = async (req, res) => {
 
     await doc.save();
     console.log('Created participant:', doc.participant_name);
+    if (create_exam_result) {
+      try { await createExamResultFor(doc, req); }
+      catch (e) { console.error('Exam result create failed:', e.message); }
+    }
     res.status(201).json(doc);
   } catch (err) {
     console.error('POST /participants error:', err.message, err.errors || '');
@@ -432,7 +483,7 @@ exports.bulkCreateParticipants = async (req, res) => {
           first_name, last_name, participant_name,
           company, department, training_type, training_date,
           end_date, location, modules,
-          ndg_subtype, online_synchronous,
+          ndg_subtype, online_synchronous, create_exam_result,
         } = item;
 
         const fName = (first_name || '').trim()
@@ -477,6 +528,10 @@ exports.bulkCreateParticipants = async (req, res) => {
         });
 
         await doc.save();
+        if (create_exam_result) {
+          try { await createExamResultFor(doc, req); }
+          catch (e) { console.error('Exam result create failed:', e.message); }
+        }
         results.push({
           success: true,
           id: doc._id,

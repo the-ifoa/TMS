@@ -1505,12 +1505,13 @@ export default function ExamResults() {
       ? results.filter(r => !r.sheet_issued)
       : results.filter(r => r.sheet_issued);
 
-  // Overview: one section per batch + course type (e.g. "OCT-2026 · FDI")
+  // Overview: one section per batch + course type + airline (e.g. "OCT-2026 · FDI · DHL Bahrain")
   const overviewGroups = (() => {
     const map = new Map();
     filteredResults.forEach(r => {
-      const key = `${r.batch_name}||${r.course_type}`;
-      if (!map.has(key)) map.set(key, { key, batch_name: r.batch_name, course_type: r.course_type, items: [] });
+      const company = (r.company || '').trim();
+      const key = `${r.batch_name}||${r.course_type}||${company.toLowerCase()}`;
+      if (!map.has(key)) map.set(key, { key, batch_name: r.batch_name, course_type: r.course_type, company, items: [] });
       map.get(key).items.push(r);
     });
     const GRADE_RANK = { OUTSTANDING: 5, DISTINCTION: 4, MERIT: 3, PASS: 2, FAILED: 1 };
@@ -1767,7 +1768,7 @@ export default function ExamResults() {
                           const gIds = g.items.map(r => r._id || r.id);
                           const gAll = gIds.every(id => selected.has(id));
                           const gSome = gIds.some(id => selected.has(id));
-                          const gCompanies = [...new Set(g.items.map(r => r.company).filter(Boolean))];
+                          const gCompanies = g.company ? [g.company] : [];
                           const gIssued = g.items.filter(r => r.sheet_issued).length;
                           const gOpen = openGroups.has(g.key);
                           const toggleG = () => setOpenGroups(prev => {

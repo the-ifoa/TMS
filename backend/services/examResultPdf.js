@@ -94,16 +94,6 @@ function isSubjectNA(subject) {
   return false;
 }
 
-function normalizeSubjectAbbr(abbr) {
-  const key = String(abbr || '').trim().toUpperCase();
-  const aliases = {
-    HF: 'HPL',
-    PER: 'POF',
-    DRM: 'DGR',
-  };
-  return aliases[key] || key;
-}
-
 async function generateExamResultPdf(examResult) {
   const W = 595;
   const H = 842;
@@ -176,8 +166,12 @@ async function generateExamResultPdf(examResult) {
   const dateLabel   = formatDate(examResult.sheet_date || examResult.end_date || '');
   const resultHeaderText = String(examResult.result_header_text || examResult.course_name || '').trim();
 
-  // ── All 12 standard subjects — always show in this order, N/A last ──────────
-  const STANDARD_SUBJECTS = [
+  // ── Subjects — exactly what the admin saved on the sheet ────────────────────
+  // The result sheet lists the student's own scored courses (names, abbreviations
+  // and max marks as edited, added or removed in the admin form); N/A courses are
+  // not printed. A sheet with no courses saved starts from the 12 standard
+  // subjects, which print nothing until they are given a score.
+  const DEFAULT_SUBJECTS = [
     { abbr: 'LAW', name: 'Air Law' },
     { abbr: 'SYS', name: 'Aircraft General Knowledge & Systems' },
     { abbr: 'MON', name: 'Flight Monitoring' },
@@ -191,37 +185,20 @@ async function generateExamResultPdf(examResult) {
     { abbr: 'FPL', name: 'Flight Planning' },
     { abbr: 'HPL', name: 'Human Factors' },
   ];
+  const stored = (Array.isArray(examResult.subjects) ? examResult.subjects : [])
+    .filter(s => s && (String(s.abbr || '').trim() || String(s.name || '').trim()));
+  const mergedSubjects = stored.length
+    ? stored.map(s => ({
+        abbr: String(s.abbr || '').trim(),
+        name: String(s.name || '').trim() || String(s.abbr || '').trim(),
+        max_marks: Number(s.max_marks) || 100,
+        marks_obtained: s.marks_obtained,
+        grade: s.grade,
+      }))
+    : DEFAULT_SUBJECTS.map(d => ({ ...d, max_marks: 100, marks_obtained: null, grade: null }));
 
-  // Build a lookup from stored subjects by abbreviation
-  const storedByAbbr = {};
-  (Array.isArray(examResult.subjects) ? examResult.subjects : []).forEach(s => {
-    const normalizedAbbr = normalizeSubjectAbbr(s.abbr);
-    if (normalizedAbbr) storedByAbbr[normalizedAbbr] = { ...s, abbr: normalizedAbbr };
-  });
-
-  const standardAbbrSet = new Set(STANDARD_SUBJECTS.map((s) => s.abbr));
-
-  // Merge: every standard subject appears; stored data wins, missing ones become N/A
-  const mergedSubjects = STANDARD_SUBJECTS.map(def => ({
-    ...def,
-    max_marks: 100,
-    marks_obtained: null,
-    grade: null,
-    ...(storedByAbbr[def.abbr] || {}),
-  }));
-
-  // Also include any non-standard stored subjects (edge cases / future subjects)
-  (Array.isArray(examResult.subjects) ? examResult.subjects : []).forEach(s => {
-    const normalizedAbbr = normalizeSubjectAbbr(s.abbr);
-    if (normalizedAbbr && !standardAbbrSet.has(normalizedAbbr)) {
-      mergedSubjects.push({ ...s, abbr: normalizedAbbr });
-    }
-  });
-
-  // Subjects with real marks first; N/A subjects at the bottom
-  const subjectsWithMarks = mergedSubjects.filter(s => !isSubjectNA(s));
-  const subjectsNA        = mergedSubjects.filter(s => isSubjectNA(s));
-  const subjects          = [...subjectsWithMarks, ...subjectsNA];
+  // Only courses with a recorded score appear on the sheet — N/A ones are left out.
+  const subjects = mergedSubjects.filter(s => !isSubjectNA(s));
 
   // ── HEADER ─────────────────────────────────────────────────────────────────
   // Logo: large, left-aligned
@@ -331,7 +308,7 @@ async function generateExamResultPdf(examResult) {
 
       drawCellTextLeft(name,   xName,  y, hRow, reg,  nameSize, C.black);
       drawCellTextCenter(abbr,  xAbbr,  colAbbr,  y, hRow, bold, 8,   C.black);
-      drawCellTextCenter('100', xMax,   colMax,   y, hRow, reg,  8,   C.black);  // max always 100
+      drawCellTextCenter(String(subject.max_marks || 100), xMax, colMax, y, hRow, reg, 8, C.black);
       drawCellTextCenter(marks, xObt,   colObt,   y, hRow, bold, 8,   C.black);  // N/A if no score
       drawCellTextCenter(grade, xGrade, colGrade, y, hRow, bold, 7.5, C.black);  // N/A if no score
     }

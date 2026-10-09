@@ -21,12 +21,14 @@ import {
   HiOutlineLockClosed,
   HiOutlineChevronDown,
   HiOutlineFilter,
+  HiOutlineReply,
 } from 'react-icons/hi';
 import { Clock, CheckCircle2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
   getExamResults,
   createExamResult,
+  bulkCreateExamResults,
   updateExamResult,
   deleteExamResult,
   issueResultSheet,
@@ -99,25 +101,34 @@ function courseTypeBadge(type) {
   return 'bg-slate-100 text-slate-700 border border-slate-200';
 }
 
+// A stored sheet keeps exactly its own courses (so removed courses stay removed);
+// only a sheet with no courses at all starts from the default list.
 function mergeSubjects(stored) {
   if (!stored || stored.length === 0) return DEFAULT_SUBJECTS.map(s => ({ ...s }));
-
-  const byAbbr = {};
-  stored.forEach(s => { byAbbr[s.abbr] = s; });
-
-  const merged = DEFAULT_SUBJECTS.map(def => ({
-    ...def,
-    ...(byAbbr[def.abbr] || {}),
-  }));
-
-  stored.forEach(s => {
-    if (!merged.find(m => m.abbr === s.abbr)) merged.push(s);
-  });
-
-  const withMarks    = merged.filter(s => s.marks_obtained != null);
-  const withoutMarks = merged.filter(s => s.marks_obtained == null);
-  return [...withMarks, ...withoutMarks];
+  const withMarks    = stored.filter(s => s.marks_obtained != null);
+  const withoutMarks = stored.filter(s => s.marks_obtained == null);
+  return [...withMarks, ...withoutMarks].map(s => ({ max_marks: 100, ...s }));
 }
+
+// Mean of recorded scores as a % of each course's max marks (N/A ignored).
+// Mirrors averageOfSubjects() in the backend controller.
+function averageOfSubjects(subjects) {
+  const pcts = (subjects || [])
+    .filter(s => s.marks_obtained != null && s.marks_obtained !== '')
+    .map(s => (Number(s.marks_obtained) / (Number(s.max_marks) || 100)) * 100);
+  if (!pcts.length) return null;
+  return Math.round((pcts.reduce((a, b) => a + b, 0) / pcts.length) * 1000) / 1000;
+}
+
+// Fields restored when an edit is undone.
+const RESTORE_FIELDS = ['first_name','last_name','batch_name','course_name','course_type',
+  'result_header_text','training_mode','start_date','end_date','company','lead_instructor',
+  'instructors','subjects','final_exam_score','final_marks','sheet_date','sheet_issued'];
+const pickRestore = (r) => {
+  const o = {};
+  RESTORE_FIELDS.forEach(k => { if (r[k] !== undefined) o[k] = JSON.parse(JSON.stringify(r[k])); });
+  return o;
+};
 
 function emptyForm() {
   return {
@@ -546,8 +557,16 @@ function ImportExcelModal({ onClose, onImported }) {
 }
 
 // ── Add / Edit Modal ──────────────────────────────────────────────────────────
-function ResultFormModal({ initial, onSave, onClose, batches = [] }) {
+function ResultFormModal({ initial, prefill = null, onSave, onClose, batches = [] }) {
   const [form, setForm] = useState(() => {
+    if (!initial && prefill) {
+      return {
+        ...emptyForm(), ...prefill,
+        instructors: Array.isArray(prefill.instructors) ? prefill.instructors.join(', ') : (prefill.instructors || ''),
+        // same courses as the rest of the batch, scores blank
+        subjects: mergeSubjects(prefill.subjects).map(s => ({ ...s, marks_obtained: null, grade: null })),
+      };
+    }
     if (!initial) return emptyForm();
     return {
       ...initial,
@@ -634,22 +653,85 @@ function ResultFormModal({ initial, onSave, onClose, batches = [] }) {
     setShowBatchDropdown(false);
   };
 
+  // ── Undo history for this form (score edits, course add / remove / rename) ──
+  const [history, setHistory] = useState([]);
+  const lastEditAbbr = useRef(null);
+  const [manageCourses, setManageCourses] = useState(false);
+  const [newCourse, setNewCourse] = useState({ abbr: '', name: '' });
+
+  const pushHistory = (label) =>
+    setHistory(h => [...h.slice(-49), { label, subjects: form.subjects.map(s => ({ ...s })) }]);
+
+  const undo = () => {
+    setHistory(h => {
+      if (!h.length) return h;
+      const last = h[h.length - 1];
+      set('subjects', last.subjects);
+      lastEditAbbr.current = null;
+      toast.success(`Undid: ${last.label}`);
+      return h.slice(0, -1);
+    });
+  };
+
+  const sortSubjects = (subs) => [
+    ...subs.filter(s => s.marks_obtained != null),
+    ...subs.filter(s => s.marks_obtained == null),
+  ];
+
   const setSubject = (i, v) => {
     const isNA = v === '' || v === null || v === undefined;
+    const max = Number(form.subjects[i].max_marks) || 100;
     if (!isNA) {
       const num = Number(v);
-      if (num < 0 || num > 100) {
-        toast.error('Subject score must be between 0 and 100.');
+      if (num < 0 || num > max) {
+        toast.error(`Course score must be between 0 and ${max}.`);
         return;
       }
     }
+    const abbr = form.subjects[i].abbr;
+    // consecutive keystrokes in the same box count as one undo step
+    if (lastEditAbbr.current !== abbr) {
+      pushHistory(isNA ? `cleared ${abbr}` : `edited ${abbr} score`);
+      lastEditAbbr.current = abbr;
+    }
     const subs = [...form.subjects];
     subs[i] = { ...subs[i], marks_obtained: isNA ? null : Number(v) };
-
-    const withMarks    = subs.filter(s => s.marks_obtained != null);
-    const withoutMarks = subs.filter(s => s.marks_obtained == null);
-    set('subjects', [...withMarks, ...withoutMarks]);
+    set('subjects', sortSubjects(subs));
   };
+
+  const removeCourse = (i) => {
+    const gone = form.subjects[i];
+    pushHistory(`removed course ${gone.abbr}`);
+    lastEditAbbr.current = null;
+    set('subjects', form.subjects.filter((_, idx) => idx !== i));
+  };
+
+  const renameCourse = (i, key, v) => {
+    const abbr = form.subjects[i].abbr;
+    const tag = `${abbr}:${key}`;
+    if (lastEditAbbr.current !== tag) {
+      pushHistory(`modified course ${abbr}`);
+      lastEditAbbr.current = tag;
+    }
+    const subs = [...form.subjects];
+    subs[i] = { ...subs[i], [key]: v };
+    set('subjects', subs);
+  };
+
+  const addCourse = (abbr, name) => {
+    const a = (abbr || '').trim().toUpperCase();
+    const n = (name || '').trim();
+    if (!a || !n) { toast.error('Course needs an abbreviation and a name.'); return; }
+    if (form.subjects.some(s => s.abbr.toUpperCase() === a)) { toast.error(`Course ${a} already exists.`); return; }
+    pushHistory(`added course ${a}`);
+    lastEditAbbr.current = null;
+    set('subjects', [...form.subjects, { abbr: a, name: n, max_marks: 100, marks_obtained: null }]);
+    setNewCourse({ abbr: '', name: '' });
+  };
+
+  const missingDefaults = DEFAULT_SUBJECTS.filter(d => !form.subjects.some(s => s.abbr === d.abbr));
+  // Average is always derived from the scores — never typed in by hand.
+  const autoAvg = averageOfSubjects(form.subjects);
 
   const handleSave = async () => {
     if (!form.first_name || !form.last_name || !form.batch_name || !form.course_name || !form.start_date || !form.end_date) {
@@ -657,19 +739,20 @@ function ResultFormModal({ initial, onSave, onClose, batches = [] }) {
       return;
     }
     for (const s of form.subjects) {
-      if (s.marks_obtained != null && (s.marks_obtained < 0 || s.marks_obtained > 100)) {
-        toast.error(`${s.abbr} score must be between 0 and 100.`);
+      if (!s.abbr?.trim() || !s.name?.trim()) {
+        toast.error('Every course needs an abbreviation and a name.');
+        return;
+      }
+      const max = Number(s.max_marks) || 100;
+      if (s.marks_obtained != null && (s.marks_obtained < 0 || s.marks_obtained > max)) {
+        toast.error(`${s.abbr} score must be between 0 and ${max}.`);
         return;
       }
     }
     const fe = form.final_exam_score !== '' ? Number(form.final_exam_score) : null;
-    const fm = form.final_marks !== '' ? Number(form.final_marks) : null;
+    const fm = autoAvg;
     if (fe != null && (fe < 0 || fe > 100)) {
       toast.error('Final Exam Score must be between 0 and 100.');
-      return;
-    }
-    if (fm != null && (fm < 0 || fm > 100)) {
-      toast.error('Overall Average / Final Marks must be between 0 and 100.');
       return;
     }
     setSaving(true);
@@ -693,8 +776,17 @@ function ResultFormModal({ initial, onSave, onClose, batches = [] }) {
         <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
           className="bg-white rounded-2xl shadow-xl border border-slate-200/80 w-full max-w-3xl max-h-[90vh] overflow-y-auto">
         <div className="sticky top-0 bg-white z-10 flex items-center justify-between p-6 border-b border-slate-100">
-          <h2 className="text-base font-bold text-slate-900">{initial ? 'Edit Exam Result' : 'Add Exam Result'}</h2>
-          <button onClick={onClose} className="p-2 rounded-xl hover:bg-slate-100 text-slate-400"><HiOutlineX className="w-5 h-5" /></button>
+          <h2 className="text-base font-bold text-slate-900">
+            {initial ? 'Edit Exam Result' : prefill ? `Add Student to ${prefill.batch_name}` : 'Add Exam Result'}
+          </h2>
+          <div className="flex items-center gap-1">
+            <button type="button" onClick={undo} disabled={history.length === 0}
+              title={history.length ? `Undo: ${history[history.length - 1].label}` : 'Nothing to undo'}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent">
+              <HiOutlineReply className="w-4 h-4" /> Undo{history.length > 0 && <span className="text-slate-400">({history.length})</span>}
+            </button>
+            <button onClick={onClose} className="p-2 rounded-xl hover:bg-slate-100 text-slate-400"><HiOutlineX className="w-5 h-5" /></button>
+          </div>
         </div>
         <div className="p-6 space-y-6">
           <div>
@@ -838,17 +930,36 @@ function ResultFormModal({ initial, onSave, onClose, batches = [] }) {
           </div>
 
           <div>
-            <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-1">Subject Scores</h3>
-            <p className="text-xs text-slate-400 mb-3 font-medium">Leave blank to mark as N/A on result sheet. N/A subjects always appear last.</p>
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Courses &amp; Scores</h3>
+              <button type="button" onClick={() => setManageCourses(m => !m)}
+                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-colors ${
+                  manageCourses ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'}`}>
+                <HiOutlinePencil className="w-3 h-3" /> {manageCourses ? 'Done' : 'Manage courses'}
+              </button>
+            </div>
+            <p className="text-xs text-slate-400 mb-3 font-medium">Leave blank to mark as N/A on result sheet. N/A courses always appear last. The average updates automatically.</p>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-3 gap-y-4">
               {form.subjects.map((s, i) => {
-                const isOver = s.marks_obtained != null && s.marks_obtained > 100;
+                const max = Number(s.max_marks) || 100;
+                const isOver = s.marks_obtained != null && s.marks_obtained > max;
                 return (
-                  <div key={s.abbr} className="flex flex-col">
-                    <label className="text-xs font-semibold text-slate-700 mb-1 min-h-[2rem] flex items-end leading-tight">
-                      <span>{s.abbr} – {s.name}</span>
-                    </label>
-                    <input type="number" min="0" max="100"
+                  <div key={`${s.abbr}-${i}`} className="flex flex-col">
+                    {manageCourses ? (
+                      <div className="mb-1 flex items-center gap-1">
+                        <input value={s.abbr} onChange={e => renameCourse(i, 'abbr', e.target.value.toUpperCase())}
+                          className="w-14 border border-slate-200 rounded-lg px-1.5 py-1 text-[11px] font-bold focus:outline-none focus:border-slate-900" title="Abbreviation" />
+                        <input value={s.name} onChange={e => renameCourse(i, 'name', e.target.value)}
+                          className="flex-1 min-w-0 border border-slate-200 rounded-lg px-1.5 py-1 text-[11px] font-medium focus:outline-none focus:border-slate-900" title="Course name" />
+                        <button type="button" onClick={() => removeCourse(i)} title={`Remove ${s.abbr}`}
+                          className="p-1 rounded-lg text-rose-500 hover:bg-rose-50"><HiOutlineTrash className="w-3.5 h-3.5" /></button>
+                      </div>
+                    ) : (
+                      <label className="text-xs font-semibold text-slate-700 mb-1 min-h-[2rem] flex items-end leading-tight">
+                        <span>{s.abbr} – {s.name}</span>
+                      </label>
+                    )}
+                    <input type="number" min="0" max={max}
                       className={`w-full border rounded-xl px-3 py-2 text-xs font-medium focus:outline-none focus:ring-2 ${
                         isOver
                           ? 'border-rose-400 bg-rose-50 focus:ring-rose-400 text-rose-700'
@@ -856,14 +967,42 @@ function ResultFormModal({ initial, onSave, onClose, batches = [] }) {
                       }`}
                       placeholder="Leave blank = N/A"
                       value={s.marks_obtained ?? ''}
-                      onChange={e => setSubject(i, e.target.value)} />
+                      onChange={e => setSubject(i, e.target.value)}
+                      onBlur={() => { lastEditAbbr.current = null; }} />
                     {isOver && (
-                      <p className="text-[10px] text-rose-500 mt-0.5 font-bold">Max 100</p>
+                      <p className="text-[10px] text-rose-500 mt-0.5 font-bold">Max {max}</p>
                     )}
                   </div>
                 );
               })}
             </div>
+            {form.subjects.length === 0 && (
+              <p className="text-xs text-slate-400 font-medium py-3">No courses on this sheet — add one below.</p>
+            )}
+            {manageCourses && (
+              <div className="mt-4 p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+                <p className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">Add course</p>
+                {missingDefaults.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {missingDefaults.map(d => (
+                      <button key={d.abbr} type="button" onClick={() => addCourse(d.abbr, d.name)}
+                        className="px-2 py-1 rounded-lg bg-white border border-slate-200 text-[11px] font-semibold text-slate-700 hover:bg-slate-100">
+                        + {d.abbr}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <input placeholder="ABBR" value={newCourse.abbr} onChange={e => setNewCourse(c => ({ ...c, abbr: e.target.value.toUpperCase() }))}
+                    className="w-20 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold focus:outline-none focus:border-slate-900" />
+                  <input placeholder="Course name" value={newCourse.name} onChange={e => setNewCourse(c => ({ ...c, name: e.target.value }))}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addCourse(newCourse.abbr, newCourse.name); } }}
+                    className="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-medium focus:outline-none focus:border-slate-900" />
+                  <button type="button" onClick={() => addCourse(newCourse.abbr, newCourse.name)}
+                    className="px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800">Add</button>
+                </div>
+              </div>
+            )}
           </div>
 
           <div>
@@ -884,18 +1023,15 @@ function ResultFormModal({ initial, onSave, onClose, batches = [] }) {
                 )}
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Overall Average / Final Marks</label>
-                <input type="number" min="0" max="100"
-                  className={`w-full border rounded-xl px-3 py-2 text-xs font-medium focus:outline-none focus:ring-2 ${
-                    form.final_marks !== '' && Number(form.final_marks) > 100
-                      ? 'border-rose-400 bg-rose-50 focus:ring-rose-400 text-rose-700'
-                      : 'border-slate-200 focus:ring-slate-900/10 focus:border-slate-900'
-                  }`}
-                  value={form.final_marks}
-                  onChange={e => set('final_marks', e.target.value)} />
-                {form.final_marks !== '' && Number(form.final_marks) > 100 && (
-                  <p className="text-[10px] text-rose-500 mt-0.5 font-bold">Max 100</p>
-                )}
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Overall Average / Final Marks <span className="text-[10px] font-bold text-emerald-600 ml-1">AUTO</span>
+                </label>
+                <div className="w-full border border-slate-200 bg-slate-50 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 flex items-center justify-between">
+                  <span>{autoAvg != null ? `${autoAvg}%` : '—'}</span>
+                  {autoAvg != null && gradeFromMark(autoAvg) && (
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${gradeBadge(gradeFromMark(autoAvg))}`}>{gradeFromMark(autoAvg)}</span>
+                  )}
+                </div>
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Sheet Date</label>
@@ -1119,11 +1255,13 @@ export default function ExamResults() {
   const [showForm, setShowForm]       = useState(false);
   const [showImport, setShowImport]   = useState(false);
   const [editTarget, setEditTarget]   = useState(null);
+  const [prefill, setPrefill]         = useState(null); // add-student-to-batch defaults
+  const [undoStack, setUndoStack]     = useState([]);   // [{ label, run }] — newest last
   const [viewStudent, setViewStudent] = useState(null);
 
   const [selected, setSelected]       = useState(new Set());
   const [sort, setSort] = useState({ key: null, dir: 'asc' }); // Overview sorting
-  const [collapsedGroups, setCollapsedGroups] = useState(new Set()); // Overview accordion
+  const [openGroups, setOpenGroups] = useState(new Set()); // Overview accordion — batches start collapsed
   const [bulkIssuing, setBulkIssuing] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [bulkRevoking, setBulkRevoking] = useState(false);
@@ -1136,15 +1274,57 @@ export default function ExamResults() {
   const toggleAll = () =>
     setSelected(selected.size === results.length ? new Set() : new Set(results.map(r => r._id || r.id)));
 
+  // ── Undo history ──────────────────────────────────────────────────────────
+  // Every destructive / modifying action pushes { label, run }; run() reverses it.
+  const pushUndo = (label, run) => setUndoStack(st => [...st.slice(-19), { label, run }]);
+
+  const handleUndo = async () => {
+    const entry = undoStack[undoStack.length - 1];
+    if (!entry) return;
+    setUndoStack(st => st.slice(0, -1));
+    try {
+      await entry.run();
+      toast.success(`Undone: ${entry.label}`);
+    } catch (err) {
+      toast.error(err?.response?.data?.error || `Could not undo: ${entry.label}`);
+    }
+    fetchAll();
+  };
+
+  // Ctrl/Cmd+Z undoes the last page-level action (ignored while typing in a field,
+  // so it never fights the browser's own text undo or the form modal's undo).
+  const undoRef = useRef(handleUndo);
+  undoRef.current = handleUndo;
+  useEffect(() => {
+    const onKey = (e) => {
+      if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.key.toLowerCase() !== 'z') return;
+      const t = e.target;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      e.preventDefault();
+      undoRef.current();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   const handleBulkDelete = async () => {
     const ok = await confirm(`Delete ${selected.size} selected result(s)? This cannot be undone.`, { title: 'Delete results', confirmLabel: 'Delete' });
     if (!ok) return;
     setBulkDeleting(true);
     let count = 0;
+    const deletedRows = [];
     for (const id of selected) {
-      try { await deleteExamResult(id); count++; } catch {}
+      const snap = results.find(r => (r._id || r.id) === id);
+      try {
+        await deleteExamResult(id);
+        count++;
+        if (snap) deletedRows.push(pickRestore(snap));
+      } catch {}
     }
-    toast.success(`${count} result(s) deleted.`);
+    if (deletedRows.length) {
+      pushUndo(`delete ${deletedRows.length} result(s)`, () => bulkCreateExamResults(deletedRows));
+    }
+    toast.success(`${count} result(s) deleted. Press Undo to restore.`);
     setSelected(new Set());
     setBulkDeleting(false);
     fetchAll();
@@ -1226,14 +1406,21 @@ export default function ExamResults() {
   const handleSave = async (payload) => {
     try {
       if (editTarget) {
-        await updateExamResult(editTarget._id || editTarget.id, payload);
+        const id = editTarget._id || editTarget.id;
+        const before = pickRestore(editTarget);
+        const name = editTarget.participant_name || `${editTarget.first_name} ${editTarget.last_name}`;
+        await updateExamResult(id, payload);
+        pushUndo(`edit ${name}`, () => updateExamResult(id, before));
         toast.success('Exam result updated.');
       } else {
-        await createExamResult(payload);
+        const res = await createExamResult(payload);
+        const newId = res?.data?.id || res?.data?._id;
+        if (newId) pushUndo(`add ${payload.first_name} ${payload.last_name}`, () => deleteExamResult(newId));
         toast.success('Exam result added.');
       }
       setShowForm(false);
       setEditTarget(null);
+      setPrefill(null);
       fetchAll();
     } catch (err) {
       toast.error(err?.response?.data?.error || 'Failed to save exam result.');
@@ -1244,8 +1431,13 @@ export default function ExamResults() {
   const handleDelete = async (id, name) => {
     if (!(await confirm(`Delete result for ${name}?`, { title: 'Delete result', confirmLabel: 'Delete' }))) return;
     try {
+      const snap = results.find(r => (r._id || r.id) === id);
       await deleteExamResult(id);
-      toast.success('Result deleted.');
+      if (snap) {
+        const row = pickRestore(snap);
+        pushUndo(`delete ${name}`, () => createExamResult(row));
+      }
+      toast.success('Result deleted. Press Undo to restore.');
       fetchAll();
     } catch {
       toast.error('Failed to delete result.');
@@ -1276,8 +1468,24 @@ export default function ExamResults() {
     }
   };
 
-  const openAdd  = ()     => { setEditTarget(null); setShowForm(true); };
-  const openEdit = (item) => { setEditTarget(item); setShowForm(true); };
+  const openAdd  = ()     => { setEditTarget(null); setPrefill(null); setShowForm(true); };
+  // Add one student to an existing batch — batch / course details and the course
+  // list are copied from the batch, scores start blank.
+  const openAddToBatch = (g) => {
+    const t = g.items[0] || {};
+    setEditTarget(null);
+    setPrefill({
+      batch_name: g.batch_name, course_type: g.course_type,
+      course_name: t.course_name || '', result_header_text: t.result_header_text || '',
+      training_mode: t.training_mode || 'HYBRID',
+      start_date: t.start_date || '', end_date: t.end_date || '',
+      company: t.company || '', lead_instructor: t.lead_instructor || '',
+      instructors: t.instructors || [], sheet_date: t.sheet_date || t.end_date || '',
+      subjects: t.subjects || [],
+    });
+    setShowForm(true);
+  };
+  const openEdit = (item) => { setEditTarget(item); setPrefill(null); setShowForm(true); };
 
   const handleQuickIssueAndView = async (r) => {
     const id = r._id || r.id;
@@ -1343,6 +1551,12 @@ export default function ExamResults() {
 
         {isAdmin && (
           <div className="flex items-center gap-2 flex-shrink-0">
+            <button onClick={handleUndo} disabled={undoStack.length === 0}
+              title={undoStack.length ? `Undo: ${undoStack[undoStack.length - 1].label} (Ctrl+Z)` : 'Nothing to undo'}
+              className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 bg-white border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl hover:bg-slate-50 transition-all shadow-2xs disabled:opacity-40 disabled:hover:bg-white">
+              <HiOutlineReply className="w-4 h-4 text-slate-500" />
+              <span>Undo{undoStack.length > 0 && ` (${undoStack.length})`}</span>
+            </button>
             <button onClick={() => setShowImport(true)}
               className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 bg-white border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl hover:bg-slate-50 transition-all shadow-2xs">
               <HiOutlineUpload className="w-4 h-4 text-slate-500" />
@@ -1555,8 +1769,8 @@ export default function ExamResults() {
                           const gSome = gIds.some(id => selected.has(id));
                           const gCompanies = [...new Set(g.items.map(r => r.company).filter(Boolean))];
                           const gIssued = g.items.filter(r => r.sheet_issued).length;
-                          const gOpen = !collapsedGroups.has(g.key);
-                          const toggleG = () => setCollapsedGroups(prev => {
+                          const gOpen = openGroups.has(g.key);
+                          const toggleG = () => setOpenGroups(prev => {
                             const n = new Set(prev);
                             n.has(g.key) ? n.delete(g.key) : n.add(g.key);
                             return n;
@@ -1583,6 +1797,13 @@ export default function ExamResults() {
                                 <span className="text-xs font-extrabold text-slate-900">{g.batch_name}</span>
                                 <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${courseTypeBadge(g.course_type)}`}>{g.course_type}</span>
                                 {gCompanies.length > 0 && <span className="text-[11px] font-medium text-slate-500">{gCompanies.join(', ')}</span>}
+                                {isAdmin && (
+                                  <button type="button" onClick={(e) => { e.stopPropagation(); openAddToBatch(g); }}
+                                    title={`Add a student to ${g.batch_name}`}
+                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white border border-slate-200 text-[11px] font-bold text-slate-700 hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-colors">
+                                    <HiOutlinePlus className="w-3 h-3" /> Add student
+                                  </button>
+                                )}
                                 <span className="ml-auto text-[11px] font-semibold text-slate-500">
                                   {g.items.length} student{g.items.length > 1 ? 's' : ''} · {gIssued} sheet{gIssued !== 1 ? 's' : ''} issued
                                 </span>
@@ -1839,8 +2060,8 @@ export default function ExamResults() {
           <ImportExcelModal onClose={() => setShowImport(false)} onImported={() => { fetchAll(); }} />
         )}
         {showForm && (
-          <ResultFormModal initial={editTarget} onSave={handleSave} batches={batches}
-            onClose={() => { setShowForm(false); setEditTarget(null); }} />
+          <ResultFormModal initial={editTarget} prefill={prefill} onSave={handleSave} batches={batches}
+            onClose={() => { setShowForm(false); setEditTarget(null); setPrefill(null); }} />
         )}
         {viewStudent && (
           <StudentDetailModal

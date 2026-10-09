@@ -71,7 +71,7 @@ examResultSchema.pre('save', function () {
   // Compute grade for each subject
   this.subjects = this.subjects.map((s) => {
     const m = s.marks_obtained;
-    if (m == null) return s;
+    if (m == null) { s.grade = null; return s; }
     let grade = 'FAILED';
     if (m > 95)       grade = 'OUTSTANDING';
     else if (m >= 90) grade = 'DISTINCTION';
@@ -88,6 +88,8 @@ examResultSchema.pre('save', function () {
     else if (fm >= 76) this.overall_grade = 'MERIT';
     else if (fm >= 75) this.overall_grade = 'PASS';
     else               this.overall_grade = 'FAILED';
+  } else {
+    this.overall_grade = null;
   }
 });
 

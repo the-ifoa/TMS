@@ -742,10 +742,10 @@ const AirlineCardGroup = React.memo(function AirlineCardGroup({
 
         {/* Airline action buttons */}
         <div className="flex items-center gap-2 flex-shrink-0">
-          <button type="button" onClick={() => openEditAirline(airline)}
+          {!airline.is_unassigned && <button type="button" onClick={() => openEditAirline(airline)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 hover:border-slate-300 transition-all shadow-2xs">
             <HiOutlinePencil className="w-3.5 h-3.5 text-slate-500" /> Edit
-          </button>
+          </button>}
           <button type="button" onClick={toggle} className="p-1.5 rounded-xl hover:bg-slate-100 transition-all">
             <HiOutlineChevronDown className={`w-5 h-5 text-slate-400 transition-transform duration-300 ease-out ${isCardOpen ? 'rotate-180 text-slate-800' : 'rotate-0'}`} />
           </button>

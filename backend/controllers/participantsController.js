@@ -263,6 +263,9 @@ exports.listByAirline = async (req, res) => {
     const result = airlines.map((a) => {
       const aName     = normName(a.airlineName);
       const deptNames = deptNamesByParent.get(String(a._id)) || new Set();
+      // Every record in this card belongs to the airline's main account
+      // (department rosters are excluded above), so label it accordingly.
+      const ownerLabel = `${a.airlineName} · main account`;
       return {
         airline: a.toJSON(),
         participants: participants.filter((p) => {
@@ -273,9 +276,25 @@ exports.listByAirline = async (req, res) => {
           if (!aName) return false;
           if (normName(p.company) !== aName && normName(p.airline_name) !== aName) return false;
           return !(p.department && deptNames.has(normName(p.department)));
-        }),
+        }).map((p) => ({ ...p, owner_id: String(a._id), owner_label: ownerLabel, owner_is_department: false })),
       };
     });
+
+    // Safety net: records that landed in no airline card (admin-entered with a
+    // company name matching no single airline account, or owned by a deleted
+    // account) would otherwise be invisible to the admin. Surface them in a
+    // pseudo "Unassigned" card so admin sees every entry.
+    const shown = new Set();
+    result.forEach((r) => r.participants.forEach((p) => shown.add(String(p._id || p.id))));
+    const orphans = participants
+      .filter((p) => !shown.has(String(p._id || p.id)))
+      .map((p) => ({ ...p, owner_id: null, owner_label: p.company || p.airline_name || 'Unassigned', owner_is_department: false }));
+    if (orphans.length) {
+      result.push({
+        airline: { _id: 'unassigned', id: 'unassigned', airlineName: 'Unassigned entries', is_unassigned: true },
+        participants: orphans,
+      });
+    }
 
     // Return every airline, including ones with zero submissions — the admin UI
     // has a "Empty airlines" toggle that decides whether to show them.

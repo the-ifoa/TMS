@@ -444,6 +444,16 @@ exports.getResultPdf = async (req, res) => {
   }
 };
 
+// Mean of the recorded subject scores as a percentage of each subject's max
+// marks (unrecorded / N/A subjects are ignored). null when nothing is recorded.
+function averageOfSubjects(subjects) {
+  const marks = (subjects || [])
+    .filter((s) => s && s.marks_obtained != null && s.marks_obtained !== '')
+    .map((s) => (Number(s.marks_obtained) / (Number(s.max_marks) || 100)) * 100);
+  if (marks.length === 0) return null;
+  return Math.round((marks.reduce((a, b) => a + b, 0) / marks.length) * 1000) / 1000;
+}
+
 // ── POST create exam result ───────────────────────────────────────────────────
 exports.createResult = async (req, res) => {
   try {
@@ -519,7 +529,15 @@ exports.updateResult = async (req, res) => {
                     'result_header_text',
                     'training_mode','start_date','end_date','company','lead_instructor',
                     'instructors','subjects','final_exam_score','final_marks','sheet_date','sheet_issued'];
+    // Subjects changed (score entered / edited / removed, course added / removed)
+    // → the average is recomputed here so it can never drift from the scores.
+    const subjectsChanged = Array.isArray(req.body.subjects) && JSON.stringify(
+      req.body.subjects.map((x) => [x.abbr, x.name, x.max_marks ?? 100, x.marks_obtained ?? null])
+    ) !== JSON.stringify(
+      (doc.subjects || []).map((x) => [x.abbr, x.name, x.max_marks ?? 100, x.marks_obtained ?? null])
+    );
     fields.forEach(f => { if (req.body[f] !== undefined) doc[f] = req.body[f]; });
+    if (subjectsChanged) doc.final_marks = averageOfSubjects(doc.subjects);
     await doc.save();
     res.json(doc);
   } catch (err) {

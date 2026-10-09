@@ -27,4 +27,7 @@ router.post('/:token/attempts/:attemptId/violation', loadInvite, publicExamContr
 // ─── GET /public-exam/:token/attempts/:attemptId/result — full graded result ──
 router.get('/:token/attempts/:attemptId/result', loadInvite, publicExamController.getResult);
 
+// Completion certificate (PDF) — only for exams with it enabled, once passed
+router.get('/:token/attempts/:attemptId/certificate', loadInvite, publicExamController.getCertificate);
+
 module.exports = router;

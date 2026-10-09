@@ -36,6 +36,7 @@ function getTemplatePath(rawType, variant) {
     FDA: resolveGreenFile('Dispatch_graduate.pdf'),
     GD:  resolveGreenFile('Dispatch_graduate.pdf'),
     TCD: resolveGreenFile('Dispatch_graduate.pdf'),
+    EXAM: resolveGreenFile('Dispatch_graduate.pdf'),
     FDR: GREEN_FALLBACK,
     FTL: GREEN_FALLBACK,
     HF:  resolveGreenFile('HumanFactors.pdf'),
@@ -81,6 +82,7 @@ function getTemplatePath(rawType, variant) {
 const CANONICAL_TYPE = {
   FDI: 'Dispatch Graduate', FDA: 'Dispatch Graduate',
   GD:  'Dispatch Graduate', TCD: 'Dispatch Graduate',
+  EXAM: 'Dispatch Graduate',
   FDR: 'Recurrent',         FTL: 'Recurrent',
   HF:  'Human Factors',     NDG: 'Human Factors',
   'Dispatch Graduate': 'Dispatch Graduate',
@@ -103,7 +105,32 @@ function formatDateUpper(dateStr) {
   return `${day} ${month} ${y}`;
 }
 
+// "07 SEPTEMBER - 09 OCTOBER 2026" for a course spanning two dates; falls back to
+// the single end date when there is no usable start date. Year is repeated on
+// the start date only when the course crosses a year boundary.
+function formatDateRangeUpper(startStr, endStr) {
+  const start = (startStr || '').slice(0, 10);
+  const end   = (endStr || '').slice(0, 10);
+  if (!start || !end || start === end) return formatDateUpper(end || start);
+  const [sy] = start.split('-').map(Number);
+  const [ey] = end.split('-').map(Number);
+  const startFull = formatDateUpper(start);
+  const startText = sy === ey ? startFull.replace(/ \d{4}$/, '') : startFull;
+  return `${startText} - ${formatDateUpper(end)}`;
+}
+
+// Whole weeks the course spans (rounded up), e.g. 07 Sep - 09 Oct = 5. null if unknown.
+function courseWeeks(startStr, endStr) {
+  const s = (startStr || '').slice(0, 10);
+  const e = (endStr || '').slice(0, 10);
+  if (!s || !e) return null;
+  const days = (Date.UTC(...e.split('-').map((n, i) => (i === 1 ? n - 1 : +n))) -
+                Date.UTC(...s.split('-').map((n, i) => (i === 1 ? n - 1 : +n)))) / 86400000 + 1;
+  return days > 0 ? Math.ceil(days / 7) : null;
+}
+
 function buildCertId(participant) {
+  if (participant.cert_id_override) return String(participant.cert_id_override);
   const seq = Number(participant.cert_sequence);
   if (!seq || seq <= 0) return 'PREVIEW';
   const rawType = participant.training_type || '';
@@ -227,6 +254,7 @@ async function generateCertificate(participant) {
     HF:  'HUMAN FACTORS',
     NDG: 'DANGEROUS GOODS NO-CARRY',
     TCD: 'TRAIN THE TRAINER',
+    EXAM: 'ONLINE ASSESSMENT',
     'Dispatch Graduate': 'FLIGHT DISPATCHER EASA STANDARDS',
     'Human Factors':     'HUMAN FACTORS',
     'Recurrent':         'FLIGHT DISPATCHER EASA STANDARDS',
@@ -264,6 +292,7 @@ async function generateCertificate(participant) {
       FDI: 'OF GRADUATION',  GD:  'OF ATTENDANCE',
       FDA: 'OF COMPLETION',  NDG: 'OF COMPLETION',
       TCD: 'OF COMPLETION',  HF:  'OF ATTENDANCE',
+      EXAM: 'OF COMPLETION',
       'Dispatch Graduate': 'OF GRADUATION',
       'Human Factors':     'OF ATTENDANCE',
     };
@@ -333,28 +362,38 @@ async function generateCertificate(participant) {
   })();
   const validityLine = `This certificate is valid for ${validityLabel}`;
 
-  if (rawType === 'FDA') {
+  if (rawType === 'EXAM') {
+    // Online-exam completion certificate: title + score instead of a course blurb.
+    const title = (participant.exam_title || 'Online Assessment').trim();
+    let tSize = 20;
+    while (helveticaBold.widthOfTextAtSize(title, tSize) > 560 && tSize > 11) tSize -= 1;
+    drawCentered('Has successfully completed the online assessment', 336, helvetica, 12);
+    drawCentered(title, 366, helveticaBold, tSize);
+    if (participant.exam_score_text) drawCentered(`with a score of ${participant.exam_score_text}`, 392, helvetica, 12);
+    drawCentered(dateText, 424, helveticaBold, 18);
+
+  } else if (rawType === 'FDA') {
     drawCentered('Has successfully completed the North Atlantic Operations and Extended Diversion Time Operations Training.', 330, helvetica, 11);
     drawCentered('This training has been delivered as per the', 348, helvetica, 11);
     drawCentered('ICAO DOC 10085 First Edition 2017 and EASA SPA EDTO 110', 362, helvetica, 11);
-    drawCentered(validityLine, 384, helvetica, 8);
+    drawCentered(validityLine, 384, helveticaBold, 11);
     drawCentered(dateText, 404, helveticaBold, 18);
-    if (locationText) drawCentered(`Delivered in: ${locationText}`, 428, helvetica, 10);
+    if (locationText) drawCentered(`Delivered in: ${locationText}`, 428, helveticaBold, 12);
 
   } else if (rawType === 'FTL') {
     drawCentered('Has successfully completed Crew Control Training as per EASA Annex 3 Part-ORO Subpart FTL', 330, helvetica, 11);
     drawCentered('Flight Duty Limitations and Rest Requirements', 344, helvetica, 11);
-    drawCentered(validityLine, 370, helvetica, 8);
+    drawCentered(validityLine, 370, helveticaBold, 11);
     drawCentered(dateText, 393, helveticaBold, 18);
-    if (locationText) drawCentered(`Delivered in: ${locationText}`, 416, helvetica, 10);
+    if (locationText) drawCentered(`Delivered in: ${locationText}`, 416, helveticaBold, 12);
 
   } else if (rawType === 'TCD') {
     drawCentered('Has successfully completed the Competency Development Training.', 330, helvetica, 11);
     drawCentered('This training has been delivered as prescribed in', 348, helvetica, 11);
     drawCentered('ICAO DOC 9868', 362, helvetica, 11);
-    drawCentered(validityLine, 384, helvetica, 8);
+    drawCentered(validityLine, 384, helveticaBold, 11);
     drawCentered(dateText, 404, helveticaBold, 18);
-    if (locationText) drawCentered(`Delivered in: ${locationText}`, 428, helvetica, 10);
+    if (locationText) drawCentered(`Delivered in: ${locationText}`, 428, helveticaBold, 12);
 
   } else if (rawType === 'NDG') {
     const ndgScore   = participant.ndg_score != null ? participant.ndg_score : null;
@@ -371,40 +410,67 @@ async function generateCertificate(participant) {
       page.drawText(scoreValueText, { x: startX + line1W + 4,  y: flipY(336), size: 11, font: helveticaBold, color: black });
       drawCentered('This training has been delivered as prescribed in', 357, helvetica, 11);
       drawCentered('ICAO DOC 9284 Ed. 2025-2026, IATA DGR Ed. 67 2026 and IATA DGR CBTA Training Guidance/Appendix H.', 371, helvetica, 9.5);
-      drawCentered(validityLine, 392, helvetica, 8);
+      drawCentered(validityLine, 392, helveticaBold, 11);
       drawCentered(dateText, 412, helveticaBold, 18);
-      if (locationText) drawCentered(`Delivered in: ${locationText}`, 436, helvetica, 10);
+      if (locationText) drawCentered(`Delivered in: ${locationText}`, 436, helveticaBold, 12);
     } else {
       drawCentered(`Has successfully completed the ${ndgSubtype} Dangerous Goods No Carry Training.`, 330, helvetica, 11);
       drawCentered('This training has been delivered as prescribed in', 348, helvetica, 11);
       drawCentered('ICAO DOC 9284 Ed. 2025-2026, IATA DGR Ed. 67 2026 and IATA DGR CBTA Training Guidance/Appendix H.', 362, helvetica, 9.5);
-      drawCentered(validityLine, 384, helvetica, 8);
+      drawCentered(validityLine, 384, helveticaBold, 11);
       drawCentered(dateText, 404, helveticaBold, 18);
-      if (locationText) drawCentered(`Delivered in: ${locationText}`, 428, helvetica, 10);
+      if (locationText) drawCentered(`Delivered in: ${locationText}`, 428, helveticaBold, 12);
     }
 
   } else if (rawType === 'GD') {
     drawCentered('Has attended the OPERATIONS COORDINATION AND SUPERVISION Training.', 330, helvetica, 11);
     drawCentered('This training covered the following topics:', 354, helvetica, 11);
     drawCentered('Flight Plan / Aeronautical Information / ATFM & Airport Slots theory / Basic A-CDM / Permits / Freedoms of Air', 368, helvetica, 11);
-    drawCentered(validityLine, 390, helvetica, 8);
+    drawCentered(validityLine, 390, helveticaBold, 11);
     drawCentered(dateText, 410, helveticaBold, 18);
-    if (locationText) drawCentered(`Delivered in: ${locationText}`, 434, helvetica, 10);
+    if (locationText) drawCentered(`Delivered in: ${locationText}`, 434, helveticaBold, 12);
 
   } else if (trainingType === 'Dispatch Graduate') {
-    drawCentered('Has successfully completed ground school instruction required by the Initial Flight Dispatcher Course', 330, helvetica, 11);
-    drawCentered('training as prescribed in ICAO Doc 10106, ICAO Doc 9868 and EASA Part ORO.GEN.110(c).', 344, helvetica, 11);
-    drawCentered(validityLine, 370, helvetica, 8);
-    drawCentered(dateText, 393, helveticaBold, 18);
-    if (locationText) drawCentered(`Delivered in: ${locationText}`, 416, helvetica, 10);
+    // Initial course: duration + language in the body, start–end range as the date.
+    // Same two-line layout; only the key details (duration, language, course name,
+    // regulation references) are bold.
+    const startStr = participant.training_date;
+    const weeks    = courseWeeks(startStr, certDateStr);
+    const drawRuns = (runs, topY, size, maxW = 640) => {
+      const widthAt = (sz) => runs.reduce((w, [t, f]) => w + f.widthOfTextAtSize(t, sz), 0);
+      let sz = size;
+      while (widthAt(sz) > maxW && sz > 8) sz -= 0.25;   // shrink to fit the safe area
+      let x = (width - widthAt(sz)) / 2;
+      runs.forEach(([t, f]) => {
+        page.drawText(t, { x, y: flipY(topY), size: sz, font: f, color: black });
+        x += f.widthOfTextAtSize(t, sz);
+      });
+    };
+    drawRuns([
+      ['Has successfully completed the ', helvetica],
+      ...(weeks ? [[`${weeks}-week `, helveticaBold]] : []),
+      ['ground school instruction delivered in ', helvetica],
+      ['English', helveticaBold],
+      [', as required by the', helvetica],
+    ], 330, 11);
+    drawRuns([
+      ['Initial Flight Dispatcher Course', helveticaBold],
+      [' training as prescribed in ', helvetica],
+      ['ICAO Doc 10106', helveticaBold], [', ', helvetica],
+      ['ICAO Doc 9868', helveticaBold], [' and ', helvetica],
+      ['EASA Part ORO.GEN.110(c)', helveticaBold], ['.', helvetica],
+    ], 344, 11);
+    drawCentered(validityLine, 370, helveticaBold, 11);
+    drawCentered(formatDateRangeUpper(startStr, certDateStr), 393, helveticaBold, 18);
+    if (locationText) drawCentered(`Delivered in: ${locationText}`, 416, helveticaBold, 12);
 
   } else if (trainingType === 'Human Factors') {
     drawCentered('Has successfully attended the Human Factors Introduction Training for Flight Operations Personnel', 330, helvetica, 11);
     drawCentered('This training has been delivered as per the ICAO doc 9683 and ICAO doc 10106', 344, helvetica, 11);
     drawCentered('Prerequisite learning objectives: Human Factors in Aviation', 358, helvetica, 11);
-    drawCentered(validityLine, 376, helvetica, 8);
+    drawCentered(validityLine, 376, helveticaBold, 11);
     drawCentered(dateText, 399, helveticaBold, 18);
-    if (locationText) drawCentered(`Delivered in: ${locationText}`, 422, helvetica, 10);
+    if (locationText) drawCentered(`Delivered in: ${locationText}`, 422, helveticaBold, 12);
 
   } else if (trainingType === 'Recurrent') {
     // Optional hours figure, admin-entered — e.g. "Has successfully completed
@@ -447,9 +513,9 @@ async function generateCertificate(participant) {
       afterBodyY = modStartY + rows.length * lineH + 8;
     }
 
-    drawCentered(validityLine, afterBodyY, helvetica, 8);
+    drawCentered(validityLine, afterBodyY, helveticaBold, 11);
     drawCentered(dateText, afterBodyY + 18, helveticaBold, 18);
-    if (locationText) drawCentered(`Delivered in: ${locationText}`, afterBodyY + 40, helvetica, 10);
+    if (locationText) drawCentered(`Delivered in: ${locationText}`, afterBodyY + 40, helveticaBold, 12);
   }
 
   return Buffer.from(await pdfDoc.save());

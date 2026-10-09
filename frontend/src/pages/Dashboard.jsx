@@ -14,6 +14,7 @@ import { getParticipants } from '../api';
 import { useAuth } from '../context/AuthContext';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { CountUp } from '@/components/ui/count-up';
+import TeamPerformanceCard from '../components/TeamPerformanceCard';
 
 const container = {
   hidden: { opacity: 0 },
@@ -36,22 +37,10 @@ const TRAINING_BADGES = {
 };
 
 const themeStyles = {
-  blue: {
-    border: 'border-slate-100 hover:border-blue-200/60 hover:shadow-[0_8px_30px_rgba(59,130,246,0.04)]',
-    iconBg: 'bg-blue-50 text-blue-600',
-  },
-  purple: {
-    border: 'border-slate-100 hover:border-purple-200/60 hover:shadow-[0_8px_30px_rgba(147,51,234,0.04)]',
-    iconBg: 'bg-purple-50 text-purple-600',
-  },
-  emerald: {
-    border: 'border-slate-100 hover:border-emerald-200/60 hover:shadow-[0_8px_30px_rgba(16,185,129,0.04)]',
-    iconBg: 'bg-emerald-50 text-emerald-600',
-  },
-  amber: {
-    border: 'border-slate-100 hover:border-amber-200/60 hover:shadow-[0_8px_30px_rgba(245,158,11,0.04)]',
-    iconBg: 'bg-amber-50 text-amber-600',
-  },
+  blue:    { iconBg: 'bg-blue-50 text-blue-600' },
+  purple:  { iconBg: 'bg-violet-50 text-violet-600' },
+  emerald: { iconBg: 'bg-emerald-50 text-emerald-600' },
+  amber:   { iconBg: 'bg-amber-50 text-amber-600' },
 };
 
 export default function Dashboard() {
@@ -110,12 +99,12 @@ export default function Dashboard() {
     <motion.div variants={container} initial="hidden" animate="show" className="p-4 sm:p-6 space-y-6">
 
       {/* Welcome & Greeting */}
-      <motion.div variants={item} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-100">
+      <motion.div variants={item} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-800 tracking-tight">
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
             {isAdmin ? 'Welcome back' : `Welcome, ${admin?.airlineName || admin?.name || 'Airline'}`}
           </h1>
-          <p className="text-sm text-slate-500 font-normal mt-1">
+          <p className="text-sm text-slate-500 mt-0.5">
             {isAdmin
               ? 'Manage training records and generate certificates'
               : isDepartment
@@ -125,28 +114,21 @@ export default function Dashboard() {
         </div>
         <Link
           to={primaryTo}
-          className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl transition-all duration-200 font-semibold text-sm shadow-sm whitespace-nowrap flex-shrink-0"
+          className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg transition-colors font-semibold text-sm whitespace-nowrap flex-shrink-0"
         >
-          <HiOutlinePlusCircle className="w-5 h-5" />
+          <HiOutlinePlusCircle className="w-4.5 h-4.5" />
           {primaryLabel}
         </Link>
       </motion.div>
 
-      {/* Airline Notice Banner — enrollment lock notice, not relevant to departments */}
+      {/* Airline notice — enrollment lock, not relevant to departments */}
       {!isAdmin && !isDepartment && (
-        <motion.div 
-          variants={item} 
-          className="flex items-start gap-4 p-5 rounded-2xl border border-blue-100/80 bg-gradient-to-r from-blue-50/40 to-indigo-50/10 backdrop-blur-sm shadow-[0_4px_20px_rgba(59,130,246,0.02)]"
-        >
-          <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100/70 flex items-center justify-center flex-shrink-0 shadow-sm">
-            <HiOutlineLockClosed className="w-5 h-5 text-blue-600" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-slate-800">Submissions are locked after filing</p>
-            <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-              Once you submit an enrollment, the record is locked. Only <span className="font-semibold text-slate-700">IFOA administrators</span> can edit records or generate certificates.
-            </p>
-          </div>
+        <motion.div variants={item} className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200/70 bg-slate-50/70">
+          <HiOutlineLockClosed className="w-4 h-4 text-slate-400 flex-shrink-0" />
+          <p className="text-xs text-slate-500 leading-relaxed">
+            <span className="font-semibold text-slate-700">Submissions are locked after filing.</span>{' '}
+            Only IFOA administrators can edit records or generate certificates.
+          </p>
         </motion.div>
       )}
 
@@ -155,89 +137,88 @@ export default function Dashboard() {
         {statCards.map((card) => {
           const style = themeStyles[card.theme];
           return (
-            <div 
-              key={card.key} 
-              className={`bg-white rounded-2xl border ${style.border} p-5 transition-all duration-300 hover:-translate-y-1 shadow-sm flex items-center justify-between group`}
-            >
+            <div key={card.key} className="bg-white rounded-xl border border-slate-200/70 p-5 flex items-center gap-4">
+              <div className={`${style.iconBg} w-11 h-11 rounded-lg flex items-center justify-center flex-shrink-0`}>
+                <card.icon className="w-5 h-5" />
+              </div>
               <div className="min-w-0">
-                <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider leading-tight">{card.label}</p>
-                <p className="text-3xl font-extrabold text-slate-800 mt-2 tracking-tight group-hover:text-slate-950 transition-colors">
+                <p className="text-2xl font-bold text-slate-900 tracking-tight leading-none">
                   <CountUp value={stats[card.key]} />
                 </p>
-              </div>
-              <div className={`${style.iconBg} w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 transition-transform duration-300 group-hover:scale-110 shadow-sm`}>
-                <card.icon className="w-6 h-6" />
+                <p className="text-xs font-medium text-slate-500 mt-1.5 truncate">{card.label}</p>
               </div>
             </div>
           );
         })}
       </motion.div>
 
+      <TeamPerformanceCard item={item} />
+
       {/* Quick Actions + Recent Records */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
 
         {/* Quick Actions Card */}
-        <motion.div variants={item} className="bg-white rounded-2xl border border-slate-100 p-6 shadow-sm flex flex-col h-full">
-          <h2 className="text-base font-bold text-slate-800 mb-5">Quick Actions</h2>
-          <div className="space-y-3 flex-1 flex flex-col justify-center">
+        <motion.div variants={item} className="bg-white rounded-xl border border-slate-200/70 p-5 flex flex-col h-full">
+          <h2 className="text-sm font-semibold text-slate-900 mb-4">Quick Actions</h2>
+          <div className="space-y-2 flex-1">
             <Link
               to={primaryTo}
-              className="flex items-center gap-4 p-4 rounded-xl border border-slate-100 hover:border-blue-100 hover:bg-blue-50/20 transition-all duration-300 group shadow-sm hover:shadow-md"
+              className="flex items-center gap-3 p-3 rounded-lg border border-slate-200/70 hover:bg-slate-50 transition-colors group"
             >
-              <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center transition-colors group-hover:bg-blue-100/50 flex-shrink-0">
-                <HiOutlinePlusCircle className="w-5.5 h-5.5 text-blue-600" />
+              <div className="w-9 h-9 bg-blue-50 rounded-lg flex items-center justify-center flex-shrink-0">
+                <HiOutlinePlusCircle className="w-4.5 h-4.5 text-blue-600" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-slate-700 group-hover:text-blue-700 transition-colors">
+                <p className="text-sm font-semibold text-slate-800">
                   {isAdmin ? 'Add Participant' : primaryLabel}
                 </p>
                 <p className="text-xs text-slate-400 mt-0.5 truncate">
                   {isAdmin ? 'Create a new training record' : primaryDesc}
                 </p>
               </div>
-              <HiOutlineArrowRight className="w-4 h-4 text-slate-300 group-hover:text-blue-600 transition-all duration-300 transform group-hover:translate-x-1 flex-shrink-0" />
+              <HiOutlineArrowRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500 flex-shrink-0" />
             </Link>
 
             {isAdmin && (
               <Link
                 to="/admin/airlines?pendingCerts=1"
-                className="flex items-center gap-4 p-4 rounded-xl border border-slate-100 hover:border-emerald-100 hover:bg-emerald-50/20 transition-all duration-300 group shadow-sm hover:shadow-md"
+                className="flex items-center gap-3 p-3 rounded-lg border border-slate-200/70 hover:bg-slate-50 transition-colors group"
               >
-                <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center transition-colors group-hover:bg-emerald-100/50 flex-shrink-0">
-                  <HiOutlineDocumentText className="w-5.5 h-5.5 text-emerald-600" />
+                <div className="w-9 h-9 bg-emerald-50 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <HiOutlineDocumentText className="w-4.5 h-4.5 text-emerald-600" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-slate-700 group-hover:text-emerald-700 transition-colors">Generate Certificates</p>
+                  <p className="text-sm font-semibold text-slate-800">Generate Certificates</p>
                   <p className="text-xs text-slate-400 mt-0.5 truncate">Download or print certificates</p>
                 </div>
-                <HiOutlineArrowRight className="w-4 h-4 text-slate-300 group-hover:text-emerald-600 transition-all duration-300 transform group-hover:translate-x-1 flex-shrink-0" />
+                <HiOutlineArrowRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500 flex-shrink-0" />
               </Link>
             )}
 
             <Link
               to={listTo}
-              className="flex items-center gap-4 p-4 rounded-xl border border-slate-100 hover:border-purple-100 hover:bg-purple-50/20 transition-all duration-300 group shadow-sm hover:shadow-md"
+              className="flex items-center gap-3 p-3 rounded-lg border border-slate-200/70 hover:bg-slate-50 transition-colors group"
             >
-              <div className="w-10 h-10 bg-purple-50 rounded-xl flex items-center justify-center transition-colors group-hover:bg-purple-100/50 flex-shrink-0">
-                <HiOutlineUsers className="w-5.5 h-5.5 text-purple-600" />
+              <div className="w-9 h-9 bg-purple-50 rounded-lg flex items-center justify-center flex-shrink-0">
+                <HiOutlineUsers className="w-4.5 h-4.5 text-purple-600" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-slate-700 group-hover:text-purple-700 transition-colors">
+                <p className="text-sm font-semibold text-slate-800">
                   {listLabel}
                 </p>
                 <p className="text-xs text-slate-400 mt-0.5 truncate">
                   {listDesc}
                 </p>
               </div>
-              <HiOutlineArrowRight className="w-4 h-4 text-slate-300 group-hover:text-purple-600 transition-all duration-300 transform group-hover:translate-x-1 flex-shrink-0" />
+              <HiOutlineArrowRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500 flex-shrink-0" />
             </Link>
           </div>
         </motion.div>
 
         {/* Recent Records Card */}
-        <motion.div variants={item} className="bg-white rounded-2xl border border-slate-100 p-5 sm:p-6 lg:col-span-2 shadow-sm overflow-hidden flex flex-col h-full">
+        <motion.div variants={item} className="bg-white rounded-xl border border-slate-200/70 p-5 lg:col-span-2 overflow-hidden flex flex-col h-full">
           <div className="flex items-center justify-between mb-5">
-            <h2 className="text-base font-bold text-slate-800">
+            <h2 className="text-sm font-semibold text-slate-900">
               {recentTitle}
             </h2>
             <Link
@@ -276,7 +257,7 @@ export default function Dashboard() {
                       </TableCell>
                       <TableCell className="text-sm text-slate-500 hidden sm:table-cell max-w-[120px] truncate">{record.company}</TableCell>
                       <TableCell>
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${badge.bg} whitespace-nowrap shadow-sm`}>
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${badge.bg} whitespace-nowrap`}>
                           {badge.label}
                         </span>
                       </TableCell>

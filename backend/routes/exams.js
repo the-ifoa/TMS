@@ -20,6 +20,13 @@ router.get('/assigned', examsController.listAssigned);
 router.get('/attempts', examsController.listAttempts);
 
 // ─── GET /exams/attempts/:attemptId — resume in-progress attempt (sanitized) ────
+// Dashboard KPIs, downloadable report and result deletion — all BEFORE the
+// `/attempts/:attemptId` routes so the literal paths aren't captured as an id.
+router.get('/team-performance', examsController.teamPerformance);
+router.get('/attempts/export', examsController.exportAttempts);
+router.post('/attempts/bulk-delete', requirePermission('exams.author'), examsController.bulkDeleteAttempts);
+router.delete('/attempts/:attemptId', requirePermission('exams.author'), examsController.deleteAttempt);
+
 router.get('/attempts/:attemptId', examsController.getAttempt);
 
 // ─── GET /exams/attempts/:attemptId/result — full result incl. correct answers ──

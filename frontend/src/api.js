@@ -220,6 +220,13 @@ export const savePublicAnswer     = (token, attemptId, questionId, response) => 
 export const submitPublicExam     = (token, attemptId)              => api.post(`/public-exam/${token}/attempts/${attemptId}/submit`);
 export const reportPublicViolation = (token, attemptId, type)       => api.post(`/public-exam/${token}/attempts/${attemptId}/violation`, { type });
 export const getPublicExamResult  = (token, attemptId)              => api.get(`/public-exam/${token}/attempts/${attemptId}/result`);
+export const getPublicExamCertificate = (token, attemptId)          => api.get(`/public-exam/${token}/attempts/${attemptId}/certificate`, { responseType: 'blob' });
+
+// ── Exam results: team KPIs, downloadable report, delete ─────────────────────
+export const getTeamPerformance   = (params)       => api.get('/exams/team-performance', { params });
+export const exportExamAttempts   = (format, params) => api.get('/exams/attempts/export', { params: { format, ...params }, responseType: 'blob' });
+export const deleteExamAttempt    = (attemptId)    => api.delete(`/exams/attempts/${attemptId}`);
+export const bulkDeleteExamAttempts = (ids)        => api.post('/exams/attempts/bulk-delete', { ids });
 
 // ── Password Reset ────────────────────────────────────────────────────────────
 export const forgotPassword = (email)                     => api.post('/auth/airline/forgot-password', { email });

@@ -159,6 +159,14 @@ const examSchema = new mongoose.Schema(
       },
     ],
 
+    // After submitting, the candidate may review every question with their own
+    // answer, whether it was right, the correct answer and the explanation.
+    // Off by default — it reveals the answer key, so it is opt-in per exam.
+    show_review: { type: Boolean, default: false },
+
+    // Auto-issue a completion certificate (PDF) to candidates who pass.
+    issue_certificate: { type: Boolean, default: false },
+
     // Lockdown mode — fullscreen exam view with violation tracking (tab-switch,
     // exiting fullscreen, etc). max_violations is how many infractions are
     // tolerated before the attempt is auto-submitted. 0 disables lockdown mode.

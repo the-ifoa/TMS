@@ -43,6 +43,7 @@ const emptyExam = () => ({
   title: '', description: '', duration_minutes: 30, pass_percentage: 75,
   max_attempts: 1, shuffle_questions: false, shuffle_options: false,
   lockdown_enabled: true, max_violations: 4, questions: [], sections: [],
+  show_review: false, issue_certificate: false,
   opens_at: null, closes_at: null, section_settings: [],
 });
 
@@ -1132,6 +1133,30 @@ export default function ExamBuilder() {
                       </span>
                     </div>
                   )}
+                </div>
+              </div>
+              {/* Candidate experience — what the candidate sees after the exam */}
+              <div className="pt-2 border-t border-slate-100">
+                <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3.5 space-y-3">
+                  <p className="font-bold text-slate-900 text-xs">Candidate experience</p>
+                  <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                    <Checkbox checked={!!exam.show_review} onCheckedChange={(c) => set('show_review', !!c)} className="mt-0.5" />
+                    <div className="space-y-0.5 min-w-0">
+                      <span className="font-bold text-slate-900 text-xs block">Show answer review &amp; explanations</span>
+                      <span className="text-[11px] text-slate-500 leading-snug block font-medium">
+                        After submitting, the candidate sees each question with their answer, the correct answer and the explanation. Reveals the answer key — leave off for graded exams that are re-used.
+                      </span>
+                    </div>
+                  </label>
+                  <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                    <Checkbox checked={!!exam.issue_certificate} onCheckedChange={(c) => set('issue_certificate', !!c)} className="mt-0.5" />
+                    <div className="space-y-0.5 min-w-0">
+                      <span className="font-bold text-slate-900 text-xs block">Issue completion certificate</span>
+                      <span className="text-[11px] text-slate-500 leading-snug block font-medium">
+                        Candidates who pass can download a certificate of completion (PDF).
+                      </span>
+                    </div>
+                  </label>
                 </div>
               </div>
             </Card>

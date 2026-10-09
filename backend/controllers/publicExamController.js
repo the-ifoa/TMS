@@ -3,12 +3,7 @@ const ExamAttempt = require('../models/ExamAttempt');
 const ExamInvite = require('../models/ExamInvite');
 const { sanitizeQuestionForTaking } = require('../services/examGrading');
 const { finalizeAttempt, schedulingError, closeOpenAttempts } = require('../services/examAttemptFlow');
-
-// ─── Public, passwordless exam-taking flow ────────────────────────────────────
-// Auth is the unguessable invite token in the URL — NO authMiddleware here.
-// A candidate opens the emailed link (/exam/<token>), which drives these
-// endpoints. Correct answers are stripped from every payload until the attempt
-// is submitted (via sanitizeQuestionForTaking / the /result gate).
+const { generateCertificate } = require('../services/certificateGenerator');
 
 // Loads the invite by token and attaches it + its exam to req. 404 on unknown token.
 // Exported so routes can mount it as per-route middleware.
@@ -76,6 +71,7 @@ exports.getLandingInfo = async (req, res) => {
         pass_percentage: exam.pass_percentage,
         opens_at: exam.opens_at,
         closes_at: exam.closes_at,
+        issue_certificate: !!exam.issue_certificate,
       },
       status: invite.status,
       attempts_used: priorAttempts,
@@ -226,15 +222,49 @@ exports.reportViolation = async (req, res) => {
   }
 };
 
-// ─── GET /public-exam/:token/attempts/:attemptId/result — full graded result ──
+// ─── GET /public-exam/:token/attempts/:attemptId/result — graded result ───────
+// The answer key (questions_snapshot: correct options, explanations) is only
+// sent when the exam has review enabled; otherwise the candidate gets just the
+// score and per-question correct / incorrect flags.
 exports.getResult = async (req, res) => {
   try {
     const attempt = await loadOwnAttempt(req, res);
     if (!attempt) return;
     if (attempt.status === 'in_progress') return res.status(400).json({ error: 'Attempt has not been submitted yet.' });
-    res.json(attempt.toJSON());
+    const json = attempt.toJSON();
+    const review = !!req.exam.show_review && attempt.status !== 'pending_review';
+    if (!review) json.questions_snapshot = undefined;
+    json.review_enabled = review;
+    json.certificate_available = !!req.exam.issue_certificate && attempt.passed === true;
+    res.json(json);
   } catch (err) {
     console.error('GET /public-exam result error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// ─── GET /public-exam/:token/attempts/:attemptId/certificate — completion PDF ─
+exports.getCertificate = async (req, res) => {
+  try {
+    const attempt = await loadOwnAttempt(req, res);
+    if (!attempt) return;
+    if (!req.exam.issue_certificate) return res.status(404).json({ error: 'No certificate is offered for this exam.' });
+    if (attempt.passed !== true) return res.status(403).json({ error: 'A certificate is only issued once the exam is passed.' });
+
+    const pct = Math.round(Number(attempt.percentage) * 10) / 10;
+    const pdf = await generateCertificate({
+      participant_name: attempt.participant_name,
+      training_type: 'EXAM',
+      exam_title: attempt.exam_title_snapshot || req.exam.title,
+      exam_score_text: `${pct}%`,
+      end_date: (attempt.submitted_at || new Date()).toISOString().slice(0, 10),
+      cert_id_override: `EXAM-${String(attempt._id).slice(-6).toUpperCase()}`,
+    });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="certificate-${String(attempt._id).slice(-6)}.pdf"`);
+    res.send(pdf);
+  } catch (err) {
+    console.error('GET /public-exam certificate error:', err.message);
     res.status(500).json({ error: err.message });
   }
 };

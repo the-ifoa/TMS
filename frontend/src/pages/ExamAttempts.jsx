@@ -17,8 +17,11 @@ import {
   HiOutlineChartBar,
   HiOutlineChevronDown,
   HiOutlineChevronUp,
+  HiOutlineTrash,
+  HiOutlineDownload,
 } from 'react-icons/hi';
-import { listExamAttempts, getExam, getExamAttemptResult, gradeExamAttempt, getExamAnalytics } from '../api';
+import { listExamAttempts, getExam, getExamAttemptResult, gradeExamAttempt, getExamAnalytics, exportExamAttempts, deleteExamAttempt, bulkDeleteExamAttempts } from '../api';
+import { useConfirm } from '@/hooks/use-confirm';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -749,6 +752,76 @@ export default function ExamAttempts() {
   const [analytics, setAnalytics] = useState(null);
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [expandedViolations, setExpandedViolations] = useState(() => new Set());
+  const { confirm, ConfirmDialog } = useConfirm();
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [showExport, setShowExport] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  // IFOA admins manage results of IFOA-owned exams; airlines manage their own
+  // exams. The server enforces this too — this only hides buttons that would 403.
+  const canDelete = exam ? (isAdmin ? !exam.owner_airline : true) : false;
+
+  const toggleSelected = (attemptId) => setSelectedIds((prev) => {
+    const next = new Set(prev);
+    next.has(attemptId) ? next.delete(attemptId) : next.add(attemptId);
+    return next;
+  });
+
+  const handleExport = async (format) => {
+    setShowExport(false);
+    setExporting(true);
+    try {
+      const res = await exportExamAttempts(format, { exam_id: id });
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `exam-results-${(exam?.title || 'exam').replace(/[^\w-]+/g, '_')}.${format}`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } catch {
+      toast.error('Failed to export results.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleDelete = async (a) => {
+    const ok = await confirm(
+      `Delete the result for ${a.participant_name || 'this candidate'} (attempt ${a.attempt_number})? This cannot be undone. The candidate's link will work again, and this attempt no longer counts toward their limit.`,
+      { title: 'Delete result', confirmLabel: 'Delete' },
+    );
+    if (!ok) return;
+    try {
+      await deleteExamAttempt(a.id);
+      toast.success('Result deleted.');
+      setSelectedIds((prev) => { const n = new Set(prev); n.delete(a.id); return n; });
+      load();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to delete result.');
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    const ids = [...selectedIds];
+    const ok = await confirm(
+      `Delete ${ids.length} selected result${ids.length === 1 ? '' : 's'}? This cannot be undone.`,
+      { title: 'Delete results', confirmLabel: 'Delete' },
+    );
+    if (!ok) return;
+    setDeleting(true);
+    try {
+      const res = await bulkDeleteExamAttempts(ids);
+      toast.success(`${res.data.deleted} result${res.data.deleted === 1 ? '' : 's'} deleted.`);
+      if (res.data.skipped) toast.error(`${res.data.skipped} could not be deleted.`);
+      setSelectedIds(new Set());
+      load();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to delete results.');
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const toggleViolations = (attemptId) => {
     setExpandedViolations((prev) => {
@@ -826,6 +899,32 @@ export default function ExamAttempts() {
                   <HiOutlineChartBar className="w-3.5 h-3.5" />
                   <span className="hidden sm:inline">Analytics</span>
                 </button>
+              )}
+              {attempts.length > 0 && (
+                <div className="relative">
+                  <button
+                    type="button"
+                    disabled={exporting}
+                    onClick={() => setShowExport((v) => !v)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold shadow-2xs border bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300 transition-all cursor-pointer disabled:opacity-60"
+                  >
+                    <HiOutlineDownload className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">{exporting ? 'Exporting…' : 'Export'}</span>
+                  </button>
+                  {showExport && (
+                    <>
+                      <div className="fixed inset-0 z-30" onClick={() => setShowExport(false)} />
+                      <div className="absolute right-0 mt-1.5 w-44 z-40 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden py-1">
+                        {[['xlsx', 'Excel (.xlsx)'], ['csv', 'CSV (.csv)'], ['pdf', 'PDF report (.pdf)'], ['xml', 'XML (.xml)']].map(([f, label]) => (
+                          <button key={f} type="button" onClick={() => handleExport(f)}
+                            className="w-full text-left px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer">
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
               )}
               <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 text-white text-xs font-semibold shadow-2xs">
                 <HiOutlineUsers className="w-3.5 h-3.5 text-slate-300" />
@@ -1004,6 +1103,26 @@ export default function ExamAttempts() {
           </Card>
         ) : (
           <div className="space-y-3">
+            {canDelete && (
+              <div className="flex items-center justify-between gap-3 px-1">
+                <label className="inline-flex items-center gap-2 text-xs font-semibold text-slate-600 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    className="w-4 h-4 rounded border-slate-300 cursor-pointer"
+                    checked={filteredAttempts.length > 0 && filteredAttempts.every((x) => selectedIds.has(x.id))}
+                    onChange={(e) => setSelectedIds(e.target.checked ? new Set(filteredAttempts.map((x) => x.id)) : new Set())}
+                  />
+                  Select all
+                </label>
+                {selectedIds.size > 0 && (
+                  <button type="button" onClick={handleBulkDelete} disabled={deleting}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-2xs cursor-pointer disabled:opacity-60">
+                    <HiOutlineTrash className="w-3.5 h-3.5" />
+                    {deleting ? 'Deleting…' : `Delete selected (${selectedIds.size})`}
+                  </button>
+                )}
+              </div>
+            )}
             {filteredAttempts.map((a) => {
               const isPending = a.status === 'pending_review';
               const isGraded = a.status === 'graded' || a.status === 'submitted';
@@ -1022,6 +1141,14 @@ export default function ExamAttempts() {
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 sm:p-5 gap-4">
                     {/* Left: Avatar & Candidate info */}
                     <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                      {canDelete && (
+                        <input
+                          type="checkbox"
+                          className="w-4 h-4 rounded border-slate-300 cursor-pointer flex-shrink-0"
+                          checked={selectedIds.has(a.id)}
+                          onChange={() => toggleSelected(a.id)}
+                        />
+                      )}
                       <div className="w-11 h-11 rounded-2xl bg-black text-white flex items-center justify-center font-black text-xs shadow-xs flex-shrink-0 tracking-wider">
                         {initials}
                       </div>
@@ -1135,6 +1262,17 @@ export default function ExamAttempts() {
                           <span>{isPending ? 'Grade Attempt' : 'Edit Grade'}</span>
                         </button>
                       )}
+
+                      {canDelete && (
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(a)}
+                          title="Delete this result"
+                          className="p-2 rounded-xl border border-slate-200 bg-white text-slate-400 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 transition-all cursor-pointer"
+                        >
+                          <HiOutlineTrash className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -1175,6 +1313,7 @@ export default function ExamAttempts() {
           </div>
         )}
 
+        {ConfirmDialog}
         {gradingId && (
           <GradeModal
             attemptId={gradingId}

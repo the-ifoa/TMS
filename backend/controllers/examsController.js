@@ -10,6 +10,8 @@ const { finalizeAttempt, schedulingError, closeOpenAttempts } = require('../serv
 const { sendExamInviteEmail } = require('../services/emailService');
 const { brandingResolver } = require('../services/emailBranding');
 const { frontendLink } = require('../config/appUrls');
+const XLSX = require('xlsx');
+const PDFDocument = require('pdfkit');
 
 function isAdmin(req) {
   return req.admin?.role === 'admin' || req.admin?.role === 'Administrator';
@@ -192,6 +194,219 @@ exports.listAssigned = async (req, res) => {
     res.json(result);
   } catch (err) {
     console.error('GET /exams/assigned error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+
+// ─── Shared attempt scoping ────────────────────────────────────────────────────
+// Same visibility rule as listAttempts: IFOA admin sees every attempt, an
+// airline only its own. Optional exam_id / airline_id (admin only) narrow it.
+function attemptScopeFilter(req) {
+  const filter = {};
+  if (req.query.exam_id) filter.exam_id = req.query.exam_id;
+  if (isAdmin(req)) {
+    if (req.query.airline_id) filter.airline_id = req.query.airline_id;
+  } else {
+    filter.airline_id = req.admin.id;
+  }
+  return filter;
+}
+
+const pct1 = (n) => (n == null ? null : Math.round(Number(n) * 10) / 10);
+
+// ─── GET /exams/team-performance — dashboard KPIs ─────────────────────────────
+// Team-level version of the per-participant performance view: accuracy by
+// section and question type across every finished attempt in scope, weakest
+// first, so strengths (green) and weak areas (red) are visible at a glance.
+exports.teamPerformance = async (req, res) => {
+  try {
+    const filter = { ...attemptScopeFilter(req), status: { $ne: 'in_progress' } };
+    const attempts = await ExamAttempt.find(filter).select(
+      'participant_id exam_id exam_title_snapshot percentage passed status answers questions_snapshot'
+    );
+
+    const bySection = {};
+    const byType = {};
+    const byExam = {};
+    const participants = new Set();
+    attempts.forEach((a) => {
+      participants.add(String(a.participant_id));
+      const key = String(a.exam_id);
+      if (!byExam[key]) byExam[key] = { exam_id: key, title: a.exam_title_snapshot, attempts: 0, passed: 0, scored: 0, pctSum: 0 };
+      byExam[key].attempts += 1;
+      if (a.passed === true) byExam[key].passed += 1;
+      if (a.percentage != null) { byExam[key].scored += 1; byExam[key].pctSum += a.percentage; }
+
+      a.answers.forEach((ans) => {
+        if (ans.needs_manual_grading || ans.is_correct == null) return;
+        const q = a.questions_snapshot.id(ans.question_id);
+        const sec = q ? (q.section || '') : '';
+        (bySection[sec] = bySection[sec] || { section: sec, total: 0, correct: 0 });
+        bySection[sec].total += 1; if (ans.is_correct) bySection[sec].correct += 1;
+        (byType[ans.type] = byType[ans.type] || { type: ans.type, total: 0, correct: 0 });
+        byType[ans.type].total += 1; if (ans.is_correct) byType[ans.type].correct += 1;
+      });
+    });
+    const withAccuracy = (obj) => Object.values(obj)
+      .map((x) => ({ ...x, accuracy: x.total ? pct1((x.correct / x.total) * 100) : null }))
+      .sort((x, y) => (x.accuracy ?? 101) - (y.accuracy ?? 101));
+
+    const scored = attempts.filter((a) => a.percentage != null);
+    const decided = attempts.filter((a) => a.passed != null);
+    res.json({
+      overall: {
+        attempts: attempts.length,
+        participants: participants.size,
+        avg_percentage: scored.length ? pct1(scored.reduce((t, a) => t + a.percentage, 0) / scored.length) : null,
+        pass_rate: decided.length ? pct1((decided.filter((a) => a.passed).length / decided.length) * 100) : null,
+      },
+      section_breakdown: withAccuracy(bySection),
+      type_breakdown: withAccuracy(byType),
+      exams: Object.values(byExam).map((e) => ({
+        exam_id: e.exam_id, title: e.title, attempts: e.attempts,
+        avg_percentage: e.scored ? pct1(e.pctSum / e.scored) : null,
+        pass_rate: e.attempts ? pct1((e.passed / e.attempts) * 100) : null,
+      })).sort((x, y) => (x.avg_percentage ?? 101) - (y.avg_percentage ?? 101)),
+    });
+  } catch (err) {
+    console.error('GET /exams/team-performance error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// ─── GET /exams/attempts/export?format=csv|xlsx|xml|pdf — downloadable report ─
+exports.exportAttempts = async (req, res) => {
+  try {
+    const format = String(req.query.format || 'xlsx').toLowerCase();
+    if (!['csv', 'xlsx', 'xml', 'pdf'].includes(format)) {
+      return res.status(400).json({ error: 'format must be one of csv, xlsx, xml, pdf.' });
+    }
+    const attempts = await ExamAttempt.find({ ...attemptScopeFilter(req), status: { $ne: 'in_progress' } })
+      .select('-questions_snapshot -answers').sort({ submitted_at: -1 });
+    const airlines = await Airline.find({ _id: { $in: [...new Set(attempts.map((a) => String(a.airline_id)).filter(Boolean))] } })
+      .select('airlineName').lean();
+    const airlineName = Object.fromEntries(airlines.map((a) => [String(a._id), a.airlineName]));
+
+    const day = (d) => (d ? new Date(d).toISOString().slice(0, 16).replace('T', ' ') : '');
+    const rows = attempts.map((a) => ({
+      Participant: a.participant_name || '',
+      Airline: airlineName[String(a.airline_id)] || '',
+      Exam: a.exam_title_snapshot || '',
+      Attempt: a.attempt_number,
+      Status: a.status,
+      Score: a.score ?? '',
+      'Max score': a.max_score ?? '',
+      'Percentage': a.percentage != null ? pct1(a.percentage) : '',
+      Result: a.passed === true ? 'Passed' : a.passed === false ? 'Not passed' : '',
+      Submitted: day(a.submitted_at),
+      'Time (min)': a.time_taken_seconds != null ? Math.round(a.time_taken_seconds / 6) / 10 : '',
+      Violations: a.violation_count || 0,
+    }));
+    const stamp = new Date().toISOString().slice(0, 10);
+    const base = `exam-results-${stamp}`;
+    const send = (type, ext, body) => {
+      res.setHeader('Content-Type', type);
+      res.setHeader('Content-Disposition', `attachment; filename="${base}.${ext}"`);
+      res.send(body);
+    };
+
+    if (format === 'csv' || format === 'xlsx') {
+      const ws = XLSX.utils.json_to_sheet(rows, { header: Object.keys(rows[0] || { Participant: '' }) });
+      if (format === 'csv') return send('text/csv; charset=utf-8', 'csv', '﻿' + XLSX.utils.sheet_to_csv(ws));
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Exam results');
+      return send('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'xlsx',
+        XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }));
+    }
+
+    if (format === 'xml') {
+      const esc = (v) => String(v ?? '').replace(/[<>&"']/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' }[c]));
+      const tag = (k) => k.replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+      const xml = ['<?xml version="1.0" encoding="UTF-8"?>', `<examResults generated="${esc(new Date().toISOString())}" count="${rows.length}">`,
+        ...rows.map((r) => `  <attempt>\n${Object.entries(r).map(([k, v]) => `    <${tag(k)}>${esc(v)}</${tag(k)}>`).join('\n')}\n  </attempt>`),
+        '</examResults>'].join('\n');
+      return send('application/xml; charset=utf-8', 'xml', xml);
+    }
+
+    // PDF — landscape table
+    const doc = new PDFDocument({ size: 'A4', layout: 'landscape', margin: 30 });
+    const chunks = [];
+    doc.on('data', (c) => chunks.push(c));
+    const done = new Promise((resolve) => doc.on('end', resolve));
+    const cols = [['Participant', 130], ['Airline', 110], ['Exam', 170], ['Attempt', 40], ['Percentage', 55], ['Result', 60], ['Submitted', 95], ['Violations', 50]];
+    const x0 = 30;
+    const header = () => {
+      doc.font('Helvetica-Bold').fontSize(8).fillColor('#0f172a');
+      let x = x0; const y = doc.y;
+      cols.forEach(([name, w]) => { doc.text(name === 'Percentage' ? '%' : name, x, y, { width: w - 4 }); x += w; });
+      doc.moveTo(x0, y + 12).lineTo(x0 + cols.reduce((t, c) => t + c[1], 0), y + 12).strokeColor('#cbd5e1').stroke();
+      doc.y = y + 16;
+    };
+    doc.font('Helvetica-Bold').fontSize(14).fillColor('#0f172a').text('Exam Results Report', x0, 30);
+    doc.font('Helvetica').fontSize(8).fillColor('#64748b').text(`Generated ${stamp} · ${rows.length} attempt${rows.length === 1 ? '' : 's'}`);
+    doc.moveDown(0.8);
+    header();
+    doc.font('Helvetica').fontSize(8).fillColor('#1e293b');
+    rows.forEach((r) => {
+      if (doc.y > 540) { doc.addPage(); header(); doc.font('Helvetica').fontSize(8).fillColor('#1e293b'); }
+      const y = doc.y; let x = x0;
+      cols.forEach(([name, w]) => { doc.text(String(r[name] ?? ''), x, y, { width: w - 4, height: 11, ellipsis: true, lineBreak: false }); x += w; });
+      doc.y = y + 13;
+    });
+    doc.end();
+    await done;
+    return send('application/pdf', 'pdf', Buffer.concat(chunks));
+  } catch (err) {
+    console.error('GET /exams/attempts/export error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// ─── DELETE attempts — remove results created by mistake / during testing ────
+// IFOA admin: attempts of IFOA-owned (global) exams. Airline: attempts of exams
+// it owns. Anything else is skipped, never silently deleted.
+async function deleteAttemptsByIds(req, ids) {
+  const attempts = await ExamAttempt.find({ _id: { $in: ids } }).select('exam_id participant_id');
+  const exams = await Exam.find({ _id: { $in: [...new Set(attempts.map((a) => String(a.exam_id)))] } })
+    .select('owner_airline owner_department');
+  const examById = Object.fromEntries(exams.map((e) => [String(e._id), e]));
+
+  const allowed = attempts.filter((a) => {
+    const exam = examById[String(a.exam_id)];
+    return exam ? canManageExam(req, exam) : isAdmin(req); // orphaned attempt (exam gone) → admin only
+  });
+  const allowedIds = allowed.map((a) => a._id);
+  if (allowedIds.length) {
+    await ExamAttempt.deleteMany({ _id: { $in: allowedIds } });
+    // Invites that pointed at a deleted attempt go back to "opened" so the
+    // candidate's link is usable again and the invite doesn't show a dead score.
+    await ExamInvite.updateMany(
+      { attempt_id: { $in: allowedIds } },
+      { $set: { status: 'opened', attempt_id: null, completed_at: null } }
+    );
+  }
+  return { deleted: allowedIds.length, skipped: ids.length - allowedIds.length };
+}
+
+exports.deleteAttempt = async (req, res) => {
+  try {
+    const result = await deleteAttemptsByIds(req, [req.params.attemptId]);
+    if (!result.deleted) return res.status(403).json({ error: 'Attempt not found or you cannot delete it.' });
+    res.json({ message: 'Result deleted.', ...result });
+  } catch (err) {
+    console.error('DELETE /exams/attempts/:id error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+exports.bulkDeleteAttempts = async (req, res) => {
+  try {
+    const ids = Array.isArray(req.body.ids) ? req.body.ids.filter(Boolean) : [];
+    if (!ids.length) return res.status(400).json({ error: 'ids is required.' });
+    res.json(await deleteAttemptsByIds(req, ids));
+  } catch (err) {
+    console.error('POST /exams/attempts/bulk-delete error:', err.message);
     res.status(500).json({ error: err.message });
   }
 };

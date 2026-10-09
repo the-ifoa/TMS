@@ -5,13 +5,14 @@ import {
   HiOutlineClock, HiOutlineExclamationCircle,
   HiOutlineCheckCircle, HiOutlineAcademicCap, HiOutlineLockClosed,
   HiOutlineArrowsExpand, HiOutlineShieldExclamation,
-  HiOutlineCheck, HiOutlineX,
+  HiOutlineCheck, HiOutlineX, HiOutlineDownload,
 } from 'react-icons/hi';
 import {
   getPublicExam, startPublicExam, savePublicAnswer, submitPublicExam,
-  reportPublicViolation, getPublicExamResult,
+  reportPublicViolation, getPublicExamResult, getPublicExamCertificate,
 } from '../api';
 import ExamRunner from '../components/ExamRunner';
+import AnswerReviewList from '../components/AnswerReviewList';
 import logoImg from '../assets/logo.png';
 
 function requestFullscreen(el) {
@@ -178,6 +179,22 @@ function TakeShell({ token, initial, onFinished, setResultAttempt }) {
 function ResultSummary({ token, attemptId }) {
   const [attempt, setAttempt] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [certLoading, setCertLoading] = useState(false);
+
+  const downloadCertificate = async () => {
+    setCertLoading(true);
+    try {
+      const res = await getPublicExamCertificate(token, attemptId);
+      const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+      const a = document.createElement('a');
+      a.href = url; a.download = 'certificate.pdf'; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } catch {
+      toast.error('Could not download the certificate.');
+    } finally {
+      setCertLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!attemptId) { setLoading(false); return; }
@@ -203,7 +220,7 @@ function ResultSummary({ token, attemptId }) {
   return (
     <div className="fixed inset-0 bg-slate-100/90 overflow-y-auto">
       <div className="min-h-full flex items-center justify-center p-4 sm:p-6">
-        <div className="w-full max-w-md bg-white rounded-3xl border border-slate-200/80 shadow-xl p-7 sm:p-8 text-center space-y-6">
+        <div className={`w-full ${attempt?.review_enabled ? 'max-w-2xl' : 'max-w-md'} bg-white rounded-3xl border border-slate-200/80 shadow-xl p-7 sm:p-8 text-center space-y-6`}>
           <img src={logoImg} alt="IFOA" className="h-9 w-auto mx-auto" />
 
           {attempt?.auto_submitted && (
@@ -305,6 +322,15 @@ function ResultSummary({ token, attemptId }) {
               </div>
             </div>
           )}
+
+          {attempt?.certificate_available && (
+            <button onClick={downloadCertificate} disabled={certLoading}
+              className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold transition-all inline-flex items-center justify-center gap-2 disabled:opacity-60">
+              <HiOutlineDownload className="w-4 h-4" /> {certLoading ? 'Preparing…' : 'Download Certificate'}
+            </button>
+          )}
+
+          {attempt?.review_enabled && <AnswerReviewList attempt={attempt} />}
 
           <div className="pt-3 border-t border-slate-100 flex items-center justify-center gap-1.5 text-xs text-slate-400 font-medium">
             <span>You may now close this window.</span>

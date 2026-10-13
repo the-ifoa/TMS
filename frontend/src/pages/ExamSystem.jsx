@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useHistoryState } from '@/hooks/use-history-state';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -346,9 +347,9 @@ export default function ExamSystem() {
   const [loading, setLoading] = useState(true);
   const [sendTarget, setSendTarget] = useState(null);
   const [bankShowCreate, setBankShowCreate] = useState(false);
-  const [examSearch, setExamSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [ownerFilter, setOwnerFilter] = useState('all'); // airline-exams tab: filter by airline/department
+  const [examSearch, setExamSearch] = useHistoryState('examSearch', '');
+  const [statusFilter, setStatusFilter] = useHistoryState('statusFilter', 'all');
+  const [ownerFilter, setOwnerFilter] = useHistoryState('ownerFilter', 'all'); // airline-exams tab: filter by airline/department
   const { confirm, ConfirmDialog } = useConfirm();
 
   const setActiveTab = (tab) => {
@@ -552,12 +553,12 @@ export default function ExamSystem() {
     <div className="w-full min-h-full pb-20 flex flex-col">
       {/* Flush Full-Width Sticky Page Header */}
       <div className="sticky top-0 z-20 w-full bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-3.5 sm:px-6 lg:px-8 py-2.5 shadow-2xs">
-        <div className="w-full max-w-7xl mx-auto flex items-center justify-between gap-4 flex-wrap sm:flex-nowrap">
-          <div className="flex items-center gap-3 min-w-0">
+        <div className="w-full max-w-7xl mx-auto flex items-center justify-between gap-x-4 gap-y-2.5 flex-wrap lg:flex-nowrap">
+          <div className="flex items-center gap-x-3 gap-y-2 min-w-0 max-w-full flex-wrap">
             <h1 className="text-base sm:text-lg font-black text-slate-900 tracking-tight flex-shrink-0">Exam System</h1>
             
             {/* Executive Tab Switcher */}
-            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200/80 ml-2">
+            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200/80 sm:ml-2 max-w-full overflow-x-auto [&>button]:flex-shrink-0 [&>button]:whitespace-nowrap">
               <button
                 type="button"
                 onClick={() => setActiveTab('exams')}

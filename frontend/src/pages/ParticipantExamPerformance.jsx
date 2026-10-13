@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
+import { useHistoryState } from '@/hooks/use-history-state';
 import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
@@ -487,8 +488,8 @@ export default function ParticipantExamPerformance() {
   const { isAdmin } = useAuth();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [selectedDateKey, setSelectedDateKey] = useState(null);
-  const [selectedAttemptId, setSelectedAttemptId] = useState(null);
+  const [selectedDateKey, setSelectedDateKey] = useHistoryState('selectedDateKey', null);
+  const [selectedAttemptId, setSelectedAttemptId] = useHistoryState('selectedAttemptId', null);
 
   useEffect(() => {
     getParticipantExamPerformance(participantId)

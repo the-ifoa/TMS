@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useMemo } from 'react';
+import { useHistoryState } from '@/hooks/use-history-state';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -813,15 +814,15 @@ export default function Participants() {
   const [searchParams] = useSearchParams();
   const focusId = searchParams.get('focus') || null;
   const [search, setSearch]       = useState(searchParams.get('search') || '');
-  const [filterType, setFilterType] = useState('');
-  const [filterCompany, setFilterCompany] = useState(''); // admin: filter table by airline/company
-  const [filterOwner, setFilterOwner]     = useState(''); // airline: filter by which account submitted (main vs a department)
-  const [sortKey, setSortKey]       = useState('submitted_desc');
+  const [filterType, setFilterType] = useHistoryState('filterType', '');
+  const [filterCompany, setFilterCompany] = useHistoryState('filterCompany', ''); // admin: filter table by airline/company
+  const [filterOwner, setFilterOwner]     = useHistoryState('filterOwner', ''); // airline: filter by which account submitted (main vs a department)
+  const [sortKey, setSortKey]       = useHistoryState('sortKey', 'submitted_desc');
   const [loading, setLoading]       = useState(true);
   const [openGroups, setOpenGroups] = useState({});
   const [openAttGroups, setOpenAttGroups] = useState({}); // admin attendance tab: airline accordion
   const { confirm, ConfirmDialog } = useConfirm();
-  const [activeTab, setActiveTab] = useState('participants'); // 'participants' | 'attendance'
+  const [activeTab, setActiveTab] = useHistoryState('activeTab', 'participants'); // 'participants' | 'attendance'
   const [attSearch, setAttSearch] = useState('');
   const [attFilterType, setAttFilterType] = useState('');
   const [attFilterCompany, setAttFilterCompany] = useState('');
@@ -1010,7 +1011,7 @@ export default function Participants() {
           />
         )}
         {/* Page Header (Full width header banner) */}
-        <div className="-mx-3 sm:-mx-6 -mt-3 sm:-mt-6 bg-white border-b border-slate-200/80 px-7 pt-6 pb-4 sm:px-12 sm:pt-8 sm:pb-5 shadow-2xs flex items-center justify-between gap-3">
+        <div className="bg-white border-b border-slate-200/80 px-4 py-3.5 sm:px-6 shadow-2xs flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
           <div className="min-w-0">
             <h1 className="text-base sm:text-xl font-bold text-slate-900 tracking-tight break-words leading-tight">My Submissions</h1>
             <p className="text-xs font-medium text-slate-500 hidden sm:block mt-0.5">
@@ -1030,9 +1031,9 @@ export default function Participants() {
 
         {/* Search + filter + sort bar (no outer card box) */}
         <div className="space-y-2.5">
-          <div className="flex flex-col sm:flex-row items-center gap-2.5">
+          <div className="flex flex-col sm:flex-row sm:flex-wrap items-center gap-2.5">
             {/* Search input with clear icon */}
-            <div className="flex-1 relative w-full">
+            <div className="flex-1 relative w-full sm:min-w-[16rem]">
               <HiOutlineSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
               <input
                 type="text"
@@ -1297,9 +1298,9 @@ export default function Participants() {
       {/* ── Sticky Top Header & Control Bar ── */}
       <div className="sticky top-0 z-20 bg-slate-50/95 backdrop-blur-md -mx-4 sm:-mx-6 -mt-5 px-4 sm:px-6 pt-0 pb-3 space-y-3 border-b border-slate-200/80">
         {/* Page Header (Full width) */}
-        <div className="-mx-4 sm:-mx-6 bg-white border-b border-slate-200/80 px-4 sm:px-6 py-3 sm:py-3.5 shadow-2xs flex flex-row items-center justify-between gap-2.5">
+        <div className="-mx-4 sm:-mx-6 bg-white border-b border-slate-200/80 px-4 sm:px-6 py-3 sm:py-3.5 shadow-2xs flex flex-wrap items-center justify-between gap-x-2.5 gap-y-2">
           <div className="min-w-0 flex items-center gap-2.5">
-            <h1 className="text-base sm:text-xl font-bold text-slate-900 tracking-tight truncate">Participants</h1>
+            <h1 className="text-base sm:text-xl font-bold text-slate-900 tracking-tight">Participants</h1>
             <span className="hidden xs:inline-block px-2.5 py-0.5 rounded-full bg-slate-100 border border-slate-200 text-[10px] sm:text-[11px] font-bold text-slate-700 flex-shrink-0">Roster</span>
             {records.length > 0 && (
               <span className="hidden sm:inline-block px-2.5 py-0.5 rounded-full bg-blue-50 border border-blue-200/70 text-[10px] sm:text-[11px] font-bold text-blue-700 flex-shrink-0">
@@ -1307,7 +1308,7 @@ export default function Participants() {
               </span>
             )}
           </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-center gap-2 flex-wrap">
             {activeTab === 'participants' && (
               bulkEmail ? (
                 <>
@@ -1559,7 +1560,7 @@ export default function Participants() {
             className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden flex flex-col"
           >
             <div
-              className="overflow-x-auto max-h-[520px] overflow-y-auto"
+              className="overflow-x-auto max-h-[calc(100vh-19rem)] min-h-[16rem] overflow-y-auto"
               onWheel={e => {
                 const el = e.currentTarget;
                 const atTop = el.scrollTop === 0;
@@ -1597,7 +1598,7 @@ export default function Participants() {
                     visibleRecords.map(record => (
                       <tr key={record.id} onClick={() => setDetailRecord(record)}
                         className="hover:bg-slate-50/70 transition-colors cursor-pointer group">
-                        <td className="px-5 py-3.5">
+                        <td className="px-5 py-2.5">
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-50 transition-colors">
                               <span className="text-[10px] font-bold text-slate-600">{initials(record.participant_name)}</span>
@@ -1605,11 +1606,11 @@ export default function Participants() {
                             <span className="text-sm font-semibold text-slate-800 truncate max-w-[120px] sm:max-w-none">{record.participant_name}</span>
                           </div>
                         </td>
-                        <td className="px-5 py-3.5 text-sm text-slate-600 hidden sm:table-cell">{record.company}</td>
-                        <td className="px-5 py-3.5 text-sm text-slate-600 hidden md:table-cell">{record.department}</td>
-                        <td className="px-5 py-3.5">{typeBadge(record.training_type)}</td>
-                        <td className="px-5 py-3.5 text-sm text-slate-600 hidden sm:table-cell font-medium">{fmtDate(record.training_date)}</td>
-                        <td className="px-5 py-3.5" onClick={e => e.stopPropagation()}>
+                        <td className="px-5 py-2.5 text-sm text-slate-600 hidden sm:table-cell">{record.company}</td>
+                        <td className="px-5 py-2.5 text-sm text-slate-600 hidden md:table-cell">{record.department}</td>
+                        <td className="px-5 py-2.5">{typeBadge(record.training_type)}</td>
+                        <td className="px-5 py-2.5 text-sm text-slate-600 hidden sm:table-cell font-medium">{fmtDate(record.training_date)}</td>
+                        <td className="px-5 py-2.5" onClick={e => e.stopPropagation()}>
                           {bulkEmail ? (
                             <input
                               type="email"
@@ -1622,7 +1623,7 @@ export default function Participants() {
                             <EmailInlineEditor rec={record} />
                           )}
                         </td>
-                        <td className="px-5 py-3.5" onClick={e => e.stopPropagation()}>
+                        <td className="px-5 py-2.5" onClick={e => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-1.5">
                             <Link to={`/admin/participants/${record.id}/performance`}
                               className="p-1.5 rounded-lg bg-slate-50 border border-slate-200 hover:border-emerald-300 hover:bg-emerald-50 text-slate-500 hover:text-emerald-600 transition-all" title="Exam Performance">
@@ -1645,8 +1646,8 @@ export default function Participants() {
               </table>
             </div>
             {visibleRecords.length > 0 && (
-              <div className="px-6 py-3 bg-slate-50/70 border-t border-slate-100">
-                <p className="text-xs font-semibold text-slate-500">
+              <div className="px-5 py-2 bg-slate-50/70 border-t border-slate-100">
+                <p className="text-[11px] font-medium text-slate-400">
                   Showing {visibleRecords.length} record{visibleRecords.length !== 1 ? 's' : ''}
                   {filterCompany && records.length !== visibleRecords.length ? ` of ${records.length}` : ''}
                 </p>
@@ -1704,7 +1705,7 @@ export default function Participants() {
                 </div>
               ) : (
                 <div
-                  className="divide-y divide-slate-100 max-h-[560px] overflow-y-auto"
+                  className="divide-y divide-slate-100 max-h-[calc(100vh-19rem)] min-h-[16rem] overflow-y-auto"
                   onWheel={e => {
                     const el = e.currentTarget;
                     const atTop = el.scrollTop === 0;

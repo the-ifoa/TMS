@@ -5,7 +5,6 @@ import {
   HiOutlineUserGroup, HiOutlinePlusCircle, HiOutlinePencil, HiOutlineTrash,
   HiOutlineX, HiOutlineShieldCheck, HiOutlineOfficeBuilding, HiOutlineUsers,
   HiOutlineCheck, HiOutlineEye, HiOutlineEyeOff,
-  HiOutlineMail,
 } from 'react-icons/hi';
 import { FaPlaneDeparture } from 'react-icons/fa';
 import InfoButton from '../components/InfoButton';
@@ -287,9 +286,9 @@ export default function TeamPage() {
   return (
     <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col">
       {/* Header */}
-      <div className="w-full bg-white border-b border-slate-200/80 px-4 sm:px-6 lg:px-8 py-3.5 shadow-2xs flex items-center justify-between gap-3">
+      <div className="w-full bg-white border-b border-slate-200/80 px-4 sm:px-6 lg:px-8 py-3.5 shadow-2xs flex flex-wrap items-center justify-between gap-x-3 gap-y-2.5">
         <div className="min-w-0">
-          <h1 className="text-base sm:text-xl font-bold text-primary-800 tracking-tight flex items-center gap-2">
+          <h1 className="text-base sm:text-xl font-bold text-primary-800 tracking-tight flex flex-wrap items-center gap-x-2 gap-y-1">
             <HiOutlineUserGroup className="w-5 h-5 text-accent-500" />
             {isAdmin ? 'Sub-admins & Sub-departments' : 'Departments'}
             <InfoButton onClick={() => setInfoOpen(true)} active={infoOpen} />
@@ -300,7 +299,7 @@ export default function TeamPage() {
               : 'Create department logins for your airline and choose exactly what each department can do.'}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap [&>button]:whitespace-nowrap">
           {isAdmin && (
             <button
               type="button"
@@ -332,147 +331,97 @@ export default function TeamPage() {
             No sub-users yet.
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {allMembers.map((m) => {
               const isAdminScope = m.memberScope === 'admin';
               const isDisabled = m.account_status === 'disabled';
               const perms = m.permissions || [];
 
+              const MAX_CHIPS = 6;
+              const shown = perms.slice(0, MAX_CHIPS);
+              const extra = perms.slice(MAX_CHIPS);
+
               return (
                 <div
                   key={m._id || m.id}
-                  className={`bg-white rounded-3xl border overflow-hidden transition-all duration-200 flex flex-col justify-between shadow-2xs hover:shadow-md group ${
-                    isDisabled
-                      ? 'border-slate-200/60 opacity-80 bg-slate-50/40 border-dashed'
-                      : 'border-slate-200/90 hover:border-slate-300 hover:-translate-y-0.5'
+                  className={`bg-white rounded-xl border flex flex-col transition-colors ${
+                    isDisabled ? 'border-slate-200/70 bg-slate-50/50' : 'border-slate-200/80 hover:border-slate-300'
                   }`}
                 >
-                  {/* Card Top Header - Black Background */}
-                  <div className="bg-slate-900 text-white p-5 sm:p-6 space-y-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-start gap-3.5 min-w-0">
-                        <div className="w-11 h-11 rounded-2xl bg-white/10 text-white border border-white/15 flex items-center justify-center flex-shrink-0 shadow-2xs backdrop-blur-xs">
-                          {isAdminScope ? (
-                            <HiOutlineShieldCheck className="w-5 h-5 text-white" />
-                          ) : (
-                            <FaPlaneDeparture className="w-4 h-4 text-white" />
-                          )}
-                        </div>
-
-                        <div className="min-w-0 space-y-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h3 className="text-sm sm:text-base font-extrabold text-white truncate">
-                              {m.name}
-                            </h3>
-                            <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-white/15 text-slate-100 border border-white/20 tracking-wide uppercase">
-                              {isAdminScope ? 'Sub-Admin' : m.department_name || 'Department'}
-                            </span>
-                          </div>
-
-                          <div className="flex items-center gap-1.5 text-xs text-slate-300 font-medium truncate">
-                            <HiOutlineMail className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-                            <span className="truncate">{m.email}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Status indicator badge */}
-                      <span
-                        className={`inline-flex items-center text-[10px] font-extrabold px-2.5 py-1 rounded-full border flex-shrink-0 tracking-wider uppercase ${
-                          isDisabled
-                            ? 'bg-white/10 text-slate-300 border-white/20'
-                            : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-                        }`}
-                      >
-                        {isDisabled ? 'DISABLED' : 'ACTIVE'}
-                      </span>
+                  {/* Identity */}
+                  <div className="flex items-start gap-3 p-4">
+                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                      isDisabled ? 'bg-slate-100 text-slate-400' : 'bg-slate-900 text-white'
+                    }`}>
+                      {isAdminScope
+                        ? <HiOutlineShieldCheck className="w-4.5 h-4.5" />
+                        : <FaPlaneDeparture className="w-3.5 h-3.5" />}
                     </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <h3 className={`text-sm font-semibold truncate ${isDisabled ? 'text-slate-500' : 'text-slate-900'}`} title={m.name}>{m.name}</h3>
+                        <span className="text-[10px] font-semibold px-1.5 py-px rounded bg-slate-100 text-slate-500 flex-shrink-0 max-w-[45%] truncate"
+                          title={isAdminScope ? 'Sub-admin' : m.department_name || 'Department'}>
+                          {isAdminScope ? 'Sub-admin' : m.department_name || 'Department'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 truncate mt-0.5" title={m.email}>{m.email}</p>
+                    </div>
+                    <span className={`text-[11px] font-semibold flex-shrink-0 mt-0.5 ${
+                      isDisabled ? 'text-slate-400' : 'text-emerald-700'
+                    }`}>
+                      {isDisabled ? 'Disabled' : 'Active'}
+                    </span>
                   </div>
 
-                  {/* Card Body - Light Background */}
-                  <div className="p-5 sm:p-6 space-y-4 flex flex-col flex-1 justify-between">
-                    {/* Permissions Section */}
-                    <div className="space-y-2.5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-extrabold uppercase text-slate-400 tracking-wider flex items-center gap-1.5">
-                          <HiOutlineShieldCheck className="w-3.5 h-3.5 text-slate-400" />
-                          Granted Permissions
-                        </span>
-                        <span className="px-2 py-0.5 text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200/80 rounded-full">
-                          {perms.length}
-                        </span>
-                      </div>
-
-                      {perms.length === 0 ? (
-                        <div className="py-3 px-3 rounded-2xl bg-slate-50/60 border border-dashed border-slate-200 text-center">
-                          <p className="text-xs text-slate-400 italic">No permissions assigned</p>
-                        </div>
-                      ) : (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-2 max-h-36 overflow-y-auto pr-1 scrollbar-thin">
-                          {perms.map((p) => {
-                            const label = formatPermLabel(p, permLabels);
-                            return (
-                              <div
-                                key={p}
-                                title={label}
-                                className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-slate-50/90 hover:bg-slate-100/90 border border-slate-200/80 transition-colors min-w-0"
-                              >
-                                <span className="w-1.5 h-1.5 rounded-full bg-slate-400 flex-shrink-0" />
-                                <span className="text-[11px] font-medium text-slate-700 truncate">
-                                  {label}
-                                </span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Card Footer Actions */}
-                    <div className="pt-3.5 border-t border-slate-100 flex items-center justify-between gap-2 mt-auto">
-                      <div>
-                        {m.memberScope === 'airline' ? (
-                          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-600 bg-slate-50 border border-slate-200/80 px-2.5 py-1 rounded-xl">
-                            <HiOutlineUsers className="w-3.5 h-3.5 text-slate-600" />
-                            <span>Isolated Directory</span>
+                  {/* Permissions */}
+                  <div className="px-4 pb-4 flex-1">
+                    <p className="text-[11px] font-medium text-slate-400 mb-2">
+                      Permissions <span className="text-slate-600 font-semibold">{perms.length}</span>
+                    </p>
+                    {perms.length === 0 ? (
+                      <p className="text-xs text-slate-400">No permissions assigned.</p>
+                    ) : (
+                      <div className="flex flex-wrap gap-1.5">
+                        {shown.map((p) => (
+                          <span key={p} className="text-[11px] font-medium text-slate-600 bg-slate-50 border border-slate-200/70 px-2 py-0.5 rounded-md">
+                            {formatPermLabel(p, permLabels)}
                           </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-700 bg-slate-50 border border-slate-200/80 px-2.5 py-1 rounded-xl">
-                            <HiOutlineShieldCheck className="w-3.5 h-3.5 text-slate-700" />
-                            <span>Sub-Admin Account</span>
+                        ))}
+                        {extra.length > 0 && (
+                          <span className="text-[11px] font-semibold text-slate-500 px-2 py-0.5 rounded-md border border-dashed border-slate-200 cursor-help"
+                            title={extra.map((p) => formatPermLabel(p, permLabels)).join('\n')}>
+                            +{extra.length} more
                           </span>
                         )}
                       </div>
+                    )}
+                  </div>
 
-                      <div className="flex items-center gap-1.5 ml-auto">
-                        <button
-                          type="button"
-                          onClick={() => toggleStatus(m)}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer shadow-2xs ${
-                            isDisabled
-                              ? 'bg-slate-900 border-slate-900 text-white hover:bg-slate-800'
-                              : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-900 hover:text-white hover:border-slate-900'
-                          }`}
-                        >
-                          {isDisabled ? 'Enable' : 'Disable'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => openEdit(m)}
-                          title="Edit member"
-                          className="p-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-900 hover:text-white hover:border-slate-900 text-slate-600 transition-all cursor-pointer shadow-2xs"
-                        >
-                          <HiOutlinePencil className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => remove(m)}
-                          title="Remove member"
-                          className="p-2 rounded-xl bg-white border border-slate-200 hover:bg-rose-600 hover:text-white hover:border-rose-600 text-slate-600 transition-all cursor-pointer shadow-2xs"
-                        >
-                          <HiOutlineTrash className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
+                  {/* Footer */}
+                  <div className="flex items-center justify-between gap-2 px-4 py-2.5 border-t border-slate-100">
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-slate-400 min-w-0">
+                      {m.memberScope === 'airline'
+                        ? <><HiOutlineUsers className="w-3.5 h-3.5 flex-shrink-0" /><span className="truncate">Own participant list</span></>
+                        : <><HiOutlineShieldCheck className="w-3.5 h-3.5 flex-shrink-0" /><span className="truncate">Admin account</span></>}
+                    </span>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <button type="button" onClick={() => toggleStatus(m)}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-colors cursor-pointer ${
+                          isDisabled
+                            ? 'bg-slate-900 border-slate-900 text-white hover:bg-slate-800'
+                            : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300'
+                        }`}>
+                        {isDisabled ? 'Enable' : 'Disable'}
+                      </button>
+                      <button type="button" onClick={() => openEdit(m)} title="Edit"
+                        className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 hover:border-slate-300 hover:text-slate-800 transition-colors cursor-pointer">
+                        <HiOutlinePencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button type="button" onClick={() => remove(m)} title="Remove"
+                        className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-rose-50 hover:border-rose-200 hover:text-rose-600 transition-colors cursor-pointer">
+                        <HiOutlineTrash className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   </div>
                 </div>

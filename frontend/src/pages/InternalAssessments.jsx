@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useHistoryState } from '@/hooks/use-history-state';
 import toast from 'react-hot-toast';
 import {
   HiOutlineBadgeCheck, HiOutlineSearch, HiOutlinePlus, HiOutlineArrowLeft, HiOutlineEye,
   HiOutlineDownload, HiOutlineTrash, HiOutlineUpload, HiOutlinePencil, HiOutlineUserAdd,
-  HiOutlineCalendar, HiOutlineUsers, HiOutlineX, HiOutlineRefresh,
+  HiOutlineCalendar, HiOutlineUsers, HiOutlineX, HiOutlineRefresh, HiOutlineDocumentText, HiOutlineUserRemove,
 } from 'react-icons/hi';
 import {
   listInternalAssessments, createInternalAssessment, updateInternalAssessment, deleteInternalAssessment,
@@ -15,6 +16,8 @@ import { useConfirm } from '@/hooks/use-confirm';
 import {
   Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog';
+import SegmentedToggle from '../components/SegmentedToggle';
+import { CountingNumber } from '@/components/animate-ui/primitives/texts/counting-number';
 
 const MAX_BYTES = 10 * 1024 * 1024;
 
@@ -23,22 +26,10 @@ function fmtDate(v) {
   return new Date(v).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-const AVATAR_TONES = [
-  'bg-blue-100 text-blue-700', 'bg-emerald-100 text-emerald-700', 'bg-amber-100 text-amber-700',
-  'bg-violet-100 text-violet-700', 'bg-rose-100 text-rose-700', 'bg-cyan-100 text-cyan-700',
-];
-
 function initials(name) {
   const parts = (name || '').trim().split(/\s+/).filter(Boolean);
   if (!parts.length) return '?';
   return (parts[0][0] + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
-}
-
-// Stable colour per candidate name.
-function avatarTone(name) {
-  let h = 0;
-  for (const ch of name || '') h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  return AVATAR_TONES[h % AVATAR_TONES.length];
 }
 
 const certCount = (a) => a.candidates.filter((c) => c.certificate).length;
@@ -46,6 +37,9 @@ const certCount = (a) => a.candidates.filter((c) => c.certificate).length;
 const INPUT = 'w-full h-9 px-3 bg-white border border-slate-200/80 rounded-lg text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500';
 const BTN_PRIMARY = 'inline-flex items-center justify-center gap-1.5 h-9 px-3.5 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 disabled:opacity-50 transition-colors';
 const BTN_GHOST = 'inline-flex items-center justify-center gap-1.5 h-9 px-3.5 rounded-lg bg-white border border-slate-200 text-slate-700 text-xs font-semibold hover:border-slate-300 hover:bg-slate-50 disabled:opacity-50 transition-colors';
+// Row actions sit in one joined control: neutral icons, colour only on hover.
+const ACTION = 'h-8 w-8 inline-flex items-center justify-center text-slate-500 hover:bg-slate-50 hover:text-blue-600 transition-colors disabled:opacity-50';
+const DANGER = 'hover:!bg-red-50 hover:!text-red-600';
 const ICON_BTN = 'p-1.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-500 disabled:opacity-50';
 
 // Create / rename an assessment.
@@ -199,17 +193,8 @@ function AddCandidatesDialog({ open, assessment, onClose, onSaved }) {
         <DialogHeader>
           <DialogTitle>Add candidates</DialogTitle>
           <DialogDescription>{assessment?.title}</DialogDescription>
-          <div className="mt-3 inline-flex p-0.5 bg-slate-100 border border-slate-200/80 rounded-lg">
-            {tabs.map((t) => (
-              <button key={t.key} onClick={() => setTab(t.key)}
-                className={`inline-flex items-center gap-1.5 h-7 px-3 rounded-md text-[11px] font-semibold transition-colors ${
-                  tab === t.key ? 'bg-slate-900 text-white' : 'text-slate-500 hover:text-slate-700'
-                }`}>
-                {t.label}
-                {t.n > 0 && <span className={tab === t.key ? 'text-white/70' : 'text-slate-400'}>{t.n}</span>}
-              </button>
-            ))}
-          </div>
+          <SegmentedToggle className="mt-3" value={tab} onChange={setTab}
+            options={tabs.map((t) => ({ key: t.key, label: t.label, count: t.n > 0 ? t.n : undefined }))} />
         </DialogHeader>
 
         {tab === 'existing' ? (
@@ -243,7 +228,7 @@ function AddCandidatesDialog({ open, assessment, onClose, onSaved }) {
                       <label key={id} className="flex items-center gap-3 px-5 py-2 cursor-pointer hover:bg-slate-50/60">
                         <input type="checkbox" checked={picked.has(id)} onChange={() => toggle(id)}
                           className="w-4 h-4 rounded border-slate-300 text-slate-900 focus:ring-slate-400" />
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-[10px] font-bold ${avatarTone(p.participant_name)}`}>
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-[10px] font-bold bg-slate-100 text-slate-600`}>
                           {initials(p.participant_name)}
                         </div>
                         <div className="min-w-0">
@@ -315,7 +300,7 @@ function AssessmentCard({ a, showOwner, onOpen }) {
         <div className="flex -space-x-2">
           {a.candidates.slice(0, 5).map((c) => (
             <div key={c.id} title={c.name}
-              className={`w-7 h-7 rounded-full ring-2 ring-white flex items-center justify-center text-[9px] font-bold ${avatarTone(c.name)}`}>
+              className={`w-7 h-7 rounded-full ring-2 ring-white flex items-center justify-center text-[9px] font-bold bg-slate-100 text-slate-600`}>
               {initials(c.name)}
             </div>
           ))}
@@ -352,10 +337,10 @@ export default function InternalAssessments() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [openId, setOpenId] = useState(null);
+  const [openId, setOpenId] = useHistoryState('openId', null);
   const [form, setForm] = useState({ open: false, initial: null });
   const [adding, setAdding] = useState(false);
-  const [candSearch, setCandSearch] = useState('');
+  const [candSearch, setCandSearch] = useHistoryState('candSearch', '');
   const [busyId, setBusyId] = useState(null);
   const fileRef = useRef(null);
   const uploadFor = useRef(null);
@@ -452,9 +437,9 @@ export default function InternalAssessments() {
   };
 
   return (
-    <div className="w-full min-h-full flex flex-col">
+    <div className={`w-full flex flex-col ${current ? 'h-[calc(100vh-4rem)] overflow-hidden' : 'min-h-full'}`}>
       {/* Header */}
-      <div className="sticky top-0 z-20 w-full bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-2xs">
+      <div className="sticky top-0 z-20 w-full flex-shrink-0 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-2xs">
         <div className="w-full max-w-6xl mx-auto px-3.5 sm:px-6 lg:px-8 py-3 flex flex-col sm:flex-row sm:items-center gap-3">
           <div className="min-w-0 flex-1 flex items-center gap-2">
             {current && (
@@ -472,7 +457,7 @@ export default function InternalAssessments() {
                   {current ? current.title : 'Internal Assessment'}
                 </h1>
                 <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-100 text-[11px] font-bold flex-shrink-0">
-                  {current ? current.candidates.length : items.length}
+                  <CountingNumber number={current ? current.candidates.length : items.length} />
                 </span>
               </div>
               <p className="text-[11px] text-slate-400 mt-1 truncate">
@@ -505,7 +490,7 @@ export default function InternalAssessments() {
         </div>
       </div>
 
-      <div className="w-full max-w-6xl mx-auto px-3.5 sm:px-6 lg:px-8 py-5 space-y-4">
+      <div className={`w-full max-w-6xl mx-auto px-3.5 sm:px-6 lg:px-8 py-5 space-y-4 ${current ? 'flex-1 min-h-0 flex flex-col' : ''}`}>
         {loading ? (
           <div className="py-24 flex items-center justify-center">
             <div className="w-6 h-6 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" />
@@ -540,27 +525,33 @@ export default function InternalAssessments() {
             )}
           </>
         ) : (
-          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden flex flex-col">
-            {(current.description || current.candidates.length > 0) && (
-              <div className="p-3 border-b border-slate-200/80 space-y-2.5">
-                {current.description && <p className="text-xs text-slate-600 whitespace-pre-line">{current.description}</p>}
-                {current.candidates.length > 0 && (
-                  <div className="relative">
-                    <HiOutlineSearch className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
-                    <input value={candSearch} onChange={(e) => setCandSearch(e.target.value)}
-                      placeholder="Search candidates…" className={`${INPUT} pl-8 bg-slate-50 focus:bg-white`} />
-                  </div>
-                )}
+          <div className="flex-1 min-h-0 bg-white rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden flex flex-col">
+            {/* Toolbar: search + certificate progress */}
+            <div className="flex-shrink-0 px-4 sm:px-5 py-3 border-b border-slate-200/80 flex flex-col sm:flex-row sm:items-center gap-3">
+              <div className="relative flex-1 sm:max-w-sm">
+                <HiOutlineSearch className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                <input value={candSearch} onChange={(e) => setCandSearch(e.target.value)}
+                  placeholder="Search candidates…" className={`${INPUT} pl-8 bg-slate-50 focus:bg-white`} />
               </div>
+              <div className="sm:ml-auto flex items-center gap-3 text-[11px] text-slate-500 whitespace-nowrap">
+                <span><span className="font-semibold text-slate-800">{certCount(current)}</span> of {current.candidates.length} certificates uploaded</span>
+                <div className="w-24 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                  <div className="h-full rounded-full bg-emerald-500 transition-all duration-500"
+                    style={{ width: `${current.candidates.length ? Math.round((certCount(current) / current.candidates.length) * 100) : 0}%` }} />
+                </div>
+              </div>
+            </div>
+            {current.description && (
+              <p className="flex-shrink-0 max-h-20 overflow-y-auto px-4 sm:px-5 py-2.5 border-b border-slate-100 text-xs text-slate-500 whitespace-pre-line">{current.description}</p>
             )}
 
-            <div className="hidden md:grid md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_9rem] md:gap-4 px-4 py-2 bg-slate-50/80 border-b border-slate-200/80 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+            <div className="hidden md:grid md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_12.5rem] md:items-center md:gap-4 px-4 sm:px-5 py-2 bg-slate-50/80 border-b border-slate-200/80 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
               <span>Candidate</span>
               <span>Certificate</span>
               <span className="text-right">Actions</span>
             </div>
 
-            <div className="h-[calc(100vh-19rem)] min-h-[18rem] overflow-y-auto">
+            <div className="flex-1 min-h-0 overflow-y-auto">
               {candidates.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center gap-3 text-center px-6">
                   <HiOutlineUsers className="w-7 h-7 text-slate-300" />
@@ -575,75 +566,82 @@ export default function InternalAssessments() {
                 </div>
               ) : (
                 <div className="divide-y divide-slate-100">
-                  {candidates.map((c) => (
-                    <div key={c.id} className="md:grid md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_9rem] md:items-center md:gap-4 px-4 py-3 hover:bg-slate-50/60 transition-colors">
+                  {candidates.map((c) => {
+                    const busy = busyId === c.id;
+                    return (
+                    <div key={c.id} className="md:grid md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_12.5rem] md:items-center md:gap-4 px-4 sm:px-5 py-2.5 hover:bg-slate-50/60 transition-colors">
+                      {/* Candidate */}
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 text-[11px] font-bold ${avatarTone(c.name)}`}>
+                        <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center flex-shrink-0 text-[10px] font-bold">
                           {initials(c.name)}
                         </div>
                         <div className="min-w-0">
                           <p className="text-sm font-semibold text-slate-900 truncate capitalize" title={c.name}>
                             {c.name}
                             {!c.participant && (
-                              <span className="ml-1.5 px-1.5 py-px rounded bg-slate-100 text-slate-500 text-[10px] font-semibold normal-case align-middle">Manual</span>
+                              <span className="ml-1.5 px-1.5 py-px rounded bg-slate-100 text-slate-500 text-[10px] font-medium normal-case align-middle">Manual</span>
                             )}
                           </p>
                           <p className="text-[11px] text-slate-400 truncate">{c.email || 'No email'}</p>
                         </div>
                       </div>
 
-                      <div className="mt-2 md:mt-0 min-w-0">
+                      {/* Certificate status */}
+                      <div className="mt-2 md:mt-0 pl-11 md:pl-0 min-w-0">
                         {c.certificate ? (
                           <div className="flex items-center gap-2 min-w-0">
-                            <span className="px-1.5 py-0.5 rounded-md bg-red-50 text-red-600 border border-red-100 text-[9px] font-extrabold flex-shrink-0">PDF</span>
+                            <HiOutlineDocumentText className="w-4 h-4 text-emerald-600 flex-shrink-0" />
                             <div className="min-w-0">
-                              <p className="text-xs font-semibold text-slate-700 truncate" title={c.certificate.original_name}>{c.certificate.original_name}</p>
+                              <p className="text-xs font-medium text-slate-700 truncate" title={c.certificate.original_name}>{c.certificate.original_name}</p>
                               <p className="text-[10px] text-slate-400">Uploaded {fmtDate(c.certificate.uploaded_at)}</p>
                             </div>
                           </div>
                         ) : (
-                          <button onClick={() => pickFile(c)} disabled={busyId === c.id}
-                            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-dashed border-slate-300 text-[11px] font-semibold text-slate-600 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700 disabled:opacity-50 transition-colors">
-                            <HiOutlineUpload className="w-3.5 h-3.5" /> {busyId === c.id ? 'Uploading…' : 'Upload certificate'}
-                          </button>
+                          <span className="inline-flex items-center gap-1.5 text-xs text-slate-400">
+                            <span className="w-1.5 h-1.5 rounded-full bg-slate-300" /> {busy ? 'Uploading…' : 'Not uploaded'}
+                          </span>
                         )}
                       </div>
 
-                      <div className="mt-2 md:mt-0 flex items-center gap-1 md:justify-end">
-                        {c.certificate && (
-                          <>
-                            <button onClick={() => openCert(c, false)} disabled={busyId === c.id} title="View certificate"
-                              className={`${ICON_BTN} hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600`}>
-                              <HiOutlineEye className="w-3.5 h-3.5" />
+                      {/* Actions — one joined control */}
+                      <div className="mt-2 md:mt-0 pl-11 md:pl-0 flex md:justify-end">
+                        <div className="inline-flex items-center rounded-lg border border-slate-200 bg-white divide-x divide-slate-200 overflow-hidden shadow-2xs">
+                          {c.certificate ? (
+                            <>
+                              <button onClick={() => openCert(c, false)} disabled={busy} title="View certificate" className={ACTION}>
+                                <HiOutlineEye className="w-4 h-4" />
+                              </button>
+                              <button onClick={() => openCert(c, true)} disabled={busy} title="Download certificate" className={ACTION}>
+                                <HiOutlineDownload className="w-4 h-4" />
+                              </button>
+                              <button onClick={() => pickFile(c)} disabled={busy} title="Replace certificate" className={ACTION}>
+                                <HiOutlineRefresh className="w-4 h-4" />
+                              </button>
+                              <button onClick={() => removeCert(c)} disabled={busy} title="Delete certificate" className={`${ACTION} ${DANGER}`}>
+                                <HiOutlineTrash className="w-4 h-4" />
+                              </button>
+                            </>
+                          ) : (
+                            <button onClick={() => pickFile(c)} disabled={busy} title="Upload a certificate PDF"
+                              className="h-8 px-3 inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-blue-600 transition-colors disabled:opacity-50">
+                              <HiOutlineUpload className="w-4 h-4" /> Upload
                             </button>
-                            <button onClick={() => openCert(c, true)} disabled={busyId === c.id} title="Download certificate"
-                              className={`${ICON_BTN} hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600`}>
-                              <HiOutlineDownload className="w-3.5 h-3.5" />
-                            </button>
-                            <button onClick={() => pickFile(c)} disabled={busyId === c.id} title="Replace certificate"
-                              className={`${ICON_BTN} hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600`}>
-                              <HiOutlineRefresh className="w-3.5 h-3.5" />
-                            </button>
-                            <button onClick={() => removeCert(c)} disabled={busyId === c.id} title="Delete certificate"
-                              className={`${ICON_BTN} hover:border-red-300 hover:bg-red-50 hover:text-red-600`}>
-                              <HiOutlineTrash className="w-3.5 h-3.5" />
-                            </button>
-                          </>
-                        )}
-                        <button onClick={() => removeCandidate(c)} disabled={busyId === c.id} title="Remove candidate"
-                          className={`${ICON_BTN} hover:border-red-300 hover:bg-red-50 hover:text-red-600`}>
-                          <HiOutlineX className="w-3.5 h-3.5" />
-                        </button>
+                          )}
+                          <button onClick={() => removeCandidate(c)} disabled={busy} title="Remove candidate from assessment" className={`${ACTION} ${DANGER}`}>
+                            <HiOutlineUserRemove className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
 
-            <div className="px-4 py-2 bg-slate-50/80 border-t border-slate-200/80 text-[11px] text-slate-400 font-medium flex items-center justify-between">
+            <div className="flex-shrink-0 px-4 sm:px-5 py-2 bg-slate-50/80 border-t border-slate-200/80 text-[11px] text-slate-400 font-medium flex items-center justify-between">
               <span>{current.created_by_name ? `Created by ${current.created_by_name}` : 'Internal assessment'} · {fmtDate(current.createdAt)}</span>
-              <span>{candidates.length} of {current.candidates.length}</span>
+              <span>Showing {candidates.length} of {current.candidates.length}</span>
             </div>
           </div>
         )}

@@ -11,6 +11,7 @@ const { sendExamInviteEmail, sendExamCertificateEmail } = require('../services/e
 const { brandingResolver, resolveEmailBranding } = require('../services/emailBranding');
 const r2 = require('../services/r2');
 const { frontendLink } = require('../config/appUrls');
+const { accessibleParticipantFilter } = require('./internalCertificatesController');
 const { hasExamPower } = require('../config/permissions');
 const XLSX = require('xlsx');
 const PDFDocument = require('pdfkit');
@@ -208,15 +209,32 @@ exports.listAssigned = async (req, res) => {
 // ─── Shared attempt scoping ────────────────────────────────────────────────────
 // Same visibility rule as listAttempts: IFOA admin sees every attempt, an
 // airline only its own. Optional exam_id / airline_id (admin only) narrow it.
-function attemptScopeFilter(req) {
+// Which attempts a caller may list. An airline normally sees only attempts by
+// its own candidates — but for an exam it OWNS it sees every attempt, the same
+// set it can already grade and that its analytics count (e.g. candidates of a
+// department that assigned the airline's exam to its own team).
+async function attemptScopeFilter(req) {
   const filter = {};
   if (req.query.exam_id) filter.exam_id = req.query.exam_id;
   if (isAdmin(req)) {
     if (req.query.airline_id) filter.airline_id = req.query.airline_id;
-  } else {
-    filter.airline_id = req.admin.id;
+    return filter;
   }
+  if (req.query.exam_id) {
+    const exam = await Exam.findById(req.query.exam_id).select('owner_airline owner_department').catch(() => null);
+    if (exam && ownsExam(req, exam)) return filter;
+  }
+  filter.airline_id = req.admin.id;
   return filter;
+}
+
+// May this caller read one attempt? Its own candidate's, or any attempt of an
+// exam it owns (matches gradeAttempt / getAnalytics).
+async function canReadAttempt(req, attempt) {
+  if (isAdmin(req)) return true;
+  if (String(attempt.airline_id) === String(req.admin.id)) return true;
+  const exam = await Exam.findById(attempt.exam_id).select('owner_airline owner_department');
+  return !!(exam && ownsExam(req, exam));
 }
 
 const pct1 = (n) => (n == null ? null : Math.round(Number(n) * 10) / 10);
@@ -227,7 +245,7 @@ const pct1 = (n) => (n == null ? null : Math.round(Number(n) * 10) / 10);
 // first, so strengths (green) and weak areas (red) are visible at a glance.
 exports.teamPerformance = async (req, res) => {
   try {
-    const filter = { ...attemptScopeFilter(req), status: { $ne: 'in_progress' } };
+    const filter = { ...(await attemptScopeFilter(req)), status: { $ne: 'in_progress' } };
     const attempts = await ExamAttempt.find(filter).select(
       'participant_id exam_id exam_title_snapshot percentage passed status answers questions_snapshot'
     );
@@ -288,7 +306,7 @@ exports.exportAttempts = async (req, res) => {
     if (!['csv', 'xlsx', 'xml', 'pdf'].includes(format)) {
       return res.status(400).json({ error: 'format must be one of csv, xlsx, xml, pdf.' });
     }
-    const attempts = await ExamAttempt.find({ ...attemptScopeFilter(req), status: { $ne: 'in_progress' } })
+    const attempts = await ExamAttempt.find({ ...(await attemptScopeFilter(req)), status: { $ne: 'in_progress' } })
       .select('-questions_snapshot -answers').sort({ submitted_at: -1 });
     const airlines = await Airline.find({ _id: { $in: [...new Set(attempts.map((a) => String(a.airline_id)).filter(Boolean))] } })
       .select('airlineName').lean();
@@ -710,9 +728,7 @@ exports.sendAttemptCertificate = async (req, res) => {
 // ─── GET /exams/attempts — list attempts ─────────────────────────────────────────
 exports.listAttempts = async (req, res) => {
   try {
-    const filter = {};
-    if (req.query.exam_id) filter.exam_id = req.query.exam_id;
-    if (!isAdmin(req)) filter.airline_id = req.admin.id;
+    const filter = await attemptScopeFilter(req);
 
     const attempts = await ExamAttempt.find(filter).sort({ created_at: -1 });
     // Candidate emails — the UI needs them to offer "email certificate".
@@ -761,7 +777,7 @@ exports.getAttemptResult = async (req, res) => {
   try {
     const attempt = await ExamAttempt.findById(req.params.attemptId);
     if (!attempt) return res.status(404).json({ error: 'Attempt not found.' });
-    if (!isAdmin(req) && String(attempt.airline_id) !== String(req.admin.id)) {
+    if (!(await canReadAttempt(req, attempt))) {
       return res.status(403).json({ error: 'Access denied.' });
     }
     if (attempt.status === 'in_progress') {
@@ -775,14 +791,17 @@ exports.getAttemptResult = async (req, res) => {
 };
 
 // ─── GET /exams/participants/:participantId/performance — cross-exam profile ────
-// Admin: any participant. Airline: only their own (submitted_by match), same
-// ownership rule used everywhere else a participant record is read.
+// Admin: any participant. Airline: the participants it can see (see
+// internalCertificatesController.accessibleParticipantFilter).
 exports.participantPerformance = async (req, res) => {
   try {
     const participant = await Participant.findById(req.params.participantId);
     if (!participant) return res.status(404).json({ error: 'Participant not found.' });
-    if (!isAdmin(req) && String(participant.submitted_by) !== String(req.admin.id)) {
-      return res.status(403).json({ error: 'Access denied.' });
+    if (!isAdmin(req)) {
+      // Own candidates, a top-level airline's departments' candidates, and
+      // owner-less legacy records matched by airline name.
+      const visible = await Participant.exists({ $and: [{ _id: participant._id }, accessibleParticipantFilter(req) || {}] });
+      if (!visible) return res.status(403).json({ error: 'Access denied.' });
     }
 
     const attempts = await ExamAttempt.find({

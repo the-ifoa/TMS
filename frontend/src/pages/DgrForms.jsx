@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useMemo } from 'react';
+import { useHistoryState } from '@/hooks/use-history-state';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -613,7 +614,7 @@ export default function DgrForms() {
   const [saving, setSaving]     = useState(false);
   const [search, setSearch]     = useState('');
   const [filterType, setFilterType] = useState('');
-  const [sortKey, setSortKey]   = useState('name_asc');
+  const [sortKey, setSortKey]   = useHistoryState('sortKey', 'name_asc');
 
   // editModal shape: { airline_id?, _id?, _student?, ...formFields }
   const [editModal, setEditModal] = useState(null);

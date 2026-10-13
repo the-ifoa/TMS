@@ -1,27 +1,29 @@
 import * as React from 'react';
-import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { cn } from '@/lib/utils';
+import {
+  Popover, PopoverTrigger, PopoverAnchor, PopoverPortal,
+  PopoverContent as ContentPrimitive,
+} from '@/components/animate-ui/primitives/radix/popover';
 
-const Popover = PopoverPrimitive.Root;
-const PopoverTrigger = PopoverPrimitive.Trigger;
-const PopoverAnchor = PopoverPrimitive.Anchor;
-
-const PopoverContent = React.forwardRef(({ className, align = 'end', sideOffset = 8, alignOffset = -8, ...props }, ref) => (
-  <PopoverPrimitive.Portal>
-    <PopoverPrimitive.Content
-      ref={ref}
+// Popover with a spring pop from its trigger (Animate UI). Same API as before.
+const PopoverContent = ({ className, align = 'end', sideOffset = 8, alignOffset = -8, ...props }) => (
+  <PopoverPortal>
+    {/* Plain wrapper: Radix hands the portal's direct child a ref, which a
+        function component can't take on React 18. */}
+    <div>
+    <ContentPrimitive
       align={align}
       sideOffset={sideOffset}
       alignOffset={alignOffset}
+      transition={{ type: 'spring', stiffness: 420, damping: 30 }}
       className={cn(
-        'z-50 rounded-2xl border border-slate-200/80 bg-white shadow-2xl outline-none overflow-hidden',
-        'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2',
+        'z-50 rounded-2xl border border-slate-200/80 bg-white shadow-2xl outline-none overflow-hidden origin-[var(--radix-popover-content-transform-origin)]',
         className
       )}
       {...props}
     />
-  </PopoverPrimitive.Portal>
-));
-PopoverContent.displayName = PopoverPrimitive.Content.displayName;
+    </div>
+  </PopoverPortal>
+);
 
 export { Popover, PopoverTrigger, PopoverContent, PopoverAnchor };

@@ -2650,11 +2650,11 @@ export default function Airlines() {
       </AnimatePresence>
 
       {/* ── Page Header (Full Width Edge-to-Edge) ── */}
-      <div className="w-full bg-white border-b border-slate-200/80 px-4 sm:px-6 lg:px-8 py-3.5 shadow-2xs flex flex-row items-center justify-between gap-3">
+      <div className="w-full bg-white border-b border-slate-200/80 px-4 sm:px-6 lg:px-8 py-3.5 shadow-2xs flex flex-wrap items-center justify-between gap-x-3 gap-y-2.5">
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-base sm:text-xl font-bold text-primary-800 tracking-tight truncate">Airlines &amp; Submissions</h1>
-            <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
+            <h1 className="text-base sm:text-xl font-bold text-primary-800 tracking-tight">Airlines &amp; Submissions</h1>
+            <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200 whitespace-nowrap">
               <span>{totalAirlines} Airlines</span>
               <span>•</span>
               <span>{totalParticipants} Participants</span>
@@ -2662,7 +2662,7 @@ export default function Airlines() {
           </div>
           <p className="text-xs text-primary-400 mt-0.5 hidden sm:block">View airline submissions, generate and manage certificates</p>
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="flex items-center gap-2 flex-wrap">
           {canManageAirlines && (<button type="button" onClick={() => setSettingsOpen(true)} title="Manage settings for all airlines"
             className="btn-outline flex items-center justify-center gap-1.5 text-xs px-3 py-1.5 sm:px-4 sm:py-2 whitespace-nowrap">
             <Settings2 className="w-4 h-4" />

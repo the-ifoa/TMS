@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useHistoryState } from '@/hooks/use-history-state';
 import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   HiOutlineUsers, HiOutlineSearch, HiOutlineMail, HiOutlineCheck, HiOutlineX,
-  HiOutlineFilter, HiOutlineChartBar, HiOutlinePlus,
+  HiOutlineFilter, HiOutlinePresentationChartLine, HiOutlinePlus, HiOutlineCalendar,
   HiOutlinePencil, HiOutlineTrash, HiOutlineDocumentText, HiOutlineUpload,
 } from 'react-icons/hi';
 import { getParticipants, updateParticipantEmail, deleteParticipant } from '../api';
@@ -53,7 +54,7 @@ function EmailCell({ rec }) {
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') save(); if (e.key === 'Escape') { setDraft(email); setEditing(false); } }}
           placeholder="candidate@email.com"
-          className="w-52 px-2.5 py-1 text-xs border border-blue-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/25" />
+          className="w-full min-w-0 px-2.5 py-1 text-xs border border-blue-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/25" />
         <button onClick={save} disabled={saving} className="p-1 rounded-lg text-emerald-600 hover:bg-emerald-50 disabled:opacity-50"><HiOutlineCheck className="w-4 h-4" /></button>
         <button onClick={() => { setDraft(email); setEditing(false); }} className="p-1 rounded-lg text-slate-400 hover:bg-slate-100"><HiOutlineX className="w-4 h-4" /></button>
       </div>
@@ -61,10 +62,14 @@ function EmailCell({ rec }) {
   }
   return (
     <button onClick={() => { setDraft(email); setEditing(true); }}
-      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-semibold border transition-all ${email ? 'bg-blue-50/80 border-blue-200/80 text-blue-700 hover:bg-blue-100/80' : 'bg-slate-50 border-dashed border-slate-300 text-slate-500 hover:bg-slate-100'}`}
+      className={`group/email inline-flex items-center gap-1.5 max-w-full text-xs transition-colors ${
+        email ? 'font-medium text-slate-600 hover:text-blue-600' : 'font-semibold text-blue-600 hover:text-blue-700'
+      }`}
       title={email ? 'Edit email' : 'Add email'}>
-      <HiOutlineMail className="w-3.5 h-3.5" />
-      <span className="max-w-[220px] truncate">{email || 'Add email'}</span>
+      {email
+        ? <><HiOutlineMail className="w-3.5 h-3.5 flex-shrink-0 text-slate-400" /><span className="truncate">{email}</span></>
+        : <><HiOutlinePlus className="w-3.5 h-3.5 flex-shrink-0" /> Add email</>}
+      {email && <HiOutlinePencil className="w-3 h-3 flex-shrink-0 text-slate-300 group-hover/email:text-blue-500" />}
     </button>
   );
 }
@@ -82,6 +87,12 @@ export default function AirlineParticipants() {
   const canUploadCerts = can('internalCerts.manage');
   const [certsFor, setCertsFor] = useState(null); // { participant, mode: 'upload' | 'view' }
   const [certCounts, , certExpiries, reloadCerts] = useInternalCertCounts(internalCertsOn);
+  // Row grid: participant · training · email · (certificates) · actions.
+  const COLS = internalCertsOn
+    ? 'lg:grid lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_14rem_8rem] lg:items-center lg:gap-4'
+    : 'lg:grid lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1.1fr)_minmax(0,1.1fr)_8rem] lg:items-center lg:gap-4';
+  // Row actions sit in one joined control: neutral icons, colour only on hover.
+  const ACTION = 'h-8 w-8 inline-flex items-center justify-center text-slate-500 hover:bg-slate-50 hover:text-blue-600 transition-colors disabled:opacity-50';
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState(null);
@@ -104,9 +115,9 @@ export default function AirlineParticipants() {
     }
   };
 
-  const [search, setSearch] = useState('');
-  const [filterType, setFilterType] = useState('');
-  const [emailFilter, setEmailFilter] = useState(''); // '' | 'with' | 'without'
+  const [search, setSearch] = useHistoryState('search', '');
+  const [filterType, setFilterType] = useHistoryState('filterType', '');
+  const [emailFilter, setEmailFilter] = useHistoryState('emailFilter', ''); // '' | 'with' | 'without'
   const [bulkEmail, setBulkEmail] = useState(false);
   const [emailDrafts, setEmailDrafts] = useState({});
   const [savingEmails, setSavingEmails] = useState(false);
@@ -162,17 +173,17 @@ export default function AirlineParticipants() {
   const withEmail = records.filter((r) => r.email).length;
 
   return (
-    <div className="w-full min-h-full pb-20 flex flex-col">
-      {/* Sticky header + compact toolbar */}
+    <div className="w-full min-h-full flex flex-col">
+      {/* Sticky header: title + page actions */}
       <div className="sticky top-0 z-20 w-full bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-2xs">
-        <div className="w-full max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8 py-2 space-y-2">
+        <div className="w-full max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8 py-3">
           {/* Top Row: Title, Counter & Action Button */}
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
             <div className="flex items-center gap-2 min-w-0">
-              <div className="w-7 h-7 rounded-lg bg-slate-900 text-white flex items-center justify-center shadow-2xs flex-shrink-0">
-                <HiOutlineUsers className="w-4 h-4" />
+              <div className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center shadow-2xs flex-shrink-0">
+                <HiOutlineUsers className="w-4.5 h-4.5" />
               </div>
-              <h1 className="text-sm font-extrabold text-slate-900 tracking-tight leading-none">Participants</h1>
+              <h1 className="text-base font-bold text-slate-900 tracking-tight leading-none">Participants</h1>
               <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-100 text-[11px] font-bold flex-shrink-0">
                 {withEmail}/{records.length} with email
               </span>
@@ -180,31 +191,31 @@ export default function AirlineParticipants() {
 
             {/* Bulk Email Manager + New Enrollment Actions */}
             {bulkEmail ? (
-              <div className="flex items-center gap-1.5 flex-shrink-0">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <button type="button" onClick={saveAllEmails} disabled={savingEmails}
-                  className="inline-flex items-center gap-1 h-7 px-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-2xs disabled:opacity-60 whitespace-nowrap">
+                  className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-2xs disabled:opacity-60 whitespace-nowrap">
                   <HiOutlineCheck className="w-3.5 h-3.5" />{savingEmails ? 'Saving…' : 'Save All'}
                 </button>
                 <button type="button" onClick={() => setBulkEmail(false)} disabled={savingEmails}
-                  className="inline-flex items-center h-7 px-2.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-xs font-semibold whitespace-nowrap">
+                  className="inline-flex items-center h-8 px-3 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-xs font-semibold whitespace-nowrap">
                   Cancel
                 </button>
               </div>
             ) : (
-              <div className="flex items-center gap-1.5 flex-shrink-0">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 {internalCertsOn && (
                   <Link to="/airline/certificates"
-                  className="inline-flex items-center gap-1 h-7 px-2.5 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-xs font-semibold shadow-2xs whitespace-nowrap">
+                  className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-xs font-semibold shadow-2xs whitespace-nowrap">
                   <HiOutlineDocumentText className="w-3.5 h-3.5 text-slate-500" /> All Certificates
                 </Link>
                 )}
                 <button type="button" onClick={enterBulk}
-                  className="inline-flex items-center gap-1 h-7 px-2.5 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-xs font-semibold shadow-2xs whitespace-nowrap">
+                  className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-xs font-semibold shadow-2xs whitespace-nowrap">
                   <HiOutlineMail className="w-3.5 h-3.5 text-slate-500" /> Manage Emails
                 </button>
                 {(!can || can('participants.create')) && (
                   <Link to="/airline/enrollment/new"
-                    className="inline-flex items-center gap-1 h-7 px-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-2xs whitespace-nowrap">
+                    className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-2xs whitespace-nowrap">
                     <HiOutlinePlus className="w-3.5 h-3.5" /> New Enrollment
                   </Link>
                 )}
@@ -212,13 +223,28 @@ export default function AirlineParticipants() {
             )}
           </div>
 
-          {/* Bottom Row: Search & Filters in a single horizontal row */}
+        </div>
+      </div>
+
+      <div className="w-full max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8 py-5 flex-1">
+        {loading ? (
+          <div className="space-y-2.5">
+            <Skeleton className="h-12 w-full rounded-xl" />
+            <Skeleton className="h-12 w-full rounded-xl" />
+            <Skeleton className="h-12 w-full rounded-xl" />
+          </div>
+        ) : records.length === 0 ? (
+          <Card className="p-12 text-center text-sm font-medium text-slate-400 rounded-2xl">No participants enrolled yet.</Card>
+        ) : (
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden flex flex-col">
+            {/* Toolbar: search + filters */}
+            <div className="p-3 border-b border-slate-200/80">
           <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
             <div className="relative flex-1 min-w-[200px]">
               <HiOutlineSearch className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
               <input type="text" value={search} onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search by name, email or department…"
-                className="w-full pl-8 pr-7 py-1 bg-slate-50 border border-slate-200/80 rounded-lg text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 h-8 transition-all" />
+                className="w-full pl-8 pr-7 h-9 bg-slate-50 border border-slate-200/80 rounded-lg text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 h-8 transition-all" />
               {search && (
                 <button type="button" onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
                   <HiOutlineX className="w-3 h-3" />
@@ -227,7 +253,7 @@ export default function AirlineParticipants() {
             </div>
 
             <Select value={filterType || 'all'} onValueChange={(v) => setFilterType(v === 'all' ? '' : v)}>
-              <SelectTrigger className="w-[140px] sm:w-36 h-8 text-xs bg-white rounded-lg flex-shrink-0"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-[140px] sm:w-36 h-9 text-xs bg-white rounded-lg flex-shrink-0"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Training Types</SelectItem>
                 {TRAINING_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
@@ -235,7 +261,7 @@ export default function AirlineParticipants() {
             </Select>
 
             <Select value={emailFilter || 'all'} onValueChange={(v) => setEmailFilter(v === 'all' ? '' : v)}>
-              <SelectTrigger className="w-[120px] sm:w-32 h-8 text-xs bg-white rounded-lg flex-shrink-0"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-[120px] sm:w-32 h-9 text-xs bg-white rounded-lg flex-shrink-0"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Any Email</SelectItem>
                 <SelectItem value="with">Has Email</SelectItem>
@@ -243,124 +269,119 @@ export default function AirlineParticipants() {
               </SelectContent>
             </Select>
           </div>
-        </div>
-      </div>
+            </div>
 
-      <div className="w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 space-y-4 flex-1">
-        {loading ? (
-          <div className="space-y-2.5">
-            <Skeleton className="h-16 w-full rounded-2xl" />
-            <Skeleton className="h-16 w-full rounded-2xl" />
-            <Skeleton className="h-16 w-full rounded-2xl" />
-          </div>
-        ) : records.length === 0 ? (
-          <Card className="p-12 text-center text-sm font-medium text-slate-400 rounded-2xl">No participants enrolled yet.</Card>
-        ) : (
-          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs divide-y divide-slate-100 overflow-hidden">
+            {/* Column header */}
+            <div className={`hidden ${COLS} px-4 sm:px-5 py-2 bg-slate-50/80 border-b border-slate-200/80 text-[10px] font-semibold uppercase tracking-wider text-slate-400`}>
+              <span>Participant</span>
+              <span>Training</span>
+              <span>Email</span>
+              {internalCertsOn && <span>Certificates</span>}
+              <span className="text-right">Actions</span>
+            </div>
+
+            {/* Rows — fixed height, scrolls internally */}
+            <div className="h-[calc(100vh-19.5rem)] min-h-[18rem] overflow-y-auto divide-y divide-slate-100">
             {filtered.length === 0 ? (
-              <div className="p-8 text-center text-xs font-medium text-slate-400">No participants match your filters.</div>
-            ) : filtered.map((r) => (
-              <div key={r.id || r._id} className="flex flex-col lg:flex-row lg:items-center gap-3 px-4 sm:px-5 py-3.5 hover:bg-slate-50/60 transition-colors">
-                {/* Identity */}
-                <div className="flex items-center gap-3 flex-1 min-w-0">
-                  <Avatar className="w-9 h-9 border border-slate-200 shadow-2xs flex-shrink-0">
-                    <AvatarFallback className="bg-slate-100 text-slate-600 text-[11px] font-bold">{initials(r.participant_name)}</AvatarFallback>
+              <div className="h-full flex items-center justify-center text-xs font-medium text-slate-400">No participants match your filters.</div>
+            ) : filtered.map((r) => {
+              const id = r.id || r._id;
+              const certs = certCounts[id] || 0;
+              return (
+              <div key={id} className={`${COLS} px-4 sm:px-5 py-2.5 hover:bg-slate-50/60 transition-colors`}>
+                {/* Participant */}
+                <div className="flex items-center gap-3 min-w-0">
+                  <Avatar className="w-8 h-8 flex-shrink-0">
+                    <AvatarFallback className="bg-slate-100 text-slate-600 text-[10px] font-bold">{initials(r.participant_name)}</AvatarFallback>
                   </Avatar>
                   <div className="min-w-0">
-                    <p className="text-sm font-bold text-slate-900 truncate">{r.participant_name}</p>
-                    <p className="text-[11px] text-slate-400 font-medium truncate">
-                      {r.department || '—'} · {fmtDate(r.training_date)}{r.end_date ? ` → ${fmtDate(r.end_date)}` : ''}
-                    </p>
+                    <p className="text-sm font-semibold text-slate-900 truncate capitalize" title={r.participant_name}>{r.participant_name}</p>
+                    <p className="text-[11px] text-slate-400 truncate">{r.department || 'No department'}</p>
                   </div>
                 </div>
 
-                {/* Meta + email + status + actions */}
-                <div className="flex items-center gap-2.5 flex-wrap lg:flex-nowrap pl-12 lg:pl-0 flex-shrink-0">
-                  {/* Training Type */}
-                  <div className="w-14 shrink-0 flex justify-center">
-                    {r.training_type ? (
-                      <span className="w-full text-center px-2 py-1 rounded-lg bg-slate-100 border border-slate-200/80 text-[11px] font-bold text-slate-600">{r.training_type}</span>
+                {/* Training */}
+                <div className="mt-2 lg:mt-0 pl-11 lg:pl-0 flex items-center gap-2 min-w-0">
+                  {r.training_type && (
+                    <span className="px-1.5 py-0.5 rounded-md bg-slate-100 text-[10px] font-bold text-slate-600 flex-shrink-0">{r.training_type}</span>
+                  )}
+                  <HiOutlineCalendar className="w-3.5 h-3.5 text-slate-300 flex-shrink-0" />
+                  <span className="text-[11px] text-slate-500 truncate">
+                    {r.training_date ? `${fmtDate(r.training_date)}${r.end_date ? ` → ${fmtDate(r.end_date)}` : ''}` : 'No date'}
+                  </span>
+                </div>
+
+                {/* Email */}
+                <div className="mt-2 lg:mt-0 pl-11 lg:pl-0 min-w-0">
+                  {bulkEmail ? (
+                    <input type="email"
+                      value={emailDrafts[id] ?? (r.email || '')}
+                      onChange={(e) => setDraft(id, e.target.value)}
+                      placeholder="candidate@email.com"
+                      className="w-full px-2.5 py-1 text-xs border border-blue-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/25 bg-blue-50/30" />
+                  ) : (
+                    <EmailCell rec={r} />
+                  )}
+                </div>
+
+                {/* Internal certificates */}
+                {internalCertsOn && (
+                  <div className="mt-2 lg:mt-0 pl-11 lg:pl-0 flex items-center gap-2 min-w-0">
+                    {certs > 0 ? (
+                      <>
+                        <button type="button" onClick={() => setCertsFor({ participant: r, mode: 'view' })}
+                          title="View uploaded certificates"
+                          className="inline-flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-blue-600 transition-colors whitespace-nowrap">
+                          <HiOutlineDocumentText className="w-3.5 h-3.5 text-slate-400" /> {certs} file{certs === 1 ? '' : 's'}
+                        </button>
+                        <ValidityBadge expiry={certExpiries[id] ?? null} showDate={false} />
+                      </>
                     ) : (
-                      <span className="w-full text-center text-slate-300 text-xs">—</span>
+                      <span className="text-xs text-slate-300">None</span>
                     )}
                   </div>
+                )}
 
-                  {/* Email */}
-                  <div className="w-44 sm:w-48 shrink-0">
-                    {bulkEmail ? (
-                      <input type="email"
-                        value={emailDrafts[r.id || r._id] ?? (r.email || '')}
-                        onChange={(e) => setDraft(r.id || r._id, e.target.value)}
-                        placeholder="candidate@email.com"
-                        className="w-full px-2.5 py-1 text-xs border border-blue-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/25 bg-blue-50/30" />
-                    ) : (
-                      <EmailCell rec={r} />
-                    )}
-                  </div>
-
-                  {/* Performance */}
-                  <div className="w-28 shrink-0">
-                    <Link to={`/airline/participants/${r.id || r._id}/performance`}
-                      className="w-full justify-center inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold bg-slate-50 border border-slate-200 hover:border-blue-300 hover:bg-blue-50 text-slate-600 hover:text-blue-600 transition-all">
-                      <HiOutlineChartBar className="w-3.5 h-3.5 shrink-0" /> Performance
-                    </Link>
-                  </div>
-
-                  {/* Internal certificates */}
-                  {internalCertsOn && (
-                    <div className="shrink-0 flex items-center gap-1">
-                      {canUploadCerts && (
-                        <button type="button" onClick={() => setCertsFor({ participant: r, mode: 'upload' })}
-                          title="Upload a new certificate"
-                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-blue-50 border border-blue-200 hover:bg-blue-100 text-blue-700 transition-all whitespace-nowrap">
-                          <HiOutlineUpload className="w-3.5 h-3.5 shrink-0" /> Upload
-                        </button>
-                      )}
-                      <button type="button" onClick={() => setCertsFor({ participant: r, mode: 'view' })}
-                        disabled={!certCounts[r.id || r._id]}
-                        title={certCounts[r.id || r._id] ? 'View uploaded certificates' : 'No certificates uploaded yet'}
-                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-slate-50 border border-slate-200 hover:border-blue-300 hover:bg-blue-50 text-slate-600 hover:text-blue-600 transition-all whitespace-nowrap disabled:opacity-40 disabled:pointer-events-none">
-                        <HiOutlineDocumentText className="w-3.5 h-3.5 shrink-0" /> Certificates
-                        <span className="ml-0.5 px-1.5 rounded-md bg-white border border-slate-200 text-[10px] font-bold text-slate-500">{certCounts[r.id || r._id] || 0}</span>
-                      </button>
-                      {certCounts[r.id || r._id] > 0 && <ValidityBadge expiry={certExpiries[r.id || r._id] ?? null} showDate={false} />}
-                    </div>
+                {/* Actions */}
+                <div className="mt-2 lg:mt-0 pl-11 lg:pl-0 flex lg:justify-end">
+                  <div className="inline-flex items-center rounded-lg border border-slate-200 bg-white divide-x divide-slate-200 overflow-hidden shadow-2xs">
+                  <Link to={`/airline/participants/${id}/performance`} title="Performance dashboard" className={ACTION}>
+                    <HiOutlinePresentationChartLine className="w-4 h-4" />
+                  </Link>
+                  {internalCertsOn && canUploadCerts && (
+                    <button type="button" onClick={() => setCertsFor({ participant: r, mode: 'upload' })}
+                      title="Upload a certificate" className={ACTION}>
+                      <HiOutlineUpload className="w-4 h-4" />
+                    </button>
                   )}
-
-                  {/* Edit / Delete */}
-                  {(canEdit || canDelete) && (
-                    <div className="shrink-0 flex items-center gap-1">
-                      {canEdit && (
-                        <button type="button"
-                          onClick={() => navigate(`/airline/enrollment/${r.id || r._id}/edit`)}
-                          title="Edit participant"
-                          className="p-1.5 rounded-lg bg-slate-50 border border-slate-200 hover:border-blue-300 hover:bg-blue-50 text-slate-500 hover:text-blue-600 transition-all">
-                          <HiOutlinePencil className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                      {canDelete && (
-                        <button type="button"
-                          onClick={() => removeRecord(r)}
-                          disabled={deletingId === (r.id || r._id)}
-                          title="Delete participant"
-                          className="p-1.5 rounded-lg bg-slate-50 border border-slate-200 hover:border-red-300 hover:bg-red-50 text-slate-500 hover:text-red-600 transition-all disabled:opacity-50">
-                          <HiOutlineTrash className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
+                  {canEdit && (
+                    <button type="button" onClick={() => navigate(`/airline/enrollment/${id}/edit`)}
+                      title="Edit participant" className={ACTION}>
+                      <HiOutlinePencil className="w-4 h-4" />
+                    </button>
                   )}
-
+                  {canDelete && (
+                    <button type="button" onClick={() => removeRecord(r)} disabled={deletingId === id}
+                      title="Delete participant"
+                      className={`${ACTION} hover:!bg-red-50 hover:!text-red-600`}>
+                      <HiOutlineTrash className="w-4 h-4" />
+                    </button>
+                  )}
+                  </div>
                 </div>
               </div>
-            ))}
+              );
+            })}
+            </div>
+
+            {/* Footer */}
+            <div className="px-4 sm:px-5 py-2 bg-slate-50/80 border-t border-slate-200/80 text-[11px] font-medium text-slate-400 flex items-center justify-between">
+              <span>{withEmail} of {records.length} have an email</span>
+              <span>Showing {filtered.length} of {records.length}</span>
+            </div>
           </div>
         )}
 
-        {!loading && records.length > 0 && (
-          <p className="text-xs text-slate-400 text-right font-medium">
-            Showing {filtered.length} of {records.length} participant{records.length !== 1 ? 's' : ''}
-          </p>
-        )}
       </div>
       {ConfirmDialog}
       <InternalCertificatesDialog participant={certsFor?.participant} mode={certsFor?.mode}

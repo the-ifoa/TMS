@@ -89,7 +89,12 @@ exports.bulkEnsureSheets = async (req, res) => {
 
     let parts = await Participant.find({ _id: { $in: ids } }).lean();
     if (req.admin.role === 'airline') {
-      parts = parts.filter(p => String(p.submitted_by) === String(req.admin.id));
+      // Own records, plus owner-less legacy ones matched by airline name — the
+      // same set the airline's participant list shows.
+      const myName = (req.admin.airlineName || '').trim().toLowerCase();
+      parts = parts.filter(p => (p.submitted_by
+        ? String(p.submitted_by) === String(req.admin.id)
+        : !!myName && [p.airline_name, p.company].some(v => (v || '').trim().toLowerCase() === myName)));
     }
     if (!parts.length) return res.status(404).json({ error: 'No matching participants' });
 

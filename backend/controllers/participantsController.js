@@ -320,38 +320,36 @@ exports.listAirlineNames = async (req, res) => {
   }
 };
 
+// Does this airline-side caller own the record? Same rule the list view uses,
+// so anything an account can SEE in its list it can also open / edit / delete:
+//   • owner id matches the caller, or
+//   • (top-level airline only) a legacy record with no owner whose airline /
+//     company name is the caller's — unless it belongs to one of its departments.
+async function airlineOwnsRecord(req, doc) {
+  if (doc.submitted_by) return String(doc.submitted_by) === String(req.admin.id);
+  const s = req.scope || {};
+  if (s.isDepartment) return false;
+  const name = (req.admin.airlineName || '').trim().toLowerCase();
+  if (!name) return false;
+  const matches = [doc.airline_name, doc.company].some((v) => (v || '').trim().toLowerCase() === name);
+  if (!matches) return false;
+  const deptIds = s.departmentIds || [];
+  if (deptIds.length && doc.department) {
+    const deptDocs = await Airline.find({ _id: { $in: deptIds } }).select('department_name name').lean();
+    const deptNames = new Set(deptDocs.flatMap((d) => [d.department_name, d.name]).filter(Boolean));
+    if (deptNames.has(doc.department)) return false;
+  }
+  return true;
+}
+
 // ─── GET single participant ───────────────────────────────────────────────────
 exports.getParticipant = async (req, res) => {
   try {
     const participant = await Participant.findById(req.params.id);
     if (!participant) return res.status(404).json({ error: 'Participant not found' });
 
-    if (req.admin.role === 'airline') {
-      const isDept = !!(req.scope && req.scope.isDepartment);
-      const ownedById = participant.submitted_by && String(participant.submitted_by) === String(req.admin.id);
-
-      // A top-level airline must never reach a record that belongs to one of its
-      // departments — not by owner id, and not via the legacy name-match below
-      // (a department candidate carries the parent's airline_name).
-      const deptIds = (req.scope && req.scope.departmentIds) || [];
-      const ownedByDept = participant.submitted_by
-        && deptIds.some((d) => String(d) === String(participant.submitted_by));
-      let belongsToDept = ownedByDept;
-      if (!isDept && !participant.submitted_by && deptIds.length && participant.department) {
-        const deptDocs = await Airline.find({ _id: { $in: deptIds } })
-          .select('department_name name').lean();
-        const deptNames = new Set(deptDocs.flatMap((d) => [d.department_name, d.name]).filter(Boolean));
-        if (deptNames.has(participant.department)) belongsToDept = true;
-      }
-
-      // Legacy name fallback only for a top-level airline, and only for records
-      // that don't belong to a department.
-      const ownedByName = !isDept && !belongsToDept
-        && !participant.submitted_by && participant.airline_name === req.admin.airlineName;
-
-      if (belongsToDept || (!ownedById && !ownedByName)) {
-        return res.status(403).json({ error: 'Access denied.' });
-      }
+    if (req.admin.role === 'airline' && !(await airlineOwnsRecord(req, participant))) {
+      return res.status(403).json({ error: 'Access denied.' });
     }
 
     res.json(participant);
@@ -661,8 +659,7 @@ exports.updateEmail = async (req, res) => {
     const doc = await Participant.findById(req.params.id);
     if (!doc) return res.status(404).json({ error: 'Participant not found' });
 
-    const isOwnerAirline = req.admin.role === 'airline'
-      && doc.submitted_by && String(doc.submitted_by) === String(req.admin.id);
+    const isOwnerAirline = req.admin.role === 'airline' && await airlineOwnsRecord(req, doc);
     if (req.admin.role !== 'admin' && req.admin.role !== 'Administrator' && !isOwnerAirline) {
       return res.status(403).json({ error: 'Not allowed to edit this record.' });
     }
@@ -695,7 +692,7 @@ exports.updateParticipant = async (req, res) => {
     if (!doc) return res.status(404).json({ error: 'Participant not found' });
 
     if (req.admin.role === 'airline') {
-      const owns = doc.submitted_by && String(doc.submitted_by) === String(req.admin.id);
+      const owns = await airlineOwnsRecord(req, doc);
       if (!owns) {
         return res.status(403).json({ error: 'You can only edit records in your own list.' });
       }
@@ -928,7 +925,7 @@ exports.deleteParticipant = async (req, res) => {
     if (!doc) return res.status(404).json({ error: 'Participant not found' });
 
     if (req.admin.role === 'airline') {
-      const owns = doc.submitted_by && String(doc.submitted_by) === String(req.admin.id);
+      const owns = await airlineOwnsRecord(req, doc);
       if (!owns) {
         return res.status(403).json({ error: 'You can only delete records in your own list.' });
       }

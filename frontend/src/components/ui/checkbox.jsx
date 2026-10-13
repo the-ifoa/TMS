@@ -1,22 +1,18 @@
 import * as React from 'react';
-import * as CheckboxPrimitive from '@radix-ui/react-checkbox';
-import { HiCheck } from 'react-icons/hi';
 import { cn } from '@/lib/utils';
+import { Checkbox as CheckboxPrimitive, CheckboxIndicator } from '@/components/animate-ui/primitives/radix/checkbox';
 
-const Checkbox = React.forwardRef(({ className, ...props }, ref) => (
-  <CheckboxPrimitive.Root
-    ref={ref}
+// Checkbox with a drawn-in tick (Animate UI). Same API as the shadcn one it replaced.
+const Checkbox = ({ className, ...props }) => (
+  <CheckboxPrimitive
     className={cn(
-      'peer h-4 w-4 shrink-0 rounded-md border border-slate-300 bg-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 data-[state=indeterminate]:bg-blue-600 data-[state=indeterminate]:border-blue-600',
+      'peer flex h-4 w-4 shrink-0 items-center justify-center rounded-md border border-slate-300 bg-white text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 data-[state=indeterminate]:bg-blue-600 data-[state=indeterminate]:border-blue-600',
       className
     )}
     {...props}
   >
-    <CheckboxPrimitive.Indicator className="flex items-center justify-center text-white">
-      <HiCheck className="h-3.5 w-3.5" />
-    </CheckboxPrimitive.Indicator>
-  </CheckboxPrimitive.Root>
-));
-Checkbox.displayName = CheckboxPrimitive.Root.displayName;
+    <CheckboxIndicator viewBox="0 0 24 24" className="h-3 w-3" />
+  </CheckboxPrimitive>
+);
 
 export { Checkbox };

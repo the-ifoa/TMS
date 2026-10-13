@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useHistoryState } from '@/hooks/use-history-state';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
@@ -15,10 +16,10 @@ import {
 } from '@/components/ui/select';
 
 const INVITE_STATUS = {
-  sent:        { label: 'Sent',        cls: 'bg-blue-50 text-blue-700 border-blue-200' },
-  opened:      { label: 'Opened',      cls: 'bg-amber-50 text-amber-700 border-amber-200' },
-  in_progress: { label: 'In Progress', cls: 'bg-violet-50 text-violet-700 border-violet-200' },
-  completed:   { label: 'Completed',   cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  sent:        { label: 'Sent',        cls: 'text-slate-500',   dot: 'bg-slate-400' },
+  opened:      { label: 'Opened',      cls: 'text-amber-700',   dot: 'bg-amber-500' },
+  in_progress: { label: 'In progress', cls: 'text-violet-700',  dot: 'bg-violet-500' },
+  completed:   { label: 'Completed',   cls: 'text-emerald-700', dot: 'bg-emerald-500' },
 };
 
 function fmtDate(v) {
@@ -33,9 +34,9 @@ export default function AirlineExams() {
   const navigate = useNavigate();
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [sortDir, setSortDir] = useState('newest');
-  const [openBatch, setOpenBatch] = useState(null);
+  const [search, setSearch] = useHistoryState('search', '');
+  const [sortDir, setSortDir] = useHistoryState('sortDir', 'newest');
+  const [openBatch, setOpenBatch] = useHistoryState('openBatch', null);
 
   useEffect(() => {
     getAirlineExamResults()
@@ -192,7 +193,7 @@ export default function AirlineExams() {
       </div>
 
       {/* Batch detail modal */}
-      <Dialog open={!!openBatch} onOpenChange={(o) => !o && setOpenBatch(null)}>
+      <Dialog open={!!activeBatch} onOpenChange={(o) => !o && setOpenBatch(null)}>
         <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col p-0 overflow-hidden rounded-3xl border border-slate-200/80 shadow-2xl bg-white">
           {activeBatch && (
             <>
@@ -234,12 +235,18 @@ export default function AirlineExams() {
                           <p className="text-[11px] text-slate-400 font-medium truncate">{r.participant_email}</p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 flex-shrink-0 flex-wrap pl-12 sm:pl-0">
+                      <div className="flex items-center gap-3.5 flex-shrink-0 flex-wrap pl-12 sm:pl-0">
                         {att && att.percentage != null && !pending && (
-                          <span className={`text-xs font-extrabold px-2.5 py-1 rounded-xl border ${att.passed ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'}`}>{att.percentage}%</span>
+                          <span className={`text-sm font-bold tabular-nums ${att.passed ? 'text-emerald-600' : 'text-rose-600'}`} title={att.passed ? 'Passed' : 'Not passed'}>{att.percentage}%</span>
                         )}
-                        {pending && <span className="text-xs font-bold px-2.5 py-1 rounded-xl border bg-amber-50 text-amber-700 border-amber-200">Awaiting Review</span>}
-                        <span className={`text-xs font-bold px-2.5 py-1 rounded-xl border ${st.cls}`}>{st.label}</span>
+                        {pending && (
+                          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-700">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" /> Awaiting review
+                          </span>
+                        )}
+                        <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${st.cls}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} /> {st.label}
+                        </span>
                         {att && att.status !== 'in_progress' && (
                           <button type="button" onClick={() => navigate(`/airline/exams/${r.exam_id}/result/${att.id}`)}
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 shadow-2xs">

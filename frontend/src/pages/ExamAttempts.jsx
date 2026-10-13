@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useHistoryState, useBack } from '@/hooks/use-history-state';
 import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
@@ -706,12 +707,13 @@ export default function ExamAttempts() {
   const navigate = useNavigate();
   const { isAdmin, can } = useAuth();
   const backToExams = isAdmin ? '/admin/exams' : '/airline/exams/manage';
+  const goBack = useBack(backToExams);
   const [exam, setExam] = useState(null);
   const [attempts, setAttempts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [gradingId, setGradingId] = useState(null);
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [search, setSearch] = useHistoryState('search', '');
+  const [statusFilter, setStatusFilter] = useHistoryState('statusFilter', 'all');
   const [analytics, setAnalytics] = useState(null);
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [expandedViolations, setExpandedViolations] = useState(() => new Set());
@@ -976,21 +978,21 @@ export default function ExamAttempts() {
       <div className="sticky top-0 z-20 w-full bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-2xs">
         <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 space-y-2.5">
           {/* Top Row: Navigation, Title & Right Controls */}
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+            <div className="flex items-center gap-2.5 min-w-0 flex-1 basis-60">
               <button
                 type="button"
                 className="h-8 px-3 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:border-slate-300 flex items-center gap-1.5 flex-shrink-0 shadow-2xs transition-all cursor-pointer"
-                onClick={() => navigate(backToExams)}
-                title="Back to Exams"
+                onClick={goBack}
+                title="Back"
               >
                 <HiOutlineArrowLeft className="w-3.5 h-3.5 text-slate-500" />
-                <span className="hidden sm:inline">Back to Exams</span>
+                <span className="hidden sm:inline">Back</span>
                 <span className="sm:hidden">Back</span>
               </button>
 
-              <div className="flex items-center gap-2 min-w-0 truncate border-l border-slate-200 pl-3">
-                <h1 className="text-sm sm:text-base font-bold text-slate-900 tracking-tight truncate" title={exam?.title}>
+              <div className="flex items-center gap-2 min-w-0 border-l border-slate-200 pl-3">
+                <h1 className="text-sm sm:text-base font-bold text-slate-900 tracking-tight line-clamp-2 sm:line-clamp-1" title={exam?.title}>
                   {exam?.title || 'Exam'}
                 </h1>
                 <span className="hidden sm:inline-block text-[10px] font-bold text-slate-600 bg-slate-100 border border-slate-200/70 px-2 py-0.5 rounded-md flex-shrink-0">
@@ -1243,7 +1245,7 @@ export default function ExamAttempts() {
           <div className="space-y-3">
             {canSelect && (
               <div className="flex items-center justify-between gap-3 px-1">
-                <label className="inline-flex items-center gap-2 text-xs font-semibold text-slate-600 cursor-pointer select-none">
+                <label className="inline-flex items-center gap-2 text-xs font-semibold text-slate-600 cursor-pointer select-none whitespace-nowrap flex-shrink-0">
                   <input
                     type="checkbox"
                     className="w-4 h-4 rounded border-slate-300 cursor-pointer"

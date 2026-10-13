@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useBack } from '@/hooks/use-history-state';
 import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
@@ -534,6 +535,7 @@ export default function ExamBuilder() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { isAdmin } = useAuth();
+  const goBack = useBack(isAdmin ? '/admin/exams' : '/airline/exams/manage');
   const base = isAdmin ? '/admin/exams' : '/airline/exams';
   const isNew = !id;
 
@@ -874,8 +876,8 @@ export default function ExamBuilder() {
         <div className="w-full max-w-7xl mx-auto flex items-center justify-between gap-3">
           {/* Left: Back button */}
           <div className="flex items-center flex-shrink-0">
-            <Button variant="outline" size="sm" onClick={() => navigate(isAdmin ? '/admin/exams' : '/airline/exams/manage')} className="rounded-xl border-slate-200 text-xs font-semibold">
-              <HiOutlineArrowLeft className="w-4 h-4" /> <span className="hidden sm:inline">Back to Exam System</span><span className="sm:hidden">Back</span>
+            <Button variant="outline" size="sm" onClick={goBack} className="rounded-xl border-slate-200 text-xs font-semibold">
+              <HiOutlineArrowLeft className="w-4 h-4" /> <span className="hidden sm:inline">Back</span><span className="sm:hidden">Back</span>
             </Button>
           </div>
 

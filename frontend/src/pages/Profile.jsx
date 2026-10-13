@@ -186,11 +186,11 @@ export default function Profile() {
       </div>
 
       {/* Main Content Layout */}
-      <div className="space-y-6">
-        {/* Profile Card */}
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-6 shadow-2xs">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6">
-            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl flex items-center justify-center overflow-hidden flex-shrink-0">
+      <div className="space-y-4">
+        {/* Account card: identity on top, details underneath */}
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 p-5 sm:p-6">
+            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-slate-50 border border-slate-100 p-1.5 flex items-center justify-center overflow-hidden flex-shrink-0">
               {!isAdmin && admin?.logo_url
                 ? <img src={admin.logo_url} alt={admin.airlineName} className="w-full h-full object-contain" />
                 : <img src={logoImg} alt="IFOA" className="w-12 h-12 sm:w-16 sm:h-16 object-contain" />
@@ -222,44 +222,43 @@ export default function Profile() {
                   </button>
                 </div>
               )}
-              <p className="text-xs font-medium text-slate-500 mt-0.5">{admin?.role || 'Administrator'}</p>
+              <p className="text-xs font-medium text-slate-500 mt-0.5 capitalize">{admin?.role || 'Administrator'}</p>
             </div>
           </div>
-        </div>
 
-        {/* Account Details Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-2xs">
+          {/* Account details — hairline-separated cells, not separate cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-slate-100 border-t border-slate-100">
+          <div className="bg-white px-5 sm:px-6 py-4">
             <div className="flex items-center gap-3.5">
-              <div className="w-10 h-10 bg-slate-50 border border-slate-100 rounded-xl flex items-center justify-center flex-shrink-0">
+              <div className="w-9 h-9 bg-slate-50 rounded-lg flex items-center justify-center flex-shrink-0">
                 <HiOutlineMail className="w-5 h-5 text-slate-600" />
               </div>
               <div className="min-w-0">
-                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Email</p>
+                <p className="text-[11px] font-medium text-slate-400">Email</p>
                 <p className="text-sm font-semibold text-slate-800 truncate mt-0.5">{admin?.email || 'admin@ifoa.com'}</p>
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-2xs">
+          <div className="bg-white px-5 sm:px-6 py-4">
             <div className="flex items-center gap-3.5">
-              <div className="w-10 h-10 bg-slate-50 border border-slate-100 rounded-xl flex items-center justify-center flex-shrink-0">
+              <div className="w-9 h-9 bg-slate-50 rounded-lg flex items-center justify-center flex-shrink-0">
                 <HiOutlineShieldCheck className="w-5 h-5 text-slate-600" />
               </div>
               <div className="min-w-0">
-                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Role</p>
-                <p className="text-sm font-semibold text-slate-800 mt-0.5">{admin?.role || 'Administrator'}</p>
+                <p className="text-[11px] font-medium text-slate-400">Role</p>
+                <p className="text-sm font-semibold text-slate-800 mt-0.5 capitalize">{admin?.role || 'Administrator'}</p>
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-2xs">
+          <div className="bg-white px-5 sm:px-6 py-4">
             <div className="flex items-center gap-3.5">
-              <div className="w-10 h-10 bg-slate-50 border border-slate-100 rounded-xl flex items-center justify-center flex-shrink-0">
+              <div className="w-9 h-9 bg-slate-50 rounded-lg flex items-center justify-center flex-shrink-0">
                 <HiOutlineUserCircle className="w-5 h-5 text-slate-600" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Organization</p>
+                <p className="text-[11px] font-medium text-slate-400">Organization</p>
                 {!isAdmin && editingAirlineName ? (
                   <div className="flex flex-wrap items-center gap-2 mt-1">
                     <input
@@ -299,13 +298,13 @@ export default function Profile() {
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-2xs">
+          <div className="bg-white px-5 sm:px-6 py-4">
             <div className="flex items-center gap-3.5">
-              <div className="w-10 h-10 bg-slate-50 border border-slate-100 rounded-xl flex items-center justify-center flex-shrink-0">
+              <div className="w-9 h-9 bg-slate-50 rounded-lg flex items-center justify-center flex-shrink-0">
                 <HiOutlineClock className="w-5 h-5 text-slate-600" />
               </div>
               <div className="min-w-0">
-                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Last Login</p>
+                <p className="text-[11px] font-medium text-slate-400">Last Login</p>
                 <p className="text-sm font-semibold text-slate-800 mt-0.5">
                   {new Date(admin?.lastLogin || Date.now()).toLocaleDateString('en-GB', {
                     day: '2-digit', month: 'short', year: 'numeric',
@@ -314,6 +313,7 @@ export default function Profile() {
                 </p>
               </div>
             </div>
+          </div>
           </div>
         </div>
 
@@ -446,19 +446,28 @@ export default function Profile() {
           <SecondaryLoginsCard viaSecondary={!!admin?.logged_in_as} signedInAs={admin?.logged_in_as} />
         )}
 
-        {/* Change Email */}
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-6 shadow-2xs">
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-slate-50 border border-slate-100 rounded-xl flex items-center justify-center">
+        {/* Sign-in & security: email and password as two rows of one card */}
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs divide-y divide-slate-100 overflow-hidden">
+          <div className="px-5 sm:px-6 py-3">
+            <h3 className="text-sm font-bold text-slate-900">Sign-in &amp; security</h3>
+          </div>
+
+          {/* Change Email */}
+          <div className="px-5 sm:px-6 py-4">
+          <div className={`flex flex-wrap items-center justify-between gap-3 ${changingEmail ? 'mb-4' : ''}`}>
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-9 h-9 bg-slate-50 rounded-lg flex items-center justify-center flex-shrink-0">
                 <HiOutlineMail className="w-5 h-5 text-slate-600" />
               </div>
-              <h3 className="text-base font-bold text-slate-900">Change Email</h3>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-slate-900">Email address</p>
+                <p className="text-xs font-medium text-slate-400 truncate">{admin?.email}</p>
+              </div>
             </div>
             {!changingEmail && (
               <button onClick={() => setChangingEmail(true)}
-                className="px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-xl hover:bg-slate-800 shadow-2xs transition-colors whitespace-nowrap">
-                Change Email
+                className="px-3.5 py-1.5 bg-white border border-slate-200 text-slate-700 text-xs font-semibold rounded-lg hover:bg-slate-50 hover:border-slate-300 transition-colors whitespace-nowrap">
+                Change
               </button>
             )}
           </div>
@@ -488,21 +497,24 @@ export default function Profile() {
               </div>
             </div>
           )}
-        </div>
+          </div>
 
-        {/* Change Password */}
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-6 shadow-2xs">
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-slate-50 border border-slate-100 rounded-xl flex items-center justify-center">
+          {/* Change Password */}
+          <div className="px-5 sm:px-6 py-4">
+          <div className={`flex flex-wrap items-center justify-between gap-3 ${changingPassword ? 'mb-4' : ''}`}>
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-9 h-9 bg-slate-50 rounded-lg flex items-center justify-center flex-shrink-0">
                 <HiOutlineLockClosed className="w-5 h-5 text-slate-600" />
               </div>
-              <h3 className="text-base font-bold text-slate-900">Change Password</h3>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-slate-900">Password</p>
+                <p className="text-xs font-medium text-slate-400">Use at least 6 characters</p>
+              </div>
             </div>
             {!changingPassword && (
               <button onClick={() => setChangingPassword(true)}
-                className="px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-xl hover:bg-slate-800 shadow-2xs transition-colors whitespace-nowrap">
-                Change Password
+                className="px-3.5 py-1.5 bg-white border border-slate-200 text-slate-700 text-xs font-semibold rounded-lg hover:bg-slate-50 hover:border-slate-300 transition-colors whitespace-nowrap">
+                Change
               </button>
             )}
           </div>
@@ -538,8 +550,8 @@ export default function Profile() {
               </div>
             </div>
           )}
+          </div>
         </div>
-
 
         {/* Account Information — airline only */}
         {!isAdmin && (

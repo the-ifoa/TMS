@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useHistoryState } from '@/hooks/use-history-state';
 import toast from 'react-hot-toast';
 import {
   HiOutlineDocumentText, HiOutlineSearch, HiOutlineEye, HiOutlineDownload, HiOutlineTrash,
@@ -6,11 +7,15 @@ import {
 import {
   listAllInternalCertificates, deleteInternalCertificate,
   getParticipants, downloadIssuedCertificate, previewIssuedCertificate,
+  listInternalAssessments, getAssessmentCertificate, deleteAssessmentCertificate,
 } from '../api';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { useAuth } from '../context/AuthContext';
 import { useConfirm } from '@/hooks/use-confirm';
 import { openInternalCertificate } from '../components/InternalCertificatesDialog';
 import ValidityBadge from '../components/ValidityBadge';
+import SegmentedToggle from '../components/SegmentedToggle';
+import { CountingNumber } from '@/components/animate-ui/primitives/texts/counting-number';
 import { internalCertExpiry, certExpiry } from '../utils/certValidity';
 
 function fmtDate(v) {
@@ -70,24 +75,46 @@ async function openIfoaCertificate(c, download) {
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
-const COLS = 'md:grid md:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_6.5rem_9.5rem_8.5rem_6.5rem] md:items-center md:gap-4';
+// Assessment filter value for certificates uploaded straight onto a candidate.
+const NO_ASSESSMENT = '__none__';
 
-const AVATAR_TONES = [
-  'bg-blue-100 text-blue-700', 'bg-emerald-100 text-emerald-700', 'bg-amber-100 text-amber-700',
-  'bg-violet-100 text-violet-700', 'bg-rose-100 text-rose-700', 'bg-cyan-100 text-cyan-700',
-];
+// A certificate uploaded inside an internal assessment, shaped like an internal row.
+function assessmentRow(a, c) {
+  return {
+    id: `${a.id}:${c.id}`,
+    assessment: { id: a.id, title: a.title, candidateId: c.id },
+    title: c.certificate.original_name?.replace(/\.pdf$/i, '') || 'Certificate',
+    original_name: c.certificate.original_name,
+    issued_on: a.assessment_date,
+    uploaded_by_name: c.certificate.uploaded_by_name || a.created_by_name,
+    createdAt: c.certificate.uploaded_at,
+    participant: { participant_name: c.name, email: c.email, owner_name: '' },
+  };
+}
+
+async function openAssessmentCertificate(c, download) {
+  const res = await getAssessmentCertificate(c.assessment.id, c.assessment.candidateId);
+  const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+  if (download) {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = c.original_name || `${c.title}.pdf`;
+    a.click();
+  } else {
+    window.open(url, '_blank', 'noopener');
+  }
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
+// Row actions sit in one joined control: neutral icons, colour only on hover.
+const ACTION = 'h-8 w-8 inline-flex items-center justify-center text-slate-500 hover:bg-slate-50 hover:text-blue-600 transition-colors disabled:opacity-50';
+
+const COLS = 'md:grid md:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_6.5rem_9.5rem_8.5rem_6.5rem] md:items-center md:gap-4';
 
 function initials(name) {
   const parts = (name || '').trim().split(/\s+/).filter(Boolean);
   if (!parts.length) return '?';
   return (parts[0][0] + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
-}
-
-// Stable colour per candidate name.
-function avatarTone(name) {
-  let h = 0;
-  for (const ch of name || '') h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  return AVATAR_TONES[h % AVATAR_TONES.length];
 }
 
 // Every certificate the caller can see, across all candidates — switchable
@@ -98,14 +125,17 @@ export default function InternalCertificates() {
   const { can, isDepartment, admin } = useAuth();
   const { confirm, ConfirmDialog } = useConfirm();
   const canManage = can('internalCerts.manage');
+  const canAssess = can('internalAssessments.manage');
 
-  const [source, setSource] = useState('internal');
-  const [internalRows, setRows] = useState([]);
+  const [source, setSource] = useHistoryState('source', 'internal');
+  const [directRows, setRows] = useState([]);
+  const [assessments, setAssessments] = useState([]);
+  const [assessment, setAssessment] = useHistoryState('assessment', ''); // '' = all, NO_ASSESSMENT, or an assessment id
   const [ifoaRows, setIfoaRows] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [owner, setOwner] = useState('');
-  const [status, setStatus] = useState('all');
+  const [search, setSearch] = useHistoryState('search', '');
+  const [owner, setOwner] = useHistoryState('owner', '');
+  const [status, setStatus] = useHistoryState('status', 'all');
   const [busyId, setBusyId] = useState(null);
 
   useEffect(() => {
@@ -118,17 +148,34 @@ export default function InternalCertificates() {
         .then((res) => setIfoaRows((res.data || []).filter((p) => p.cert_released).map(ifoaRow)))
         .catch((err) => toast.error(err.response?.data?.error || 'Failed to load IFOA certificates'))
       : Promise.resolve();
-    Promise.all([internal, ifoa]).finally(() => setLoading(false));
+    // Certificates uploaded inside internal assessments belong to the Internal list too.
+    const assess = canAssess
+      ? listInternalAssessments()
+        .then((res) => setAssessments(res.data.assessments || []))
+        .catch((err) => toast.error(err.response?.data?.error || 'Failed to load assessment certificates'))
+      : Promise.resolve();
+    Promise.all([internal, ifoa, assess]).finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const isIfoa = source === 'ifoa';
+  // Internal = uploaded straight onto a candidate + uploaded inside an assessment.
+  const internalRows = useMemo(() => [
+    ...directRows,
+    ...assessments.flatMap((a) => a.candidates.filter((c) => c.certificate).map((c) => assessmentRow(a, c))),
+  ], [directRows, assessments]);
   const rows = isIfoa ? ifoaRows : internalRows;
+  // Only offer assessments that actually hold a certificate.
+  const assessmentOptions = useMemo(
+    () => assessments.filter((a) => a.candidates.some((c) => c.certificate)),
+    [assessments],
+  );
 
   const switchSource = (key) => {
     setSource(key);
     setStatus('all');
     setOwner('');
+    setAssessment('');
   };
 
   const owners = useMemo(
@@ -158,16 +205,17 @@ export default function InternalCertificates() {
     return tagged.filter((r) => {
       if (status !== 'all' && r.bucket !== status) return false;
       if (owner && r.participant?.owner_name !== owner) return false;
+      if (!isIfoa && assessment && (assessment === NO_ASSESSMENT ? !!r.assessment : r.assessment?.id !== assessment)) return false;
       if (!q) return true;
-      return [r.title, r.original_name, r.participant?.participant_name, r.participant?.email]
+      return [r.title, r.original_name, r.assessment?.title, r.participant?.participant_name, r.participant?.email]
         .some((v) => (v || '').toLowerCase().includes(q));
     });
-  }, [tagged, search, owner, status]);
+  }, [tagged, search, owner, status, assessment, isIfoa]);
 
   const open = async (c, download) => {
     setBusyId(c.id);
     try {
-      await (isIfoa ? openIfoaCertificate : openInternalCertificate)(c, download);
+      await (isIfoa ? openIfoaCertificate : c.assessment ? openAssessmentCertificate : openInternalCertificate)(c, download);
     } catch (err) {
       toast.error(err.response?.data?.error || 'Could not open certificate');
     } finally {
@@ -181,8 +229,13 @@ export default function InternalCertificates() {
     }))) return;
     setBusyId(c.id);
     try {
-      await deleteInternalCertificate(c.id);
-      setRows((prev) => prev.filter((x) => x.id !== c.id));
+      if (c.assessment) {
+        const res = await deleteAssessmentCertificate(c.assessment.id, c.assessment.candidateId);
+        setAssessments((prev) => prev.map((a) => (a.id === c.assessment.id ? res.data.assessment : a)));
+      } else {
+        await deleteInternalCertificate(c.id);
+        setRows((prev) => prev.filter((x) => x.id !== c.id));
+      }
       toast.success('Certificate deleted');
     } catch (err) {
       toast.error(err.response?.data?.error || 'Delete failed');
@@ -191,7 +244,11 @@ export default function InternalCertificates() {
     }
   };
 
-  const canDeleteCert = (c) => !isIfoa && canManage && (!isDepartment || String(c.uploaded_by) === String(admin?._id || admin?.id));
+  const canDeleteCert = (c) => {
+    if (isIfoa) return false;
+    if (c.assessment) return canAssess;
+    return canManage && (!isDepartment || String(c.uploaded_by) === String(admin?._id || admin?.id));
+  };
 
   return (
     <div className="w-full min-h-full flex flex-col">
@@ -205,7 +262,7 @@ export default function InternalCertificates() {
               </div>
               <h1 className="text-sm font-extrabold text-slate-900 tracking-tight leading-none">Certificates</h1>
               <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-100 text-[11px] font-bold flex-shrink-0">
-                {rows.length}
+                <CountingNumber number={rows.length} />
               </span>
             </div>
             <p className="text-[11px] text-slate-400 mt-1">
@@ -221,19 +278,8 @@ export default function InternalCertificates() {
           </div>
 
           {/* Source toggle */}
-          <div className="inline-flex self-start sm:self-auto p-0.5 bg-slate-100 border border-slate-200/80 rounded-lg flex-shrink-0">
-            {SOURCES.map((s) => (
-              <button key={s.key} onClick={() => switchSource(s.key)}
-                className={`inline-flex items-center gap-1.5 h-7 px-3 rounded-md text-[11px] font-semibold transition-colors ${
-                  source === s.key ? 'bg-slate-900 text-white shadow-2xs' : 'text-slate-500 hover:text-slate-700'
-                }`}>
-                {s.label}
-                <span className={source === s.key ? 'text-white/70' : 'text-slate-400'}>
-                  {(s.key === 'ifoa' ? ifoaRows : internalRows).length}
-                </span>
-              </button>
-            ))}
-          </div>
+          <SegmentedToggle className="self-start sm:self-auto flex-shrink-0" value={source} onChange={switchSource}
+            options={SOURCES.map((o) => ({ ...o, count: (o.key === 'ifoa' ? ifoaRows : internalRows).length }))} />
         </div>
       </div>
 
@@ -248,6 +294,18 @@ export default function InternalCertificates() {
                   placeholder="Search by candidate, email or certificate title…"
                   className="w-full pl-8 pr-3 h-9 bg-slate-50 border border-slate-200/80 rounded-lg text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" />
               </div>
+              {!isIfoa && assessmentOptions.length > 0 && (
+                <Select value={assessment || 'all'} onValueChange={(v) => setAssessment(v === 'all' ? '' : v)}>
+                  <SelectTrigger className="w-full sm:w-56 h-9 text-xs bg-slate-50 rounded-lg border-slate-200/80 flex-shrink-0">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All internal assessments</SelectItem>
+                    {assessmentOptions.map((a) => <SelectItem key={a.id} value={a.id}>{a.title}</SelectItem>)}
+                    <SelectItem value={NO_ASSESSMENT}>Not in an assessment</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
               {owners.length > 1 && (
                 <select value={owner} onChange={(e) => setOwner(e.target.value)}
                   className="h-9 px-3 bg-slate-50 border border-slate-200/80 rounded-lg text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500">
@@ -306,7 +364,7 @@ export default function InternalCertificates() {
                   <div key={c.id} className={`${COLS} px-4 py-3 hover:bg-slate-50/60 transition-colors`}>
                     {/* Candidate */}
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 text-[11px] font-bold ${avatarTone(name)}`}>
+                      <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center flex-shrink-0 text-[10px] font-bold">
                         {initials(c.participant?.participant_name)}
                       </div>
                       <div className="min-w-0">
@@ -319,42 +377,44 @@ export default function InternalCertificates() {
 
                     {/* Certificate */}
                     <div className="mt-2 md:mt-0 flex items-center gap-2 min-w-0">
-                      <span className="px-1.5 py-0.5 rounded-md bg-red-50 text-red-600 border border-red-100 text-[9px] font-extrabold flex-shrink-0">PDF</span>
+                      <HiOutlineDocumentText className="w-4 h-4 text-slate-400 flex-shrink-0" />
                       <div className="min-w-0">
-                        <p className="text-xs font-semibold text-slate-700 truncate" title={title}>{title}</p>
-                        {!isDepartment && c.participant?.owner_name && (
+                        <p className="text-xs font-medium text-slate-700 truncate" title={title}>{title}</p>
+                        {c.assessment ? (
+                          <p className="text-[10px] text-slate-400 truncate" title={`Internal assessment: ${c.assessment.title}`}>{c.assessment.title}</p>
+                        ) : !isDepartment && c.participant?.owner_name && (
                           <p className="text-[10px] text-slate-400 font-medium truncate">{c.participant.owner_name}</p>
                         )}
                       </div>
                     </div>
 
                     <div className="mt-2.5 md:mt-0 flex items-center gap-x-4 gap-y-2 flex-wrap md:contents">
-                      <div className="text-[11px] text-slate-600 font-medium whitespace-nowrap">
-                        <span className="md:hidden text-slate-400 font-normal">Issued </span>{fmtDate(c.issued_on)}
+                      <div className="text-[11px] text-slate-500 whitespace-nowrap">
+                        <span className="md:hidden text-slate-400">Issued </span>{fmtDate(c.issued_on)}
                       </div>
                       <div>
                         <ValidityBadge expiry={c.expiry}
                           fallback={<span className="text-[11px] text-slate-400">{isIfoa ? '—' : 'No expiry set'}</span>} />
                       </div>
                       <div className="hidden md:block min-w-0 text-[11px]">
-                        <p className="text-slate-600 font-medium truncate" title={c.uploaded_by_name || ''}>{c.uploaded_by_name || '—'}</p>
+                        <p className="text-slate-600 truncate" title={c.uploaded_by_name || ''}>{c.uploaded_by_name || '—'}</p>
                         {!isIfoa && <p className="text-slate-400">{fmtDate(c.createdAt)}</p>}
                       </div>
-                      <div className="flex items-center gap-1 ml-auto md:ml-0 md:justify-end">
-                        <button onClick={() => open(c, false)} disabled={busyId === c.id} title="View"
-                          className="p-1.5 rounded-lg bg-slate-50 border border-slate-200 hover:border-blue-300 hover:bg-blue-50 text-slate-500 hover:text-blue-600 disabled:opacity-50">
-                          <HiOutlineEye className="w-3.5 h-3.5" />
-                        </button>
-                        <button onClick={() => open(c, true)} disabled={busyId === c.id} title="Download"
-                          className="p-1.5 rounded-lg bg-slate-50 border border-slate-200 hover:border-blue-300 hover:bg-blue-50 text-slate-500 hover:text-blue-600 disabled:opacity-50">
-                          <HiOutlineDownload className="w-3.5 h-3.5" />
-                        </button>
-                        {canDeleteCert(c) && (
-                          <button onClick={() => remove(c)} disabled={busyId === c.id} title="Delete"
-                            className="p-1.5 rounded-lg bg-slate-50 border border-slate-200 hover:border-red-300 hover:bg-red-50 text-slate-500 hover:text-red-600 disabled:opacity-50">
-                            <HiOutlineTrash className="w-3.5 h-3.5" />
+                      <div className="flex ml-auto md:ml-0 md:justify-end">
+                        <div className="inline-flex items-center rounded-lg border border-slate-200 bg-white divide-x divide-slate-200 overflow-hidden shadow-2xs">
+                          <button onClick={() => open(c, false)} disabled={busyId === c.id} title="View" className={ACTION}>
+                            <HiOutlineEye className="w-4 h-4" />
                           </button>
-                        )}
+                          <button onClick={() => open(c, true)} disabled={busyId === c.id} title="Download" className={ACTION}>
+                            <HiOutlineDownload className="w-4 h-4" />
+                          </button>
+                          {canDeleteCert(c) && (
+                            <button onClick={() => remove(c)} disabled={busyId === c.id} title="Delete"
+                              className={`${ACTION} hover:!bg-red-50 hover:!text-red-600`}>
+                              <HiOutlineTrash className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>

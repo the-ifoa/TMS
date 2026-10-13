@@ -1,26 +1,28 @@
 import * as React from 'react';
-import * as TooltipPrimitive from '@radix-ui/react-tooltip';
 import { cn } from '@/lib/utils';
+import {
+  TooltipProvider, Tooltip, TooltipTrigger, TooltipPortal,
+  TooltipContent as ContentPrimitive,
+} from '@/components/animate-ui/primitives/radix/tooltip';
 
-const TooltipProvider = TooltipPrimitive.Provider;
-const Tooltip = TooltipPrimitive.Root;
-const TooltipTrigger = TooltipPrimitive.Trigger;
-
-const TooltipContent = React.forwardRef(({ className, sideOffset = 6, ...props }, ref) => (
-  <TooltipPrimitive.Portal>
-    <TooltipPrimitive.Content
-      ref={ref}
+// Tooltip with a spring pop (Animate UI). Same API as the shadcn one it replaced.
+const TooltipContent = ({ className, sideOffset = 6, ...props }) => (
+  <TooltipPortal>
+    {/* Plain wrapper: Radix hands the portal's direct child a ref, which a
+        function component can't take on React 18. */}
+    <div>
+    <ContentPrimitive
       sideOffset={sideOffset}
+      transition={{ type: 'spring', stiffness: 460, damping: 30 }}
       className={cn(
-        'z-50 overflow-hidden rounded-lg bg-slate-900 px-2.5 py-1.5 text-xs font-medium text-white shadow-md',
-        'data-[state=delayed-open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=delayed-open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=delayed-open]:zoom-in-95',
+        'z-50 overflow-hidden rounded-lg bg-slate-900 px-2.5 py-1.5 text-xs font-medium text-white shadow-md origin-[var(--radix-tooltip-content-transform-origin)]',
         className
       )}
       {...props}
     />
-  </TooltipPrimitive.Portal>
-));
-TooltipContent.displayName = TooltipPrimitive.Content.displayName;
+    </div>
+  </TooltipPortal>
+);
 
 // Convenience wrapper — <SimpleTooltip label="Delete"><button>...</button></SimpleTooltip>
 function SimpleTooltip({ label, children, side = 'top' }) {

@@ -161,7 +161,7 @@ export default function ExamResultView() {
             className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold transition-all border border-slate-200/90 shadow-2xs"
           >
             <HiOutlineArrowLeft className="w-4 h-4 text-slate-500" />
-            <span>Back to Dashboard</span>
+            <span>Back</span>
           </button>
         </div>
 

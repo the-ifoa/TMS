@@ -36,7 +36,7 @@ export default function ValidityBadge({ participant, expiry, showDate = true, fa
         <Icon className="w-3 h-3" /> {timeLeftLabel(exp.daysLeft)}
       </span>
       {showDate && (
-        <span className={`text-[10px] font-medium mt-0.5 whitespace-nowrap ${DATE_COLORS[exp.status]}`}>
+        <span className={`text-[10px] font-medium mt-0.5 pl-[9px] whitespace-nowrap ${DATE_COLORS[exp.status]}`}>
           {exp.daysLeft < 0 ? 'Expired' : 'Until'} {fmtExpiry(exp.expiresOn)}
         </span>
       )}

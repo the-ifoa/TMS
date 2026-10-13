@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useHistoryState } from '@/hooks/use-history-state';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
@@ -32,7 +33,7 @@ export default function MyTeam() {
 
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useHistoryState('search', '');
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ first_name: '', last_name: '', email: '' });
   const [edit, setEdit] = useState(null); // { id, first_name, last_name, email }

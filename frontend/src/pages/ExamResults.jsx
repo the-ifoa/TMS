@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useState, useCallback, useRef } from 'react';
+import { useHistoryState } from '@/hooks/use-history-state';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   HiOutlineClipboardList,
@@ -1542,11 +1543,11 @@ export default function ExamResults() {
   const { isAdmin } = useAuth();
   const [results, setResults]         = useState([]);
   const [loading, setLoading]         = useState(true);
-  const [activeTab, setActiveTab]     = useState(0);
-  const [search, setSearch]           = useState('');
-  const [filterType, setFilterType]   = useState('');
-  const [filterBatch, setFilterBatch] = useState('');
-  const [filterSheet, setFilterSheet] = useState('');
+  const [activeTab, setActiveTab]     = useHistoryState('activeTab', 0);
+  const [search, setSearch]           = useHistoryState('search', '');
+  const [filterType, setFilterType]   = useHistoryState('filterType', '');
+  const [filterBatch, setFilterBatch] = useHistoryState('filterBatch', '');
+  const [filterSheet, setFilterSheet] = useHistoryState('filterSheet', '');
   const [batches, setBatches]         = useState([]);
   const [showForm, setShowForm]       = useState(false);
   const [showImport, setShowImport]   = useState(false);
@@ -1849,10 +1850,10 @@ export default function ExamResults() {
   return (
     <div className="w-full space-y-4">
       {/* Top Card Header (Full Width Edge-to-Edge) */}
-      <div className="w-full bg-white border-b border-slate-200/80 px-4 sm:px-6 lg:px-8 py-3.5 shadow-2xs flex flex-row items-center justify-between gap-3">
+      <div className="w-full bg-white border-b border-slate-200/80 px-4 sm:px-6 lg:px-8 py-3.5 shadow-2xs flex flex-wrap items-center justify-between gap-x-3 gap-y-2.5">
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-base sm:text-xl font-bold text-slate-900 tracking-tight truncate">Exam Results &amp; Sheets</h1>
+            <h1 className="text-base sm:text-xl font-bold text-slate-900 tracking-tight">Exam Results &amp; Sheets</h1>
             <span className="hidden xs:inline-block px-2 py-0.5 rounded-full bg-slate-100 border border-slate-200 text-[10px] sm:text-[11px] font-bold text-slate-700 flex-shrink-0">
               Suite
             </span>

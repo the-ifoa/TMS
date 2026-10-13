@@ -269,7 +269,7 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onCheckAnswer,
       }
     };
     const onVisibilityChange = () => {
-      if (document.hidden && !finishedRef.current && hasEnteredFsRef.current) reportViolation('tab_switch');
+      if (document.hidden && !finishedRef.current && hasEnteredFsRef.current && !exam.allow_tab_switch) reportViolation('tab_switch');
     };
     const blockDefault = (e) => e.preventDefault();
     const blockKeys = (e) => {

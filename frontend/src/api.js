@@ -233,6 +233,8 @@ export const sendExamInvites       = (examId, participantIds, opts = {}) => api.
 // same link, so a participant who already finished can take the exam again.
 export const reassignExamInvites   = (examId, participantIds, opts = {}) => api.post(`/exams/${examId}/send-invites`, { participant_ids: participantIds, reassign: true, ...opts });
 export const getExamInvites        = (examId)                 => api.get(`/exams/${examId}/invites`);
+// Take one candidate off an exam: their assignment, invite link and any result.
+export const removeExamCandidate   = (examId, participantId)  => api.delete(`/exams/${examId}/candidates/${participantId}`);
 export const getAirlineExamResults = ()                       => api.get('/exams/airline-results');
 
 // ── Team / sub-user management ──────────────────────────────────────────────

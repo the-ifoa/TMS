@@ -42,8 +42,19 @@ export default function PublicExam() {
       const res = await startPublicExam(token);
       setActive(res.data);
       setPhase('taking');
+      // Coming back after closing the window: say how many returns are left.
+      const wc = res.data?.window_closes;
+      if (wc?.limited && wc.count > 0) {
+        toast(wc.left > 0
+          ? `You closed the exam window. You can come back ${wc.left} more time${wc.left === 1 ? '' : 's'}; after that your attempt is submitted automatically.`
+          : 'You closed the exam window. This is your last return: close it again and your attempt is submitted automatically.',
+        { icon: '⚠️', duration: 9000 });
+      }
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to start exam.');
+      toast.error(err.response?.data?.error || 'Failed to start exam.', { duration: 8000 });
+      // Closed the window too often: the attempt is now submitted, so reload
+      // the page state (it will offer the result instead of Resume).
+      if (err.response?.data?.auto_submitted) loadInfo();
     } finally {
       setStarting(false);
     }
@@ -88,7 +99,7 @@ function Centered({ children }) {
 
 // ─── Landing card ─────────────────────────────────────────────────────────────
 function Landing({ info, onBegin, starting, onViewResult }) {
-  const { exam, participant_name, attempts_left, active_attempt_id, status, last_attempt_id, scheduling_error, has_passed, awaiting_review } = info;
+  const { exam, participant_name, attempts_left, active_attempt_id, status, last_attempt_id, scheduling_error, has_passed, awaiting_review, window_closes_left } = info;
   // No new attempt once passed, while an attempt awaits grading, or when none are left.
   const noAttemptsLeft = !active_attempt_id && (attempts_left <= 0 || has_passed || awaiting_review);
   const doneMessage = has_passed
@@ -123,7 +134,26 @@ function Landing({ info, onBegin, starting, onViewResult }) {
           {exam.lockdown_enabled && (
             <div className="rounded-2xl bg-amber-50 border border-amber-200/80 p-4 space-y-1.5 text-xs text-amber-900">
               <p className="flex items-start gap-2 font-bold"><HiOutlineLockClosed className="w-4 h-4 flex-shrink-0 mt-0.5" /> This exam runs in a locked fullscreen session.</p>
-              <p className="flex items-start gap-2"><HiOutlineShieldExclamation className="w-4 h-4 flex-shrink-0 mt-0.5 text-amber-600" /> Exiting fullscreen or switching tabs is recorded as a violation, and too many will auto submit your exam.</p>
+              <p className="flex items-start gap-2"><HiOutlineShieldExclamation className="w-4 h-4 flex-shrink-0 mt-0.5 text-amber-600" /> {exam.allow_tab_switch ? 'Exiting fullscreen is recorded as a violation' : 'Exiting fullscreen or switching tabs is recorded as a violation'}, and too many will auto submit your exam.</p>
+            </div>
+          )}
+
+          {exam.limit_window_closes && (
+            <div className="rounded-2xl bg-amber-50 border border-amber-200/80 p-4 text-xs text-amber-900">
+              <p className="flex items-start gap-2">
+                <HiOutlineShieldExclamation className="w-4 h-4 flex-shrink-0 mt-0.5 text-amber-600" />
+                <span>
+                  <span className="font-bold">Do not close this window during the exam.</span>{' '}
+                  {exam.max_window_closes > 0
+                    ? `If you close or refresh it, you can come back ${exam.max_window_closes} time${exam.max_window_closes === 1 ? '' : 's'}; after that your attempt is submitted automatically.`
+                    : 'If you close or refresh it, your attempt is submitted automatically.'}
+                  {window_closes_left != null && (
+                    <span className="block mt-1 font-bold">
+                      {window_closes_left > 0 ? `Returns left on this attempt: ${window_closes_left}` : 'No returns left: resuming now will submit your attempt.'}
+                    </span>
+                  )}
+                </span>
+              </p>
             </div>
           )}
 
@@ -225,7 +255,11 @@ function ResultSummary({ token, attemptId }) {
           {attempt?.auto_submitted && (
             <div className="rounded-2xl bg-rose-50 border border-rose-200/80 p-3 text-xs font-semibold text-rose-800 text-left flex items-start gap-2">
               <HiOutlineExclamationCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-              <span>Your exam was submitted automatically because the lockdown limit was reached (leaving fullscreen or switching tabs {attempt.violation_count || attempt.violations?.length || ''} times).</span>
+              <span>
+                {attempt.auto_submit_reason === 'window_closed'
+                  ? `Your exam was submitted automatically because the exam window was closed more times than allowed (${attempt.window_close_count || ''} times).`
+                  : `Your exam was submitted automatically because the lockdown limit was reached (leaving fullscreen or switching tabs ${attempt.violation_count || attempt.violations?.length || ''} times).`}
+              </span>
             </div>
           )}
 

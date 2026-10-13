@@ -12,7 +12,7 @@ import {
 } from 'react-icons/hi';
 import { FaPlaneDeparture } from 'react-icons/fa';
 import LogoAvatar from '../components/LogoAvatar';
-import { listExams, deleteExam, publishExam, getExamAirlines, updateExam, sendExamInvites, reassignExamInvites, getExamInvites } from '../api';
+import { listExams, deleteExam, publishExam, getExamAirlines, updateExam, sendExamInvites, reassignExamInvites, getExamInvites, removeExamCandidate } from '../api';
 import { useAuth } from '../context/AuthContext';
 import QuestionBankList from './QuestionBank';
 import { DateTimeInputCard } from './ExamBuilder';
@@ -47,6 +47,31 @@ function SendInviteModal({ exam, onClose, onSent }) {
   const [selected, setSelected] = useState(new Set());
   const [sending, setSending] = useState(false);
   const [reassigningPid, setReassigningPid] = useState(null);
+  const [removingPid, setRemovingPid] = useState(null);
+  const { confirm, ConfirmDialog } = useConfirm();
+
+  // Take one candidate off this exam: assignment, invite link and any result.
+  const removeCandidate = async (pid, name, inv) => {
+    const hasResult = !!inv?.attempt;
+    const ok = await confirm(
+      hasResult
+        ? `Remove ${name} from this exam? Their result, answers and any uploaded certificate are deleted, and their exam link stops working. This cannot be undone.`
+        : `Remove ${name} from this exam? Their exam link will stop working. You can assign them again later.`,
+      { title: 'Remove candidate', confirmLabel: 'Remove' },
+    );
+    if (!ok) return;
+    setRemovingPid(pid);
+    try {
+      await removeExamCandidate(exam.id, pid);
+      toast.success(`${name} removed from the exam.`);
+      setInviteByPid((prev) => { const n = { ...prev }; delete n[String(pid)]; return n; });
+      onSent?.();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Could not remove the candidate.');
+    } finally {
+      setRemovingPid(null);
+    }
+  };
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState(new Set());
   // Validity window for the emailed link. 'none' = never expires; a number = days
@@ -299,6 +324,17 @@ function SendInviteModal({ exam, onClose, onSent }) {
                                       {reassigningPid === p._id ? 'Reassigning…' : 'Reassign'}
                                     </button>
                                   )}
+                                  {inv && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => { e.stopPropagation(); removeCandidate(p._id, p.participant_name, inv); }}
+                                      disabled={removingPid === p._id}
+                                      title="Remove this candidate from the exam"
+                                      className="p-1 rounded-lg border border-slate-200 bg-white text-slate-400 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 disabled:opacity-50 transition-colors"
+                                    >
+                                      <HiOutlineTrash className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
                                 </div>
                               </div>
                             );
@@ -326,6 +362,7 @@ function SendInviteModal({ exam, onClose, onSent }) {
             </Button>
           </div>
         </DialogFooter>
+        {ConfirmDialog}
       </DialogContent>
     </Dialog>
   );

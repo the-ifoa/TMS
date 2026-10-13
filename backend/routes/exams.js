@@ -107,6 +107,9 @@ router.post('/:id/send-invites', requirePermission('exams.assign'), examsControl
 // ─── GET /exams/:id/invites — admin: invite + attempt status for an exam ────────
 router.get('/:id/invites', examsController.listInvites);
 
+// ─── DELETE /exams/:id/candidates/:participantId — remove one candidate from an exam ──
+router.delete('/:id/candidates/:participantId', requirePermission('exams.assign'), examsController.removeCandidate);
+
 // ─── GET /exams/:id/analytics — admin: per-question miss rate + pass-rate over time ──
 router.get('/:id/analytics', examsController.getAnalytics);
 

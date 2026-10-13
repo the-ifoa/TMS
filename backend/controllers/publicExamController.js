@@ -62,7 +62,7 @@ exports.getLandingInfo = async (req, res) => {
     const attemptCap = exam.max_attempts + (invite.bonus_attempts || 0);
     const activeAttempt = await ExamAttempt.findOne({
       exam_id: exam._id, participant_id: invite.participant_id, status: 'in_progress',
-    }).select('_id');
+    }).select('_id window_close_count');
 
     // Latest finished attempt (for the "already completed" case).
     const lastFinished = await ExamAttempt.findOne({
@@ -84,6 +84,9 @@ exports.getLandingInfo = async (req, res) => {
         max_attempts: exam.max_attempts,
         question_count: exam.questions.length,
         lockdown_enabled: exam.lockdown_enabled,
+        allow_tab_switch: !!exam.allow_tab_switch,
+        limit_window_closes: !!exam.limit_window_closes,
+        max_window_closes: exam.max_window_closes ?? 0,
         pass_percentage: exam.pass_percentage,
         opens_at: exam.opens_at,
         closes_at: exam.closes_at,
@@ -93,6 +96,10 @@ exports.getLandingInfo = async (req, res) => {
       attempts_used: priorAttempts,
       attempts_left: Math.max(0, attemptCap - priorAttempts),
       active_attempt_id: activeAttempt ? String(activeAttempt._id) : null,
+      // Returns still allowed on the attempt in progress (null = not limited).
+      window_closes_left: activeAttempt && exam.limit_window_closes
+        ? Math.max(0, (exam.max_window_closes ?? 0) - (activeAttempt.window_close_count || 0))
+        : null,
       last_attempt_id: lastFinished ? String(lastFinished._id) : null,
       // Only blocks starting a NEW attempt — an already-active one may still resume/finish.
       scheduling_error: activeAttempt ? null : schedulingError(exam, { ignoreClose: invite.ignore_close }),
@@ -115,6 +122,30 @@ exports.startAttempt = async (req, res) => {
     let attempt = await ExamAttempt.findOne({
       exam_id: exam._id, participant_id: invite.participant_id, status: 'in_progress',
     });
+
+    if (attempt) {
+      // Coming back to an attempt already in progress means the exam window was
+      // closed (or refreshed) in between. Count it; past the exam's limit the
+      // attempt is submitted as it stands and cannot be resumed.
+      attempt.window_closes.push({ at: new Date() });
+      attempt.window_close_count = attempt.window_closes.length;
+      if (exam.limit_window_closes && attempt.window_close_count > (exam.max_window_closes ?? 0)) {
+        attempt.auto_submitted = true;
+        attempt.auto_submit_reason = 'window_closed';
+        await finalizeAttempt(attempt);
+        await attempt.save();
+        invite.status = 'completed';
+        invite.attempt_id = attempt._id;
+        invite.completed_at = new Date();
+        await invite.save();
+        return res.status(403).json({
+          error: 'You closed the exam window more times than this exam allows, so your attempt was submitted automatically.',
+          auto_submitted: true,
+          attempt_id: String(attempt._id),
+        });
+      }
+      await attempt.save();
+    }
 
     if (!attempt) {
       const schedErr = schedulingError(exam, { ignoreClose: invite.ignore_close });
@@ -161,7 +192,15 @@ exports.startAttempt = async (req, res) => {
         duration_minutes: exam.duration_minutes,
         lockdown_enabled: exam.lockdown_enabled,
         max_violations: exam.max_violations,
+        allow_tab_switch: !!exam.allow_tab_switch,
         instant_feedback: !!exam.instant_feedback,
+      },
+      // How often the window has been closed on this attempt, and what is left.
+      window_closes: {
+        count: attempt.window_close_count || 0,
+        limited: !!exam.limit_window_closes,
+        max: exam.max_window_closes ?? 0,
+        left: exam.limit_window_closes ? Math.max(0, (exam.max_window_closes ?? 0) - (attempt.window_close_count || 0)) : null,
       },
     });
   } catch (err) {
@@ -247,6 +286,10 @@ exports.reportViolation = async (req, res) => {
     const { type } = req.body;
     const validTypes = ['fullscreen_exit', 'tab_switch', 'devtools_suspected'];
     if (!validTypes.includes(type)) return res.status(400).json({ error: 'Invalid violation type.' });
+    // This exam lets candidates switch tabs: nothing to record.
+    if (type === 'tab_switch' && req.exam.allow_tab_switch) {
+      return res.json({ violation_count: attempt.violation_count || 0, auto_submitted_now: false });
+    }
 
     attempt.violations.push({ type, at: new Date() });
     attempt.violation_count = attempt.violations.length;
@@ -255,6 +298,7 @@ exports.reportViolation = async (req, res) => {
     let autoSubmitted = false;
     if (attempt.violation_count >= maxViolations) {
       attempt.auto_submitted = true;
+      attempt.auto_submit_reason = 'violations';
       await finalizeAttempt(attempt);
       autoSubmitted = true;
       req.invite.status = 'completed';

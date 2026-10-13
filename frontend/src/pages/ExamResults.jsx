@@ -1995,7 +1995,7 @@ export default function ExamResults() {
                   </div>
                 ) : (
                   <div className="rounded-xl border border-slate-200/80 overflow-hidden">
-                    <div className="overflow-auto max-h-[calc(100vh-13rem)] min-h-[28rem]">
+                    <div className="overflow-auto [scrollbar-gutter:stable] h-[calc(100vh-27.5rem)] min-h-[17rem]">
                     {/* Actions gets a fixed width that fits its five icons; the student
                         column takes whatever is left, so the table never needs to scroll sideways. */}
                     <table className="w-full min-w-[700px] table-fixed text-xs">

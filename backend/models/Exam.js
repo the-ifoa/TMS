@@ -176,6 +176,15 @@ const examSchema = new mongoose.Schema(
     // tolerated before the attempt is auto-submitted. 0 disables lockdown mode.
     lockdown_enabled: { type: Boolean, default: true },
     max_violations:   { type: Number, default: 4 },
+    // Lockdown only: when true, switching tabs / windows is NOT counted as a
+    // violation (leaving fullscreen still is).
+    allow_tab_switch: { type: Boolean, default: false },
+    // Closing the exam window entirely and coming back (also a page refresh)
+    // is tracked separately from the violations above and works with or
+    // without lockdown. When limited, the candidate may return
+    // `max_window_closes` times; one more and the attempt is auto-submitted.
+    limit_window_closes: { type: Boolean, default: false },
+    max_window_closes:   { type: Number, default: 2, min: 0 },
 
     // Ordered list of section names (e.g. "Aptitude", "Logical", "Practical").
     // Admin-managed independently of questions, so a section can exist before

@@ -1386,6 +1386,21 @@ export default function ExamAttempts() {
                         {a.status.replace('_', ' ')}
                       </span>
 
+                      {/* Times the candidate closed the exam window and came back */}
+                      {a.window_close_count > 0 && (
+                        <span
+                          title={`Closed the exam window and came back ${a.window_close_count} time${a.window_close_count === 1 ? '' : 's'}: ${(a.window_closes || []).map((w) => new Date(w.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })).join(', ')}`}
+                          className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold border whitespace-nowrap ${
+                            a.auto_submit_reason === 'window_closed'
+                              ? 'bg-rose-50 text-rose-700 border-rose-200'
+                              : 'bg-amber-50 text-amber-700 border-amber-200'
+                          }`}
+                        >
+                          Window closed ×{a.window_close_count}
+                          {a.auto_submit_reason === 'window_closed' && <span className="font-extrabold">· auto-submitted</span>}
+                        </span>
+                      )}
+
                       {/* Violation Badge */}
                       {hasViolations && (
                         <button

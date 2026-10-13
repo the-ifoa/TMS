@@ -65,7 +65,8 @@ function findQuestionProblem(questions) {
 const emptyExam = () => ({
   title: '', description: '', duration_minutes: 30, pass_percentage: 75,
   max_attempts: 1, shuffle_questions: false, shuffle_options: false,
-  lockdown_enabled: true, max_violations: 4, questions: [], sections: [],
+  lockdown_enabled: true, max_violations: 4, allow_tab_switch: false,
+  limit_window_closes: false, max_window_closes: 2, questions: [], sections: [],
   show_review: false, instant_feedback: false,
   opens_at: null, closes_at: null, section_settings: [],
 });
@@ -1158,6 +1159,57 @@ export default function ExamBuilder() {
                       />
                       <span className="block text-[10px] text-slate-400 mt-1 font-semibold">
                         Auto-submits exam when violations exceeded
+                      </span>
+
+                      <label className="mt-3 flex items-start gap-2.5 cursor-pointer select-none">
+                        <Checkbox
+                          checked={!!exam.allow_tab_switch}
+                          onCheckedChange={(checked) => set('allow_tab_switch', !!checked)}
+                          className="mt-0.5"
+                        />
+                        <div className="space-y-0.5 min-w-0">
+                          <span className="font-bold text-slate-900 text-xs block">Allow switching tabs</span>
+                          <span className="text-[11px] text-slate-500 leading-snug block font-medium">
+                            Switching to another tab or window is not counted. Leaving fullscreen still is.
+                          </span>
+                        </div>
+                      </label>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Window-close limit — separate from lockdown violations */}
+              <div className="pt-2 border-t border-slate-100">
+                <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3.5 space-y-3">
+                  <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                    <Checkbox
+                      checked={!!exam.limit_window_closes}
+                      onCheckedChange={(checked) => set('limit_window_closes', !!checked)}
+                      className="mt-0.5"
+                    />
+                    <div className="space-y-0.5 min-w-0">
+                      <span className="font-bold text-slate-900 text-xs block">Limit closing the exam window</span>
+                      <span className="text-[11px] text-slate-500 leading-snug block font-medium">
+                        Counts each time a candidate closes (or refreshes) the exam and comes back. Works with or without lockdown.
+                      </span>
+                    </div>
+                  </label>
+
+                  {exam.limit_window_closes && (
+                    <div className="pt-2 border-t border-slate-200/60">
+                      <label className="block text-xs font-bold text-slate-700 mb-1">Returns allowed</label>
+                      <Input
+                        type="number"
+                        min="0"
+                        value={exam.max_window_closes ?? 2}
+                        onChange={(e) => set('max_window_closes', Math.max(0, Number(e.target.value)))}
+                        className="text-xs bg-white rounded-xl"
+                      />
+                      <span className="block text-[10px] text-slate-400 mt-1 font-semibold">
+                        {Number(exam.max_window_closes) > 0
+                          ? `Candidate can come back ${exam.max_window_closes} time${Number(exam.max_window_closes) === 1 ? '' : 's'}; one more close auto-submits the attempt`
+                          : 'Closing the window even once auto-submits the attempt'}
                       </span>
                     </div>
                   )}

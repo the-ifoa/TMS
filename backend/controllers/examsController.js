@@ -1390,6 +1390,52 @@ exports.sendInvites = async (req, res) => {
   }
 };
 
+// ─── DELETE /exams/:id/candidates/:participantId — take one person off an exam ──
+// Removes that candidate's assignment and invite link for this exam, plus any
+// result they already have. Same reach as assigning: IFOA admin on IFOA exams;
+// an airline on its own exams; a department on its own team only. Deleting an
+// existing RESULT additionally needs what deleting results always needs —
+// ownership of the exam and the `exams.author` power.
+exports.removeCandidate = async (req, res) => {
+  try {
+    const exam = await Exam.findById(req.params.id);
+    if (!exam) return res.status(404).json({ error: 'Exam not found.' });
+    const allowed = isAdmin(req) ? canManageExam(req, exam) : canAssignExam(req, exam);
+    if (!allowed) return res.status(403).json({ error: 'Access denied.' });
+
+    const pid = req.params.participantId;
+    const scope = { exam_id: exam._id, participant_id: pid };
+    if (!isAdmin(req)) scope.airline_id = { $in: assignableOwnerIds(req) };
+
+    const [invites, attempts] = await Promise.all([
+      ExamInvite.find(scope).select('_id'),
+      ExamAttempt.find(scope).select('certificate'),
+    ]);
+    const assigned = exam.assignments.some((a) => String(a.participant_id) === String(pid));
+    if (!invites.length && !attempts.length && !assigned) {
+      return res.status(404).json({ error: 'This candidate is not on this exam.' });
+    }
+    if (attempts.length && !(canManageExam(req, exam) && hasPermission(req, ['exams.author']))) {
+      return res.status(403).json({ error: 'This candidate already has a result. Only the exam owner with the "Create & edit exams" power can remove it.' });
+    }
+
+    // Uploaded certificates go with the result (best effort).
+    await Promise.all(attempts
+      .filter((a) => a.certificate && a.certificate.r2_key)
+      .map((a) => r2.deleteObject(a.certificate.r2_key).catch(() => {})));
+    await ExamAttempt.deleteMany({ _id: { $in: attempts.map((a) => a._id) } });
+    await ExamInvite.deleteMany({ _id: { $in: invites.map((i) => i._id) } });
+    if (assigned) {
+      exam.assignments = exam.assignments.filter((a) => String(a.participant_id) !== String(pid));
+      await exam.save();
+    }
+    res.json({ message: 'Candidate removed from the exam.', invites: invites.length, results: attempts.length });
+  } catch (err) {
+    console.error('DELETE /exams/:id/candidates/:participantId error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+};
+
 // ─── GET /exams/:id/invites — admin: invite + attempt status for an exam ────────
 exports.listInvites = async (req, res) => {
   try {

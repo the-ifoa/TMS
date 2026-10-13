@@ -55,7 +55,7 @@ export default function Layout() {
 
       <div className="app-layout-main flex flex-col flex-1 overflow-hidden min-w-0 bg-slate-50">
         <Header sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
-        <main ref={mainRef} onScroll={rememberScroll} className="flex-1 overflow-y-auto overflow-x-hidden bg-slate-50 text-slate-800">
+        <main ref={mainRef} onScroll={rememberScroll} className="flex-1 overflow-y-auto overflow-x-hidden [scrollbar-gutter:stable] bg-slate-50 text-slate-800">
           {/* Keyed on the path so each page fades in when the route changes. */}
           <div key={pathname} className="page-enter min-h-full">
             <Outlet />

@@ -1,30 +1,11 @@
 import { Fragment, useEffect, useState, useCallback, useRef } from 'react';
+import SegmentedToggle from '../components/SegmentedToggle';
+import { StatTileCompact } from '../components/dashboard/Charts';
 import { useHistoryState } from '@/hooks/use-history-state';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  HiOutlineClipboardList,
-  HiOutlineSearch,
-  HiOutlineChartBar,
-  HiOutlineDocumentText,
-  HiOutlineUsers,
-  HiOutlineCheckCircle,
-  HiOutlinePlus,
-  HiOutlineTrash,
-  HiOutlinePencil,
-  HiOutlineX,
-  HiOutlineDownload,
-  HiOutlineEye,
-  HiOutlineRefresh,
-  HiOutlineAcademicCap,
-  HiOutlineUpload,
-  HiOutlineExclamationCircle,
-  HiOutlineDocumentDownload,
-  HiOutlineLockClosed,
-  HiOutlineChevronDown,
-  HiOutlineFilter,
-  HiOutlineReply,
+  HiOutlineClipboardList, HiOutlineSearch, HiOutlineChartBar, HiOutlineDocumentText, HiOutlineUsers, HiOutlineCheckCircle, HiOutlinePlus, HiOutlineTrash, HiOutlinePencil, HiOutlineX, HiOutlineDownload, HiOutlineEye, HiOutlineRefresh, HiOutlineAcademicCap, HiOutlineUpload, HiOutlineExclamationCircle, HiOutlineDocumentDownload, HiOutlineLockClosed, HiOutlineChevronDown, HiOutlineFilter, HiOutlineReply, HiOutlineUserGroup, HiOutlineTrendingUp, HiOutlineBadgeCheck, HiOutlineClipboardCheck,
 } from 'react-icons/hi';
-import { Clock, CheckCircle2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
   getExamResults,
@@ -1683,8 +1664,13 @@ export default function ExamResults() {
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
   const passCount  = results.filter(r => r.overall_grade && r.overall_grade !== 'FAILED').length;
-  const passRate   = results.length ? Math.round((passCount / results.length) * 100) : 0;
-  const avgMark    = results.length ? Math.round(results.reduce((acc, r) => acc + (r.final_marks ?? 0), 0) / results.length * 10) / 10 : 0;
+  // Students without a mark / grade yet are left out, so they don't drag the
+  // average and pass rate towards zero.
+  const marked     = results.filter(r => r.final_marks != null && r.final_marks !== '');
+  const graded     = results.filter(r => r.overall_grade);
+  const passRate   = graded.length ? Math.round((passCount / graded.length) * 100) : null;
+  const avgMark    = marked.length ? Math.round(marked.reduce((acc, r) => acc + Number(r.final_marks), 0) / marked.length * 10) / 10 : null;
+  const batchCount = new Set(results.map(r => r.batch_name).filter(Boolean)).size;
   const sheetCount = results.filter(r => r.sheet_issued).length;
 
   const subjectAverages = (() => {
@@ -1888,95 +1874,71 @@ export default function ExamResults() {
       {/* Page Content */}
       <div className="px-4 sm:px-6 lg:px-8 space-y-6">
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-4">
-        {[
-          { label: 'Total Students', value: results.length,  Icon: HiOutlineUsers,       bg: 'bg-slate-100 text-slate-700 border-slate-200' },
-          { label: 'Batch Average',  value: `${avgMark}%`,   Icon: HiOutlineChartBar,     bg: 'bg-emerald-50 text-emerald-600 border-emerald-200' },
-          { label: 'Pass Rate',      value: `${passRate}%`,  Icon: HiOutlineCheckCircle,  bg: 'bg-violet-50 text-violet-600 border-violet-200' },
-          { label: 'Sheets Issued',  value: sheetCount,      Icon: HiOutlineDocumentText, bg: 'bg-amber-50 text-amber-600 border-amber-200' },
-        ].map(({ label, value, Icon, bg }) => (
-          <div key={label} className="bg-white rounded-xl border border-slate-200/80 p-3 sm:p-4 shadow-2xs flex items-center gap-3">
-            <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl ${bg} border flex items-center justify-center flex-shrink-0 shadow-2xs`}>
-              <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight leading-none">{value}</p>
-              <p className="text-[11px] sm:text-xs font-semibold text-slate-500 mt-1 truncate">{label}</p>
-            </div>
-          </div>
-        ))}
+      {/* Headline numbers — a compact strip above the table */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+        <StatTileCompact icon={HiOutlineUserGroup} label="Students" value={results.length}
+          sub={batchCount ? `In ${batchCount} batch${batchCount === 1 ? '' : 'es'}` : 'No results yet'} />
+        <StatTileCompact icon={HiOutlineTrendingUp} label="Average mark" value={avgMark ?? '—'} suffix={avgMark != null ? '%' : ''}
+          ring={avgMark}
+          sub={marked.length ? `Across ${marked.length} marked student${marked.length === 1 ? '' : 's'}` : 'No marks entered yet'} />
+        <StatTileCompact icon={HiOutlineBadgeCheck} label="Pass rate" value={passRate ?? '—'} suffix={passRate != null ? '%' : ''}
+          ring={passRate}
+          sub={graded.length ? `${passCount} of ${graded.length} graded passed` : 'No grades yet'} />
+        <StatTileCompact icon={HiOutlineClipboardCheck} label="Result sheets issued" value={sheetCount}
+          ring={results.length ? (sheetCount / results.length) * 100 : null}
+          sub={results.length ? `${results.length - sheetCount} still pending` : 'No results yet'} />
       </div>
 
       {/* Main card */}
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden">
         {/* Merged Header & Filter Bar */}
-        <div className="px-4 py-3 border-b border-slate-200/80 bg-white space-y-3">
-          {/* Top Header Row: Navigation Tabs */}
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-            {/* Tabs */}
-            <div className="flex items-center gap-1 overflow-x-auto pb-1 lg:pb-0 scrollbar-none">
+        <div className="px-4 sm:px-5 pt-3 pb-3.5 border-b border-slate-200/80 bg-white space-y-3.5">
+          {/* Row 1: views. Row 2: everything that narrows the list. */}
+          <div className="flex items-center justify-between gap-3 -mt-1 border-b border-slate-100">
+            <div className="flex items-center gap-1 overflow-x-auto overflow-y-hidden scrollbar-none">
               {TABS.map((tab, i) => (
                 <button key={tab} onClick={() => setActiveTab(i)}
-                  className={`flex-shrink-0 px-4 py-2 text-xs sm:text-sm font-bold rounded-xl transition-all ${
-                    activeTab === i
-                      ? 'bg-slate-900 text-white shadow-2xs'
-                      : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100/80'
+                  className={`relative flex-shrink-0 px-3 py-2.5 text-sm font-semibold transition-colors ${
+                    activeTab === i ? 'text-slate-900' : 'text-slate-500 hover:text-slate-800'
                   }`}>
                   {tab}
+                  {activeTab === i && <span className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-slate-900" />}
                 </button>
               ))}
             </div>
+            <button onClick={fetchAll} title="Refresh"
+              className="flex-shrink-0 inline-flex items-center gap-1.5 h-8 px-2.5 rounded-lg text-xs font-semibold text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors">
+              <HiOutlineRefresh className="w-4 h-4" /> <span className="hidden sm:inline">Refresh</span>
+            </button>
+          </div>
 
-            {/* Merged Filter Controls Bar */}
-            <div className="flex flex-wrap items-center gap-2.5 flex-1 lg:justify-end">
-              {/* Search */}
-              <div className="relative flex-1 sm:flex-initial sm:w-60 min-w-[180px]">
-                <HiOutlineSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-                <input className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200/90 rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900 transition-all"
-                  placeholder="Search student, batch, company…" value={search} onChange={e => setSearch(e.target.value)} />
-              </div>
+          <div className="flex flex-col lg:flex-row lg:items-center gap-2.5">
+            <div className="relative flex-1 min-w-0">
+              <HiOutlineSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+              <input className="w-full h-9 pl-9 pr-3 bg-slate-50 border border-slate-200/80 rounded-lg text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                placeholder="Search student, batch, company…" value={search} onChange={e => setSearch(e.target.value)} />
+            </div>
 
-              {/* Course Type Dropdown */}
+            <div className="flex flex-wrap items-center gap-2.5">
               <Select value={filterType || 'all'} onValueChange={v => setFilterType(v === 'all' ? '' : v)}>
-                <SelectTrigger className="w-full sm:w-44 text-xs font-semibold bg-slate-50 border-slate-200/90 h-8.5 rounded-xl"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="w-full sm:w-44 h-9 text-xs font-medium bg-white border-slate-200/80 rounded-lg"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Course Types</SelectItem>
                   {COURSE_TYPES.map(ct => <SelectItem key={ct.value} value={ct.value}>{ct.value}</SelectItem>)}
                 </SelectContent>
               </Select>
 
-              {/* Batch Dropdown */}
               <Select value={filterBatch || 'all'} onValueChange={v => setFilterBatch(v === 'all' ? '' : v)}>
-                <SelectTrigger className="w-full sm:w-40 text-xs font-semibold bg-slate-50 border-slate-200/90 h-8.5 rounded-xl"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="w-full sm:w-44 h-9 text-xs font-medium bg-white border-slate-200/80 rounded-lg"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Batches</SelectItem>
                   {batches.filter(b => b._id?.batch_name).map(b => <SelectItem key={b._id.batch_name} value={b._id.batch_name}>{b._id.batch_name}</SelectItem>)}
                 </SelectContent>
               </Select>
 
-              {/* Status Filter Pills */}
-              <div className="flex items-center gap-1 bg-slate-100/80 rounded-xl p-1 border border-slate-200/60">
-                <button onClick={() => setFilterSheet('')}
-                  className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all ${filterSheet === '' ? 'bg-slate-900 text-white shadow-2xs' : 'text-slate-600 hover:text-slate-900'}`}>
-                  All
-                </button>
-                <button onClick={() => setFilterSheet('pending')}
-                  className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all ${filterSheet === 'pending' ? 'bg-amber-600 text-white shadow-2xs' : 'text-slate-600 hover:text-slate-900'}`}>
-                  <Clock className="w-3.5 h-3.5" />
-                  Pending
-                </button>
-                <button onClick={() => setFilterSheet('generated')}
-                  className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all ${filterSheet === 'generated' ? 'bg-emerald-600 text-white shadow-2xs' : 'text-slate-600 hover:text-slate-900'}`}>
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  Generated
-                </button>
-              </div>
-
-              {/* Refresh Button */}
-              <button onClick={fetchAll} className="p-2 bg-slate-50 border border-slate-200/90 rounded-xl hover:bg-slate-100 text-slate-600 transition-colors shadow-2xs" title="Refresh">
-                <HiOutlineRefresh className="w-4 h-4" />
-              </button>
+              {/* Sheet status */}
+              <SegmentedToggle value={filterSheet || 'all'} onChange={(v) => setFilterSheet(v === 'all' ? '' : v)}
+                options={[{ key: 'all', label: 'All sheets' }, { key: 'pending', label: 'Pending' }, { key: 'generated', label: 'Issued' }]} />
             </div>
           </div>
 
@@ -2034,17 +1996,19 @@ export default function ExamResults() {
                 ) : (
                   <div className="rounded-xl border border-slate-200/80 overflow-hidden">
                     <div className="overflow-auto max-h-[calc(100vh-13rem)] min-h-[28rem]">
-                    <table className="w-full min-w-[900px] table-fixed text-xs">
+                    {/* Actions gets a fixed width that fits its five icons; the student
+                        column takes whatever is left, so the table never needs to scroll sideways. */}
+                    <table className="w-full min-w-[700px] table-fixed text-xs">
                       <colgroup>
-                        {isAdmin && <col style={{ width: '3.5rem' }} />}
-                        <col style={{ width: '3.5rem' }} />
-                        <col style={{ width: '22%' }} />
-                        <col style={{ width: '14%' }} />
+                        {isAdmin && <col style={{ width: '3rem' }} />}
+                        <col style={{ width: '3rem' }} />
+                        <col />
+                        <col style={{ width: '12%' }} />
+                        <col style={{ width: '7%' }} />
+                        <col style={{ width: '10%' }} />
                         <col style={{ width: '9%' }} />
                         <col style={{ width: '12%' }} />
-                        <col style={{ width: '12%' }} />
-                        <col style={{ width: '13%' }} />
-                        {isAdmin && <col />}
+                        {isAdmin && <col style={{ width: '11.5rem' }} />}
                       </colgroup>
                       <thead className="sticky top-0 z-10">
                         <tr className="bg-slate-50 text-left">
@@ -2084,6 +2048,8 @@ export default function ExamResults() {
                           const gCompanies = g.company ? [g.company] : [];
                           const gIssued = g.items.filter(r => r.sheet_issued).length;
                           const gOpen = openGroups.has(g.key);
+                          const gMarks = g.items.map(r => r.final_marks).filter(v => v != null && v !== '').map(Number).filter(v => !Number.isNaN(v));
+                          const gAvg = gMarks.length ? Math.round((gMarks.reduce((t, v) => t + v, 0) / gMarks.length) * 10) / 10 : null;
                           const toggleG = () => setOpenGroups(prev => {
                             const n = new Set(prev);
                             n.has(g.key) ? n.delete(g.key) : n.add(g.key);
@@ -2091,9 +2057,9 @@ export default function ExamResults() {
                           });
                           return (
                           <Fragment key={g.key}>
-                          <tr className="bg-slate-100/70 hover:bg-slate-100 cursor-pointer select-none" onClick={toggleG}>
+                          <tr className={`cursor-pointer select-none transition-colors ${gOpen ? 'bg-slate-100/80' : 'bg-slate-50/60 hover:bg-slate-100/70'}`} onClick={toggleG}>
                             {isAdmin && (
-                              <td className="px-4 py-2.5" onClick={e => e.stopPropagation()}>
+                              <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
                                 <Checkbox
                                   checked={gAll ? true : gSome ? 'indeterminate' : false}
                                   onCheckedChange={() => setSelected(prev => {
@@ -2105,31 +2071,43 @@ export default function ExamResults() {
                                 />
                               </td>
                             )}
-                            <td colSpan={isAdmin ? 8 : 7} className="px-4 py-2.5">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <HiOutlineChevronDown className={`w-4 h-4 text-slate-500 transition-transform ${gOpen ? '' : '-rotate-90'}`} />
-                                <span className="text-xs font-extrabold text-slate-900">{g.batch_name}</span>
-                                <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${courseTypeBadge(g.course_type)}`}>{g.course_type}</span>
-                                {gCompanies.length > 0 && <span className="text-[11px] font-medium text-slate-500">{gCompanies.join(', ')}</span>}
-                                {isAdmin && (
-                                  <button type="button" onClick={(e) => { e.stopPropagation(); setBatchEdit(g); }}
-                                    title={`Edit all students in ${g.batch_name} at once`}
-                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white border border-slate-200 text-[11px] font-bold text-slate-700 hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-colors">
-                                    <HiOutlinePencil className="w-3 h-3" /> Edit batch
-                                  </button>
-                                )}
-                                {isAdmin && (
-                                  <button type="button" onClick={(e) => { e.stopPropagation(); openAddToBatch(g); }}
-                                    title={`Add a student to ${g.batch_name}`}
-                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white border border-slate-200 text-[11px] font-bold text-slate-700 hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-colors">
-                                    <HiOutlinePlus className="w-3 h-3" /> Add student
-                                  </button>
-                                )}
-                                <span className="ml-auto text-[11px] font-semibold text-slate-500">
-                                  {g.items.length} student{g.items.length > 1 ? 's' : ''} · {gIssued} sheet{gIssued !== 1 ? 's' : ''} issued
-                                </span>
-                              </div>
+                            {/* Batch row follows the table's own columns, so everything lines up with the header */}
+                            <td className="px-4 py-3">
+                              <HiOutlineChevronDown className={`w-4 h-4 text-slate-500 transition-transform ${gOpen ? '' : '-rotate-90'}`} />
                             </td>
+                            <td className="px-4 py-3 min-w-0">
+                              <p className="text-sm font-extrabold text-slate-900 truncate" title={g.batch_name}>{g.batch_name}</p>
+                              {gCompanies.length > 0 && <p className="text-[11px] font-medium text-slate-500 truncate">{gCompanies.join(', ')}</p>}
+                            </td>
+                            <td className="px-4 py-3 text-xs font-semibold text-slate-600 whitespace-nowrap">
+                              {g.items.length} student{g.items.length > 1 ? 's' : ''}
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${courseTypeBadge(g.course_type)}`}>{g.course_type}</span>
+                            </td>
+                            <td className="px-4 py-3 text-xs font-semibold text-slate-600 whitespace-nowrap">
+                              {gAvg != null ? <>Avg <span className="font-bold text-slate-900">{gAvg}</span></> : <span className="text-slate-300">–</span>}
+                            </td>
+                            <td className="px-4 py-3" />
+                            <td className="px-4 py-3 text-xs font-semibold text-slate-600 whitespace-nowrap">
+                              <span className="font-bold text-slate-900">{gIssued}</span> of {g.items.length} issued
+                            </td>
+                            {isAdmin && (
+                              <td className="px-3 py-3" onClick={e => e.stopPropagation()}>
+                                <div className="inline-flex items-center rounded-lg border border-slate-200 bg-white divide-x divide-slate-200 overflow-hidden shadow-2xs">
+                                  <button type="button" onClick={() => setBatchEdit(g)}
+                                    title={`Edit all students in ${g.batch_name} at once`}
+                                    className="h-8 w-8 inline-flex items-center justify-center text-slate-500 hover:bg-slate-50 hover:text-blue-600 transition-colors">
+                                    <HiOutlinePencil className="w-4 h-4" />
+                                  </button>
+                                  <button type="button" onClick={() => openAddToBatch(g)}
+                                    title={`Add a student to ${g.batch_name}`}
+                                    className="h-8 w-8 inline-flex items-center justify-center text-slate-500 hover:bg-slate-50 hover:text-blue-600 transition-colors">
+                                    <HiOutlinePlus className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </td>
+                            )}
                           </tr>
                           {gOpen && g.items.map((r, i) => {
                           const rid = r._id || r.id;
@@ -2162,8 +2140,8 @@ export default function ExamResults() {
                                 : <span className="text-xs text-amber-600 font-bold flex items-center gap-1"><HiOutlineLockClosed className="w-3.5 h-3.5" /> Pending</span>}
                             </td>
                             {isAdmin && (
-                              <td className="px-4 py-3">
-                                <div className="flex items-center gap-1">
+                              <td className="px-3 py-3">
+                                <div className="flex items-center gap-0.5">
                                   <button onClick={() => setViewStudent(r)} title="View" className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-900">
                                     <HiOutlineEye className="w-4 h-4" />
                                   </button>

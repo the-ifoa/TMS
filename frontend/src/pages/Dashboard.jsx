@@ -14,6 +14,8 @@ import { getParticipants } from '../api';
 import { useAuth } from '../context/AuthContext';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { CountUp } from '@/components/ui/count-up';
+import AirlineDashboard from './AirlineDashboard';
+import AdminDashboard from './AdminDashboard';
 import TeamPerformanceCard from '../components/TeamPerformanceCard';
 
 const container = {
@@ -43,7 +45,7 @@ const themeStyles = {
   amber:   { iconBg: 'bg-slate-900 text-white' },
 };
 
-export default function Dashboard() {
+function LegacyDashboard() {
   const { admin, isAdmin, isDepartment } = useAuth();
   // A department has no enrollment flow — it only keeps a lightweight "My Team"
   // roster. Point every enrollment-shaped CTA at My Team instead.
@@ -283,4 +285,12 @@ export default function Dashboard() {
       </div>
     </motion.div>
   );
+}
+
+// Admins and main airline accounts each get their chart dashboard; a department
+// keeps the simple team summary above.
+export default function Dashboard() {
+  const { isAdmin, isDepartment } = useAuth();
+  if (isAdmin) return <AdminDashboard />;
+  return isDepartment ? <LegacyDashboard /> : <AirlineDashboard />;
 }

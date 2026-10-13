@@ -553,7 +553,7 @@ export default function ExamSystem() {
     <div className="w-full min-h-full pb-20 flex flex-col">
       {/* Flush Full-Width Sticky Page Header */}
       <div className="sticky top-0 z-20 w-full bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-3.5 sm:px-6 lg:px-8 py-2.5 shadow-2xs">
-        <div className="w-full max-w-7xl mx-auto flex items-center justify-between gap-x-4 gap-y-2.5 flex-wrap lg:flex-nowrap">
+        <div className="w-full flex items-center justify-between gap-x-4 gap-y-2.5 flex-wrap lg:flex-nowrap">
           <div className="flex items-center gap-x-3 gap-y-2 min-w-0 max-w-full flex-wrap">
             <h1 className="text-base sm:text-lg font-black text-slate-900 tracking-tight flex-shrink-0">Exam System</h1>
             
@@ -626,7 +626,7 @@ export default function ExamSystem() {
       </div>
 
       {/* Main Content Body */}
-      <div className="w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 space-y-6 flex-1">
+      <div className="w-full p-4 sm:p-6 lg:p-8 space-y-6 flex-1">
         {activeTab !== 'question-bank' && !loading && (
           <div className="flex flex-col sm:flex-row sm:items-center gap-2.5">
             <div className="relative flex-1 min-w-0">
@@ -709,7 +709,7 @@ export default function ExamSystem() {
               {anyExamFilterActive && (
                 <p className="text-xs text-slate-400 font-medium mb-3">Showing {list.length} of {base.length}</p>
               )}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-5">
                 {list.map(renderCard)}
               </div>
             </>

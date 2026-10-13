@@ -500,7 +500,7 @@ export default function ParticipantExamPerformance() {
 
   if (loading) {
     return (
-      <div className="max-w-7xl mx-auto p-6 space-y-6">
+      <div className="p-6 space-y-6">
         <Skeleton className="h-16 w-full rounded-2xl" />
         <Skeleton className="h-48 w-full rounded-3xl" />
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -559,7 +559,7 @@ export default function ParticipantExamPerformance() {
       
       {/* Executive Top Navbar Header */}
       <header className="bg-white/90 backdrop-blur-md border-b border-slate-200/80 px-6 py-4 sticky top-0 z-30 shadow-2xs">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
+        <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button
               onClick={() => navigate(-1)}
@@ -589,7 +589,7 @@ export default function ParticipantExamPerformance() {
       </header>
 
       {/* Main Layout Container */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-6 space-y-6">
+      <main className="px-4 sm:px-6 pt-6 space-y-6">
         
         {/* ── 1. EXECUTIVE DARK HERO BANNER ── */}
         <div className="bg-slate-900 text-white rounded-3xl p-6 sm:p-7 shadow-xl border border-slate-800 relative overflow-hidden space-y-6">

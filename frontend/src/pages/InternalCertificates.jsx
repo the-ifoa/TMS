@@ -254,7 +254,7 @@ export default function InternalCertificates() {
     <div className="w-full min-h-full flex flex-col">
       {/* Header */}
       <div className="sticky top-0 z-20 w-full bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-2xs">
-        <div className="w-full max-w-6xl mx-auto px-3.5 sm:px-6 lg:px-8 py-3 flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="w-full px-3.5 sm:px-6 lg:px-8 py-3 flex flex-col sm:flex-row sm:items-center gap-3">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 min-w-0">
               <div className="w-7 h-7 rounded-lg bg-slate-900 text-white flex items-center justify-center shadow-2xs flex-shrink-0">
@@ -283,7 +283,7 @@ export default function InternalCertificates() {
         </div>
       </div>
 
-      <div className="w-full max-w-6xl mx-auto px-3.5 sm:px-6 lg:px-8 py-5">
+      <div className="w-full px-3.5 sm:px-6 lg:px-8 py-5">
         <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden flex flex-col">
           {/* Toolbar */}
           <div className="p-3 border-b border-slate-200/80 space-y-2.5">

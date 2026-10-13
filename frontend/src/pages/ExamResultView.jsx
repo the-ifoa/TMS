@@ -152,7 +152,7 @@ export default function ExamResultView() {
 
   return (
     <div className="w-full min-h-screen pb-20 p-4 sm:p-6 lg:p-8 bg-slate-50/60 text-slate-800">
-      <div className="w-full max-w-7xl mx-auto space-y-6">
+      <div className="w-full space-y-6">
 
         {/* ── Top Bar Action Header ── */}
         <div className="print:hidden flex items-center justify-between">

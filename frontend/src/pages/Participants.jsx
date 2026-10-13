@@ -24,7 +24,7 @@ import {
   HiOutlineLockClosed,
   HiOutlineMail,
   HiOutlineCheck,
-  HiOutlineChartBar,
+  HiOutlinePresentationChartLine,
   HiOutlineUpload,
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
@@ -1624,19 +1624,22 @@ export default function Participants() {
                           )}
                         </td>
                         <td className="px-5 py-2.5" onClick={e => e.stopPropagation()}>
-                          <div className="flex items-center justify-end gap-1.5">
-                            <Link to={`/admin/participants/${record.id}/performance`}
-                              className="p-1.5 rounded-lg bg-slate-50 border border-slate-200 hover:border-emerald-300 hover:bg-emerald-50 text-slate-500 hover:text-emerald-600 transition-all" title="Exam Performance">
-                              <HiOutlineChartBar className="w-3.5 h-3.5" />
-                            </Link>
-                            <Link to={`/admin/participants/edit/${record.id}`}
-                              className="p-1.5 rounded-lg bg-slate-50 border border-slate-200 hover:border-blue-300 hover:bg-blue-50 text-slate-500 hover:text-blue-600 transition-all" title="Edit">
-                              <HiOutlinePencil className="w-3.5 h-3.5" />
-                            </Link>
-                            <button onClick={() => handleDelete(record.id, record.participant_name)}
-                              className="p-1.5 rounded-lg bg-slate-50 border border-slate-200 hover:border-red-300 hover:bg-red-50 text-slate-500 hover:text-red-600 transition-all" title="Delete">
-                              <HiOutlineTrash className="w-3.5 h-3.5" />
-                            </button>
+                          {/* One joined control, same as the airline participants table */}
+                          <div className="flex justify-end">
+                            <div className="inline-flex items-center rounded-lg border border-slate-200 bg-white divide-x divide-slate-200 overflow-hidden shadow-2xs">
+                              <Link to={`/admin/participants/${record.id}/performance`} title="Performance dashboard"
+                                className="h-8 w-8 inline-flex items-center justify-center text-slate-500 hover:bg-slate-50 hover:text-blue-600 transition-colors">
+                                <HiOutlinePresentationChartLine className="w-4 h-4" />
+                              </Link>
+                              <Link to={`/admin/participants/edit/${record.id}`} title="Edit participant"
+                                className="h-8 w-8 inline-flex items-center justify-center text-slate-500 hover:bg-slate-50 hover:text-blue-600 transition-colors">
+                                <HiOutlinePencil className="w-4 h-4" />
+                              </Link>
+                              <button onClick={() => handleDelete(record.id, record.participant_name)} title="Delete participant"
+                                className="h-8 w-8 inline-flex items-center justify-center text-slate-500 hover:bg-slate-50 hover:text-blue-600 transition-colors hover:!bg-red-50 hover:!text-red-600">
+                                <HiOutlineTrash className="w-4 h-4" />
+                              </button>
+                            </div>
                           </div>
                         </td>
                       </tr>

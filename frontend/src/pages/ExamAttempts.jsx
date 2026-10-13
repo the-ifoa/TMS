@@ -976,7 +976,7 @@ export default function ExamAttempts() {
     <div className="w-full min-h-full pb-20 flex flex-col">
       {/* Integrated Sticky Top Header & Search/Filter Bar */}
       <div className="sticky top-0 z-20 w-full bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-2xs">
-        <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 space-y-2.5">
+        <div className="w-full px-4 sm:px-6 lg:px-8 py-3 space-y-2.5">
           {/* Top Row: Navigation, Title & Right Controls */}
           <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
             <div className="flex items-center gap-2.5 min-w-0 flex-1 basis-60">
@@ -1108,7 +1108,7 @@ export default function ExamAttempts() {
       </div>
 
       {/* Main Content Area */}
-      <div className="w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 space-y-4 flex-1">
+      <div className="w-full p-4 sm:p-6 lg:p-8 space-y-4 flex-1">
 
         {/* Analytics Panel */}
         {showAnalytics && analytics && (

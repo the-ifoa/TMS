@@ -176,7 +176,7 @@ export default function AirlineParticipants() {
     <div className="w-full min-h-full flex flex-col">
       {/* Sticky header: title + page actions */}
       <div className="sticky top-0 z-20 w-full bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-2xs">
-        <div className="w-full max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8 py-3">
+        <div className="w-full px-3.5 sm:px-6 lg:px-8 py-3">
           {/* Top Row: Title, Counter & Action Button */}
           <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
             <div className="flex items-center gap-2 min-w-0">
@@ -226,7 +226,7 @@ export default function AirlineParticipants() {
         </div>
       </div>
 
-      <div className="w-full max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8 py-5 flex-1">
+      <div className="w-full px-3.5 sm:px-6 lg:px-8 py-5 flex-1">
         {loading ? (
           <div className="space-y-2.5">
             <Skeleton className="h-12 w-full rounded-xl" />

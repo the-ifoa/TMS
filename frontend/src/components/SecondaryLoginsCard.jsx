@@ -7,6 +7,7 @@ import {
 import { getSecondaryLogins, getSecondaryLoginPowers, addSecondaryLogin, updateSecondaryLogin, deleteSecondaryLogin } from '../api';
 import { useConfirm } from '@/hooks/use-confirm';
 import InfoButton from './InfoButton';
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 
 // Profile section: extra email + password pairs that sign in to this same airline
 // account. Shown only when an IFOA admin has enabled it for the airline; only the
@@ -137,7 +138,7 @@ export default function SecondaryLoginsCard({ viaSecondary = false, signedInAs =
           <div>
             <h3 className="text-base font-bold text-slate-900 flex items-center gap-1.5">
               Additional logins
-              <InfoButton onClick={() => setShowInfo((v) => !v)} active={showInfo} title="How additional logins work" />
+              <InfoButton onClick={() => setShowInfo(true)} active={showInfo} title="How additional logins work" />
             </h3>
             <p className="text-xs font-medium text-slate-400">More email + password pairs that open this same account</p>
           </div>
@@ -150,36 +151,100 @@ export default function SecondaryLoginsCard({ viaSecondary = false, signedInAs =
         )}
       </div>
 
-      {showInfo && (
-        <div className="mt-4 relative rounded-xl bg-blue-50/60 border border-blue-200/70 px-4 py-3.5 pr-9 text-xs font-medium text-slate-700 space-y-2.5">
-          <button onClick={() => setShowInfo(false)} title="Close" className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-700">
-            <HiOutlineX className="w-4 h-4" />
-          </button>
-          <p className="font-bold text-slate-900">How additional logins work</p>
-          <ul className="list-disc pl-4 space-y-1">
-            <li>Each login is another email + password that opens <span className="font-semibold">this same account</span>, with the same participants, exams and results. It is not a separate department.</li>
-            <li><span className="font-semibold">Full access</span>: the person can do everything you can, including anything switched on for your airline later.</li>
-            <li><span className="font-semibold">Limited access</span>: the person can only use the powers you tick. Everything else is hidden from their menu and blocked.</li>
-            <li>Every login always sees the Dashboard, Exam Results and Profile.</li>
-            <li>No additional login can add, change or remove logins. Only the main email and password can.</li>
-            <li>Changing a login&apos;s access takes effect straight away; removing it signs that person out.</li>
-          </ul>
-          {powers.length > 0 && (
-            <div>
-              <p className="font-bold text-slate-900 mb-1.5">What each power allows</p>
-              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5">
-                {powers.map((p) => (
-                  <div key={p.key}>
-                    <dt className="font-semibold text-slate-800">{p.label}</dt>
-                    <dd className="text-[11px] text-slate-500">{p.hint}</dd>
+      {/* "How it works" popup — same layout as the one on the Departments page */}
+      <Dialog open={showInfo} onOpenChange={setShowInfo}>
+        <DialogContent className="max-w-2xl rounded-2xl" hideClose>
+          <div className="flex items-center justify-between gap-3 px-6 py-4 border-b border-slate-200/80">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 bg-slate-900 text-white">
+                <HiOutlineUsers className="w-4.5 h-4.5" />
+              </div>
+              <div className="min-w-0">
+                <DialogTitle className="text-base font-bold text-slate-900 leading-tight tracking-tight">How additional logins work</DialogTitle>
+                <DialogDescription className="text-xs text-slate-500 mt-0.5">More people on the same account, each with their own sign-in</DialogDescription>
+              </div>
+            </div>
+            <button type="button" onClick={() => setShowInfo(false)} title="Close"
+              className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors">
+              <HiOutlineX className="w-5 h-5" />
+            </button>
+          </div>
+
+          <div className="px-6 py-5 space-y-6 overflow-y-auto">
+            <p className="text-sm text-slate-600 leading-relaxed">
+              Each additional login is another email and password that opens <strong>this same account</strong>, with the same participants, exams and results. It is not a separate department.
+            </p>
+
+            <section>
+              <h3 className="text-xs font-semibold text-slate-900 mb-2.5">Access levels</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {[
+                  { name: 'Full access', tag: 'Everything', text: 'The person can do everything you can, including anything switched on for your airline later.' },
+                  { name: 'Limited access', tag: 'Only what you tick', text: 'The person can use only the powers you tick. Everything else is hidden from their menu and blocked.' },
+                ].map((r) => (
+                  <div key={r.name} className="rounded-xl border border-slate-200/80 bg-slate-50/60 p-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="flex items-center gap-2.5 min-w-0">
+                        <span className="w-8 h-8 rounded-lg bg-white border border-slate-200 text-slate-700 flex items-center justify-center flex-shrink-0">
+                          <HiOutlineShieldCheck className="w-4 h-4" />
+                        </span>
+                        <span className="text-sm font-semibold text-slate-900 truncate">{r.name}</span>
+                      </span>
+                      <span className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-white border border-slate-200 text-slate-600 flex-shrink-0">{r.tag}</span>
+                    </div>
+                    <p className="mt-2.5 text-[13px] text-slate-600 leading-relaxed">{r.text}</p>
                   </div>
                 ))}
-              </dl>
-            </div>
-          )}
-          <p className="text-[11px] text-slate-500">Tip: give each person only what their job needs, and use a separate login per person so you can remove one without affecting the others.</p>
-        </div>
-      )}
+              </div>
+            </section>
+
+            <section>
+              <h3 className="text-xs font-semibold text-slate-900 mb-2.5">Good to know</h3>
+              <ul className="rounded-xl border border-slate-200/80 divide-y divide-slate-100">
+                {[
+                  ['Always available', 'Every login sees the Dashboard, Exam Results and Profile.'],
+                  ['Only the main login manages logins', 'No additional login can add, change or remove logins.'],
+                  ['Changes apply straight away', 'Changing access takes effect immediately; removing a login signs that person out.'],
+                  ['One login per person', 'Give each person only what their job needs, so you can remove one without affecting the others.'],
+                ].map(([title, text]) => (
+                  <li key={title} className="px-4 py-3">
+                    <p className="text-sm font-semibold text-slate-900">{title}</p>
+                    <p className="mt-0.5 text-[13px] text-slate-600 leading-relaxed">{text}</p>
+                  </li>
+                ))}
+              </ul>
+            </section>
+
+            {powers.length > 0 && (
+              <section>
+                <h3 className="text-xs font-semibold text-slate-900 mb-2.5">What each power allows</h3>
+                <div className="space-y-3">
+                  {grouped(powers).map(([group, items]) => (
+                    <div key={group} className="rounded-xl border border-slate-200/80 overflow-hidden">
+                      <p className="px-4 py-2 bg-slate-50/80 border-b border-slate-100 text-[11px] font-semibold uppercase tracking-wider text-slate-500">{group}</p>
+                      <dl className="divide-y divide-slate-100">
+                        {items.map((p) => (
+                          <div key={p.key} className="px-4 py-2.5 sm:grid sm:grid-cols-[minmax(0,13rem)_1fr] sm:gap-4">
+                            <dt className="text-[13px] font-semibold text-slate-900">{p.label}</dt>
+                            <dd className="text-[13px] text-slate-600">{p.hint}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+          </div>
+
+          <div className="px-6 py-3.5 border-t border-slate-200/80 flex items-center justify-end">
+            <button type="button" onClick={() => setShowInfo(false)}
+              className="px-5 py-2 rounded-lg text-sm font-semibold bg-slate-900 text-white hover:bg-slate-800 transition-colors">
+              Got it
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {viaSecondary && (
         <p className="mt-4 text-xs font-medium text-amber-800 bg-amber-50 border border-amber-200/80 rounded-xl px-3.5 py-2.5">

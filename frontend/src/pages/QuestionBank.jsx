@@ -217,7 +217,7 @@ export default function QuestionBankList({ embedded = false, showCreateState, se
     <div className={embedded ? "w-full" : "w-full min-h-full pb-20 flex flex-col"}>
       {!embedded && (
         <div className="sticky top-0 z-20 w-full bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-3.5 sm:px-6 lg:px-8 py-2.5 shadow-2xs">
-          <div className="w-full max-w-7xl mx-auto flex items-center justify-between gap-4">
+          <div className="w-full flex items-center justify-between gap-4">
             <div className="flex items-center gap-3 min-w-0">
               <h1 className="text-base sm:text-lg font-black text-slate-900 tracking-tight flex-shrink-0">Question Bank</h1>
               <span className="hidden sm:inline-block text-xs font-medium text-slate-400 truncate border-l border-slate-200 pl-3">
@@ -231,7 +231,7 @@ export default function QuestionBankList({ embedded = false, showCreateState, se
         </div>
       )}
 
-      <div className={embedded ? "w-full space-y-4" : "w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 space-y-4 flex-1"}>
+      <div className={embedded ? "w-full space-y-4" : "w-full p-4 sm:p-6 lg:p-8 space-y-4 flex-1"}>
         {showCreate && (
           <Card className="p-4 rounded-2xl border border-blue-200 bg-blue-50/40 shadow-2xs space-y-3">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -280,7 +280,7 @@ export default function QuestionBankList({ embedded = false, showCreateState, se
         )}
 
         {loading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4">
             <Skeleton className="h-32 rounded-2xl" />
             <Skeleton className="h-32 rounded-2xl" />
             <Skeleton className="h-32 rounded-2xl" />
@@ -303,7 +303,7 @@ export default function QuestionBankList({ embedded = false, showCreateState, se
             );
           }
           return (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6">
             {shown.map((g) => (
               <Card key={g.id} className="group p-5 sm:p-6 rounded-3xl border border-slate-200/90 shadow-2xs hover:shadow-lg hover:border-slate-300 transition-all duration-200 flex flex-col justify-between">
                 {editingId === g.id ? (
@@ -580,7 +580,7 @@ export function QuestionBankDetail() {
   return (
     <div className="w-full min-h-full pb-20 flex flex-col">
       <div className="sticky top-0 z-20 w-full bg-white/95 backdrop-blur-md px-3.5 sm:px-6 lg:px-8 py-2.5 shadow-2xs border-b border-slate-200/80">
-        <div className="w-full max-w-7xl mx-auto flex items-center justify-between gap-4">
+        <div className="w-full flex items-center justify-between gap-4">
           <div className="flex items-center gap-2.5 min-w-0">
             <Button variant="outline" size="sm" onClick={() => navigate('/admin/exams?tab=question-bank')} className="rounded-xl border-slate-200 text-xs font-semibold flex-shrink-0">
               <HiOutlineArrowLeft className="w-4 h-4" /> <span className="hidden sm:inline">All Banks</span>
@@ -617,7 +617,7 @@ export function QuestionBankDetail() {
         </div>
       </div>
 
-      <div className="w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 flex-1">
+      <div className="w-full p-4 sm:p-6 lg:p-8 flex-1">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           {/* LEFT SECTION: Questions List */}
           <div className="order-2 lg:order-1 lg:col-span-8 space-y-3">

@@ -8,7 +8,7 @@ import {
 } from 'react-icons/hi';
 import { FaPlaneDeparture } from 'react-icons/fa';
 import InfoButton from '../components/InfoButton';
-import { ShieldCheck, Building2, Users, CheckCircle2, Sliders, Info, Layers } from 'lucide-react';
+import { ShieldCheck, Building2, Users, CheckCircle2, Sliders, Info } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import {
   getTeamCatalog, getTeamAirlines, getTeamMembers,
@@ -62,85 +62,60 @@ function PermissionChecklist({ groups, value, onChange }) {
 
   const allKeys = Object.values(groups || {}).flatMap((items) => items.map((i) => i.key));
   const isAllSelected = allKeys.length > 0 && allKeys.every((k) => set.has(k));
-
-  const toggleAll = () => {
-    if (isAllSelected) {
-      onChange([]);
-    } else {
-      onChange(allKeys);
-    }
-  };
+  const selectedCount = allKeys.filter((k) => set.has(k)).length;
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-bold text-slate-700">Permissions & Powers</span>
+    <div>
+      <div className="flex items-center justify-between mb-2.5">
+        <h3 className="text-xs font-semibold text-slate-900">
+          Permissions
+          <span className="ml-2 font-medium text-slate-500">{selectedCount} of {allKeys.length} selected</span>
+        </h3>
         {allKeys.length > 0 && (
-          <button
-            type="button"
-            onClick={toggleAll}
-            className="text-[11px] font-semibold text-blue-600 hover:text-blue-700 transition-colors cursor-pointer"
-          >
-            {isAllSelected ? 'Deselect all' : 'Select all'}
+          <button type="button" onClick={() => onChange(isAllSelected ? [] : allKeys)}
+            className="text-xs font-semibold text-blue-600 hover:text-blue-700 transition-colors cursor-pointer">
+            {isAllSelected ? 'Clear all' : 'Select all'}
           </button>
         )}
       </div>
 
-      <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
+      {/* One bordered block per area; the dialog body scrolls, not this list */}
+      <div className="space-y-3">
         {Object.entries(groups || {}).map(([group, items]) => {
           if (!items || items.length === 0) return null;
           const groupKeys = items.map((i) => i.key);
-          const allGroupSelected = groupKeys.every((k) => set.has(k));
-
-          const toggleGroup = (e) => {
-            e.stopPropagation();
+          const groupOn = groupKeys.filter((k) => set.has(k)).length;
+          const allGroupSelected = groupOn === groupKeys.length;
+          const toggleGroup = () => {
             const next = new Set(set);
-            if (allGroupSelected) {
-              groupKeys.forEach((k) => next.delete(k));
-            } else {
-              groupKeys.forEach((k) => next.add(k));
-            }
+            groupKeys.forEach((k) => (allGroupSelected ? next.delete(k) : next.add(k)));
             onChange([...next]);
           };
 
           return (
-            <div key={group} className="p-3 rounded-2xl bg-slate-50/70 border border-slate-200/80 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+            <div key={group} className="rounded-xl border border-slate-200/80 overflow-hidden">
+              <div className="flex items-center justify-between gap-3 px-3.5 py-2 bg-slate-50/80 border-b border-slate-100">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
                   {group}
+                  <span className="ml-2 normal-case tracking-normal font-medium text-slate-400">{groupOn}/{groupKeys.length}</span>
                 </span>
-                <button
-                  type="button"
-                  onClick={toggleGroup}
-                  className="text-[10px] font-semibold text-slate-400 hover:text-blue-600 transition-colors cursor-pointer"
-                >
-                  {allGroupSelected ? 'None' : 'All'}
+                <button type="button" onClick={toggleGroup}
+                  className="text-[11px] font-semibold text-blue-600 hover:text-blue-700 transition-colors cursor-pointer">
+                  {allGroupSelected ? 'Clear' : 'Select all'}
                 </button>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2">
                 {items.map((i) => {
                   const checked = set.has(i.key);
                   return (
-                    <button
-                      key={i.key}
-                      type="button"
-                      onClick={() => toggle(i.key)}
-                      className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs text-left transition-all cursor-pointer border ${
-                        checked
-                          ? 'bg-white border-blue-500/60 text-slate-900 font-semibold shadow-2xs ring-1 ring-blue-500/20'
-                          : 'bg-white/60 border-slate-200/70 text-slate-600 hover:bg-white hover:border-slate-300'
-                      }`}
-                    >
-                      <div
-                        className={`w-4 h-4 rounded-md flex items-center justify-center flex-shrink-0 transition-colors border ${
-                          checked
-                            ? 'bg-blue-600 border-blue-600 text-white shadow-2xs'
-                            : 'border-slate-300 bg-white'
-                        }`}
-                      >
+                    <button key={i.key} type="button" role="checkbox" aria-checked={checked} onClick={() => toggle(i.key)}
+                      className="flex items-center gap-2.5 px-3.5 py-2.5 text-left transition-colors cursor-pointer hover:bg-blue-50/50">
+                      <span className={`w-4 h-4 rounded-[5px] flex items-center justify-center flex-shrink-0 border transition-colors ${
+                        checked ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300 bg-white'
+                      }`}>
                         {checked && <HiOutlineCheck className="w-3 h-3 stroke-[3]" />}
-                      </div>
-                      <span className="truncate flex-1">{i.label}</span>
+                      </span>
+                      <span className={`text-[13px] truncate ${checked ? 'font-semibold text-slate-900' : 'text-slate-600'}`}>{i.label}</span>
                     </button>
                   );
                 })}
@@ -283,6 +258,45 @@ export default function TeamPage() {
     return Object.fromEntries(all.map((i) => [i.key, i.label]));
   }, [catalog]);
 
+  // "How it works" popup content, by who is reading it.
+  const disable = <><strong>Disable</strong> pauses the login straight away and keeps its permissions and participant list. <strong>Remove</strong> deletes the account and everything it owns for good.</>;
+  const INFO = isAdmin ? {
+    title: 'How sub-users work',
+    subtitle: 'Roles, permissions and who sees which participants',
+    intro: 'Hand out parts of the work without sharing the main admin login. Each sub-user gets its own email and password, and only the powers you tick.',
+    roles: [
+      { name: 'Sub-admin', scope: 'All airlines', icon: ShieldCheck, text: <>Works across <strong>every airline</strong>, limited to the admin powers you enable. For example an auditor who can only view, or someone who only issues certificates.</> },
+      { name: 'Sub-department', scope: 'One airline', icon: Building2, text: <>Belongs to <strong>one parent airline</strong>. Keeps its own participant list and holds only the airline powers you grant.</> },
+    ],
+    points: [
+      { icon: CheckCircle2, title: 'Permissions are a checklist', text: <>Powers are grouped by area (participants, exams, certificates). Tick them one by one or use <strong>Select all</strong>. Each card shows how many are active.</> },
+      { icon: Users, title: 'Each department has its own list', text: <>A sub-department builds its <strong>own team roster</strong> on its My Team page. Those records are never shared with, or moved from, the main airline list.</> },
+      { icon: Sliders, title: 'Disable or remove', text: disable },
+    ],
+    steps: [
+      { title: 'Choose the type', text: 'Click New sub-admin or New sub-department.' },
+      { title: 'Set permissions', text: 'Tick the powers this account should have.' },
+      { title: 'Hand over the login', text: 'They sign in and start work; a department adds its people on My Team.' },
+    ],
+  } : {
+    title: 'How departments work',
+    subtitle: 'Separate logins for teams inside your airline',
+    intro: 'Create a login for each team (for example Flight Dispatch or Cabin Crew) so it can manage its own people without using your main account.',
+    roles: [
+      { name: 'Department login', scope: 'Your airline only', icon: Building2, text: <>Signs in with its own email and password. It sees only your airline, and can do only what you tick when you create it.</> },
+    ],
+    points: [
+      { icon: CheckCircle2, title: 'Permissions are a checklist', text: <>Powers are grouped by area (participants, exams, certificates). Each department card shows how many are active.</> },
+      { icon: Users, title: 'Each department has its own list', text: <>A department builds its <strong>own team roster</strong> on its My Team page. It is separate from your main list and from other departments.</> },
+      { icon: Sliders, title: 'Disable or remove', text: disable },
+    ],
+    steps: [
+      { title: 'Create the department', text: 'Enter its name, email and password.' },
+      { title: 'Set permissions', text: 'Tick the powers it should have.' },
+      { title: 'Hand over the login', text: 'The department signs in and adds its people on My Team.' },
+    ],
+  };
+
   return (
     <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col">
       {/* Header */}
@@ -331,98 +345,103 @@ export default function TeamPage() {
             No sub-users yet.
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-5">
             {allMembers.map((m) => {
               const isAdminScope = m.memberScope === 'admin';
               const isDisabled = m.account_status === 'disabled';
               const perms = m.permissions || [];
 
-              const MAX_CHIPS = 6;
+              const MAX_CHIPS = 5;
               const shown = perms.slice(0, MAX_CHIPS);
               const extra = perms.slice(MAX_CHIPS);
 
               return (
                 <div
                   key={m._id || m.id}
-                  className={`bg-white rounded-xl border flex flex-col transition-colors ${
-                    isDisabled ? 'border-slate-200/70 bg-slate-50/50' : 'border-slate-200/80 hover:border-slate-300'
+                  className={`group p-5 sm:p-6 bg-white border rounded-3xl shadow-2xs transition-all duration-200 flex flex-col justify-between ${
+                    isDisabled ? 'border-slate-200/70 bg-slate-50/60' : 'border-slate-200/90 hover:shadow-lg hover:border-slate-300'
                   }`}
                 >
-                  {/* Identity */}
-                  <div className="flex items-start gap-3 p-4">
-                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                      isDisabled ? 'bg-slate-100 text-slate-400' : 'bg-slate-900 text-white'
-                    }`}>
-                      {isAdminScope
-                        ? <HiOutlineShieldCheck className="w-4.5 h-4.5" />
-                        : <FaPlaneDeparture className="w-3.5 h-3.5" />}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <h3 className={`text-sm font-semibold truncate ${isDisabled ? 'text-slate-500' : 'text-slate-900'}`} title={m.name}>{m.name}</h3>
-                        <span className="text-[10px] font-semibold px-1.5 py-px rounded bg-slate-100 text-slate-500 flex-shrink-0 max-w-[45%] truncate"
-                          title={isAdminScope ? 'Sub-admin' : m.department_name || 'Department'}>
-                          {isAdminScope ? 'Sub-admin' : m.department_name || 'Department'}
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-slate-400 truncate mt-0.5" title={m.email}>{m.email}</p>
-                    </div>
-                    <span className={`text-[11px] font-semibold flex-shrink-0 mt-0.5 ${
-                      isDisabled ? 'text-slate-400' : 'text-emerald-700'
-                    }`}>
-                      {isDisabled ? 'Disabled' : 'Active'}
-                    </span>
-                  </div>
-
-                  {/* Permissions */}
-                  <div className="px-4 pb-4 flex-1">
-                    <p className="text-[11px] font-medium text-slate-400 mb-2">
-                      Permissions <span className="text-slate-600 font-semibold">{perms.length}</span>
-                    </p>
-                    {perms.length === 0 ? (
-                      <p className="text-xs text-slate-400">No permissions assigned.</p>
-                    ) : (
-                      <div className="flex flex-wrap gap-1.5">
-                        {shown.map((p) => (
-                          <span key={p} className="text-[11px] font-medium text-slate-600 bg-slate-50 border border-slate-200/70 px-2 py-0.5 rounded-md">
-                            {formatPermLabel(p, permLabels)}
-                          </span>
-                        ))}
-                        {extra.length > 0 && (
-                          <span className="text-[11px] font-semibold text-slate-500 px-2 py-0.5 rounded-md border border-dashed border-slate-200 cursor-help"
-                            title={extra.map((p) => formatPermLabel(p, permLabels)).join('\n')}>
-                            +{extra.length} more
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Footer */}
-                  <div className="flex items-center justify-between gap-2 px-4 py-2.5 border-t border-slate-100">
-                    <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-slate-400 min-w-0">
-                      {m.memberScope === 'airline'
-                        ? <><HiOutlineUsers className="w-3.5 h-3.5 flex-shrink-0" /><span className="truncate">Own participant list</span></>
-                        : <><HiOutlineShieldCheck className="w-3.5 h-3.5 flex-shrink-0" /><span className="truncate">Admin account</span></>}
-                    </span>
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                      <button type="button" onClick={() => toggleStatus(m)}
-                        className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-colors cursor-pointer ${
-                          isDisabled
-                            ? 'bg-slate-900 border-slate-900 text-white hover:bg-slate-800'
-                            : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300'
+                  <div className="space-y-3.5">
+                    {/* Header: icon, name, status */}
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-3 min-w-0 flex-1">
+                        <div className={`w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-2xs mt-0.5 transition-transform group-hover:scale-105 ${
+                          isDisabled ? 'bg-slate-200 text-slate-500' : 'bg-slate-900 text-white'
                         }`}>
-                        {isDisabled ? 'Enable' : 'Disable'}
-                      </button>
-                      <button type="button" onClick={() => openEdit(m)} title="Edit"
-                        className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 hover:border-slate-300 hover:text-slate-800 transition-colors cursor-pointer">
-                        <HiOutlinePencil className="w-3.5 h-3.5" />
-                      </button>
-                      <button type="button" onClick={() => remove(m)} title="Remove"
-                        className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-rose-50 hover:border-rose-200 hover:text-rose-600 transition-colors cursor-pointer">
-                        <HiOutlineTrash className="w-3.5 h-3.5" />
-                      </button>
+                          {isAdminScope ? <HiOutlineShieldCheck className="w-5 h-5" /> : <FaPlaneDeparture className="w-4 h-4" />}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <h3 className={`text-sm sm:text-base font-extrabold break-words leading-snug ${isDisabled ? 'text-slate-500' : 'text-slate-900'}`} title={m.name}>
+                            {m.name}
+                          </h3>
+                          <p className="text-[11px] font-medium text-slate-400 mt-1 truncate" title={m.email}>{m.email}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full border text-[10px] font-bold ${
+                          isDisabled ? 'bg-slate-100 text-slate-500 border-slate-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        }`}>
+                          {isDisabled ? 'Disabled' : 'Active'}
+                        </span>
+                        <button type="button" onClick={() => remove(m)} title="Remove"
+                          className="h-7 w-7 inline-flex items-center justify-center rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer">
+                          <HiOutlineTrash className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
+
+                    {/* Info tiles */}
+                    <div className="grid grid-cols-2 gap-2 text-xs font-semibold text-slate-600">
+                      <div className="flex items-center gap-2 p-2 rounded-xl bg-slate-50/80 border border-slate-200/60 min-w-0"
+                        title={isAdminScope ? 'Sub-admin' : m.department_name || 'Department'}>
+                        {isAdminScope
+                          ? <HiOutlineShieldCheck className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                          : <HiOutlineUsers className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />}
+                        <span className="truncate">{isAdminScope ? 'Sub-admin' : m.department_name || 'Department'}</span>
+                      </div>
+                      <div className="flex items-center gap-2 p-2 rounded-xl bg-slate-50/80 border border-slate-200/60 min-w-0">
+                        <HiOutlineCheck className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                        <span className="truncate">{perms.length} Permission{perms.length === 1 ? '' : 's'}</span>
+                      </div>
+                    </div>
+
+                    {/* Permissions — fixed height so every card lines up */}
+                    <div className="min-h-[3.75rem]">
+                      {perms.length === 0 ? (
+                        <p className="text-xs italic text-slate-300">No permissions assigned</p>
+                      ) : (
+                        <div className="flex flex-wrap gap-1.5">
+                          {shown.map((p) => (
+                            <span key={p} className="text-[11px] font-medium text-slate-600 bg-white border border-slate-200/80 px-2 py-0.5 rounded-lg">
+                              {formatPermLabel(p, permLabels)}
+                            </span>
+                          ))}
+                          {extra.length > 0 && (
+                            <span className="text-[11px] font-semibold text-slate-500 px-2 py-0.5 rounded-lg border border-dashed border-slate-200 cursor-help"
+                              title={extra.map((p) => formatPermLabel(p, permLabels)).join('\n')}>
+                              +{extra.length} more
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="pt-3.5 mt-3.5 border-t border-slate-100/90 grid grid-cols-2 gap-2">
+                    <button type="button" onClick={() => openEdit(m)}
+                      className="w-full h-8 inline-flex items-center justify-center gap-1 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 hover:bg-slate-50 hover:text-slate-900 shadow-2xs transition-colors cursor-pointer">
+                      <HiOutlinePencil className="w-3.5 h-3.5 text-slate-400" /> Edit
+                    </button>
+                    <button type="button" onClick={() => toggleStatus(m)}
+                      className={`w-full h-8 inline-flex items-center justify-center gap-1 rounded-xl border text-xs font-bold shadow-2xs transition-colors cursor-pointer ${
+                        isDisabled
+                          ? 'border-emerald-200 bg-emerald-50/70 text-emerald-700 hover:bg-emerald-100'
+                          : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
+                      }`}>
+                      {isDisabled ? 'Enable' : 'Disable'}
+                    </button>
                   </div>
                 </div>
               );
@@ -436,16 +455,12 @@ export default function TeamPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
           onClick={(e) => { if (e.target === e.currentTarget) setModal(null); }}>
           <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm" />
-          <div className="relative bg-white rounded-3xl shadow-2xl border border-slate-100 w-full max-w-xl max-h-[92vh] flex flex-col overflow-hidden">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 bg-slate-900 text-white shadow-2xs">
-                  {modal.scope === 'admin' ? (
-                    <HiOutlineShieldCheck className="w-5 h-5 text-white" />
-                  ) : (
-                    <FaPlaneDeparture className="w-4 h-4 text-white" />
-                  )}
+          <div className="relative bg-white rounded-2xl shadow-2xl border border-slate-200/80 w-full max-w-xl max-h-[92vh] flex flex-col overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between gap-3 px-6 py-4 border-b border-slate-200/80">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 bg-slate-900 text-white">
+                  {modal.scope === 'admin' ? <HiOutlineShieldCheck className="w-4.5 h-4.5" /> : <FaPlaneDeparture className="w-4 h-4" />}
                 </div>
                 <div className="min-w-0">
                   <h2 className="text-base font-bold text-slate-900 leading-tight truncate">
@@ -453,149 +468,124 @@ export default function TeamPage() {
                       ? (modal.scope === 'admin' ? 'New sub-admin' : (isAdmin ? 'New sub-department' : 'New department'))
                       : `Edit ${modal.name}`}
                   </h2>
-                  <p className="text-[11px] text-slate-400">
-                    {modal.scope === 'admin' ? 'Administrative user privileges' : 'Department account and power delegation'}
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {modal.scope === 'admin' ? 'Sign-in details and admin powers' : 'Sign-in details and what this department may do'}
                   </p>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setModal(null)}
-                className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
-              >
+              <button type="button" onClick={() => setModal(null)} title="Close"
+                className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer">
                 <HiOutlineX className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Modal Body */}
-            <div className="p-6 space-y-4 overflow-y-auto">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                <label className="block space-y-1.5">
-                  <span className="text-xs font-semibold text-slate-700">Full Name</span>
-                  <input
-                    value={modal.name}
-                    onChange={(e) => setModal({ ...modal, name: e.target.value })}
-                    placeholder="e.g. John Doe"
-                    className="w-full border border-slate-200 rounded-xl px-3.5 py-2 text-xs sm:text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
-                  />
-                </label>
-                <label className="block space-y-1.5">
-                  <span className="text-xs font-semibold text-slate-700">Email Address</span>
-                  <input
-                    value={modal.email}
-                    disabled={modal.mode === 'edit'}
-                    onChange={(e) => setModal({ ...modal, email: e.target.value })}
-                    placeholder="name@company.com"
-                    className="w-full border border-slate-200 rounded-xl px-3.5 py-2 text-xs sm:text-sm font-medium text-slate-800 disabled:bg-slate-50 disabled:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
-                  />
-                </label>
-              </div>
+            {/* Body: account details, then status, then permissions */}
+            <div className="px-6 py-5 space-y-6 overflow-y-auto">
+              <section>
+                <h3 className="text-xs font-semibold text-slate-900 mb-2.5">Account details</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <label className="block">
+                    <span className="block text-xs font-medium text-slate-600 mb-1">Full name</span>
+                    <input value={modal.name} onChange={(e) => setModal({ ...modal, name: e.target.value })}
+                      placeholder="e.g. John Doe" className="w-full h-9 border border-slate-200 rounded-lg px-3 text-sm text-slate-800 placeholder-slate-400 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors" />
+                  </label>
+                  <label className="block">
+                    <span className="block text-xs font-medium text-slate-600 mb-1">Email address</span>
+                    <input value={modal.email} disabled={modal.mode === 'edit'}
+                      onChange={(e) => setModal({ ...modal, email: e.target.value })}
+                      placeholder="name@company.com"
+                      title={modal.mode === 'edit' ? 'The sign-in email cannot be changed here' : undefined}
+                      className="w-full h-9 border border-slate-200 rounded-lg px-3 text-sm text-slate-800 placeholder-slate-400 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors disabled:bg-slate-50 disabled:text-slate-500" />
+                  </label>
 
-              {modal.scope === 'airline' && (
-                <label className="block space-y-1.5">
-                  <span className="text-xs font-semibold text-slate-700">Department Name</span>
-                  <input
-                    value={modal.department_name}
-                    onChange={(e) => setModal({ ...modal, department_name: e.target.value })}
-                    placeholder="e.g. Flight Dispatch"
-                    className="w-full border border-slate-200 rounded-xl px-3.5 py-2 text-xs sm:text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
-                  />
-                </label>
-              )}
+                  {modal.scope === 'airline' && (
+                    <label className="block sm:col-span-2">
+                      <span className="block text-xs font-medium text-slate-600 mb-1">Department name</span>
+                      <input value={modal.department_name} onChange={(e) => setModal({ ...modal, department_name: e.target.value })}
+                        placeholder="e.g. Flight Dispatch" className="w-full h-9 border border-slate-200 rounded-lg px-3 text-sm text-slate-800 placeholder-slate-400 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors" />
+                    </label>
+                  )}
 
-              {modal.mode === 'create' && modal.scope === 'airline' && isAdmin && (
-                <div className="space-y-1.5">
-                  <span className="text-xs font-semibold text-slate-700">Parent Airline</span>
-                  <Select
-                    value={modal.parentAirlineId || undefined}
-                    onValueChange={(val) => setModal({ ...modal, parentAirlineId: val })}
-                  >
-                    <SelectTrigger className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-medium text-slate-800 bg-white shadow-2xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer">
-                      <SelectValue placeholder="Select parent airline…" />
-                    </SelectTrigger>
-                    <SelectContent className="rounded-2xl border border-slate-200 shadow-xl bg-white max-h-64 p-1.5 z-[60]">
-                      {airlines.map((a) => (
-                        <SelectItem
-                          key={a._id}
-                          value={a._id}
-                          className="rounded-xl py-2 pl-8 pr-3 text-xs sm:text-sm font-medium text-slate-800 hover:bg-slate-50 cursor-pointer focus:bg-blue-50 focus:text-blue-900"
-                        >
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold text-slate-900">{a.airlineName}</span>
-                            <span className="text-slate-400 text-xs">· {a.email}</span>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  {modal.mode === 'create' && modal.scope === 'airline' && isAdmin && (
+                    <div className="sm:col-span-2">
+                      <span className="block text-xs font-medium text-slate-600 mb-1">Parent airline</span>
+                      <Select value={modal.parentAirlineId || undefined} onValueChange={(val) => setModal({ ...modal, parentAirlineId: val })}>
+                        <SelectTrigger className="w-full h-9 border border-slate-200 rounded-lg px-3 text-sm text-slate-800 bg-white">
+                          <SelectValue placeholder="Select parent airline…" />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-64 z-[60]">
+                          {airlines.map((a) => (
+                            <SelectItem key={a._id} value={a._id}>
+                              <span className="font-semibold text-slate-900">{a.airlineName}</span>
+                              <span className="text-slate-400 text-xs"> · {a.email}</span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
+                  <label className="block sm:col-span-2">
+                    <span className="block text-xs font-medium text-slate-600 mb-1">
+                      {modal.mode === 'create' ? 'Password' : 'New password'}
+                      {modal.mode === 'edit' && <span className="font-normal text-slate-400"> (leave blank to keep the current one)</span>}
+                    </span>
+                    <div className="relative">
+                      <input type={showPassword ? 'text' : 'password'} value={modal.password}
+                        onChange={(e) => setModal({ ...modal, password: e.target.value })}
+                        placeholder={modal.mode === 'create' ? 'At least 6 characters' : 'Unchanged'}
+                        className="w-full h-9 border border-slate-200 rounded-lg px-3 text-sm text-slate-800 placeholder-slate-400 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors pr-10" />
+                      <button type="button" onClick={() => setShowPassword((v) => !v)}
+                        title={showPassword ? 'Hide password' : 'Show password'}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-700 transition-colors">
+                        {showPassword ? <HiOutlineEyeOff className="w-4 h-4" /> : <HiOutlineEye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </label>
                 </div>
-              )}
-
-              <label className="block space-y-1.5">
-                <span className="text-xs font-semibold text-slate-700">
-                  {modal.mode === 'create' ? 'Password' : 'New password (leave blank to keep)'}
-                </span>
-                <div className="relative">
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    value={modal.password}
-                    onChange={(e) => setModal({ ...modal, password: e.target.value })}
-                    placeholder={modal.mode === 'create' ? '••••••••' : 'Leave empty to keep current password'}
-                    className="w-full border border-slate-200 rounded-xl px-3.5 py-2 pr-10 text-xs sm:text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword((v) => !v)}
-                    title={showPassword ? 'Hide password' : 'Show password'}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 transition-colors"
-                  >
-                    {showPassword ? <HiOutlineEyeOff className="w-4 h-4" /> : <HiOutlineEye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </label>
+              </section>
 
               {modal.mode === 'edit' && (
-                <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-bold text-slate-800">Account Access</p>
-                    <p className="text-[11px] text-slate-400">Block or allow this user to log into the platform</p>
+                <section>
+                  <h3 className="text-xs font-semibold text-slate-900 mb-2.5">Sign-in</h3>
+                  <div className="rounded-xl border border-slate-200/80 px-3.5 py-3 flex items-center justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-slate-900">
+                        {modal.account_status === 'disabled' ? 'Sign-in is blocked' : 'Sign-in is allowed'}
+                      </p>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        {modal.account_status === 'disabled'
+                          ? 'This account cannot log in. Its data and permissions are kept.'
+                          : 'Turn off to block this account from logging in without deleting it.'}
+                      </p>
+                    </div>
+                    <button type="button" role="switch" aria-checked={modal.account_status !== 'disabled'}
+                      aria-label="Allow sign-in"
+                      onClick={() => setModal({ ...modal, account_status: modal.account_status === 'disabled' ? 'active' : 'disabled' })}
+                      className={`w-10 h-6 inline-flex items-center rounded-full p-0.5 flex-shrink-0 transition-colors cursor-pointer ${
+                        modal.account_status === 'disabled' ? 'bg-slate-200' : 'bg-blue-600'
+                      }`}>
+                      <span className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${modal.account_status === 'disabled' ? '' : 'translate-x-4'}`} />
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setModal({ ...modal, account_status: modal.account_status === 'disabled' ? 'active' : 'disabled' })}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer shadow-2xs ${modal.account_status === 'disabled'
-                        ? 'bg-rose-50 border-rose-200 text-rose-700 font-bold'
-                        : 'bg-emerald-50 border-emerald-200 text-emerald-700 font-bold'
-                      }`}
-                  >
-                    {modal.account_status === 'disabled' ? 'Disabled (Blocked)' : 'Active (Allowed)'}
-                  </button>
-                </div>
+                </section>
               )}
 
-              <div className="pt-2">
-                <PermissionChecklist
-                  groups={modalGroups}
-                  value={modal.permissions}
-                  onChange={(permissions) => setModal({ ...modal, permissions })}
-                />
-              </div>
+              <PermissionChecklist
+                groups={modalGroups}
+                value={modal.permissions}
+                onChange={(permissions) => setModal({ ...modal, permissions })}
+              />
             </div>
 
-            {/* Modal Footer */}
-            <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex items-center justify-end gap-2.5">
-              <button
-                type="button"
-                onClick={() => setModal(null)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all cursor-pointer shadow-2xs"
-              >
+            {/* Footer */}
+            <div className="px-6 py-3.5 border-t border-slate-200/80 flex items-center justify-end gap-2.5">
+              <button type="button" onClick={() => setModal(null)}
+                className="px-4 py-2 rounded-lg text-sm font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-colors cursor-pointer">
                 Cancel
               </button>
-              <button
-                type="button"
-                onClick={save}
-                className="px-4 py-2 rounded-xl text-xs font-semibold bg-slate-900 text-white hover:bg-slate-800 transition-all cursor-pointer shadow-xs active:scale-[0.98]"
-              >
+              <button type="button" onClick={save}
+                className="px-5 py-2 rounded-lg text-sm font-semibold bg-slate-900 text-white hover:bg-slate-800 transition-colors cursor-pointer">
                 {modal.mode === 'create' ? 'Create user' : 'Save changes'}
               </button>
             </div>
@@ -607,277 +597,86 @@ export default function TeamPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
           onClick={(e) => { if (e.target === e.currentTarget) setInfoOpen(false); }}>
           <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm" />
-          <div className="relative bg-white rounded-3xl shadow-2xl border border-slate-100 w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden my-auto">
+          <div className="relative bg-white rounded-2xl shadow-2xl border border-slate-200/80 w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden my-auto">
             {/* Header */}
-            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 bg-slate-50/60">
+            <div className="flex items-center justify-between gap-3 px-6 py-4 border-b border-slate-200/80">
               <div className="flex items-center gap-3 min-w-0">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 bg-blue-50 text-blue-600 border border-blue-100 shadow-2xs">
-                  <Info className="w-5 h-5" />
+                <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 bg-slate-900 text-white">
+                  <Info className="w-4.5 h-4.5" />
                 </div>
                 <div className="min-w-0">
-                  <h2 className="text-base font-bold text-slate-900 leading-tight tracking-tight">How the Team System Works</h2>
-                  <p className="text-xs text-slate-500 mt-0.5">Overview of roles, permissions, and participant routing</p>
+                  <h2 className="text-base font-bold text-slate-900 leading-tight tracking-tight">{INFO.title}</h2>
+                  <p className="text-xs text-slate-500 mt-0.5">{INFO.subtitle}</p>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setInfoOpen(false)}
-                className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-all cursor-pointer"
-              >
+              <button type="button" onClick={() => setInfoOpen(false)} title="Close"
+                className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer">
                 <HiOutlineX className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Content Body */}
-            <div className="p-6 space-y-5 overflow-y-auto text-sm text-slate-600 leading-relaxed max-h-[72vh]">
-              {/* Concept Overview Banner */}
-              <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-50/70 via-slate-50/50 to-indigo-50/50 border border-blue-100/80">
-                <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center flex-shrink-0 mt-0.5 shadow-2xs">
-                    <Layers className="w-4 h-4" />
-                  </div>
-                  <div className="text-xs text-slate-600 leading-relaxed">
-                    <p className="font-bold text-slate-900 text-sm mb-0.5">
-                      {isAdmin ? 'Delegated Team Management' : 'Department Sub-Accounts'}
-                    </p>
-                    <p>
-                      {isAdmin
-                        ? 'Safely distribute platform responsibilities without sharing master admin credentials. Issue scoped sub-accounts with custom functional permissions.'
-                        : 'Create isolated team logins (e.g. Flight Dispatch, Cabin Crew) so departments manage their own trainees and rosters independently.'}
-                    </p>
-                  </div>
-                </div>
-              </div>
+            {/* Body: three numbered-free sections, one neutral palette */}
+            <div className="px-6 py-5 space-y-6 overflow-y-auto">
+              <p className="text-sm text-slate-600 leading-relaxed">{INFO.intro}</p>
 
-              {isAdmin ? (
-                <>
-                  {/* Account Types */}
-                  <div>
-                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2.5">Account Roles</p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {/* Sub-Admin */}
-                      <div className="p-4 rounded-2xl border border-violet-100 bg-violet-50/30 space-y-2 hover:border-violet-200 transition-colors">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <div className="w-7 h-7 rounded-lg bg-violet-100 text-violet-700 flex items-center justify-center flex-shrink-0">
-                              <ShieldCheck className="w-4 h-4" />
-                            </div>
-                            <span className="text-xs font-bold text-slate-900">Sub-Admin</span>
-                          </div>
-                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 border border-violet-200/80">
-                            Global Scope
+              {/* Account types */}
+              <section>
+                <h3 className="text-xs font-semibold text-slate-900 mb-2.5">{INFO.roles.length > 1 ? 'Account types' : 'What a department gets'}</h3>
+                <div className={`grid grid-cols-1 gap-3 ${INFO.roles.length > 1 ? 'sm:grid-cols-2' : ''}`}>
+                  {INFO.roles.map((r) => (
+                    <div key={r.name} className="rounded-xl border border-slate-200/80 bg-slate-50/60 p-4">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="flex items-center gap-2.5 min-w-0">
+                          <span className="w-8 h-8 rounded-lg bg-white border border-slate-200 text-slate-700 flex items-center justify-center flex-shrink-0">
+                            <r.icon className="w-4 h-4" />
                           </span>
-                        </div>
-                        <p className="text-xs text-slate-600 leading-relaxed">
-                          Operates across <strong>all airlines</strong> with platform powers limited strictly to what you enable (e.g. view-only auditor or report exporter).
-                        </p>
-                      </div>
-
-                      {/* Sub-Department */}
-                      <div className="p-4 rounded-2xl border border-blue-100 bg-blue-50/30 space-y-2 hover:border-blue-200 transition-colors">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <div className="w-7 h-7 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center flex-shrink-0">
-                              <Building2 className="w-4 h-4" />
-                            </div>
-                            <span className="text-xs font-bold text-slate-900">Sub-Department</span>
-                          </div>
-                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 border border-blue-200/80">
-                            Single Airline
-                          </span>
-                        </div>
-                        <p className="text-xs text-slate-600 leading-relaxed">
-                          Locked to <strong>one parent airline</strong>. Keeps its own separate participant list and only the airline-level powers you grant.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Core Mechanics */}
-                  <div>
-                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2.5">Key Mechanics</p>
-                    <div className="space-y-2.5">
-                      <div className="flex items-start gap-3 p-3.5 rounded-xl border border-slate-200/80 bg-white hover:border-slate-300 transition-colors">
-                        <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-                          <CheckCircle2 className="w-4 h-4" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-bold text-slate-900">Granular Permission Checklist</p>
-                          <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
-                            Permissions are grouped by domain (results, participants, attendance). Toggle individual powers or use <strong>Select all</strong>. Each card displays active power counts in real-time.
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-start gap-3 p-3.5 rounded-xl border border-slate-200/80 bg-white hover:border-slate-300 transition-colors">
-                        <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 border border-blue-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-                          <Users className="w-4 h-4" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-bold text-slate-900">Separate Participant Lists</p>
-                          <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
-                            A sub-department keeps its <strong>own team roster</strong> (name + email per person), fully separate from the parent airline's. The department builds it on its <strong>My Team</strong> page once logged in &mdash; records are never shared with, or moved from, the main airline pool.
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-start gap-3 p-3.5 rounded-xl border border-slate-200/80 bg-white hover:border-slate-300 transition-colors">
-                        <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 border border-slate-200 flex items-center justify-center flex-shrink-0 mt-0.5">
-                          <Sliders className="w-4 h-4" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-bold text-slate-900">Disable vs. Remove Lifecycle</p>
-                          <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
-                            <strong>Disable</strong> instantly suspends login access while preserving permissions and the department's participant list. <strong>Remove</strong> permanently deletes the account and everything it owns.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Setup Guide */}
-                  <div className="p-4 rounded-2xl border border-slate-200/80 bg-slate-50/50">
-                    <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-3">Quick 3-Step Setup</p>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      <div className="flex items-start gap-2.5">
-                        <div className="w-5 h-5 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px] font-bold flex-shrink-0 mt-0.5">
-                          1
-                        </div>
-                        <div>
-                          <p className="text-xs font-bold text-slate-800">Choose Role</p>
-                          <p className="text-[11px] text-slate-500 mt-0.5">Click New Sub-Admin or New Sub-Department</p>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-2.5">
-                        <div className="w-5 h-5 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px] font-bold flex-shrink-0 mt-0.5">
-                          2
-                        </div>
-                        <div>
-                          <p className="text-xs font-bold text-slate-800">Set Permissions</p>
-                          <p className="text-[11px] text-slate-500 mt-0.5">Check specific powers to grant</p>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-2.5">
-                        <div className="w-5 h-5 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px] font-bold flex-shrink-0 mt-0.5">
-                          3
-                        </div>
-                        <div>
-                          <p className="text-xs font-bold text-slate-800">Hand Over</p>
-                          <p className="text-[11px] text-slate-500 mt-0.5">The department logs in and adds its people on My Team</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <>
-                  {/* Department Workspace */}
-                  <div>
-                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2.5">Department Workspace</p>
-                    <div className="p-4 rounded-2xl border border-blue-100 bg-blue-50/30 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center flex-shrink-0">
-                            <Building2 className="w-4 h-4" />
-                          </div>
-                          <span className="text-xs font-bold text-slate-900">Department Logins</span>
-                        </div>
-                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 border border-blue-200/80">
-                          Airline Scoped
+                          <span className="text-sm font-semibold text-slate-900 truncate">{r.name}</span>
                         </span>
+                        <span className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-white border border-slate-200 text-slate-600 flex-shrink-0">{r.scope}</span>
                       </div>
-                      <p className="text-xs text-slate-600 leading-relaxed">
-                        Department accounts log in with their own email and password. They only see your airline's data and are restricted strictly to the permissions you tick when creating them.
-                      </p>
+                      <p className="mt-2.5 text-[13px] text-slate-600 leading-relaxed">{r.text}</p>
                     </div>
-                  </div>
+                  ))}
+                </div>
+              </section>
 
-                  {/* Core Mechanics */}
-                  <div>
-                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2.5">Key Mechanics</p>
-                    <div className="space-y-2.5">
-                      <div className="flex items-start gap-3 p-3.5 rounded-xl border border-slate-200/80 bg-white hover:border-slate-300 transition-colors">
-                        <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-                          <CheckCircle2 className="w-4 h-4" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-bold text-slate-900">Custom Capability Checklist</p>
-                          <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
-                            Organized by area (results, participants, attendance). Each department card shows a live count and summary of its current powers.
-                          </p>
-                        </div>
+              {/* How it works */}
+              <section>
+                <h3 className="text-xs font-semibold text-slate-900 mb-2.5">How it works</h3>
+                <ul className="rounded-xl border border-slate-200/80 divide-y divide-slate-100">
+                  {INFO.points.map((pt) => (
+                    <li key={pt.title} className="flex items-start gap-3 p-4">
+                      <span className="w-8 h-8 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center flex-shrink-0">
+                        <pt.icon className="w-4 h-4" />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-slate-900">{pt.title}</p>
+                        <p className="mt-0.5 text-[13px] text-slate-600 leading-relaxed">{pt.text}</p>
                       </div>
+                    </li>
+                  ))}
+                </ul>
+              </section>
 
-                      <div className="flex items-start gap-3 p-3.5 rounded-xl border border-slate-200/80 bg-white hover:border-slate-300 transition-colors">
-                        <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 border border-blue-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-                          <Users className="w-4 h-4" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-bold text-slate-900">Separate Participant Lists</p>
-                          <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
-                            Each department keeps its <strong>own team roster</strong> (name + email per person), fully separate from your main list and from other departments'. A department builds it on its <strong>My Team</strong> page after logging in &mdash; nothing is shared or moved between lists.
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-start gap-3 p-3.5 rounded-xl border border-slate-200/80 bg-white hover:border-slate-300 transition-colors">
-                        <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 border border-slate-200 flex items-center justify-center flex-shrink-0 mt-0.5">
-                          <Sliders className="w-4 h-4" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-bold text-slate-900">Account Management (Disable vs. Remove)</p>
-                          <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
-                            <strong>Disable</strong> pauses login access instantly without losing data. <strong>Remove</strong> permanently deletes the account and its participant list.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Setup Guide */}
-                  <div className="p-4 rounded-2xl border border-slate-200/80 bg-slate-50/50">
-                    <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-3">Quick 3-Step Setup</p>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      <div className="flex items-start gap-2.5">
-                        <div className="w-5 h-5 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px] font-bold flex-shrink-0 mt-0.5">
-                          1
-                        </div>
-                        <div>
-                          <p className="text-xs font-bold text-slate-800">Create Department</p>
-                          <p className="text-[11px] text-slate-500 mt-0.5">Enter contact credentials & name</p>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-2.5">
-                        <div className="w-5 h-5 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px] font-bold flex-shrink-0 mt-0.5">
-                          2
-                        </div>
-                        <div>
-                          <p className="text-xs font-bold text-slate-800">Set Permissions</p>
-                          <p className="text-[11px] text-slate-500 mt-0.5">Toggle what powers to grant</p>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-2.5">
-                        <div className="w-5 h-5 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px] font-bold flex-shrink-0 mt-0.5">
-                          3
-                        </div>
-                        <div>
-                          <p className="text-xs font-bold text-slate-800">Hand Over</p>
-                          <p className="text-[11px] text-slate-500 mt-0.5">The department logs in and adds its people on My Team</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </>
-              )}
+              {/* Setup */}
+              <section>
+                <h3 className="text-xs font-semibold text-slate-900 mb-2.5">Set up in three steps</h3>
+                <ol className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {INFO.steps.map((st, i) => (
+                    <li key={st.title} className="rounded-xl border border-slate-200/80 p-3.5">
+                      <span className="w-6 h-6 rounded-full bg-slate-900 text-white flex items-center justify-center text-[11px] font-bold">{i + 1}</span>
+                      <p className="mt-2 text-sm font-semibold text-slate-900">{st.title}</p>
+                      <p className="mt-0.5 text-xs text-slate-500 leading-relaxed">{st.text}</p>
+                    </li>
+                  ))}
+                </ol>
+              </section>
             </div>
 
             {/* Footer */}
-            <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/60 flex items-center justify-end">
-              <button
-                type="button"
-                onClick={() => setInfoOpen(false)}
-                className="px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold bg-slate-900 text-white hover:bg-slate-800 transition-all cursor-pointer shadow-sm hover:shadow-md active:scale-[0.98]"
-              >
+            <div className="px-6 py-3.5 border-t border-slate-200/80 flex items-center justify-end">
+              <button type="button" onClick={() => setInfoOpen(false)}
+                className="px-5 py-2 rounded-lg text-sm font-semibold bg-slate-900 text-white hover:bg-slate-800 transition-colors cursor-pointer">
                 Got it
               </button>
             </div>

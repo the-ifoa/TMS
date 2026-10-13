@@ -12,6 +12,7 @@ const { brandingResolver, resolveEmailBranding } = require('../services/emailBra
 const r2 = require('../services/r2');
 const { frontendLink } = require('../config/appUrls');
 const { accessibleParticipantFilter } = require('./internalCertificatesController');
+const { hasPermission } = require('../middleware/permissions');
 const { hasExamPower } = require('../config/permissions');
 const XLSX = require('xlsx');
 const PDFDocument = require('pdfkit');
@@ -129,7 +130,10 @@ exports.airlineResults = async (req, res) => {
     // on this at all, so historical data is never actually lost. A per-airline
     // override in airline_visibility wins over the exam's global visible_until.
     const examIds = [...new Set(invites.map((i) => String(i.exam_id)))];
-    const exams = await Exam.find({ _id: { $in: examIds } }).select('visible_until airline_visibility');
+    const exams = await Exam.find({ _id: { $in: examIds } }).select('visible_until airline_visibility owner_airline owner_department');
+    const examById = Object.fromEntries(exams.map((e) => [String(e._id), e]));
+    // Same rule deleteAttemptsByIds enforces: only for exams this account owns.
+    const mayDelete = hasPermission(req, ['exams.author']);
     const now = new Date();
     const hiddenExamIds = new Set(
       exams.filter((e) => {
@@ -156,6 +160,8 @@ exports.airlineResults = async (req, res) => {
             time_taken_seconds: att.time_taken_seconds,
           }
         : null;
+      const exam = examById[String(i.exam_id)];
+      json.can_delete_result = !!(att && mayDelete && exam && canManageExam(req, exam));
       return json;
     }));
   } catch (err) {

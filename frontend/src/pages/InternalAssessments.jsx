@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 import {
   HiOutlineBadgeCheck, HiOutlineSearch, HiOutlinePlus, HiOutlineArrowLeft, HiOutlineEye,
   HiOutlineDownload, HiOutlineTrash, HiOutlineUpload, HiOutlinePencil, HiOutlineUserAdd,
-  HiOutlineCalendar, HiOutlineUsers, HiOutlineX, HiOutlineRefresh, HiOutlineDocumentText, HiOutlineUserRemove,
+  HiOutlineUsers, HiOutlineX, HiOutlineRefresh, HiOutlineDocumentText, HiOutlineUserRemove,
 } from 'react-icons/hi';
 import {
   listInternalAssessments, createInternalAssessment, updateInternalAssessment, deleteInternalAssessment,
@@ -274,56 +274,71 @@ function AddCandidatesDialog({ open, assessment, onClose, onSaved }) {
   );
 }
 
-// One assessment as a card in the grid.
+// One assessment as a card in the grid — same layout as the exam cards.
 function AssessmentCard({ a, showOwner, onOpen }) {
   const total = a.candidates.length;
   const certs = certCount(a);
   const pct = total ? Math.round((certs / total) * 100) : 0;
+  const state = total > 0 && certs === total
+    ? { label: 'Complete', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' }
+    : certs > 0
+      ? { label: 'In progress', cls: 'bg-amber-50 text-amber-700 border-amber-200' }
+      : { label: 'Not started', cls: 'bg-slate-100 text-slate-600 border-slate-200' };
   return (
-    <button onClick={onOpen}
-      className="group text-left bg-white rounded-2xl border border-slate-200/80 shadow-2xs hover:shadow-md hover:border-slate-300 transition-all p-4 flex flex-col gap-3">
-      <div className="flex items-start gap-3">
-        <div className="w-9 h-9 rounded-xl bg-slate-900 text-white flex items-center justify-center flex-shrink-0">
-          <HiOutlineBadgeCheck className="w-4.5 h-4.5" />
+    <div className="group p-5 sm:p-6 bg-white border border-slate-200/90 rounded-3xl shadow-2xs hover:shadow-lg hover:border-slate-300 transition-all duration-200 flex flex-col justify-between">
+      <div className="space-y-3.5">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start gap-3 min-w-0 flex-1">
+            <div className="w-10 h-10 rounded-2xl bg-slate-900 text-white flex items-center justify-center flex-shrink-0 shadow-2xs group-hover:scale-105 transition-transform mt-0.5">
+              <HiOutlineBadgeCheck className="w-5 h-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h2 className="text-sm sm:text-base font-extrabold text-slate-900 break-words leading-snug group-hover:text-blue-600 transition-colors" title={a.title}>{a.title}</h2>
+              <p className="text-[11px] font-medium text-slate-400 mt-1 flex items-center gap-1.5 flex-wrap">
+                <span>{a.assessment_date ? fmtDate(a.assessment_date) : 'No date set'}</span>
+                {showOwner && a.created_by_name && (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200/80 truncate max-w-full">{a.created_by_name}</span>
+                )}
+              </p>
+            </div>
+          </div>
+          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full border text-[10px] font-bold flex-shrink-0 ${state.cls}`}>{state.label}</span>
         </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-bold text-slate-900 truncate group-hover:text-blue-700 transition-colors" title={a.title}>{a.title}</p>
-          <p className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5">
-            <HiOutlineCalendar className="w-3 h-3" /> {a.assessment_date ? fmtDate(a.assessment_date) : 'No date set'}
+
+        {/* Description — fixed height so cards line up */}
+        <div className="h-9 flex items-center">
+          <p className="text-xs text-slate-500 leading-relaxed line-clamp-2">
+            {a.description || <span className="italic text-slate-300">No description provided</span>}
           </p>
         </div>
-      </div>
 
-      <p className="text-[11px] text-slate-500 line-clamp-2 min-h-[2rem]">{a.description || 'No description.'}</p>
-
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex -space-x-2">
-          {a.candidates.slice(0, 5).map((c) => (
-            <div key={c.id} title={c.name}
-              className={`w-7 h-7 rounded-full ring-2 ring-white flex items-center justify-center text-[9px] font-bold bg-slate-100 text-slate-600`}>
-              {initials(c.name)}
-            </div>
-          ))}
-          {total > 5 && (
-            <div className="w-7 h-7 rounded-full ring-2 ring-white bg-slate-100 text-slate-500 flex items-center justify-center text-[9px] font-bold">+{total - 5}</div>
-          )}
-          {total === 0 && <span className="text-[11px] text-slate-400">No candidates yet</span>}
+        {/* Info tiles */}
+        <div className="grid grid-cols-2 gap-2 text-xs font-semibold text-slate-600 pt-0.5">
+          <div className="flex items-center gap-2 p-2 rounded-xl bg-slate-50/80 border border-slate-200/60">
+            <HiOutlineUsers className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+            <span className="truncate">{total} Candidate{total === 1 ? '' : 's'}</span>
+          </div>
+          <div className="flex items-center gap-2 p-2 rounded-xl bg-slate-50/80 border border-slate-200/60">
+            <HiOutlineDocumentText className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+            <span className="truncate">{certs}/{total} Certificates</span>
+          </div>
         </div>
-        {showOwner && a.created_by_name && (
-          <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 text-[10px] font-semibold truncate max-w-[45%]">{a.created_by_name}</span>
-        )}
-      </div>
 
-      <div className="pt-3 border-t border-slate-100">
-        <div className="flex items-center justify-between text-[11px] font-medium">
-          <span className="text-slate-600 inline-flex items-center gap-1"><HiOutlineUsers className="w-3.5 h-3.5 text-slate-400" /> {total} candidate{total === 1 ? '' : 's'}</span>
-          <span className="text-slate-400">{certs}/{total} certificates</span>
-        </div>
-        <div className="mt-1.5 h-1.5 rounded-full bg-slate-100 overflow-hidden">
-          <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${pct}%` }} />
+        {/* Certificate progress */}
+        <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden" title={`${pct}% of certificates uploaded`}>
+          <div className="h-full rounded-full bg-emerald-500 transition-all duration-500" style={{ width: `${pct}%` }} />
         </div>
       </div>
-    </button>
+
+      {/* Action */}
+      <div className="pt-3.5 mt-3.5 border-t border-slate-100/90">
+        <button type="button" onClick={onOpen}
+          className="w-full h-8 inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 hover:bg-slate-50 hover:text-slate-900 shadow-2xs transition-colors">
+          <HiOutlineUsers className="w-3.5 h-3.5 text-slate-400" /> Candidates &amp; certificates
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -440,7 +455,7 @@ export default function InternalAssessments() {
     <div className={`w-full flex flex-col ${current ? 'h-[calc(100vh-4rem)] overflow-hidden' : 'min-h-full'}`}>
       {/* Header */}
       <div className="sticky top-0 z-20 w-full flex-shrink-0 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-2xs">
-        <div className="w-full max-w-6xl mx-auto px-3.5 sm:px-6 lg:px-8 py-3 flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="w-full px-3.5 sm:px-6 lg:px-8 py-3 flex flex-col sm:flex-row sm:items-center gap-3">
           <div className="min-w-0 flex-1 flex items-center gap-2">
             {current && (
               <button onClick={() => { setOpenId(null); setCandSearch(''); }} title="Back to assessments"
@@ -463,7 +478,7 @@ export default function InternalAssessments() {
               <p className="text-[11px] text-slate-400 mt-1 truncate">
                 {current
                   ? `${current.assessment_date ? fmtDate(current.assessment_date) : 'No date set'} · ${certCount(current)}/${current.candidates.length} certificates uploaded`
-                  : `Your ${isDepartment ? "department's" : "airline's"} own assessments — add candidates and upload a certificate for each.`}
+                  : `Your ${isDepartment ? "department's" : "airline's"} own assessments. Add candidates and upload a certificate for each.`}
               </p>
             </div>
           </div>
@@ -490,7 +505,7 @@ export default function InternalAssessments() {
         </div>
       </div>
 
-      <div className={`w-full max-w-6xl mx-auto px-3.5 sm:px-6 lg:px-8 py-5 space-y-4 ${current ? 'flex-1 min-h-0 flex flex-col' : ''}`}>
+      <div className={`w-full px-3.5 sm:px-6 lg:px-8 py-5 space-y-4 ${current ? 'flex-1 min-h-0 flex flex-col' : ''}`}>
         {loading ? (
           <div className="py-24 flex items-center justify-center">
             <div className="w-6 h-6 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" />
@@ -517,7 +532,7 @@ export default function InternalAssessments() {
                 )}
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-5">
                 {filtered.map((a) => (
                   <AssessmentCard key={a.id} a={a} showOwner={!isDepartment} onOpen={() => setOpenId(a.id)} />
                 ))}

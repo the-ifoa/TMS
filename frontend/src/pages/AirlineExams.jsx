@@ -4,9 +4,10 @@ import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   HiOutlineAcademicCap, HiOutlineEye, HiOutlineSearch, HiOutlineMail,
-  HiOutlineUsers, HiOutlineCalendar, HiChevronRight,
+  HiOutlineUsers, HiOutlineCalendar, HiChevronRight, HiOutlineTrash,
 } from 'react-icons/hi';
-import { getAirlineExamResults } from '../api';
+import { getAirlineExamResults, deleteExamAttempt } from '../api';
+import { useConfirm } from '@/hooks/use-confirm';
 import { Card } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -34,6 +35,28 @@ export default function AirlineExams() {
   const navigate = useNavigate();
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState(null);
+  const { confirm, ConfirmDialog } = useConfirm();
+
+  // Delete one student's result. The invite goes back to "opened", so their
+  // exam link works again and they can retake.
+  const deleteResult = async (r) => {
+    const ok = await confirm(
+      `Delete the result for ${r.participant_name || 'this student'}? This cannot be undone. Their score, answers and any uploaded certificate are removed, and their exam link will work again.`,
+      { title: 'Delete result', confirmLabel: 'Delete' },
+    );
+    if (!ok) return;
+    setDeletingId(r.id);
+    try {
+      await deleteExamAttempt(r.attempt.id);
+      setResults((prev) => prev.map((x) => (x.id === r.id ? { ...x, status: 'opened', attempt: null, can_delete_result: false } : x)));
+      toast.success('Result deleted');
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Could not delete the result.');
+    } finally {
+      setDeletingId(null);
+    }
+  };
   const [search, setSearch] = useHistoryState('search', '');
   const [sortDir, setSortDir] = useHistoryState('sortDir', 'newest');
   const [openBatch, setOpenBatch] = useHistoryState('openBatch', null);
@@ -97,7 +120,7 @@ export default function AirlineExams() {
     <div className="w-full min-h-full pb-20 flex flex-col">
       {/* Sticky header */}
       <div className="sticky top-0 z-20 w-full bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-3.5 sm:px-6 lg:px-8 py-2 sm:py-2.5 shadow-2xs">
-        <div className="w-full max-w-7xl mx-auto flex items-center justify-between gap-2.5 sm:gap-4">
+        <div className="w-full flex items-center justify-between gap-2.5 sm:gap-4">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-slate-900 text-white flex items-center justify-center font-bold shadow-2xs flex-shrink-0">
               <HiOutlineAcademicCap className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -115,9 +138,9 @@ export default function AirlineExams() {
         </div>
       </div>
 
-      <div className="w-full max-w-6xl mx-auto p-4 sm:p-6 lg:p-8 space-y-5 flex-1">
+      <div className="w-full p-4 sm:p-6 lg:p-8 space-y-5 flex-1">
         {loading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4">
             <Skeleton className="h-40 w-full rounded-2xl" />
             <Skeleton className="h-40 w-full rounded-2xl" />
             <Skeleton className="h-40 w-full rounded-2xl" />
@@ -153,7 +176,7 @@ export default function AirlineExams() {
             {filteredBatches.length === 0 ? (
               <Card className="p-10 text-center text-sm text-slate-400 font-medium rounded-2xl">No exams match your search.</Card>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4">
                 {filteredBatches.map((b) => (
                   <button
                     key={b.key}
@@ -253,6 +276,13 @@ export default function AirlineExams() {
                             <HiOutlineEye className="w-3.5 h-3.5 text-slate-500" /> View
                           </button>
                         )}
+                        {r.can_delete_result && (
+                          <button type="button" onClick={() => deleteResult(r)} disabled={deletingId === r.id}
+                            title="Delete this result"
+                            className="p-1.5 rounded-xl border border-slate-200 bg-white text-slate-400 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 disabled:opacity-50 transition-colors">
+                            <HiOutlineTrash className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
@@ -262,6 +292,7 @@ export default function AirlineExams() {
           )}
         </DialogContent>
       </Dialog>
+      {ConfirmDialog}
     </div>
   );
 }

@@ -18,6 +18,7 @@ import { useAuth } from '../context/AuthContext';
 import { updateProfile, uploadAirlineLogo } from '../api';
 import { compressImageFile } from '../utils/compressImage';
 import logoImg from '../assets/logo.png';
+import SecondaryLoginsCard from '../components/SecondaryLoginsCard';
 
 export default function Profile() {
   const { admin, updateAdmin, isAdmin } = useAuth();
@@ -438,6 +439,11 @@ export default function Profile() {
             )}
             <input ref={logoInputRef} type="file" accept="image/*" onChange={handleLogoFileChange} className="hidden" />
           </div>
+        )}
+
+        {/* Additional logins — airline only, when an admin has enabled it */}
+        {!isAdmin && !admin?.parent_airline && admin?.can_have_secondary_logins && (
+          <SecondaryLoginsCard viaSecondary={!!admin?.logged_in_as} signedInAs={admin?.logged_in_as} />
         )}
 
         {/* Change Email */}

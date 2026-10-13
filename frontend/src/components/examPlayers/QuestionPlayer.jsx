@@ -303,65 +303,125 @@ function FillBlankPlayer({ q, response, onChange }) {
 
 function DragWordsPlayer({ q, response, onChange }) {
   const parts = parseBlanks(q.drag_words_text);
-  const filled = response || [];
+  const blankCount = parts.filter((p) => /^\{\{\d+\}\}$/.test(p)).length;
+  // Always a dense array so a word dropped on blank 2 never leaves holes.
+  const filled = Array.from({ length: blankCount }, (_, i) => (response && response[i]) || '');
   const [selectedWord, setSelectedWord] = useState(null);
+  const [overIdx, setOverIdx] = useState(null);
   const bank = q.drag_words_bank || [];
 
+  // Nothing placed any more → report "unanswered" rather than an array of blanks.
+  const commit = (next) => onChange(next.some(Boolean) ? next : null);
+
+  // Put `word` in blank `idx`. If the word already sits in another blank it is
+  // moved, and a word replaced in `idx` goes back to the bank.
   const placeWord = (idx, word) => {
+    if (!word) return;
     const next = [...filled];
+    // No spare copy of this word left → take it out of the blank it was in.
+    const copies = bank.filter((w) => w === word).length;
+    const elsewhere = next.map((w, i) => (i !== idx && w === word ? i : -1)).filter((i) => i !== -1);
+    if (elsewhere.length >= copies) next[elsewhere[0]] = '';
     next[idx] = word;
-    onChange(next);
+    commit(next);
     setSelectedWord(null);
+    setOverIdx(null);
+  };
+  const clearBlank = (idx) => {
+    if (!filled[idx]) return;
+    const next = [...filled];
+    next[idx] = '';
+    commit(next);
   };
 
   let blankIdx = -1;
   return (
     <div className="space-y-4 p-5 rounded-2xl border border-slate-200/80 bg-white shadow-2xs">
-      <p className="text-xs sm:text-sm leading-loose font-medium text-slate-800">
+      <p className="text-xs sm:text-sm leading-[2.6] font-medium text-slate-800">
         {parts.map((part, i) => {
           const m = part.match(/^\{\{(\d+)\}\}$/);
           if (!m) return <span key={i}>{part}</span>;
           blankIdx += 1;
           const idx = blankIdx;
+          const word = filled[idx];
+          const isOver = overIdx === idx;
           return (
             <span
               key={i}
-              onDragOver={(e) => e.preventDefault()}
+              role="button"
+              tabIndex={0}
+              onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (overIdx !== idx) setOverIdx(idx); }}
+              onDragEnter={(e) => { e.preventDefault(); setOverIdx(idx); }}
+              onDragLeave={() => setOverIdx((cur) => (cur === idx ? null : cur))}
               onDrop={(e) => {
                 e.preventDefault();
+                e.stopPropagation();
                 placeWord(idx, e.dataTransfer.getData('text/plain'));
               }}
-              onClick={() => selectedWord && placeWord(idx, selectedWord)}
-              className="inline-block mx-1.5 min-w-[90px] px-3 py-1 text-center font-bold border-b-2 border-dashed border-blue-600 bg-blue-50/80 text-blue-950 rounded-t cursor-pointer"
+              onClick={() => {
+                if (selectedWord) placeWord(idx, selectedWord);
+                else clearBlank(idx);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  if (selectedWord) placeWord(idx, selectedWord); else clearBlank(idx);
+                }
+              }}
+              title={word && !selectedWord ? 'Click to remove this word' : undefined}
+              className={`inline-flex items-center justify-center align-middle mx-1.5 min-w-[120px] min-h-[38px] px-3 rounded-xl border-2 text-center font-bold cursor-pointer transition-all ${
+                isOver
+                  ? 'border-blue-600 bg-blue-100 text-blue-900 scale-105'
+                  : word
+                    ? 'border-blue-600 bg-blue-50 text-blue-950 border-solid'
+                    : selectedWord
+                      ? 'border-dashed border-blue-500 bg-blue-50/60 text-blue-600 animate-pulse'
+                      : 'border-dashed border-slate-300 bg-slate-50 text-slate-400'
+              }`}
             >
-              {filled[idx] || ' '}
+              {word || (isOver ? 'Drop here' : `${idx + 1}`)}
             </span>
           );
         })}
       </p>
       <div className="flex flex-wrap gap-2 pt-3 border-t border-slate-100">
-        {bank.map((w, i) => (
-          <span
-            key={i}
-            draggable
-            onDragStart={(e) => e.dataTransfer.setData('text/plain', w)}
-            onClick={() => setSelectedWord(w)}
-            className={`px-3.5 py-1.5 rounded-lg border text-xs font-semibold cursor-grab active:cursor-grabbing select-none transition-all shadow-2xs ${
-              selectedWord === w
-                ? 'border-blue-600 bg-blue-600 text-white shadow-sm scale-105'
-                : 'border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-800'
-            }`}
-          >
-            {w}
-          </span>
-        ))}
+        {bank.map((w, i) => {
+          // A chip is "used" while a copy of its word sits in a blank (duplicates handled per copy).
+          const usedBefore = bank.slice(0, i).filter((x) => x === w).length;
+          const isUsed = usedBefore < filled.filter((x) => x === w).length;
+          return (
+            <span
+              key={i}
+              draggable={!isUsed}
+              onDragStart={(e) => {
+                e.dataTransfer.setData('text/plain', w);
+                e.dataTransfer.effectAllowed = 'move';
+                setSelectedWord(null);
+              }}
+              onDragEnd={() => setOverIdx(null)}
+              onClick={() => !isUsed && setSelectedWord((cur) => (cur === w ? null : w))}
+              className={`px-3.5 py-1.5 rounded-lg border text-xs font-semibold select-none transition-all shadow-2xs ${
+                isUsed
+                  ? 'border-slate-200 bg-slate-100 text-slate-300 cursor-not-allowed line-through'
+                  : selectedWord === w
+                    ? 'border-blue-600 bg-blue-600 text-white shadow-sm scale-105 cursor-pointer'
+                    : 'border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-800 cursor-grab active:cursor-grabbing'
+              }`}
+            >
+              {w}
+            </span>
+          );
+        })}
       </div>
-      <p className="text-[11px] text-slate-400 font-medium">Drag a word onto a blank, or tap a word then tap a blank.</p>
+      <p className="text-[11px] text-slate-400 font-medium">
+        Drag a word onto a blank, or tap a word then tap a blank. Tap a filled blank to remove its word.
+      </p>
     </div>
   );
 }
 
-function HotspotPlayer({ q, response, onChange }) {
+function HotspotPlayer({ q, response, onChange, feedback }) {
+  const reveal = feedback?.correct_regions || [];
   const handleClick = (e) => {
     const rect = e.currentTarget.getBoundingClientRect();
     onChange({ x: ((e.clientX - rect.left) / rect.width) * 100, y: ((e.clientY - rect.top) / rect.height) * 100 });
@@ -370,6 +430,16 @@ function HotspotPlayer({ q, response, onChange }) {
     <div className="flex justify-center">
       <div className="relative inline-block max-w-full cursor-crosshair rounded-2xl overflow-hidden border border-slate-200 shadow-2xs bg-slate-50" onClick={handleClick}>
         <img src={q.image_url} alt="" className="max-w-full max-h-72 rounded-2xl border border-primary-200 select-none object-contain" />
+        {/* Correct area(s), revealed once the answer has been checked */}
+        {reveal.map((r, i) => (
+          <div
+            key={i}
+            className={`absolute border-2 border-emerald-500 bg-emerald-400/25 pointer-events-none ${r.shape === 'circle' ? 'rounded-full' : 'rounded-md'}`}
+            style={{ left: `${r.x}%`, top: `${r.y}%`, width: `${r.width}%`, height: `${r.height}%` }}
+          >
+            <span className="absolute -top-2.5 left-1 px-1.5 rounded bg-emerald-600 text-white text-[10px] font-bold leading-4">Correct area</span>
+          </div>
+        ))}
         {response && (
           <div
             className="absolute w-4 h-4 -ml-2 -mt-2 rounded-full bg-rose-500 border-2 border-white shadow-md animate-pulse"
@@ -639,7 +709,7 @@ function ImageGallery({ gallery, setLightboxSrc }) {
   );
 }
 
-export default function QuestionPlayer({ question: q, response, onChange }) {
+export default function QuestionPlayer({ question: q, response, onChange, feedback = null }) {
   const [lightboxSrc, setLightboxSrc] = useState(null);
 
   return (
@@ -674,7 +744,7 @@ export default function QuestionPlayer({ question: q, response, onChange }) {
         {q.type === 'matching' && <MatchingPlayer q={q} response={response} onChange={onChange} />}
         {q.type === 'fill_blank' && <FillBlankPlayer q={q} response={response} onChange={onChange} />}
         {q.type === 'drag_words' && <DragWordsPlayer q={q} response={response} onChange={onChange} />}
-        {q.type === 'hotspot' && <HotspotPlayer q={q} response={response} onChange={onChange} />}
+        {q.type === 'hotspot' && <HotspotPlayer q={q} response={response} onChange={onChange} feedback={feedback} />}
         {q.type === 'drag_drop' && <DragDropPlayer q={q} response={response} onChange={onChange} />}
         {q.type === 'likert' && <LikertPlayer q={q} response={response} onChange={onChange} />}
       </div>

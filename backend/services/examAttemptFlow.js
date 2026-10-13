@@ -1,5 +1,5 @@
 const Exam = require('../models/Exam');
-const { gradeAnswer, computeAttemptScore } = require('./examGrading');
+const { gradeAnswer, computeAttemptScore, buildFeedback, buildProgress } = require('./examGrading');
 
 // Returns an error message if the exam isn't open for new attempts right now,
 // or null if it's fine to start one. Only gates NEW attempts — an attempt
@@ -82,4 +82,42 @@ async function closeOpenAttempts(exam, participantId, { onlyExpired = false } = 
   return closed;
 }
 
-module.exports = { finalizeAttempt, schedulingError, closeOpenAttempts };
+// Instant feedback: grades ONE question, locks the answer (no further edits)
+// and returns the feedback + running score. Idempotent — re-checking a locked
+// question returns the stored result and ignores the new response. Does not
+// save(); the caller persists. Returns null when the question isn't in the attempt.
+function checkAnswer(attempt, questionId, response) {
+  const question = attempt.questions_snapshot.id(questionId);
+  if (!question) return null;
+  let entry = attempt.answers.find((a) => String(a.question_id) === String(questionId));
+  if (!entry || !entry.locked) {
+    const graded = gradeAnswer(question, response);
+    if (entry) {
+      entry.response = response;
+    } else {
+      attempt.answers.push({ question_id: question._id, type: question.type, response });
+      entry = attempt.answers[attempt.answers.length - 1];
+    }
+    entry.is_correct = graded.is_correct;
+    entry.points_awarded = graded.points_awarded;
+    entry.needs_manual_grading = graded.needs_manual_grading;
+    entry.locked = true;
+  }
+  return {
+    feedback: buildFeedback(question, entry),
+    progress: buildProgress(attempt.questions_snapshot, attempt.answers),
+  };
+}
+
+// Feedback for every already-checked question — restores the UI on resume.
+function lockedFeedback(attempt) {
+  const feedback = [];
+  attempt.answers.forEach((a) => {
+    if (!a.locked) return;
+    const question = attempt.questions_snapshot.id(a.question_id);
+    if (question) feedback.push(buildFeedback(question, a));
+  });
+  return { feedback, progress: buildProgress(attempt.questions_snapshot, attempt.answers) };
+}
+
+module.exports = { finalizeAttempt, schedulingError, closeOpenAttempts, checkAnswer, lockedFeedback };

@@ -2,8 +2,7 @@ const Exam = require('../models/Exam');
 const ExamAttempt = require('../models/ExamAttempt');
 const ExamInvite = require('../models/ExamInvite');
 const { sanitizeQuestionForTaking } = require('../services/examGrading');
-const { finalizeAttempt, schedulingError, closeOpenAttempts } = require('../services/examAttemptFlow');
-const { generateCertificate } = require('../services/certificateGenerator');
+const { finalizeAttempt, schedulingError, closeOpenAttempts, checkAnswer, lockedFeedback } = require('../services/examAttemptFlow');
 
 // Loads the invite by token and attaches it + its exam to req. 404 on unknown token.
 // Exported so routes can mount it as per-route middleware.
@@ -37,6 +36,17 @@ async function loadOwnAttempt(req, res) {
   return attempt;
 }
 
+// Reasons a candidate may not START another attempt even with attempts left:
+// they already passed, or an earlier attempt is still awaiting manual grading.
+async function retakeBlockers(exam, participantId) {
+  const base = { exam_id: exam._id, participant_id: participantId };
+  const [passed, pending] = await Promise.all([
+    ExamAttempt.exists({ ...base, passed: true }),
+    ExamAttempt.exists({ ...base, status: 'pending_review' }),
+  ]);
+  return { hasPassed: !!passed, awaitingReview: !!pending };
+}
+
 // ─── GET /public-exam/:token — landing info (no questions yet) ─────────────────
 exports.getLandingInfo = async (req, res) => {
   try {
@@ -59,7 +69,13 @@ exports.getLandingInfo = async (req, res) => {
       exam_id: exam._id, participant_id: invite.participant_id, status: { $ne: 'in_progress' },
     }).sort({ created_at: -1 }).select('_id status');
 
+    // A candidate who already passed, or whose last attempt is still waiting
+    // for manual grading, must not be offered another attempt.
+    const { hasPassed, awaitingReview } = await retakeBlockers(exam, invite.participant_id);
+
     res.json({
+      has_passed: hasPassed,
+      awaiting_review: awaitingReview,
       participant_name: invite.participant_name,
       exam: {
         title: exam.title,
@@ -71,7 +87,7 @@ exports.getLandingInfo = async (req, res) => {
         pass_percentage: exam.pass_percentage,
         opens_at: exam.opens_at,
         closes_at: exam.closes_at,
-        issue_certificate: !!exam.issue_certificate,
+        instant_feedback: !!exam.instant_feedback,
       },
       status: invite.status,
       attempts_used: priorAttempts,
@@ -104,6 +120,10 @@ exports.startAttempt = async (req, res) => {
       const schedErr = schedulingError(exam, { ignoreClose: invite.ignore_close });
       if (schedErr) return res.status(403).json({ error: schedErr });
 
+      const { hasPassed, awaitingReview } = await retakeBlockers(exam, invite.participant_id);
+      if (hasPassed) return res.status(400).json({ error: 'You have already passed this exam.' });
+      if (awaitingReview) return res.status(400).json({ error: 'Your previous attempt is still being graded. You can try again once the result is published.' });
+
       const priorAttempts = await ExamAttempt.countDocuments({ exam_id: exam._id, participant_id: invite.participant_id });
       if (priorAttempts >= exam.max_attempts + (invite.bonus_attempts || 0)) {
         return res.status(400).json({ error: 'You have used all your attempts for this exam.' });
@@ -132,6 +152,8 @@ exports.startAttempt = async (req, res) => {
     json.questions_snapshot = attempt.questions_snapshot.map(sanitizeQuestionForTaking);
     json.server_now = new Date(); // lets the client correct for a skewed clock
     json.answers = (json.answers || []).map((a) => ({ question_id: a.question_id, type: a.type, response: a.response }));
+    // Instant-feedback exams: restore the already-checked (locked) answers on resume.
+    if (exam.instant_feedback) Object.assign(json, lockedFeedback(attempt));
     res.json({
       attempt: json,
       exam: {
@@ -139,6 +161,7 @@ exports.startAttempt = async (req, res) => {
         duration_minutes: exam.duration_minutes,
         lockdown_enabled: exam.lockdown_enabled,
         max_violations: exam.max_violations,
+        instant_feedback: !!exam.instant_feedback,
       },
     });
   } catch (err) {
@@ -158,12 +181,36 @@ exports.saveAnswer = async (req, res) => {
     const question = attempt.questions_snapshot.id(question_id);
     if (!question) return res.status(404).json({ error: 'Question not found in this attempt.' });
     const entry = attempt.answers.find((a) => String(a.question_id) === String(question_id));
+    if (entry && entry.locked) {
+      return res.status(409).json({ error: 'This answer has been checked and can no longer be changed.', locked: true });
+    }
     if (entry) entry.response = response;
     else attempt.answers.push({ question_id, type: question.type, response });
     await attempt.save();
     res.json({ ok: true });
   } catch (err) {
     console.error('PUT /public-exam answer error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// ─── POST /public-exam/:token/attempts/:attemptId/check — instant feedback ────
+// Grades one answer, locks it and returns right/wrong, the correct answer, the
+// explanation and the running score. Only for exams with instant feedback on.
+exports.checkAnswer = async (req, res) => {
+  try {
+    const attempt = await loadOwnAttempt(req, res);
+    if (!attempt) return;
+    if (attempt.status !== 'in_progress') return res.status(400).json({ error: 'This attempt is already submitted.' });
+    if (!req.exam.instant_feedback) return res.status(400).json({ error: 'Instant feedback is not enabled for this exam.' });
+
+    const { question_id, response } = req.body;
+    const result = checkAnswer(attempt, question_id, response);
+    if (!result) return res.status(404).json({ error: 'Question not found in this attempt.' });
+    await attempt.save();
+    res.json(result);
+  } catch (err) {
+    console.error('POST /public-exam check error:', err.message);
     res.status(500).json({ error: err.message });
   }
 };
@@ -235,36 +282,10 @@ exports.getResult = async (req, res) => {
     const review = !!req.exam.show_review && attempt.status !== 'pending_review';
     if (!review) json.questions_snapshot = undefined;
     json.review_enabled = review;
-    json.certificate_available = !!req.exam.issue_certificate && attempt.passed === true;
+    json.certificate = undefined; // delivered by email by the airline, never from this link
     res.json(json);
   } catch (err) {
     console.error('GET /public-exam result error:', err.message);
-    res.status(500).json({ error: err.message });
-  }
-};
-
-// ─── GET /public-exam/:token/attempts/:attemptId/certificate — completion PDF ─
-exports.getCertificate = async (req, res) => {
-  try {
-    const attempt = await loadOwnAttempt(req, res);
-    if (!attempt) return;
-    if (!req.exam.issue_certificate) return res.status(404).json({ error: 'No certificate is offered for this exam.' });
-    if (attempt.passed !== true) return res.status(403).json({ error: 'A certificate is only issued once the exam is passed.' });
-
-    const pct = Math.round(Number(attempt.percentage) * 10) / 10;
-    const pdf = await generateCertificate({
-      participant_name: attempt.participant_name,
-      training_type: 'EXAM',
-      exam_title: attempt.exam_title_snapshot || req.exam.title,
-      exam_score_text: `${pct}%`,
-      end_date: (attempt.submitted_at || new Date()).toISOString().slice(0, 10),
-      cert_id_override: `EXAM-${String(attempt._id).slice(-6).toUpperCase()}`,
-    });
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `inline; filename="certificate-${String(attempt._id).slice(-6)}.pdf"`);
-    res.send(pdf);
-  } catch (err) {
-    console.error('GET /public-exam certificate error:', err.message);
     res.status(500).json({ error: err.message });
   }
 };

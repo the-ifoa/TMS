@@ -28,10 +28,31 @@ const airlineSchema = new mongoose.Schema({
   // certificate PDFs (Cloudflare R2)? Also the ceiling for its departments'
   // `internalCerts.manage` permission — off here means off for the whole tree.
   can_upload_internal_certs: { type: Boolean, default: false },
+  // Admin-granted to a TOP-LEVEL airline: may it run its own internal
+  // assessments (candidate lists + a certificate PDF per candidate)? Also the
+  // ceiling for its departments' `internalAssessments.manage` permission.
+  can_manage_internal_assessments: { type: Boolean, default: false },
   // Admin-granted to a TOP-LEVEL airline: emails sent on its behalf (exam
   // invites, enrollment confirmations, expiry reminders — incl. its departments')
   // show the airline's logo instead of IFOA's. See services/emailBranding.js.
   email_use_airline_logo: { type: Boolean, default: false },
+  // Admin-granted to a TOP-LEVEL airline: may it add extra login credentials
+  // (email + password) that open this SAME account — same data, same exams,
+  // same permissions? Unlike a department (separate roster), a secondary login
+  // is just another way in. Off here = the secondary logins stop working.
+  can_have_secondary_logins: { type: Boolean, default: false },
+  secondary_logins: [{
+    email:      { type: String, required: true, lowercase: true, trim: true },
+    password:   { type: String, required: true },          // bcrypt hash
+    label:      { type: String, default: '', trim: true }, // e.g. "Ops desk", "Jane"
+    created_at: { type: Date, default: Date.now },
+    last_login: { type: Date, default: null },
+    // What this login may do. full_access (default, and every login made before
+    // powers existed) = everything the main credential can; otherwise only the
+    // keys in `permissions` — see secondaryLoginController.LOGIN_POWERS.
+    full_access: { type: Boolean, default: true },
+    permissions: { type: [String], default: [] },
+  }],
   // Who created this account: an admin (admin-made airline user) or null (self
   // signup / airline-made department carries created_by_airline instead).
   created_by_admin:   { type: mongoose.Schema.Types.ObjectId, ref: 'Admin',   default: null },
@@ -60,6 +81,7 @@ airlineSchema.methods.comparePassword = async function (candidatePassword) {
 airlineSchema.methods.toJSON = function () {
   const obj = this.toObject();
   delete obj.password;
+  delete obj.secondary_logins; // hashes never leave the server — see /auth/airline/secondary-logins
   // Ensure _id is always a plain string so frontend comparisons work reliably
   obj._id = String(obj._id);
   obj.id  = obj._id;

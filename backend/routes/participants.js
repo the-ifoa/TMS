@@ -10,6 +10,9 @@ const participantsController = require('../controllers/participantsController');
 router.use(authMiddleware, loadScope);
 
 const canView    = requirePermission('participants.view');
+// Reads the add / edit forms depend on — usable without the list permission.
+const canViewOrCreate = requirePermission('participants.view', 'participants.create');
+const canViewOrEdit   = requirePermission('participants.view', 'participants.edit');
 const canCreate  = requirePermission('participants.create');
 const canEdit    = requirePermission('participants.edit');
 const canDelete  = requirePermission('participants.delete');
@@ -24,10 +27,10 @@ router.get('/', canView, participantsController.listParticipants);
 router.get('/by-airline', canSeeAirlines, participantsController.listByAirline);
 
 // ─── GET all airline names (admin only) ──────────────────────────────────────
-router.get('/airlines', canView, participantsController.listAirlineNames);
+router.get('/airlines', canViewOrCreate, participantsController.listAirlineNames);
 
 // ─── GET single participant ───────────────────────────────────────────────────
-router.get('/:id', canView, participantsController.getParticipant);
+router.get('/:id', canViewOrEdit, participantsController.getParticipant);
 
 // ─── CREATE participant ───────────────────────────────────────────────────────
 router.post('/', canCreate, participantsController.createParticipant);

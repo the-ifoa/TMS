@@ -10,6 +10,7 @@ import {
   HiOutlineClipboardList,
   HiOutlineClipboardCheck,
   HiOutlineDocumentText,
+  HiOutlineBadgeCheck,
   HiOutlineShieldExclamation,
   HiOutlineAcademicCap,
   HiOutlineLogout,
@@ -27,7 +28,7 @@ const adminNavigation = [
   { name: 'Contracts',    href: '/admin/contracts',        icon: HiOutlineDocumentText,        perm: 'contracts.manage' },
   { name: 'Attendance',   href: '/admin/attendance',       icon: HiOutlineClipboardCheck,      perm: 'attendance.view' },
   { name: 'Exam Results', href: '/admin/exam-results',     icon: HiOutlineClipboardList,       perm: ['examResults.view', 'examResults.manage'] },
-  { name: 'Exam System',  href: '/admin/exams',            icon: HiOutlineAcademicCap,         perm: 'exams.author' },
+  { name: 'Exam System',  href: '/admin/exams',            icon: HiOutlineAcademicCap,         perm: ['exams.author', 'exams.assign', 'exams.grade'] },
   { name: 'DGR CBTA',     href: '/admin/dgr',              icon: HiOutlineShieldExclamation,   perm: ['dgr.view', 'dgr.manage'] },
   { name: 'Sub-users',    href: '/admin/team',             icon: HiOutlineUserGroup,           team: true },
   { name: 'Profile',      href: '/admin/profile',          icon: HiOutlineUserCircle },
@@ -39,6 +40,7 @@ const airlineNavigation = [
   { name: 'Participants',   href: '/airline/participants',  icon: HiOutlineUsers,               perm: 'participants.view' },
   { name: 'New Enrollment', href: '/airline/enrollment/new', icon: HiOutlinePlusCircle,         perm: 'participants.create' },
   { name: 'Certificates',   href: '/airline/certificates',  icon: HiOutlineDocumentText,        internalCerts: true },
+  { name: 'Internal Assessment', href: '/airline/assessments', icon: HiOutlineBadgeCheck,       perm: 'internalAssessments.manage' },
   { name: 'DGR CBTA',       href: '/airline/dgr',           icon: HiOutlineShieldExclamation,   perm: 'dgr.view' },
   { name: 'Exam Results',   href: '/airline/exams',         icon: HiOutlineClipboardCheck },
   { name: 'Departments',    href: '/airline/team',          icon: HiOutlineUserGroup,           team: true },
@@ -51,13 +53,14 @@ const departmentNavigation = [
   { name: 'Dashboard',        href: '/airline',            icon: HiOutlineHome },
   { name: 'My Team',          href: '/airline/my-team',    icon: HiOutlineUsers,             perm: 'participants.view' },
   { name: 'Certificates',     href: '/airline/certificates', icon: HiOutlineDocumentText,    internalCerts: true },
+  { name: 'Internal Assessment', href: '/airline/assessments', icon: HiOutlineBadgeCheck,    perm: 'internalAssessments.manage' },
   { name: 'Exam Results',     href: '/airline/exams',      icon: HiOutlineClipboardCheck },
   { name: 'Departments',      href: '/airline/team',       icon: HiOutlineUserGroup,         team: true },
   { name: 'Profile',          href: '/airline/profile',    icon: HiOutlineUserCircle },
 ];
 
 // Airlines granted exam-authoring get a "Manage Exams" entry above "Exam Results".
-const airlineExamAuthorItem = { name: 'Manage Exams', href: '/airline/exams/manage', icon: HiOutlineAcademicCap };
+const airlineExamAuthorItem = { name: 'Manage Exams', href: '/airline/exams/manage', icon: HiOutlineAcademicCap, examAuthor: true };
 
 export default function Sidebar({ open, setOpen }) {
   const navigate = useNavigate();
@@ -68,14 +71,16 @@ export default function Sidebar({ open, setOpen }) {
     navigation = adminNavigation;
   } else if (isDepartment) {
     navigation = [...departmentNavigation];
-    if (admin?.can_author_exams) navigation.splice(3, 0, airlineExamAuthorItem); // before "Exam Results"
+    if (admin?.can_author_exams) navigation.splice(4, 0, airlineExamAuthorItem); // before "Exam Results"
   } else {
     navigation = [...airlineNavigation];
-    if (admin?.can_author_exams) navigation.splice(6, 0, airlineExamAuthorItem); // before "Exam Results"
+    if (admin?.can_author_exams) navigation.splice(7, 0, airlineExamAuthorItem); // before "Exam Results"
   }
   // Hide entries the current user (a sub-user / department) has no power for.
   navigation = navigation.filter((item) => {
     if (item.team) return canManageTeam;
+    // A limited additional login needs at least one exam power.
+    if (item.examAuthor) return !admin?.login_restricted || ['exams.author', 'exams.assign', 'exams.grade'].some(can);
     // Shown once an admin enables internal certificates for the airline.
     if (item.internalCerts) return !!admin?.can_upload_internal_certs
       && (can('participants.view') || can('internalCerts.manage'));

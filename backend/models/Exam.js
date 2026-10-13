@@ -164,8 +164,12 @@ const examSchema = new mongoose.Schema(
     // Off by default — it reveals the answer key, so it is opt-in per exam.
     show_review: { type: Boolean, default: false },
 
-    // Auto-issue a completion certificate (PDF) to candidates who pass.
-    issue_certificate: { type: Boolean, default: false },
+    // Instant feedback (practice / learning mode): after answering, the
+    // candidate presses "Check answer" to see right/wrong, the correct answer
+    // and the explanation, plus a running score. Checking locks that answer —
+    // it can no longer be changed. Opt-in because it reveals the answer key
+    // during the exam.
+    instant_feedback: { type: Boolean, default: false },
 
     // Lockdown mode — fullscreen exam view with violation tracking (tab-switch,
     // exiting fullscreen, etc). max_violations is how many infractions are

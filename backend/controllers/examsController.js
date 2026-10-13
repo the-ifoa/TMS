@@ -6,10 +6,12 @@ const Airline = require('../models/Airline');
 const Participant = require('../models/Participant');
 const { examImageUpload, deleteCloudinaryImage } = require('../services/upload');
 const { sanitizeQuestionForTaking, computeAttemptScore } = require('../services/examGrading');
-const { finalizeAttempt, schedulingError, closeOpenAttempts } = require('../services/examAttemptFlow');
-const { sendExamInviteEmail } = require('../services/emailService');
-const { brandingResolver } = require('../services/emailBranding');
+const { finalizeAttempt, schedulingError, closeOpenAttempts, checkAnswer, lockedFeedback } = require('../services/examAttemptFlow');
+const { sendExamInviteEmail, sendExamCertificateEmail } = require('../services/emailService');
+const { brandingResolver, resolveEmailBranding } = require('../services/emailBranding');
+const r2 = require('../services/r2');
 const { frontendLink } = require('../config/appUrls');
+const { hasExamPower } = require('../config/permissions');
 const XLSX = require('xlsx');
 const PDFDocument = require('pdfkit');
 
@@ -21,8 +23,12 @@ function isAdmin(req) {
 // permission — resolves to the Airline doc, or null if not permitted.
 async function authoringAirline(req) {
   if (isAdmin(req)) return null;
-  const airline = await Airline.findById(req.admin.id).select('can_author_exams');
-  return airline && airline.can_author_exams ? airline : null;
+  const airline = await Airline.findById(req.admin.id).select('can_author_exams parent_airline permissions');
+  if (!airline) return null;
+  // A department gets in with any exam power (author / assign / grade); the
+  // routes then gate each action by its own key.
+  const allowed = airline.parent_airline ? hasExamPower(airline.permissions) : airline.can_author_exams;
+  return allowed ? airline : null;
 }
 
 // True when this airline caller owns the given exam. A department owns exams
@@ -311,49 +317,198 @@ exports.exportAttempts = async (req, res) => {
       res.send(body);
     };
 
-    if (format === 'csv' || format === 'xlsx') {
-      const ws = XLSX.utils.json_to_sheet(rows, { header: Object.keys(rows[0] || { Participant: '' }) });
-      if (format === 'csv') return send('text/csv; charset=utf-8', 'csv', '﻿' + XLSX.utils.sheet_to_csv(ws));
+    // Shared summary — used by every format so the numbers always agree.
+    const mean = (list) => {
+      const nums = list.map((r) => parseFloat(r.Percentage)).filter((n) => Number.isFinite(n));
+      return nums.length ? Math.round((nums.reduce((t, n) => t + n, 0) / nums.length) * 10) / 10 : null;
+    };
+    const graded = rows.filter((r) => r.Result);
+    const passed = graded.filter((r) => r.Result === 'Passed').length;
+    const avg = mean(rows);
+    const passRate = graded.length ? Math.round((passed / graded.length) * 100) : null;
+    const byExamMap = new Map();
+    rows.forEach((r) => {
+      const key = r.Exam || '(untitled)';
+      if (!byExamMap.has(key)) byExamMap.set(key, []);
+      byExamMap.get(key).push(r);
+    });
+    const byExam = [...byExamMap.entries()].map(([title, list]) => {
+      const g = list.filter((r) => r.Result);
+      const p = g.filter((r) => r.Result === 'Passed').length;
+      return { title, attempts: list.length, passed: p, notPassed: g.length - p, average: mean(list) };
+    });
+
+    // Column order + headers for the tabular formats (xlsx attempts sheet, csv).
+    const TABLE_COLS = [
+      ['Participant', 'Participant'], ['Airline', 'Airline'], ['Exam', 'Exam'], ['Attempt', 'Attempt'],
+      ['Status', 'Status'], ['Score', 'Score'], ['Max score', 'Max score'], ['Percentage', 'Score %'],
+      ['Result', 'Result'], ['Submitted', 'Submitted'], ['Time (min)', 'Time (min)'], ['Violations', 'Violations'],
+    ];
+    const tableAoa = [TABLE_COLS.map(([, label]) => label), ...rows.map((r) => TABLE_COLS.map(([k]) => r[k] ?? ''))];
+    const fitWidths = (aoa) => aoa[0].map((_, c) => ({
+      wch: Math.min(48, Math.max(8, ...aoa.map((row) => String(row[c] ?? '').length)) + 2),
+    }));
+
+    if (format === 'csv') {
+      return send('text/csv; charset=utf-8', 'csv', '﻿' + XLSX.utils.sheet_to_csv(XLSX.utils.aoa_to_sheet(tableAoa)));
+    }
+
+    if (format === 'xlsx') {
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Exam results');
+      const summaryAoa = [
+        ['Exam Results Report'],
+        ['Generated', stamp],
+        [],
+        ['Overview'],
+        ['Metric', 'Value'],
+        ['Attempts', rows.length],
+        ['Passed', passed],
+        ['Not passed', graded.length - passed],
+        ['Pass rate (%)', passRate ?? ''],
+        ['Average score (%)', avg ?? ''],
+        [],
+        ['By exam'],
+        ['Exam', 'Attempts', 'Passed', 'Not passed', 'Average score (%)'],
+        ...byExam.map((e) => [e.title, e.attempts, e.passed, e.notPassed, e.average ?? '']),
+      ];
+      const wsSummary = XLSX.utils.aoa_to_sheet(summaryAoa);
+      wsSummary['!cols'] = fitWidths(summaryAoa.slice(4));
+      const wsAttempts = XLSX.utils.aoa_to_sheet(tableAoa);
+      wsAttempts['!cols'] = fitWidths(tableAoa);
+      wsAttempts['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: Math.max(rows.length, 1), c: TABLE_COLS.length - 1 } }) };
+      XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
+      XLSX.utils.book_append_sheet(wb, wsAttempts, 'Attempts');
       return send('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'xlsx',
         XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }));
     }
 
     if (format === 'xml') {
       const esc = (v) => String(v ?? '').replace(/[<>&"']/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' }[c]));
-      const tag = (k) => k.replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
-      const xml = ['<?xml version="1.0" encoding="UTF-8"?>', `<examResults generated="${esc(new Date().toISOString())}" count="${rows.length}">`,
-        ...rows.map((r) => `  <attempt>\n${Object.entries(r).map(([k, v]) => `    <${tag(k)}>${esc(v)}</${tag(k)}>`).join('\n')}\n  </attempt>`),
-        '</examResults>'].join('\n');
+      const el = (name, v, ind) => `${ind}<${name}>${esc(v)}</${name}>`;
+      const exams = byExam.map((e) => [
+        `      <exam title="${esc(e.title)}">`,
+        el('attempts', e.attempts, '        '), el('passed', e.passed, '        '),
+        el('notPassed', e.notPassed, '        '), el('averagePercentage', e.average ?? '', '        '),
+        '      </exam>',
+      ].join('\n'));
+      const attemptsXml = rows.map((r, i) => [
+        `    <attempt number="${i + 1}">`,
+        el('participant', r.Participant, '      '), el('airline', r.Airline, '      '), el('exam', r.Exam, '      '),
+        el('attemptNumber', r.Attempt, '      '), el('status', r.Status, '      '),
+        el('score', r.Score, '      '), el('maxScore', r['Max score'], '      '), el('percentage', r.Percentage, '      '),
+        el('result', r.Result, '      '), el('submitted', r.Submitted, '      '),
+        el('timeMinutes', r['Time (min)'], '      '), el('violations', r.Violations, '      '),
+        '    </attempt>',
+      ].join('\n'));
+      const xml = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        `<examResultsReport generated="${esc(new Date().toISOString())}">`,
+        '  <summary>',
+        el('attempts', rows.length, '    '), el('passed', passed, '    '), el('notPassed', graded.length - passed, '    '),
+        el('passRatePercentage', passRate ?? '', '    '), el('averagePercentage', avg ?? '', '    '),
+        '    <byExam>', ...exams, '    </byExam>',
+        '  </summary>',
+        `  <attempts count="${rows.length}">`, ...attemptsXml, '  </attempts>',
+        '</examResultsReport>',
+      ].join('\n');
       return send('application/xml; charset=utf-8', 'xml', xml);
     }
 
-    // PDF — landscape table
-    const doc = new PDFDocument({ size: 'A4', layout: 'landscape', margin: 30 });
+    // PDF — landscape, bordered table with banded rows, repeating header, page footer
+    const doc = new PDFDocument({ size: 'A4', layout: 'landscape', margin: 36, bufferPages: true });
     const chunks = [];
     doc.on('data', (c) => chunks.push(c));
     const done = new Promise((resolve) => doc.on('end', resolve));
-    const cols = [['Participant', 130], ['Airline', 110], ['Exam', 170], ['Attempt', 40], ['Percentage', 55], ['Result', 60], ['Submitted', 95], ['Violations', 50]];
-    const x0 = 30;
-    const header = () => {
-      doc.font('Helvetica-Bold').fontSize(8).fillColor('#0f172a');
-      let x = x0; const y = doc.y;
-      cols.forEach(([name, w]) => { doc.text(name === 'Percentage' ? '%' : name, x, y, { width: w - 4 }); x += w; });
-      doc.moveTo(x0, y + 12).lineTo(x0 + cols.reduce((t, c) => t + c[1], 0), y + 12).strokeColor('#cbd5e1').stroke();
-      doc.y = y + 16;
+
+    const INK = '#0f172a', MUTED = '#64748b', LINE = '#e2e8f0', BAND = '#f8fafc';
+    const GOOD = '#15803d', BAD = '#b91c1c';
+    const X0 = 36, PAGE_W = doc.page.width, PAGE_H = doc.page.height;
+    const cols = [
+      { key: 'Participant', label: 'Participant', w: 124 },
+      { key: 'Airline',     label: 'Airline',     w: 100 },
+      { key: 'Exam',        label: 'Exam',        w: 158 },
+      { key: 'Attempt',     label: 'Attempt',     w: 56, align: 'center' },
+      { key: 'Score',       label: 'Score',       w: 56, align: 'center' },
+      { key: 'Percentage',  label: 'Score %',     w: 52, align: 'center' },
+      { key: 'Result',      label: 'Result',      w: 62, align: 'center' },
+      { key: 'Submitted',   label: 'Submitted',   w: 90 },
+      { key: 'Violations',  label: 'Violations',  w: 68, align: 'center' },
+    ];
+    const TABLE_W = cols.reduce((t, c) => t + c.w, 0);
+    const ROW_H = 22, HEAD_H = 26, PAD = 6, BOTTOM = PAGE_H - 54;
+
+    const cellText = (r, c) => {
+      if (c.key === 'Score') return r.Score === '' ? '—' : `${r.Score} / ${r['Max score']}`;
+      if (c.key === 'Percentage') return r.Percentage === '' ? '—' : `${r.Percentage}%`;
+      const v = r[c.key];
+      return v === '' || v == null ? '—' : String(v);
     };
-    doc.font('Helvetica-Bold').fontSize(14).fillColor('#0f172a').text('Exam Results Report', x0, 30);
-    doc.font('Helvetica').fontSize(8).fillColor('#64748b').text(`Generated ${stamp} · ${rows.length} attempt${rows.length === 1 ? '' : 's'}`);
-    doc.moveDown(0.8);
-    header();
-    doc.font('Helvetica').fontSize(8).fillColor('#1e293b');
-    rows.forEach((r) => {
-      if (doc.y > 540) { doc.addPage(); header(); doc.font('Helvetica').fontSize(8).fillColor('#1e293b'); }
-      const y = doc.y; let x = x0;
-      cols.forEach(([name, w]) => { doc.text(String(r[name] ?? ''), x, y, { width: w - 4, height: 11, ellipsis: true, lineBreak: false }); x += w; });
-      doc.y = y + 13;
+
+    // Title band + summary
+    doc.rect(0, 0, PAGE_W, 74).fill(INK);
+    doc.font('Helvetica-Bold').fontSize(18).fillColor('#ffffff').text('Exam Results Report', X0, 22, { lineBreak: false });
+    doc.font('Helvetica').fontSize(9).fillColor('#cbd5e1')
+      .text(`Generated ${stamp}`, X0, 47, { lineBreak: false });
+    const stats = [
+      ['Attempts', String(rows.length)],
+      ['Passed', String(passed)],
+      ['Not passed', String(graded.length - passed)],
+      ['Pass rate', graded.length ? `${Math.round((passed / graded.length) * 100)}%` : '—'],
+      ['Avg score', avg != null ? `${avg}%` : '—'],
+    ];
+    const boxW = TABLE_W / stats.length;
+    stats.forEach(([label, value], i) => {
+      const bx = X0 + i * boxW;
+      doc.rect(bx, 90, boxW - 8, 48).lineWidth(0.75).strokeColor(LINE).fillAndStroke(BAND, LINE);
+      doc.font('Helvetica').fontSize(8).fillColor(MUTED).text(label.toUpperCase(), bx + 10, 99, { width: boxW - 28, lineBreak: false });
+      doc.font('Helvetica-Bold').fontSize(15).fillColor(INK).text(value, bx + 10, 114, { width: boxW - 28, lineBreak: false });
     });
+
+    const drawHeader = (y) => {
+      doc.rect(X0, y, TABLE_W, HEAD_H).fill(INK);
+      let x = X0;
+      doc.font('Helvetica-Bold').fontSize(8).fillColor('#ffffff');
+      cols.forEach((c) => {
+        doc.text(c.label.toUpperCase(), x + PAD, y + 9, { width: c.w - PAD * 2, align: c.align || 'left', lineBreak: false });
+        x += c.w;
+      });
+      return y + HEAD_H;
+    };
+
+    let y = drawHeader(158);
+    if (!rows.length) {
+      doc.font('Helvetica').fontSize(10).fillColor(MUTED)
+        .text('No finished exam attempts to report.', X0, y + 14, { width: TABLE_W, align: 'center' });
+    }
+    rows.forEach((r, i) => {
+      if (y + ROW_H > BOTTOM) { doc.addPage(); y = drawHeader(36); }
+      if (i % 2 === 1) doc.rect(X0, y, TABLE_W, ROW_H).fill(BAND);
+      let x = X0;
+      cols.forEach((c) => {
+        let color = INK, font = 'Helvetica';
+        if (c.key === 'Result') {
+          font = 'Helvetica-Bold';
+          color = r.Result === 'Passed' ? GOOD : r.Result === 'Not passed' ? BAD : MUTED;
+        } else if (c.key === 'Participant') font = 'Helvetica-Bold';
+        else if (['Attempt', 'Score', 'Percentage', 'Violations', 'Submitted'].includes(c.key)) color = '#334155';
+        doc.font(font).fontSize(8.5).fillColor(color)
+          .text(cellText(r, c), x + PAD, y + 7, { width: c.w - PAD * 2, height: 12, ellipsis: true, lineBreak: false, align: c.align || 'left' });
+        x += c.w;
+      });
+      doc.moveTo(X0, y + ROW_H).lineTo(X0 + TABLE_W, y + ROW_H).lineWidth(0.5).strokeColor(LINE).stroke();
+      y += ROW_H;
+    });
+    doc.moveTo(X0, y).lineTo(X0 + TABLE_W, y).lineWidth(1).strokeColor(INK).stroke();
+
+    // Footer on every page
+    const range = doc.bufferedPageRange();
+    for (let p = 0; p < range.count; p += 1) {
+      doc.switchToPage(range.start + p);
+      doc.page.margins.bottom = 0; // allow drawing in the bottom margin without spawning pages
+      doc.font('Helvetica').fontSize(8).fillColor(MUTED)
+        .text('Exam Results Report', X0, PAGE_H - 30, { width: TABLE_W / 2, align: 'left', lineBreak: false })
+        .text(`Page ${p + 1} of ${range.count}`, X0 + TABLE_W / 2, PAGE_H - 30, { width: TABLE_W / 2, align: 'right', lineBreak: false });
+    }
     doc.end();
     await done;
     return send('application/pdf', 'pdf', Buffer.concat(chunks));
@@ -367,7 +522,7 @@ exports.exportAttempts = async (req, res) => {
 // IFOA admin: attempts of IFOA-owned (global) exams. Airline: attempts of exams
 // it owns. Anything else is skipped, never silently deleted.
 async function deleteAttemptsByIds(req, ids) {
-  const attempts = await ExamAttempt.find({ _id: { $in: ids } }).select('exam_id participant_id');
+  const attempts = await ExamAttempt.find({ _id: { $in: ids } }).select('exam_id participant_id certificate');
   const exams = await Exam.find({ _id: { $in: [...new Set(attempts.map((a) => String(a.exam_id)))] } })
     .select('owner_airline owner_department');
   const examById = Object.fromEntries(exams.map((e) => [String(e._id), e]));
@@ -378,6 +533,10 @@ async function deleteAttemptsByIds(req, ids) {
   });
   const allowedIds = allowed.map((a) => a._id);
   if (allowedIds.length) {
+    // Uploaded certificates go with the result (best effort — never blocks the delete).
+    await Promise.all(allowed
+      .filter((a) => a.certificate && a.certificate.r2_key)
+      .map((a) => r2.deleteObject(a.certificate.r2_key).catch(() => {})));
     await ExamAttempt.deleteMany({ _id: { $in: allowedIds } });
     // Invites that pointed at a deleted attempt go back to "opened" so the
     // candidate's link is usable again and the invite doesn't show a dead score.
@@ -411,6 +570,143 @@ exports.bulkDeleteAttempts = async (req, res) => {
   }
 };
 
+// ─── Airline-uploaded certificates (one per passed attempt) ────────────────────
+// The airline uploads its own certificate for a candidate who passed, then
+// emails it to them. Nothing is generated, and the candidate never downloads
+// it from the exam link — the email is the only delivery channel.
+
+// What the client may know about an attempt's certificate (never the storage key).
+function certificateSummary(attempt) {
+  const c = attempt.certificate;
+  if (!c || !c.r2_key) return null;
+  return {
+    original_name: c.original_name, content_type: c.content_type, size: c.size,
+    uploaded_at: c.uploaded_at, emailed_at: c.emailed_at, emailed_to: c.emailed_to,
+  };
+}
+
+// Loads the attempt + its exam and checks the caller may manage that exam.
+// Sends the error response itself and returns null when access is refused.
+async function loadManagedAttempt(req, res) {
+  const attempt = await ExamAttempt.findById(req.params.attemptId).select('-questions_snapshot -answers');
+  if (!attempt) { res.status(404).json({ error: 'Attempt not found.' }); return null; }
+  const exam = await Exam.findById(attempt.exam_id).select('title owner_airline owner_department');
+  if (!exam || !canManageExam(req, exam)) { res.status(403).json({ error: 'Access denied.' }); return null; }
+  return { attempt, exam };
+}
+
+const CERT_EXT = { 'application/pdf': 'pdf', 'image/png': 'png', 'image/jpeg': 'jpg' };
+
+// ─── POST /exams/attempts/:attemptId/certificate — upload / replace ────────────
+exports.uploadAttemptCertificate = async (req, res) => {
+  try {
+    const loaded = await loadManagedAttempt(req, res);
+    if (!loaded) return;
+    const { attempt } = loaded;
+    if (attempt.passed !== true) {
+      return res.status(400).json({ error: 'A certificate can only be uploaded for a candidate who passed.' });
+    }
+    if (!req.file) return res.status(400).json({ error: 'Choose a certificate file to upload.' });
+
+    const ext = CERT_EXT[req.file.mimetype];
+    const key = `exam-certificates/${attempt.exam_id}/${attempt._id}-${Date.now()}.${ext}`;
+    await r2.putObject(key, req.file.buffer, req.file.mimetype);
+    const previousKey = attempt.certificate && attempt.certificate.r2_key;
+
+    attempt.certificate = {
+      r2_key: key,
+      original_name: req.file.originalname || `certificate.${ext}`,
+      content_type: req.file.mimetype,
+      size: req.file.size,
+      uploaded_at: new Date(),
+      emailed_at: null, // a replaced file has not been sent yet
+      emailed_to: '',
+    };
+    await attempt.save();
+    if (previousKey) await r2.deleteObject(previousKey).catch(() => {});
+    res.json({ certificate: certificateSummary(attempt) });
+  } catch (err) {
+    console.error('POST /exams/attempts/:id/certificate error:', err.message);
+    res.status(err.status || 500).json({ error: err.message });
+  }
+};
+
+// ─── GET /exams/attempts/:attemptId/certificate — view the uploaded file ───────
+exports.getAttemptCertificate = async (req, res) => {
+  try {
+    const loaded = await loadManagedAttempt(req, res);
+    if (!loaded) return;
+    const c = loaded.attempt.certificate;
+    if (!c || !c.r2_key) return res.status(404).json({ error: 'No certificate has been uploaded.' });
+    const obj = await r2.getObject(c.r2_key);
+    const safeName = (c.original_name || 'certificate').replace(/[^\w.\- ]+/g, '_');
+    res.setHeader('Content-Type', c.content_type || 'application/octet-stream');
+    if (obj.ContentLength) res.setHeader('Content-Length', obj.ContentLength);
+    res.setHeader('Content-Disposition', `inline; filename="${safeName}"`);
+    obj.Body.pipe(res);
+  } catch (err) {
+    console.error('GET /exams/attempts/:id/certificate error:', err.message);
+    res.status(err.status || 500).json({ error: err.message });
+  }
+};
+
+// ─── DELETE /exams/attempts/:attemptId/certificate — remove the file ───────────
+exports.deleteAttemptCertificate = async (req, res) => {
+  try {
+    const loaded = await loadManagedAttempt(req, res);
+    if (!loaded) return;
+    const { attempt } = loaded;
+    const key = attempt.certificate && attempt.certificate.r2_key;
+    if (!key) return res.status(404).json({ error: 'No certificate has been uploaded.' });
+    attempt.certificate = undefined;
+    await attempt.save();
+    await r2.deleteObject(key).catch(() => {});
+    res.json({ certificate: null });
+  } catch (err) {
+    console.error('DELETE /exams/attempts/:id/certificate error:', err.message);
+    res.status(err.status || 500).json({ error: err.message });
+  }
+};
+
+// ─── POST /exams/attempts/:attemptId/certificate/send — email it to the candidate ─
+exports.sendAttemptCertificate = async (req, res) => {
+  try {
+    const loaded = await loadManagedAttempt(req, res);
+    if (!loaded) return;
+    const { attempt, exam } = loaded;
+    const c = attempt.certificate;
+    if (!c || !c.r2_key) return res.status(400).json({ error: 'Upload the certificate first.' });
+
+    const participant = await Participant.findById(attempt.participant_id).select('email participant_name');
+    const toEmail = participant && participant.email;
+    if (!toEmail) return res.status(400).json({ error: 'This candidate has no email address on file.' });
+
+    const obj = await r2.getObject(c.r2_key);
+    const content = Buffer.from(await obj.Body.transformToByteArray());
+    const issuerId = attempt.airline_id || exam.owner_airline;
+    const issuer = issuerId ? await Airline.findById(issuerId).select('airlineName').lean() : null;
+    const pct = attempt.percentage != null ? `${pct1(attempt.percentage)}%` : '';
+
+    await sendExamCertificateEmail({
+      toEmail,
+      participantName: attempt.participant_name || (participant && participant.participant_name),
+      examTitle: attempt.exam_title_snapshot || exam.title,
+      scoreText: pct,
+      file: { content, filename: c.original_name || 'certificate', contentType: c.content_type },
+      issuerName: issuer && issuer.airlineName,
+      branding: await resolveEmailBranding(issuerId).catch(() => null),
+    });
+
+    attempt.certificate.emailed_at = new Date();
+    attempt.certificate.emailed_to = toEmail;
+    await attempt.save();
+    res.json({ certificate: certificateSummary(attempt) });
+  } catch (err) {
+    console.error('POST /exams/attempts/:id/certificate/send error:', err.message);
+    res.status(err.status || 500).json({ error: err.message });
+  }
+};
+
 // ─── GET /exams/attempts — list attempts ─────────────────────────────────────────
 exports.listAttempts = async (req, res) => {
   try {
@@ -419,9 +715,14 @@ exports.listAttempts = async (req, res) => {
     if (!isAdmin(req)) filter.airline_id = req.admin.id;
 
     const attempts = await ExamAttempt.find(filter).sort({ created_at: -1 });
+    // Candidate emails — the UI needs them to offer "email certificate".
+    const people = await Participant.find({ _id: { $in: attempts.map((a) => a.participant_id) } }).select('email').lean();
+    const emailById = Object.fromEntries(people.map((p) => [String(p._id), p.email || '']));
     res.json(attempts.map((a) => {
       const json = a.toJSON();
       json.questions_snapshot = undefined; // list view, keep it light
+      json.participant_email = emailById[String(a.participant_id)] || '';
+      json.certificate = certificateSummary(a);
       return json;
     }));
   } catch (err) {
@@ -444,6 +745,9 @@ exports.getAttempt = async (req, res) => {
       json.questions_snapshot = attempt.questions_snapshot.map(sanitizeQuestionForTaking);
       json.answers = json.answers.map((a) => ({ question_id: a.question_id, type: a.type, response: a.response }));
       json.server_now = new Date(); // lets the client correct for a skewed clock
+      // Instant-feedback exams: restore the already-checked (locked) answers on resume.
+      const examDoc = await Exam.findById(attempt.exam_id).select('instant_feedback');
+      if (examDoc && examDoc.instant_feedback) Object.assign(json, lockedFeedback(attempt));
     }
     res.json(json);
   } catch (err) {
@@ -552,6 +856,9 @@ exports.saveAttemptAnswer = async (req, res) => {
     if (!question) return res.status(404).json({ error: 'Question not found in this attempt.' });
 
     const existing = attempt.answers.find((a) => String(a.question_id) === String(question_id));
+    if (existing && existing.locked) {
+      return res.status(409).json({ error: 'This answer has been checked and can no longer be changed.', locked: true });
+    }
     if (existing) {
       existing.response = response;
     } else {
@@ -561,6 +868,35 @@ exports.saveAttemptAnswer = async (req, res) => {
     res.json({ saved: true });
   } catch (err) {
     console.error('PUT /exams/attempts/:id/answer error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// ─── POST /exams/attempts/:attemptId/check — instant feedback for one answer ────
+// Grades the answer, locks it (no more edits) and returns right/wrong, the
+// correct answer, the explanation and the running score. Only for exams that
+// have instant feedback switched on.
+exports.checkAttemptAnswer = async (req, res) => {
+  try {
+    const attempt = await ExamAttempt.findById(req.params.attemptId);
+    if (!attempt) return res.status(404).json({ error: 'Attempt not found.' });
+    if (!isAdmin(req) && String(attempt.airline_id) !== String(req.admin.id)) {
+      return res.status(403).json({ error: 'Access denied.' });
+    }
+    if (attempt.status !== 'in_progress') {
+      return res.status(400).json({ error: 'This attempt has already been submitted.' });
+    }
+    const exam = await Exam.findById(attempt.exam_id).select('instant_feedback');
+    if (!exam || !exam.instant_feedback) {
+      return res.status(400).json({ error: 'Instant feedback is not enabled for this exam.' });
+    }
+    const { question_id, response } = req.body;
+    const result = checkAnswer(attempt, question_id, response);
+    if (!result) return res.status(404).json({ error: 'Question not found in this attempt.' });
+    await attempt.save();
+    res.json(result);
+  } catch (err) {
+    console.error('POST /exams/attempts/:id/check error:', err.message);
     res.status(500).json({ error: err.message });
   }
 };

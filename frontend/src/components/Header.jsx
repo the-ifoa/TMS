@@ -388,7 +388,7 @@ export default function Header({ sidebarOpen, setSidebarOpen }) {
             <button className="relative p-2 rounded-xl hover:bg-slate-100 transition-colors focus:outline-none">
               <HiOutlineBell className={`w-5 h-5 text-slate-500 ${bellRinging ? 'bell-ring' : ''}`} />
               {unreadCount > 0 && (
-                <span className="absolute top-1 right-1 w-4 h-4 bg-blue-600 rounded-full flex items-center justify-center shadow-xs">
+                <span className="absolute top-1 right-1 w-4 h-4 bg-slate-900 rounded-full flex items-center justify-center shadow-xs">
                   <span className="text-[9px] font-bold text-white">{unreadCount > 9 ? '9+' : unreadCount}</span>
                 </span>
               )}
@@ -399,7 +399,7 @@ export default function Header({ sidebarOpen, setSidebarOpen }) {
               <div className="flex items-center gap-2">
                 <p className="text-sm font-bold text-slate-800">Notifications</p>
                 {unreadCount > 0 && (
-                  <span className="px-1.5 py-0.5 bg-blue-600 text-white text-[10px] font-bold rounded-full">{unreadCount}</span>
+                  <span className="px-1.5 py-0.5 bg-slate-900 text-white text-[10px] font-bold rounded-full">{unreadCount}</span>
                 )}
               </div>
               {unreadCount > 0 && (

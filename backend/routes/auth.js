@@ -4,6 +4,7 @@ const { upload } = require('../services/upload');
 const { authMiddleware, adminOnly } = require('../middleware/auth');
 const { loadScope, requirePermission } = require('../middleware/permissions');
 const authController = require('../controllers/authController');
+const secondaryLogins = require('../controllers/secondaryLoginController');
 
 // ─── ADMIN SIGNUP — POST /api/auth/signup ────────────────────────────────────
 router.post('/signup', authController.adminSignup);
@@ -25,6 +26,13 @@ router.post('/airline/resend-otp', authController.airlineResendOtp);
 
 // ─── AIRLINE LOGIN — POST /api/auth/airline/login ────────────────────────────
 router.post('/airline/login', authController.airlineLogin);
+
+// Additional logins for the same airline account (admin-granted; primary login only)
+router.get('/airline/secondary-logins',          authMiddleware, secondaryLogins.list);
+router.get('/airline/secondary-logins/powers',   authMiddleware, secondaryLogins.powers);
+router.post('/airline/secondary-logins',         authMiddleware, secondaryLogins.create);
+router.patch('/airline/secondary-logins/:id',    authMiddleware, secondaryLogins.update);
+router.delete('/airline/secondary-logins/:id',   authMiddleware, secondaryLogins.remove);
 
 // ─── GET ME — GET /api/auth/me ───────────────────────────────────────────────
 router.get('/me', authMiddleware, authController.getMe);

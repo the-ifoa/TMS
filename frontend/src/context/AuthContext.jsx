@@ -60,17 +60,26 @@ export function AuthProvider({ children }) {
   // in their own realm; sub-users are limited to their granted permission keys.
   // Airline keys that also need an admin switch on the (parent) airline — for a
   // department, /me reports the parent's switch in the same field.
-  const ADMIN_GATED = { 'internalCerts.manage': 'can_upload_internal_certs' };
+  const ADMIN_GATED = {
+    'internalCerts.manage': 'can_upload_internal_certs',
+    'internalAssessments.manage': 'can_manage_internal_assessments',
+  };
   const can = (perm) => {
     if (!admin) return false;
     if (isSuperAdmin) return true;
     if (isAirline && ADMIN_GATED[perm] && !admin[ADMIN_GATED[perm]]) return false;
+    // An additional login the airline limited holds only its ticked powers.
+    // Powers outside the tickable list (login_power_keys) are never withheld.
+    if (isTopLevelAirline && admin.login_restricted && (admin.login_power_keys || []).includes(perm)) {
+      return (admin.login_permissions || []).includes(perm);
+    }
     if (isTopLevelAirline) return true;
     return permissions.includes(perm);
   };
 
   const canManageTeam = isSuperAdmin
-    || (isTopLevelAirline && !!admin?.can_create_subusers)
+    || (isTopLevelAirline && !!admin?.can_create_subusers
+      && (!admin.login_restricted || (admin.login_permissions || []).includes('team.manage')))
     || permissions.includes('team.manage');
 
   return (

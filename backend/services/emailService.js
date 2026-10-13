@@ -13,7 +13,7 @@ function getTransporter() {
     console.warn(`[email]   SMTP_HOST=${host || '(unset)'} SMTP_USER=${user || '(unset)'} SMTP_PASS=${pass ? '(set)' : '(unset)'}`);
     return null;
   }
-  return nodemailer.createTransport({
+  const transporter = nodemailer.createTransport({
     host, port,
     secure: port === 465,
     auth: { user, pass },
@@ -22,6 +22,44 @@ function getTransporter() {
     greetingTimeout:   30000,
     socketTimeout:     30000,
   });
+  // Every outgoing email goes through makeResponsive, so no template can forget it.
+  const send = transporter.sendMail.bind(transporter);
+  transporter.sendMail = (opts, ...rest) => send(opts && opts.html ? { ...opts, html: makeResponsive(opts.html) } : opts, ...rest);
+  return transporter;
+}
+
+// ─── Mobile layout for every template ─────────────────────────────────────────
+// The templates are fixed 600px tables with 40px side padding and inline styles
+// only. This tags the outer wrapper, the main card and the padded cells with
+// classes and injects one media query, so on a phone the card fills the screen
+// and the side padding shrinks. Clients that ignore <style> still get the
+// fluid (max-width + width:100%) desktop layout.
+const RESPONSIVE_CSS = `<style>
+  @media only screen and (max-width:620px){
+    .m-outer{padding:12px 6px !important}
+    .m-wrap{width:100% !important;max-width:100% !important;border-radius:12px !important}
+    .m-pad{padding-left:18px !important;padding-right:18px !important}
+    .m-wrap img{max-width:100% !important}
+    .m-wrap table{max-width:100% !important}
+    .m-wrap td,.m-wrap p,.m-wrap a{word-break:break-word}
+  }
+</style>`;
+
+function makeResponsive(html) {
+  if (typeof html !== 'string' || html.includes('m-wrap')) return html;
+  const addClass = (attrs, cls) => (/\bclass="/.test(attrs)
+    ? attrs.replace(/\bclass="/, `class="${cls} `)
+    : `${attrs} class="${cls}"`);
+  let out = html.replace(/<(table|td)\b([^>]*)>/g, (tag, name, attrs) => {
+    const style = (attrs.match(/style="([^"]*)"/) || [])[1] || '';
+    let next = attrs;
+    if (/padding:40px 16px/.test(style)) next = addClass(next, 'm-outer');
+    else if (name === 'td' && /padding:[^;"]*\b40px\b/.test(style)) next = addClass(next, 'm-pad');
+    if (name === 'table' && /\bwidth="(600|620|640)"/.test(attrs)) next = addClass(next, 'm-wrap');
+    return next === attrs ? tag : `<${name}${next}>`;
+  });
+  out = out.includes('</head>') ? out.replace('</head>', `${RESPONSIVE_CSS}\n</head>`) : RESPONSIVE_CSS + out;
+  return out;
 }
 
 // ─── Verify SMTP connection on startup — logs success/failure clearly ────────
@@ -948,6 +986,108 @@ async function sendExamInviteEmail({ toEmail, participantName, examTitle, durati
   return info;
 }
 
+// ─── Send the airline-uploaded exam certificate to the candidate ──────────────
+// `file`: { content: Buffer, filename, contentType } — the airline's own document.
+async function sendExamCertificateEmail({ toEmail, participantName, examTitle, scoreText, file, issuerName, branding }) {
+  const transporter = getTransporter();
+  if (!transporter) throw new Error('SMTP not configured — cannot send the certificate.');
+
+  const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const name = participantName || 'Candidate';
+  const issuer = issuerName || 'IFOA';
+  const scoreRow = scoreText
+    ? `<tr>
+                  <td style="padding:5px 0;font-size:13px;color:#6b7280;width:40%;border-top:1px solid #f1f5f9">Score</td>
+                  <td style="padding:5px 0;font-size:13px;color:#111827;font-weight:600;border-top:1px solid #f1f5f9">${esc(scoreText)}</td>
+                </tr>`
+    : '';
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/><title>Your Certificate</title></head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:'Segoe UI',Helvetica,Arial,sans-serif">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:40px 16px">
+  <tr><td align="center">
+    <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 32px rgba(0,0,0,0.10)">
+      <tr>
+        <td bgcolor="#0c1a2e" style="background:#0c1a2e;padding:28px 40px 24px;text-align:center">
+          <img src="cid:ifoa_logo" width="460" alt="IFOA" style="display:block;margin:0 auto;border:0;width:460px;max-width:100%;height:auto"/>
+          <div style="height:16px"></div>
+          <div style="width:40px;height:2px;background:#2563eb;margin:0 auto 14px"></div>
+          <p style="margin:0;font-size:22px;font-weight:800;color:#ffffff">Your Certificate</p>
+        </td>
+      </tr>
+      <tr><td style="background:linear-gradient(90deg,#2563eb,#3b82f6);height:4px;font-size:0;line-height:0">&nbsp;</td></tr>
+      <tr>
+        <td style="padding:36px 40px 0">
+          <p style="margin:0 0 8px;font-size:16px;font-weight:700;color:#111827">Dear ${esc(name)},</p>
+          <p style="margin:0 0 24px;font-size:14px;color:#4b5563;line-height:1.7">
+            Congratulations on passing the exam below. Your certificate is attached to this email.
+          </p>
+          <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;margin-bottom:24px">
+            <tr><td style="padding:18px 22px">
+              <p style="margin:0 0 10px;font-size:17px;font-weight:800;color:#0f172a">${esc(examTitle)}</p>
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="padding:5px 0;font-size:13px;color:#6b7280;width:40%">Result</td>
+                  <td style="padding:5px 0;font-size:13px;color:#15803d;font-weight:700">Passed</td>
+                </tr>
+                ${scoreRow}
+                <tr>
+                  <td style="padding:5px 0;font-size:13px;color:#6b7280;border-top:1px solid #f1f5f9">Attachment</td>
+                  <td style="padding:5px 0;font-size:13px;color:#111827;font-weight:600;border-top:1px solid #f1f5f9">${esc(file.filename)}</td>
+                </tr>
+              </table>
+            </td></tr>
+          </table>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:4px 40px 32px">
+          <p style="margin:0;font-size:13px;color:#374151;line-height:1.7">
+            Best regards,<br/>
+            <strong style="color:#111827">${esc(issuer)}</strong>
+          </p>
+        </td>
+      </tr>
+      <tr>
+        <td bgcolor="#0c1a2e" style="background:#0c1a2e;padding:16px 40px">
+          <p style="margin:0;font-size:11px;color:#64748b;text-align:center">This is an automated email. Please do not reply.</p>
+        </td>
+      </tr>
+    </table>
+  </td></tr>
+</table>
+</body>
+</html>`;
+
+  const text = [
+    `Dear ${name},`,
+    '',
+    `Congratulations on passing the exam: ${examTitle}`,
+    ...(scoreText ? [`Score: ${scoreText}`] : []),
+    '',
+    'Your certificate is attached to this email.',
+    '',
+    'Best regards,',
+    issuer,
+  ].join('\n');
+
+  const info = await transporter.sendMail({
+    from:    `"IFOA – International Flight Operations Academy" <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER}>`,
+    to:      toEmail,
+    subject: `Your certificate: ${examTitle}`,
+    text,
+    html:    applyBranding(html, branding),
+    attachments: [
+      ...logoAttachment(branding),
+      { filename: file.filename, content: file.content, contentType: file.contentType },
+    ],
+  });
+  console.log(`[email] Exam certificate sent to ${toEmail} — messageId: ${info.messageId}`);
+  return info;
+}
+
 // ─── Certificate expiry reminder (admin → airline) ────────────────────────────
 // `rows`: [{ name, trainingType, certNo, expiresOn: 'YYYY-MM-DD', daysLeft }]
 async function sendCertExpiryReminderEmail({ toEmail, cc, airlineName, rows, message, branding }) {
@@ -1058,4 +1198,4 @@ async function sendCertExpiryReminderEmail({ toEmail, cc, airlineName, rows, mes
   return info;
 }
 
-module.exports = { sendSubmissionConfirmation, sendPasswordResetEmail, sendOtpEmail, sendContractEmail, sendExamInviteEmail, sendCertExpiryReminderEmail };
+module.exports = { sendSubmissionConfirmation, sendPasswordResetEmail, sendOtpEmail, sendContractEmail, sendExamInviteEmail, sendExamCertificateEmail, sendCertExpiryReminderEmail };

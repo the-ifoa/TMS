@@ -3,7 +3,7 @@ import toast from 'react-hot-toast';
 import {
   HiOutlineClock, HiOutlineChevronLeft, HiOutlineChevronRight,
   HiOutlineShieldCheck, HiOutlineExclamationCircle,
-  HiOutlineBookmark, HiOutlineCheckCircle,
+  HiOutlineBookmark, HiOutlineCheckCircle, HiOutlineXCircle, HiOutlineLockClosed, HiOutlineLightBulb,
 } from 'react-icons/hi';
 import QuestionPlayer from './examPlayers/QuestionPlayer';
 import { Button } from '@/components/ui/button';
@@ -20,8 +20,10 @@ const AUTOSAVE_SECONDS = Math.max(1, Number(import.meta.env.VITE_EXAM_AUTOSAVE_S
 //
 // Props:
 //   attempt          — { id, questions_snapshot, answers, started_at, violation_count }
-//   exam             — { title, duration_minutes, lockdown_enabled, max_violations }
+//   exam             — { title, duration_minutes, lockdown_enabled, max_violations, instant_feedback }
 //   onSaveAnswer(qId, response)  — persist one answer; may return a promise (rejects → retried next autosave tick)
+//   onCheckAnswer(qId, response) — instant-feedback exams only: grade + lock one answer →
+//                                  { feedback: { is_correct, points_awarded, max_points, correct_answer, explanation, … }, progress }
 //   onSubmit()                   — async: persist final submission server-side
 //   onReportViolation(type)      — async → { violation_count, auto_submitted_now }
 //   onFinished()                 — called after a successful submit / auto-submit
@@ -48,7 +50,7 @@ const VIOLATION_LABEL = {
   devtools_suspected: 'Suspicious activity detected.',
 };
 
-export default function ExamRunner({ attempt, exam, onSaveAnswer, onSubmit, onReportViolation, onFinished, onBack, previewMode = false }) {
+export default function ExamRunner({ attempt, exam, onSaveAnswer, onCheckAnswer, onSubmit, onReportViolation, onFinished, onBack, previewMode = false }) {
   const questions = attempt.questions_snapshot;
 
   const [answers, setAnswers] = useState(() => {
@@ -57,6 +59,16 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onSubmit, onRe
     return init;
   });
   const [marked, setMarked] = useState(new Set());
+  // Instant feedback: checked answers (id → feedback) are final — locked client
+  // and server side. Restored from the attempt when the candidate resumes.
+  const instantFeedback = !!exam.instant_feedback && typeof onCheckAnswer === 'function';
+  const [feedback, setFeedback] = useState(() => {
+    const init = {};
+    (attempt.feedback || []).forEach((f) => { init[f.question_id] = f; });
+    return init;
+  });
+  const [progress, setProgress] = useState(attempt.progress || null);
+  const [checking, setChecking] = useState(false);
   const [index, setIndex] = useState(0);
   // No duration → no overall timer (null), instead of an instant auto-submit.
   // server_now (when the API sends it) corrects for a skewed device clock, which
@@ -423,7 +435,27 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onSubmit, onRe
     sectionGroups[sectionGroups.length - 1].items.push({ ...qq, _index: i });
   });
 
+  const currentChecked = !!feedback[q._id];
+  const hasAnswer = (id) => answers[id] !== undefined && answers[id] !== null && answers[id] !== '';
+
+  const handleCheck = async () => {
+    if (checking || currentChecked || !hasAnswer(q._id)) return;
+    setChecking(true);
+    const qId = q._id;
+    try {
+      const res = await onCheckAnswer(qId, answers[qId]);
+      pendingRef.current.delete(qId); // the check stored the answer — nothing left to autosave
+      setFeedback((prev) => ({ ...prev, [qId]: res.feedback }));
+      if (res.progress) setProgress(res.progress);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Could not check this answer. Please try again.');
+    } finally {
+      setChecking(false);
+    }
+  };
+
   const setResponse = (response) => {
+    if (currentChecked) return; // checked answers are final
     if (currentQuestionLocked) { toast.error("Time's up for this question — answer is locked."); return; }
     if (currentSectionLocked) { toast.error("Time's up for this section — answers are locked."); return; }
     setAnswers((prev) => ({ ...prev, [q._id]: response }));
@@ -460,6 +492,16 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onSubmit, onRe
             <span className="text-slate-500">/</span>
             <span>{questions.length} Answered</span>
           </div>
+
+          {/* Running score (instant-feedback exams) */}
+          {instantFeedback && progress && progress.checked > 0 && (
+            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/90 border border-slate-700/80 text-xs font-semibold text-slate-300 shadow-2xs" title="Score on the answers you have checked so far">
+              <span className="text-emerald-400 font-extrabold">{progress.score}</span>
+              <span className="text-slate-500">/</span>
+              <span>{progress.max} pts</span>
+              {progress.percentage != null && <span className="text-slate-500">· {progress.percentage}%</span>}
+            </div>
+          )}
 
           {/* Secure Mode Badge */}
           {lockdownEnabled && (
@@ -571,6 +613,7 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onSubmit, onRe
                 let btnCls = 'bg-slate-100 text-slate-600';
                 if (i === index) btnCls = 'bg-slate-900 text-white font-bold ring-2 ring-slate-900/20 shadow-2xs';
                 else if (marked.has(qq._id)) btnCls = 'bg-amber-500 text-white font-bold';
+                else if (feedback[qq._id]?.is_correct === false) btnCls = 'bg-rose-500 text-white font-bold';
                 else if (isAnswered) btnCls = 'bg-emerald-500 text-white font-bold';
                 return <button key={qq._id} onClick={() => setIndex(i)} className={`w-8 h-8 rounded-full text-xs font-bold transition-all flex items-center justify-center flex-shrink-0 ${btnCls}`}>{i + 1}</button>;
               })}
@@ -627,6 +670,7 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onSubmit, onRe
                         let btnCls = 'bg-slate-100 text-slate-600 hover:bg-slate-200';
                         if (i === index) btnCls = 'bg-slate-900 text-white font-bold shadow-2xs ring-2 ring-slate-900/20';
                         else if (marked.has(qq._id)) btnCls = 'bg-amber-500 text-white font-bold shadow-2xs';
+                        else if (feedback[qq._id]?.is_correct === false) btnCls = 'bg-rose-500 text-white font-bold shadow-2xs';
                         else if (isAnswered) btnCls = 'bg-emerald-500 text-white font-bold shadow-2xs';
                         return <button key={qq._id} onClick={() => setIndex(i)} className={`w-9 h-9 rounded-full text-xs font-bold transition-all flex items-center justify-center ${btnCls}`}>{i + 1}</button>;
                       })}
@@ -664,7 +708,62 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onSubmit, onRe
               </Button>
             </div>
             <div className="p-4 sm:p-6 lg:p-7 flex-1 overflow-y-auto scrollbar-none min-h-0">
-              <QuestionPlayer question={q} response={answers[q._id]} onChange={setResponse} />
+              <div className={currentChecked ? 'pointer-events-none select-none opacity-90' : ''} aria-disabled={currentChecked}>
+                <QuestionPlayer question={q} response={answers[q._id]} onChange={setResponse} feedback={feedback[q._id] || null} />
+              </div>
+
+              {instantFeedback && !currentChecked && (
+                <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-4">
+                  <Button size="sm" onClick={handleCheck} disabled={checking || !hasAnswer(q._id) || currentLocked}
+                    className="rounded-xl px-5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs">
+                    <HiOutlineCheckCircle className="w-4 h-4 mr-1.5" />
+                    {checking ? 'Checking…' : 'Check answer'}
+                  </Button>
+                  <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-slate-400">
+                    <HiOutlineLockClosed className="w-3.5 h-3.5" />
+                    Once checked, this answer can't be changed.
+                  </span>
+                </div>
+              )}
+
+              {instantFeedback && currentChecked && (() => {
+                const f = feedback[q._id];
+                const manual = f.needs_manual_grading;
+                const good = f.is_correct === true;
+                const bad = f.is_correct === false;
+                const tone = good
+                  ? { box: 'bg-emerald-50 border-emerald-200', head: 'text-emerald-800', Icon: HiOutlineCheckCircle, icon: 'text-emerald-600' }
+                  : bad
+                    ? { box: 'bg-rose-50 border-rose-200', head: 'text-rose-800', Icon: HiOutlineXCircle, icon: 'text-rose-600' }
+                    : { box: 'bg-slate-50 border-slate-200', head: 'text-slate-800', Icon: HiOutlineLockClosed, icon: 'text-slate-500' };
+                return (
+                  <div className={`mt-6 rounded-2xl border p-4 sm:p-5 ${tone.box}`} role="status">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className={`flex items-center gap-2 text-sm font-bold ${tone.head}`}>
+                        <tone.Icon className={`w-5 h-5 ${tone.icon}`} />
+                        {f.preview ? 'Answer locked (preview)' : good ? 'Correct' : bad ? 'Incorrect' : manual ? 'Answer locked — reviewed manually' : 'Answer locked'}
+                      </p>
+                      {f.max_points > 0 && f.points_awarded != null && (
+                        <span className={`text-xs font-bold ${tone.head}`}>{f.points_awarded} / {f.max_points} pt{f.max_points === 1 ? '' : 's'}</span>
+                      )}
+                    </div>
+                    {bad && f.correct_answer && (
+                      <p className="mt-3 text-sm text-slate-800">
+                        <span className="font-semibold">Correct answer: </span>{f.correct_answer}
+                      </p>
+                    )}
+                    {f.explanation && (
+                      <div className="mt-3 flex items-start gap-2 rounded-xl bg-white/70 border border-white px-3 py-2.5">
+                        <HiOutlineLightBulb className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />
+                        <p className="text-sm text-slate-700 whitespace-pre-wrap">{f.explanation}</p>
+                      </div>
+                    )}
+                    <p className="mt-3 flex items-center gap-1.5 text-[11px] font-medium text-slate-500">
+                      <HiOutlineLockClosed className="w-3.5 h-3.5" /> This answer is final and can no longer be changed.
+                    </p>
+                  </div>
+                );
+              })()}
             </div>
             <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-slate-100 flex items-center justify-between gap-2 flex-shrink-0 bg-white rounded-b-2xl z-10">
               <div className="flex items-center gap-1.5 text-[11px] sm:text-xs font-medium text-slate-400">

@@ -332,7 +332,7 @@ function SendInviteModal({ exam, onClose, onSent }) {
 
 export default function ExamSystem() {
   const navigate = useNavigate();
-  const { isAdmin, isDepartment, admin } = useAuth();
+  const { isAdmin, isDepartment, admin, can } = useAuth();
   const selfId = String(admin?._id || admin?.id || '');
   const base = isAdmin ? '/admin/exams' : '/airline/exams';
   const [searchParams, setSearchParams] = useSearchParams();
@@ -419,6 +419,12 @@ export default function ExamSystem() {
       : isDepartment
         ? String(exam.owner_department || '') === selfId
         : airlineOwned;
+    // Each action also needs its own power — anything missing is not shown.
+    const canAuthor = canManage && can('exams.author');
+    // A department may also assign its parent airline's exams to its own team.
+    const canAssign = can('exams.assign') && (canManage || (isDepartment && airlineOwned));
+    const showPublish = canAuthor && exam.status === 'draft';
+    const showAssign  = canAssign && exam.status !== 'draft';
     return (
       <Card
         key={exam.id}
@@ -457,7 +463,7 @@ export default function ExamSystem() {
               >
                 {exam.status}
               </Badge>
-              {canManage && (
+              {canAuthor && (
                 <SimpleTooltip label="Delete exam">
                   <Button
                     variant="ghost"
@@ -494,8 +500,9 @@ export default function ExamSystem() {
 
         {/* Structured 2-Row Action Bar */}
         <div className="pt-3.5 mt-3.5 border-t border-slate-100/90 space-y-2">
-          {canManage && (
-          <div className="grid grid-cols-2 gap-2">
+          {(canAuthor || showAssign) && (
+          <div className={`grid gap-2 ${canAuthor && (showPublish || showAssign) ? 'grid-cols-2' : 'grid-cols-1'}`}>
+            {canAuthor && (
             <Button
               variant="outline"
               size="sm"
@@ -504,8 +511,9 @@ export default function ExamSystem() {
             >
               <HiOutlinePencil className="w-3.5 h-3.5 text-slate-400" /> Edit
             </Button>
+            )}
 
-            {exam.status === 'draft' ? (
+            {showPublish ? (
               <Button
                 size="sm"
                 variant="outline"
@@ -514,7 +522,7 @@ export default function ExamSystem() {
               >
                 <HiOutlineCheckCircle className="w-3.5 h-3.5 text-emerald-600" /> Publish
               </Button>
-            ) : (
+            ) : showAssign && (
               <Button
                 size="sm"
                 variant="outline"
@@ -604,7 +612,7 @@ export default function ExamSystem() {
             </div>
           </div>
 
-          {activeTab === 'exams' ? (
+          {activeTab === 'exams' ? can('exams.author') && (
             <Button onClick={() => navigate(`${base}/new`)} className="bg-slate-900 hover:bg-slate-800 text-white text-xs sm:text-sm font-bold rounded-xl shadow-2xs flex items-center gap-1.5 px-4 py-2 flex-shrink-0">
               <HiOutlinePlusCircle className="w-4 h-4" /> New Exam
             </Button>

@@ -11,8 +11,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
 const Admin = require('../models/Admin');
 const Airline = require('../models/Airline');
-const { catalogForScope, clampPermissions, keysForScope } = require('../config/permissions');
+const { catalogForScope, clampPermissions, keysForScope, hasExamPower } = require('../config/permissions');
 const { ADMIN_GATED_AIRLINE_KEYS } = require('../middleware/permissions');
+const { LOGIN_POWER_KEYS } = require('./secondaryLoginController');
 
 // Effective permission ceiling for the caller, per target scope.
 // Returns null when unrestricted (super admin / top-level airline).
@@ -24,8 +25,11 @@ function ceilingFor(req, targetScope) {
   // airline caller
   const base = s.isTopLevel ? keysForScope('airline') : (s.permissions || []);
   const blocked = Object.keys(ADMIN_GATED_AIRLINE_KEYS).filter((k) => !s[ADMIN_GATED_AIRLINE_KEYS[k]]);
-  if (s.isTopLevel && blocked.length === 0) return null;
-  return base.filter((k) => !blocked.includes(k));
+  // Signed in through a limited additional login: it can only pass on the
+  // tickable powers it holds itself.
+  const held = (k) => !s.loginPermissions || !LOGIN_POWER_KEYS.includes(k) || s.loginPermissions.includes(k);
+  if (s.isTopLevel && blocked.length === 0 && !s.loginPermissions) return null;
+  return base.filter((k) => !blocked.includes(k) && held(k));
 }
 
 function canManage(req, targetScope) {
@@ -66,7 +70,7 @@ exports.airlines = async (req, res) => {
   if (req.scope.kind !== 'admin')
     return res.status(403).json({ error: 'Admin only.' });
   const airlines = await Airline.find({ parent_airline: null, emailVerified: true })
-    .select('_id airlineName email can_create_subusers can_upload_internal_certs')
+    .select('_id airlineName email can_create_subusers can_upload_internal_certs can_manage_internal_assessments')
     .sort({ airlineName: 1 })
     .lean();
   res.json(airlines.map((a) => ({ ...a, _id: String(a._id) })));
@@ -164,7 +168,7 @@ exports.create = async (req, res) => {
       topAirlineId = s.topAirlineId;
     }
 
-    if (await Airline.findOne({ email: lowerEmail }))
+    if (await Airline.findOne({ $or: [{ email: lowerEmail }, { 'secondary_logins.email': lowerEmail }] }))
       return res.status(400).json({ error: 'An account with this email already exists.' });
 
     const parentDoc = await Airline.findById(topAirlineId).select('airlineName logo_url');
@@ -182,7 +186,7 @@ exports.create = async (req, res) => {
       // (or an admin) can change it later from Profile.
       logo_url: parentDoc?.logo_url || null,
       permissions: cleanPerms,
-      can_author_exams: cleanPerms.includes('exams.author'),
+      can_author_exams: hasExamPower(cleanPerms),
       created_by_admin: s.kind === 'admin' ? s.adminId : null,
       created_by_airline: s.kind === 'airline' ? s.selfId : null,
     });
@@ -248,8 +252,17 @@ exports.update = async (req, res) => {
       doc.password = password;
     }
     if (Array.isArray(permissions)) {
-      doc.permissions = clampPermissions(permissions, scope, ceilingFor(req, scope));
-      if (scope === 'airline') doc.can_author_exams = doc.permissions.includes('exams.author');
+      const ceiling = ceilingFor(req, scope);
+      doc.permissions = clampPermissions(permissions, scope, ceiling);
+      // A limited login can't see powers above its ceiling, so saving must not
+      // silently strip the ones the department already had.
+      if (req.scope.loginPermissions && ceiling) {
+        const kept = [];
+        const before = await Airline.findById(doc._id).select('permissions').lean();
+        (before?.permissions || []).forEach((k) => { if (!ceiling.includes(k)) kept.push(k); });
+        doc.permissions = [...new Set([...doc.permissions, ...kept])];
+      }
+      if (scope === 'airline') doc.can_author_exams = hasExamPower(doc.permissions);
     }
     if (account_status && ['active', 'disabled'].includes(account_status))
       doc.account_status = account_status;

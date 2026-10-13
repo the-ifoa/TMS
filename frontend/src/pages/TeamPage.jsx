@@ -4,10 +4,11 @@ import toast from 'react-hot-toast';
 import {
   HiOutlineUserGroup, HiOutlinePlusCircle, HiOutlinePencil, HiOutlineTrash,
   HiOutlineX, HiOutlineShieldCheck, HiOutlineOfficeBuilding, HiOutlineUsers,
-  HiOutlineCheck, HiOutlineInformationCircle, HiOutlineEye, HiOutlineEyeOff,
+  HiOutlineCheck, HiOutlineEye, HiOutlineEyeOff,
   HiOutlineMail,
 } from 'react-icons/hi';
 import { FaPlaneDeparture } from 'react-icons/fa';
+import InfoButton from '../components/InfoButton';
 import { ShieldCheck, Building2, Users, CheckCircle2, Sliders, Info, Layers } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -264,17 +265,17 @@ export default function TeamPage() {
     }
   };
 
-  // Internal certificate upload is only grantable to a department whose parent
+  // Admin-gated keys (internal certificates / assessments) are only grantable to a department whose parent
   // airline has the admin switch on. (An airline caller's catalog is already
   // filtered server-side; this covers an admin picking the parent.)
   const modalGroups = useMemo(() => {
     const groups = modal ? (catalog[modal.scope] || {}) : {};
     if (!modal || modal.scope !== 'airline' || !isAdmin) return groups;
     const parent = airlines.find((a) => String(a._id) === String(modal.parentAirlineId));
-    if (parent?.can_upload_internal_certs) return groups;
+    const gated = { 'internalCerts.manage': 'can_upload_internal_certs', 'internalAssessments.manage': 'can_manage_internal_assessments' };
     return Object.fromEntries(
       Object.entries(groups)
-        .map(([g, items]) => [g, items.filter((i) => i.key !== 'internalCerts.manage')])
+        .map(([g, items]) => [g, items.filter((i) => !gated[i.key] || parent?.[gated[i.key]])])
         .filter(([, items]) => items.length),
     );
   }, [modal, catalog, airlines, isAdmin]);
@@ -291,15 +292,7 @@ export default function TeamPage() {
           <h1 className="text-base sm:text-xl font-bold text-primary-800 tracking-tight flex items-center gap-2">
             <HiOutlineUserGroup className="w-5 h-5 text-accent-500" />
             {isAdmin ? 'Sub-admins & Sub-departments' : 'Departments'}
-            <button
-              type="button"
-              onClick={() => setInfoOpen(true)}
-              title="How does this work?"
-              aria-label="How does this work?"
-              className="p-1 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
-            >
-              <HiOutlineInformationCircle className="w-5 h-5" />
-            </button>
+            <InfoButton onClick={() => setInfoOpen(true)} active={infoOpen} />
           </h1>
           <p className="text-xs text-primary-400 mt-0.5 hidden sm:block">
             {isAdmin

@@ -37,10 +37,10 @@ const TRAINING_BADGES = {
 };
 
 const themeStyles = {
-  blue:    { iconBg: 'bg-blue-50 text-blue-600' },
-  purple:  { iconBg: 'bg-violet-50 text-violet-600' },
-  emerald: { iconBg: 'bg-emerald-50 text-emerald-600' },
-  amber:   { iconBg: 'bg-amber-50 text-amber-600' },
+  blue:    { iconBg: 'bg-slate-900 text-white' },
+  purple:  { iconBg: 'bg-slate-900 text-white' },
+  emerald: { iconBg: 'bg-slate-900 text-white' },
+  amber:   { iconBg: 'bg-slate-900 text-white' },
 };
 
 export default function Dashboard() {
@@ -123,7 +123,7 @@ export default function Dashboard() {
 
       {/* Airline notice — enrollment lock, not relevant to departments */}
       {!isAdmin && !isDepartment && (
-        <motion.div variants={item} className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200/70 bg-slate-50/70">
+        <motion.div variants={item} className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 bg-slate-50">
           <HiOutlineLockClosed className="w-4 h-4 text-slate-400 flex-shrink-0" />
           <p className="text-xs text-slate-500 leading-relaxed">
             <span className="font-semibold text-slate-700">Submissions are locked after filing.</span>{' '}
@@ -137,7 +137,7 @@ export default function Dashboard() {
         {statCards.map((card) => {
           const style = themeStyles[card.theme];
           return (
-            <div key={card.key} className="bg-white rounded-xl border border-slate-200/70 p-5 flex items-center gap-4">
+            <div key={card.key} className="bg-white rounded-2xl border border-slate-100 p-5 flex items-center gap-4 shadow-[0_1px_2px_rgba(15,23,42,0.05),0_12px_32px_-14px_rgba(15,23,42,0.22)]">
               <div className={`${style.iconBg} w-11 h-11 rounded-lg flex items-center justify-center flex-shrink-0`}>
                 <card.icon className="w-5 h-5" />
               </div>
@@ -158,15 +158,15 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
 
         {/* Quick Actions Card */}
-        <motion.div variants={item} className="bg-white rounded-xl border border-slate-200/70 p-5 flex flex-col h-full">
+        <motion.div variants={item} className="bg-white rounded-2xl border border-slate-100 p-5 flex flex-col shadow-[0_1px_2px_rgba(15,23,42,0.05),0_12px_32px_-14px_rgba(15,23,42,0.22)]">
           <h2 className="text-sm font-semibold text-slate-900 mb-4">Quick Actions</h2>
           <div className="space-y-2 flex-1">
             <Link
               to={primaryTo}
-              className="flex items-center gap-3 p-3 rounded-lg border border-slate-200/70 hover:bg-slate-50 transition-colors group"
+              className="flex items-center gap-3 p-3 rounded-xl border border-slate-100 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.05)] hover:shadow-[0_6px_16px_-8px_rgba(15,23,42,0.25)] hover:-translate-y-px transition-all group"
             >
-              <div className="w-9 h-9 bg-blue-50 rounded-lg flex items-center justify-center flex-shrink-0">
-                <HiOutlinePlusCircle className="w-4.5 h-4.5 text-blue-600" />
+              <div className="w-9 h-9 bg-slate-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                <HiOutlinePlusCircle className="w-4.5 h-4.5 text-slate-800" />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-slate-800">
@@ -182,10 +182,10 @@ export default function Dashboard() {
             {isAdmin && (
               <Link
                 to="/admin/airlines?pendingCerts=1"
-                className="flex items-center gap-3 p-3 rounded-lg border border-slate-200/70 hover:bg-slate-50 transition-colors group"
+                className="flex items-center gap-3 p-3 rounded-xl border border-slate-100 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.05)] hover:shadow-[0_6px_16px_-8px_rgba(15,23,42,0.25)] hover:-translate-y-px transition-all group"
               >
-                <div className="w-9 h-9 bg-emerald-50 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <HiOutlineDocumentText className="w-4.5 h-4.5 text-emerald-600" />
+                <div className="w-9 h-9 bg-slate-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <HiOutlineDocumentText className="w-4.5 h-4.5 text-slate-800" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-slate-800">Generate Certificates</p>
@@ -197,10 +197,10 @@ export default function Dashboard() {
 
             <Link
               to={listTo}
-              className="flex items-center gap-3 p-3 rounded-lg border border-slate-200/70 hover:bg-slate-50 transition-colors group"
+              className="flex items-center gap-3 p-3 rounded-xl border border-slate-100 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.05)] hover:shadow-[0_6px_16px_-8px_rgba(15,23,42,0.25)] hover:-translate-y-px transition-all group"
             >
-              <div className="w-9 h-9 bg-purple-50 rounded-lg flex items-center justify-center flex-shrink-0">
-                <HiOutlineUsers className="w-4.5 h-4.5 text-purple-600" />
+              <div className="w-9 h-9 bg-slate-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                <HiOutlineUsers className="w-4.5 h-4.5 text-slate-800" />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-slate-800">
@@ -216,14 +216,14 @@ export default function Dashboard() {
         </motion.div>
 
         {/* Recent Records Card */}
-        <motion.div variants={item} className="bg-white rounded-xl border border-slate-200/70 p-5 lg:col-span-2 overflow-hidden flex flex-col h-full">
+        <motion.div variants={item} className="bg-white rounded-2xl border border-slate-100 p-5 lg:col-span-2 overflow-hidden flex flex-col shadow-[0_1px_2px_rgba(15,23,42,0.05),0_12px_32px_-14px_rgba(15,23,42,0.22)]">
           <div className="flex items-center justify-between mb-5">
             <h2 className="text-sm font-semibold text-slate-900">
               {recentTitle}
             </h2>
             <Link
               to={isAdmin ? '/admin/participants' : listTo}
-              className="text-xs font-semibold text-blue-600 hover:text-blue-700 transition-all duration-200 flex items-center gap-1 group/link"
+              className="text-xs font-semibold text-slate-900 hover:underline underline-offset-4 transition-all duration-200 flex items-center gap-1 group/link"
             >
               View All
               <HiOutlineArrowRight className="w-3.5 h-3.5 transform group-hover/link:translate-x-0.5 transition-transform" />
@@ -250,7 +250,7 @@ export default function Dashboard() {
                   return (
                     <TableRow key={record.id} className="group">
                       <TableCell className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-600 flex-shrink-0 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
+                        <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-600 flex-shrink-0 group-hover:bg-slate-900 group-hover:text-white transition-colors">
                           {nameInitials}
                         </div>
                         <span className="text-sm font-semibold text-slate-700 truncate max-w-[150px]">{record.participant_name}</span>

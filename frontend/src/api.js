@@ -75,6 +75,8 @@ export const revokeCertificateById = (id) =>
   api.delete(`/certificates/revoke/${id}`);
 export const downloadIssuedCertificate = (id) =>
   api.get(`/certificates/download/${id}`, { responseType: 'blob' });
+export const previewIssuedCertificate = (id) =>
+  api.get(`/certificates/preview/${id}`, { responseType: 'blob' });
 export const generateDhlCertificateBlob = (id) =>
   api.post(`/certificates/dhl-generate/${id}`, {}, { responseType: 'blob' });
 export const downloadDhlCertificate = (id) =>
@@ -106,6 +108,26 @@ export const uploadInternalCertificate = (participantId, file, meta = {}) => {
 };
 export const getInternalCertificateFile = (id) => api.get(`/internal-certificates/${id}/file`, { responseType: 'blob' });
 export const deleteInternalCertificate  = (id) => api.delete(`/internal-certificates/${id}`);
+
+// ─── Internal assessments — an airline's own assessments + per-candidate certificate ──
+export const listInternalAssessments   = () => api.get('/internal-assessments');
+export const createInternalAssessment  = (body) => api.post('/internal-assessments', body);
+export const updateInternalAssessment  = (id, body) => api.patch(`/internal-assessments/${id}`, body);
+export const deleteInternalAssessment  = (id) => api.delete(`/internal-assessments/${id}`);
+// body: { participant_ids: [], manual: [{ name, email }] }
+export const addAssessmentCandidates   = (id, body) => api.post(`/internal-assessments/${id}/candidates`, body);
+export const removeAssessmentCandidate = (id, candidateId) => api.delete(`/internal-assessments/${id}/candidates/${candidateId}`);
+export const uploadAssessmentCertificate = (id, candidateId, file) => {
+  const fd = new FormData();
+  fd.append('file', file);
+  return api.post(`/internal-assessments/${id}/candidates/${candidateId}/certificate`, fd, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+};
+export const getAssessmentCertificate    = (id, candidateId) =>
+  api.get(`/internal-assessments/${id}/candidates/${candidateId}/certificate`, { responseType: 'blob' });
+export const deleteAssessmentCertificate = (id, candidateId) =>
+  api.delete(`/internal-assessments/${id}/candidates/${candidateId}/certificate`);
 
 // ── Participants ────────────────────────────────────────────────────────────
 export const getParticipantsByAirline = () => api.get('/participants/by-airline');
@@ -174,6 +196,7 @@ export const deleteExamImage  = (publicId) => api.delete(`/exams/questions/image
 export const getAssignedExams     = ()                        => api.get('/exams/assigned');
 export const startExamAttempt     = (examId, participantId)   => api.post(`/exams/${examId}/attempts`, { participant_id: participantId });
 export const getExamAttempt       = (attemptId)                => api.get(`/exams/attempts/${attemptId}`);
+export const checkExamAnswer      = (attemptId, questionId, response) => api.post(`/exams/attempts/${attemptId}/check`, { question_id: questionId, response });
 export const saveExamAnswer       = (attemptId, questionId, response) => api.put(`/exams/attempts/${attemptId}/answer`, { question_id: questionId, response });
 export const submitExamAttempt    = (attemptId)                => api.post(`/exams/attempts/${attemptId}/submit`);
 export const reportExamViolation  = (attemptId, type)           => api.post(`/exams/attempts/${attemptId}/violation`, { type });
@@ -194,6 +217,13 @@ export const getQuestionBankTopics    = (bankId)      => api.get('/question-bank
 export const createQuestionBankItem   = (data)        => api.post('/question-bank/items', data);
 export const updateQuestionBankItem   = (id, data)    => api.put(`/question-bank/items/${id}`, data);
 export const deleteQuestionBankItem   = (id)          => api.delete(`/question-bank/items/${id}`);
+
+// ── Additional logins for the same airline account (admin-granted) ───────────
+export const getSecondaryLogins    = ()          => api.get('/auth/airline/secondary-logins');
+export const getSecondaryLoginPowers = ()        => api.get('/auth/airline/secondary-logins/powers');
+export const addSecondaryLogin     = (data)      => api.post('/auth/airline/secondary-logins', data);
+export const updateSecondaryLogin  = (id, data)  => api.patch(`/auth/airline/secondary-logins/${id}`, data);
+export const deleteSecondaryLogin  = (id)        => api.delete(`/auth/airline/secondary-logins/${id}`);
 
 export const updateParticipantEmail = (id, email) => api.patch(`/participants/${id}/email`, { email });
 
@@ -216,15 +246,24 @@ export const deleteTeamMember = (id)      => api.delete(`/team/members/${id}`);
 // ── Public token-based exam taking (no auth) ─────────────────────────────────
 export const getPublicExam        = (token)                          => api.get(`/public-exam/${token}`);
 export const startPublicExam      = (token)                          => api.post(`/public-exam/${token}/start`);
+export const checkPublicAnswer    = (token, attemptId, questionId, response) => api.post(`/public-exam/${token}/attempts/${attemptId}/check`, { question_id: questionId, response });
 export const savePublicAnswer     = (token, attemptId, questionId, response) => api.put(`/public-exam/${token}/attempts/${attemptId}/answer`, { question_id: questionId, response });
 export const submitPublicExam     = (token, attemptId)              => api.post(`/public-exam/${token}/attempts/${attemptId}/submit`);
 export const reportPublicViolation = (token, attemptId, type)       => api.post(`/public-exam/${token}/attempts/${attemptId}/violation`, { type });
 export const getPublicExamResult  = (token, attemptId)              => api.get(`/public-exam/${token}/attempts/${attemptId}/result`);
-export const getPublicExamCertificate = (token, attemptId)          => api.get(`/public-exam/${token}/attempts/${attemptId}/certificate`, { responseType: 'blob' });
 
 // ── Exam results: team KPIs, downloadable report, delete ─────────────────────
 export const getTeamPerformance   = (params)       => api.get('/exams/team-performance', { params });
 export const exportExamAttempts   = (format, params) => api.get('/exams/attempts/export', { params: { format, ...params }, responseType: 'blob' });
+// Certificate the airline uploads for a passed attempt, then emails to the candidate
+export const uploadAttemptCertificate = (attemptId, file) => {
+  const fd = new FormData();
+  fd.append('file', file);
+  return api.post(`/exams/attempts/${attemptId}/certificate`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+};
+export const getAttemptCertificate    = (attemptId) => api.get(`/exams/attempts/${attemptId}/certificate`, { responseType: 'blob' });
+export const deleteAttemptCertificate = (attemptId) => api.delete(`/exams/attempts/${attemptId}/certificate`);
+export const sendAttemptCertificate   = (attemptId) => api.post(`/exams/attempts/${attemptId}/certificate/send`);
 export const deleteExamAttempt    = (attemptId)    => api.delete(`/exams/attempts/${attemptId}`);
 export const bulkDeleteExamAttempts = (ids)        => api.post('/exams/attempts/bulk-delete', { ids });
 

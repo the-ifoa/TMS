@@ -75,9 +75,14 @@ function pointInRegion(point, region) {
   if (!point) return false;
   const { x, y } = point;
   if (region.shape === 'circle') {
-    const dx = x - region.x;
-    const dy = y - region.y;
-    return Math.sqrt(dx * dx + dy * dy) <= region.width; // width doubles as radius
+    // Ellipse inscribed in the region's box, so it matches the box the admin
+    // drew / the candidate is shown (all values are % of the image).
+    const rx = region.width / 2;
+    const ry = region.height / 2;
+    if (rx <= 0 || ry <= 0) return false;
+    const dx = (x - (region.x + rx)) / rx;
+    const dy = (y - (region.y + ry)) / ry;
+    return dx * dx + dy * dy <= 1;
   }
   return (
     x >= region.x && x <= region.x + region.width &&
@@ -137,6 +142,79 @@ function gradeAnswer(question, response) {
   const grader = GRADERS[question.type];
   if (!grader) return { is_correct: null, points_awarded: 0, needs_manual_grading: false };
   return { ...grader(question, response), needs_manual_grading: false };
+}
+
+
+// Human-readable correct answer for the instant-feedback panel. Empty string
+// when there is no machine-checkable key (essay, short answer, likert).
+function correctAnswerText(question) {
+  const q = question.toObject ? question.toObject() : question;
+  switch (q.type) {
+    case 'mcq':
+    case 'true_false':
+    case 'select_list':
+    case 'multi_response':
+      return (q.options || []).filter((o) => o.is_correct).map((o) => o.text).join('; ');
+    case 'numeric':
+      return q.numeric_answer == null ? ''
+        : `${q.numeric_answer}${q.numeric_tolerance ? ` (± ${q.numeric_tolerance})` : ''}`;
+    case 'sequence':
+      return (q.sequence_items || []).map((it, i) => `${i + 1}. ${it.text}`).join('  ');
+    case 'matching':
+      return (q.matching_pairs || []).map((p) => `${p.left} → ${p.right}`).join('; ');
+    case 'fill_blank':
+      return (q.blanks_answers || []).map((set, i) => `(${i + 1}) ${(set || [])[0] ?? ''}`).join('  ');
+    case 'drag_words':
+      return (q.drag_words_answers || []).map((w, i) => `(${i + 1}) ${w}`).join('  ');
+    case 'drag_drop': {
+      const targets = q.dragdrop_targets || [];
+      return (q.dragdrop_items || [])
+        .map((it) => `${it.label} → ${(targets[it.correct_target_index] || {}).label ?? '?'}`).join('; ');
+    }
+    case 'hotspot':
+      return 'The correct area is highlighted on the image.';
+    default:
+      return '';
+  }
+}
+
+// Feedback shown after the candidate checks one answer. Only ever built for a
+// question whose answer is already locked.
+function buildFeedback(question, entry) {
+  return {
+    question_id: String(question._id),
+    is_correct: entry.is_correct,
+    points_awarded: entry.points_awarded,
+    max_points: UNSCORED_TYPES.has(question.type) ? 0 : question.points,
+    needs_manual_grading: !!entry.needs_manual_grading,
+    correct_answer: entry.needs_manual_grading ? '' : correctAnswerText(question),
+    explanation: question.explanation || '',
+    // Hotspot: the correct area(s), as % of the image, so the client can draw them.
+    ...(question.type === 'hotspot' ? {
+      correct_regions: (question.hotspot_regions || [])
+        .filter((r) => r.is_correct)
+        .map((r) => ({ shape: r.shape, x: r.x, y: r.y, width: r.width, height: r.height })),
+    } : {}),
+  };
+}
+
+// Running score over the answers checked so far (manual-review and survey
+// questions have no instant score, so they are left out of both sides).
+function buildProgress(questionsSnapshot, answers) {
+  let score = 0; let max = 0; let checked = 0; let correct = 0; let incorrect = 0;
+  (answers || []).forEach((a) => {
+    if (!a.locked) return;
+    checked += 1;
+    const q = questionsSnapshot.find((qq) => String(qq._id) === String(a.question_id));
+    if (!q || UNSCORED_TYPES.has(q.type) || MANUAL_TYPES.has(q.type)) return;
+    max += q.points;
+    score += a.points_awarded || 0;
+    if (a.is_correct) correct += 1; else incorrect += 1;
+  });
+  return {
+    score, max, checked, correct, incorrect,
+    percentage: max > 0 ? Math.round((score / max) * 1000) / 10 : null,
+  };
 }
 
 // Strips correct-answer fields so a question can be sent to the client while
@@ -255,6 +333,8 @@ module.exports = {
   gradeAnswer,
   sanitizeQuestionForTaking,
   computeAttemptScore,
+  buildFeedback,
+  buildProgress,
   MANUAL_TYPES,
   UNSCORED_TYPES,
 };

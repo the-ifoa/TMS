@@ -19,8 +19,11 @@ import {
   HiOutlineChevronUp,
   HiOutlineTrash,
   HiOutlineDownload,
+  HiOutlineUpload,
+  HiOutlineMail,
+  HiOutlineDocumentText,
 } from 'react-icons/hi';
-import { listExamAttempts, getExam, getExamAttemptResult, gradeExamAttempt, getExamAnalytics, exportExamAttempts, deleteExamAttempt, bulkDeleteExamAttempts } from '../api';
+import { listExamAttempts, getExam, getExamAttemptResult, gradeExamAttempt, getExamAnalytics, exportExamAttempts, deleteExamAttempt, bulkDeleteExamAttempts, uploadAttemptCertificate, getAttemptCertificate, deleteAttemptCertificate, sendAttemptCertificate } from '../api';
 import { useConfirm } from '@/hooks/use-confirm';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -155,46 +158,6 @@ const VIOLATION_LABELS = {
   tab_switch: 'Switched tab/window',
   devtools_suspected: 'Suspicious activity detected',
 };
-
-function StatTile({ label, value, icon: Icon, color = 'blue' }) {
-  const colorMap = {
-    blue: {
-      bg: 'bg-blue-50/60',
-      border: 'border-blue-100',
-      iconBg: 'bg-blue-100/70 text-blue-600',
-    },
-    emerald: {
-      bg: 'bg-emerald-50/60',
-      border: 'border-emerald-100',
-      iconBg: 'bg-emerald-100/70 text-emerald-600',
-    },
-    violet: {
-      bg: 'bg-violet-50/60',
-      border: 'border-violet-100',
-      iconBg: 'bg-violet-100/70 text-violet-600',
-    },
-    slate: {
-      bg: 'bg-slate-50',
-      border: 'border-slate-200/80',
-      iconBg: 'bg-slate-100 text-slate-600',
-    },
-  };
-  const theme = colorMap[color] || colorMap.slate;
-
-  return (
-    <div className={`p-4 rounded-2xl ${theme.bg} border ${theme.border} flex items-center gap-3.5 transition-all shadow-2xs`}>
-      {Icon && (
-        <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${theme.iconBg} shadow-2xs`}>
-          <Icon className="w-5 h-5" />
-        </div>
-      )}
-      <div className="min-w-0">
-        <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">{label}</p>
-        <p className="text-xl font-extrabold text-slate-900 tracking-tight leading-tight mt-0.5">{value}</p>
-      </div>
-    </div>
-  );
-}
 
 function AttemptImageGallery({ gallery }) {
   const scrollRef = useRef(null);
@@ -741,7 +704,7 @@ function GradeModal({ attemptId, onClose, onGraded }) {
 export default function ExamAttempts() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { isAdmin } = useAuth();
+  const { isAdmin, can } = useAuth();
   const backToExams = isAdmin ? '/admin/exams' : '/airline/exams/manage';
   const [exam, setExam] = useState(null);
   const [attempts, setAttempts] = useState([]);
@@ -761,6 +724,11 @@ export default function ExamAttempts() {
   // IFOA admins manage results of IFOA-owned exams; airlines manage their own
   // exams. The server enforces this too — this only hides buttons that would 403.
   const canDelete = exam ? (isAdmin ? !exam.owner_airline : true) : false;
+  // What this account may do here — anything it can't is simply not shown.
+  const canGrade         = can('exams.grade');
+  const canDeleteResults = canDelete && can('exams.author');
+  const canManageCerts   = canDelete && (canGrade || can('exams.author'));
+  const canSelect        = canDeleteResults || canManageCerts;
 
   const toggleSelected = (attemptId) => setSelectedIds((prev) => {
     const next = new Set(prev);
@@ -783,6 +751,152 @@ export default function ExamAttempts() {
       toast.error('Failed to export results.');
     } finally {
       setExporting(false);
+    }
+  };
+
+  // ── Certificates: the airline uploads its own file per passed candidate, then emails it ──
+  const [certBusy, setCertBusy] = useState(null); // `${attemptId}:${action}` while a request runs
+  const setAttemptCertificate = (attemptId, certificate) =>
+    setAttempts((prev) => prev.map((x) => (x.id === attemptId ? { ...x, certificate } : x)));
+
+  const handleCertUpload = async (a, file) => {
+    if (!file) return;
+    setCertBusy(`${a.id}:upload`);
+    try {
+      const res = await uploadAttemptCertificate(a.id, file);
+      setAttemptCertificate(a.id, res.data.certificate);
+      toast.success('Certificate uploaded.');
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Could not upload the certificate.');
+    } finally {
+      setCertBusy(null);
+    }
+  };
+
+  const handleCertView = async (a) => {
+    try {
+      const res = await getAttemptCertificate(a.id);
+      const url = URL.createObjectURL(res.data);
+      window.open(url, '_blank', 'noopener');
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch {
+      toast.error('Could not open the certificate.');
+    }
+  };
+
+  const handleCertSend = async (a) => {
+    if (a.certificate?.emailed_at) {
+      const ok = await confirm(`Send the certificate to ${a.participant_email} again?`, { title: 'Resend certificate', confirmLabel: 'Send again' });
+      if (!ok) return;
+    }
+    setCertBusy(`${a.id}:send`);
+    try {
+      const res = await sendAttemptCertificate(a.id);
+      setAttemptCertificate(a.id, res.data.certificate);
+      toast.success(`Certificate emailed to ${res.data.certificate.emailed_to}.`);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Could not send the certificate.');
+    } finally {
+      setCertBusy(null);
+    }
+  };
+
+  // ── Bulk email: the selected candidates, or (nothing selected) everyone not emailed yet ──
+  const [bulkSending, setBulkSending] = useState(null); // { done, total } while running
+  const bulkEmailTargets = () => {
+    const withCert = attempts.filter((x) => x.certificate && x.participant_email);
+    return selectedIds.size > 0
+      ? withCert.filter((x) => selectedIds.has(x.id))
+      : withCert.filter((x) => !x.certificate.emailed_at);
+  };
+
+  const handleBulkEmail = async () => {
+    const targets = bulkEmailTargets();
+    if (!targets.length) {
+      toast.error(selectedIds.size > 0
+        ? 'None of the selected candidates has an uploaded certificate and an email address.'
+        : 'No uploaded certificates are waiting to be emailed.');
+      return;
+    }
+    const ok = await confirm(
+      `Email ${targets.length} certificate${targets.length === 1 ? '' : 's'} to the candidate${targets.length === 1 ? '' : 's'} now?`,
+      { title: 'Email certificates', confirmLabel: 'Send' },
+    );
+    if (!ok) return;
+    let sent = 0; const failed = [];
+    setBulkSending({ done: 0, total: targets.length });
+    for (const t of targets) {
+      try {
+        const res = await sendAttemptCertificate(t.id);
+        setAttemptCertificate(t.id, res.data.certificate);
+        sent += 1;
+      } catch (err) {
+        failed.push(`${t.participant_name || 'Candidate'}: ${err.response?.data?.error || 'failed'}`);
+      }
+      setBulkSending({ done: sent + failed.length, total: targets.length });
+    }
+    setBulkSending(null);
+    if (sent) toast.success(`${sent} certificate${sent === 1 ? '' : 's'} emailed.`);
+    if (failed.length) toast.error(`${failed.length} could not be sent. ${failed[0]}`);
+  };
+
+  // ── Bulk upload: pick many files, match each to a passed candidate, upload all ──
+  const [bulkUploadOpen, setBulkUploadOpen] = useState(false);
+  const [bulkFiles, setBulkFiles] = useState([]);       // File[]
+  const [bulkMap, setBulkMap] = useState({});           // attemptId → index into bulkFiles ('' = none)
+  const [bulkUploading, setBulkUploading] = useState(null); // { done, total }
+  const passedAttempts = attempts.filter((x) => x.passed === true);
+
+  const normalizeName = (v) => String(v || '').toLowerCase().replace(/\.[a-z0-9]+$/, '').replace(/[^a-z0-9]+/g, ' ').trim();
+  const pickBulkFiles = (fileList) => {
+    const files = [...fileList];
+    setBulkFiles(files);
+    // Auto-match: a file belongs to a candidate when its name contains every word of theirs.
+    const used = new Set();
+    const map = {};
+    passedAttempts.forEach((a) => {
+      const words = normalizeName(a.participant_name).split(' ').filter(Boolean);
+      if (!words.length) return;
+      const idx = files.findIndex((f, i) => !used.has(i) && words.every((w) => normalizeName(f.name).split(' ').includes(w)));
+      if (idx !== -1) { map[a.id] = idx; used.add(idx); }
+    });
+    setBulkMap(map);
+  };
+  const closeBulkUpload = () => { if (!bulkUploading) { setBulkUploadOpen(false); setBulkFiles([]); setBulkMap({}); } };
+
+  const handleBulkUpload = async () => {
+    const jobs = passedAttempts.filter((a) => bulkMap[a.id] !== undefined && bulkMap[a.id] !== '');
+    if (!jobs.length) { toast.error('Match at least one file to a candidate.'); return; }
+    let done = 0; const failed = [];
+    setBulkUploading({ done: 0, total: jobs.length });
+    for (const a of jobs) {
+      try {
+        const res = await uploadAttemptCertificate(a.id, bulkFiles[bulkMap[a.id]]);
+        setAttemptCertificate(a.id, res.data.certificate);
+        done += 1;
+      } catch (err) {
+        failed.push(`${a.participant_name || 'Candidate'}: ${err.response?.data?.error || 'failed'}`);
+      }
+      setBulkUploading({ done: done + failed.length, total: jobs.length });
+    }
+    setBulkUploading(null);
+    if (done) toast.success(`${done} certificate${done === 1 ? '' : 's'} uploaded.`);
+    if (failed.length) toast.error(`${failed.length} could not be uploaded. ${failed[0]}`);
+    if (!failed.length) { setBulkUploadOpen(false); setBulkFiles([]); setBulkMap({}); }
+  };
+
+  const handleCertRemove = async (a) => {
+    const ok = await confirm(`Remove the certificate uploaded for ${a.participant_name || 'this candidate'}?`, { title: 'Remove certificate', confirmLabel: 'Remove' });
+    if (!ok) return;
+    setCertBusy(`${a.id}:remove`);
+    try {
+      await deleteAttemptCertificate(a.id);
+      setAttemptCertificate(a.id, null);
+      toast.success('Certificate removed.');
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Could not remove the certificate.');
+    } finally {
+      setCertBusy(null);
     }
   };
 
@@ -996,95 +1110,119 @@ export default function ExamAttempts() {
 
         {/* Analytics Panel */}
         {showAnalytics && analytics && (
-          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-5 sm:p-6 space-y-5">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-100 shadow-2xs">
-                  <HiOutlineChartBar className="w-4.5 h-4.5" />
-                </div>
-                <div>
-                  <h2 className="text-sm font-bold text-slate-900">Performance Analytics</h2>
-                  <p className="text-[11px] text-slate-400">Exam metrics, historical pass rates, and question performance</p>
+          <div className="space-y-4">
+            {/* Header */}
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <span className="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center flex-shrink-0 shadow-[0_6px_16px_-8px_rgba(15,23,42,0.5)]">
+                  <HiOutlineChartBar className="w-5 h-5" />
+                </span>
+                <div className="min-w-0">
+                  <h2 className="text-base font-semibold text-slate-900 leading-tight">Performance Analytics</h2>
+                  <p className="text-xs text-slate-500 mt-0.5 truncate">Exam metrics, historical pass rates and question performance</p>
                 </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-              <StatTile label="Finished" value={analytics.overall.finished_attempts} icon={HiOutlineClipboardCheck} color="blue" />
-              <StatTile label="Passed" value={analytics.overall.passed} icon={HiOutlineCheckCircle} color="emerald" />
-              <StatTile label="Avg Score" value={analytics.overall.avg_percentage != null ? `${analytics.overall.avg_percentage}%` : '—'} icon={HiOutlineAcademicCap} color="violet" />
-              <StatTile label="Total Attempts" value={analytics.overall.total_attempts} icon={HiOutlineUsers} color="slate" />
+            {/* KPI cards */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              {(() => {
+                const o = analytics.overall;
+                const passRate = o.finished_attempts ? Math.round((o.passed / o.finished_attempts) * 100) : null;
+                return [
+                  { label: 'Finished', value: o.finished_attempts, icon: HiOutlineClipboardCheck, hint: 'Completed attempts' },
+                  { label: 'Passed', value: o.passed, icon: HiOutlineCheckCircle, hint: passRate != null ? `${passRate}% pass rate` : 'No finished attempts' },
+                  { label: 'Average score', value: o.avg_percentage != null ? `${o.avg_percentage}%` : '—', icon: HiOutlineAcademicCap, hint: 'Across graded attempts' },
+                  { label: 'Total attempts', value: o.total_attempts, icon: HiOutlineUsers, hint: 'Including in progress' },
+                ];
+              })().map(({ label, value, icon: Icon, hint }) => (
+                <div key={label} className="bg-white rounded-2xl border border-slate-100 p-5 shadow-[0_1px_2px_rgba(15,23,42,0.05),0_12px_32px_-14px_rgba(15,23,42,0.22)]">
+                  <div className="flex items-start justify-between">
+                    <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">{label}</p>
+                    <span className="w-9 h-9 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center">
+                      <Icon className="w-[18px] h-[18px]" />
+                    </span>
+                  </div>
+                  <p className="text-2xl font-bold text-slate-900 tracking-tight leading-none mt-3">{value}</p>
+                  <p className="text-xs text-slate-400 mt-2 truncate">{hint}</p>
+                </div>
+              ))}
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 pt-1">
+            {/* Detail cards */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
               {/* Pass Rate Over Time */}
               {analytics.pass_rate_over_time.length > 0 && (
-                <div className="p-4 rounded-2xl bg-slate-50/60 border border-slate-200/70 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">Pass Rate Over Time</span>
-                    <span className="text-[11px] font-semibold text-slate-400">{analytics.pass_rate_over_time.length} recorded session(s)</span>
+                <section className="bg-white rounded-2xl border border-slate-100 flex flex-col overflow-hidden shadow-[0_1px_2px_rgba(15,23,42,0.05),0_12px_32px_-14px_rgba(15,23,42,0.22)]">
+                  <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+                    <div>
+                      <h3 className="text-sm font-semibold text-slate-900">Pass rate over time</h3>
+                      <p className="text-xs text-slate-400 mt-0.5">By exam session date</p>
+                    </div>
+                    <span className="text-[11px] font-semibold text-slate-600 bg-slate-100 rounded-full px-2.5 py-1">
+                      {analytics.pass_rate_over_time.length} session{analytics.pass_rate_over_time.length === 1 ? '' : 's'}
+                    </span>
                   </div>
-                  <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                  <div className="grid grid-cols-[110px_1fr_64px_52px] items-center gap-3 px-5 py-2 bg-slate-50/70 border-b border-slate-100 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                    <span>Date</span><span>Pass rate</span><span className="text-right">Passed</span><span className="text-right">%</span>
+                  </div>
+                  <ul className="flex-1 max-h-80 overflow-y-auto divide-y divide-slate-100">
                     {analytics.pass_rate_over_time.map((d) => (
-                      <div key={d.date} className="p-2.5 rounded-xl bg-white border border-slate-200/80 shadow-2xs space-y-1.5">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="font-semibold text-slate-700">{d.date}</span>
-                          <span className="font-bold text-emerald-600">{d.pass_rate}% <span className="font-normal text-slate-400">({d.passed}/{d.total} passed)</span></span>
+                      <li key={d.date} className="grid grid-cols-[110px_1fr_64px_52px] items-center gap-3 px-5 py-3 hover:bg-slate-50/60 transition-colors">
+                        <span className="text-xs font-semibold text-slate-800 tabular-nums">{d.date}</span>
+                        <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                          <div className="h-full bg-[#7fb89a] rounded-full transition-all duration-500" style={{ width: `${d.pass_rate}%` }} />
                         </div>
-                        <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                          <div className="h-full bg-emerald-500 rounded-full transition-all duration-500" style={{ width: `${d.pass_rate}%` }} />
-                        </div>
-                      </div>
+                        <span className="text-xs text-slate-400 tabular-nums text-right">{d.passed}/{d.total}</span>
+                        <span className={`text-xs font-bold tabular-nums text-right ${d.pass_rate > 0 ? 'text-[#3f8a65]' : 'text-slate-400'}`}>{d.pass_rate}%</span>
+                      </li>
                     ))}
-                  </div>
-                </div>
+                  </ul>
+                </section>
               )}
 
               {/* Per-Question Miss Rate */}
               {analytics.per_question.length > 0 && (
-                <div className="p-4 rounded-2xl bg-slate-50/60 border border-slate-200/70 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">Per-Question Miss Rate</span>
-                    <span className="text-[11px] font-semibold text-slate-400">{analytics.per_question.length} questions</span>
+                <section className="bg-white rounded-2xl border border-slate-100 flex flex-col overflow-hidden shadow-[0_1px_2px_rgba(15,23,42,0.05),0_12px_32px_-14px_rgba(15,23,42,0.22)]">
+                  <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-slate-100">
+                    <div>
+                      <h3 className="text-sm font-semibold text-slate-900">Question miss rate</h3>
+                      <p className="text-xs text-slate-400 mt-0.5">{analytics.per_question.length} questions</p>
+                    </div>
+                    <span className="flex items-center gap-3 text-[11px] text-slate-500 flex-shrink-0">
+                      <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[#d98c96]" />Above 50%</span>
+                      <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[#d9b36c]" />21 to 50%</span>
+                      <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[#7fb89a]" />Up to 20%</span>
+                    </span>
                   </div>
-                  <div className="space-y-2 max-h-56 overflow-y-auto pr-1 scrollbar-thin">
-                    {analytics.per_question.map((q, idx) => (
-                      <div key={q.question_id || idx} className="p-2.5 rounded-xl bg-white border border-slate-200/80 shadow-2xs flex items-center justify-between gap-3">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-[10px] font-extrabold text-slate-400 bg-slate-100 px-1.5 py-0.2 rounded">Q{idx + 1}</span>
-                            <p className="text-xs font-medium text-slate-800 truncate" title={q.prompt}>
-                              {q.prompt || '(untitled question)'}
-                            </p>
-                          </div>
-                        </div>
-                        {q.miss_rate != null ? (
-                          <div className="flex items-center gap-2 flex-shrink-0">
-                            <div className="w-16 h-2 bg-slate-100 rounded-full overflow-hidden">
-                              <div
-                                className={`h-full rounded-full transition-all duration-500 ${
-                                  q.miss_rate > 50 ? 'bg-rose-500' : q.miss_rate > 20 ? 'bg-amber-500' : 'bg-emerald-500'
-                                }`}
-                                style={{ width: `${q.miss_rate}%` }}
-                              />
-                            </div>
-                            <span className={`text-[11px] font-bold px-2 py-0.5 rounded-md border ${
-                              q.miss_rate > 50
-                                ? 'bg-rose-50 text-rose-700 border-rose-200'
-                                : q.miss_rate > 20
-                                ? 'bg-amber-50 text-amber-700 border-amber-200'
-                                : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                            }`}>
-                              {q.miss_rate}% miss
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="text-[10px] font-semibold text-slate-400">No data</span>
-                        )}
-                      </div>
-                    ))}
+                  <div className="grid grid-cols-[40px_1fr_96px_48px] items-center gap-3 px-5 py-2 bg-slate-50/70 border-b border-slate-100 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                    <span>No.</span><span>Question</span><span>Miss rate</span><span className="text-right">%</span>
                   </div>
-                </div>
+                  <ul className="flex-1 max-h-80 overflow-y-auto divide-y divide-slate-100">
+                    {analytics.per_question.map((q, idx) => {
+                      // Three muted, distinct tones: high miss = dusty rose, medium = sand, low = sage.
+                      const hard = q.miss_rate > 50 ? 0 : q.miss_rate > 20 ? 1 : 2;
+                      const bar = ['bg-[#d98c96]', 'bg-[#d9b36c]', 'bg-[#7fb89a]'][hard];
+                      const text = ['text-[#b4505c]', 'text-[#9a7428]', 'text-[#3f8a65]'][hard];
+                      return (
+                        <li key={q.question_id || idx} className="grid grid-cols-[40px_1fr_96px_48px] items-center gap-3 px-5 py-3 hover:bg-slate-50/60 transition-colors">
+                          <span className="text-[11px] font-semibold text-slate-400 tabular-nums">Q{idx + 1}</span>
+                          <p className="text-xs font-medium text-slate-800 truncate" title={q.prompt}>{q.prompt || '(untitled question)'}</p>
+                          {q.miss_rate != null ? (
+                            <>
+                              <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                <div className={`h-full rounded-full transition-all duration-500 ${bar}`} style={{ width: `${q.miss_rate}%` }} />
+                              </div>
+                              <span className={`text-xs font-bold tabular-nums text-right ${text}`}>{q.miss_rate}%</span>
+                            </>
+                          ) : (
+                            <span className="col-span-2 text-[11px] font-medium text-slate-400 text-right">No data</span>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </section>
               )}
             </div>
           </div>
@@ -1103,7 +1241,7 @@ export default function ExamAttempts() {
           </Card>
         ) : (
           <div className="space-y-3">
-            {canDelete && (
+            {canSelect && (
               <div className="flex items-center justify-between gap-3 px-1">
                 <label className="inline-flex items-center gap-2 text-xs font-semibold text-slate-600 cursor-pointer select-none">
                   <input
@@ -1114,13 +1252,33 @@ export default function ExamAttempts() {
                   />
                   Select all
                 </label>
-                {selectedIds.size > 0 && (
+                <div className="flex items-center gap-2 flex-wrap justify-end">
+                {canManageCerts && passedAttempts.length > 0 && (
+                  <>
+                    <button type="button" onClick={() => setBulkUploadOpen(true)}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 shadow-2xs cursor-pointer">
+                      <HiOutlineUpload className="w-3.5 h-3.5" />
+                      Bulk upload certificates
+                    </button>
+                    <button type="button" onClick={handleBulkEmail} disabled={!!bulkSending}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white shadow-2xs cursor-pointer disabled:opacity-60">
+                      <HiOutlineMail className="w-3.5 h-3.5" />
+                      {bulkSending
+                        ? `Sending ${bulkSending.done}/${bulkSending.total}…`
+                        : selectedIds.size > 0
+                          ? `Email selected (${bulkEmailTargets().length})`
+                          : `Email all pending (${bulkEmailTargets().length})`}
+                    </button>
+                  </>
+                )}
+                {canDeleteResults && selectedIds.size > 0 && (
                   <button type="button" onClick={handleBulkDelete} disabled={deleting}
                     className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-2xs cursor-pointer disabled:opacity-60">
                     <HiOutlineTrash className="w-3.5 h-3.5" />
                     {deleting ? 'Deleting…' : `Delete selected (${selectedIds.size})`}
                   </button>
                 )}
+                </div>
               </div>
             )}
             {filteredAttempts.map((a) => {
@@ -1141,7 +1299,7 @@ export default function ExamAttempts() {
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 sm:p-5 gap-4">
                     {/* Left: Avatar & Candidate info */}
                     <div className="flex items-center gap-3.5 min-w-0 flex-1">
-                      {canDelete && (
+                      {canSelect && (
                         <input
                           type="checkbox"
                           className="w-4 h-4 rounded border-slate-300 cursor-pointer flex-shrink-0"
@@ -1156,9 +1314,10 @@ export default function ExamAttempts() {
                       <div className="min-w-0 space-y-1">
                         <div className="flex items-center gap-2 flex-wrap">
                           <p
-                            onClick={() => !isInProgress && navigate(`/airline/exams/attempts/${a.id}/result`)}
+                            onClick={() => a.participant_id && navigate(`/${isAdmin ? 'admin' : 'airline'}/participants/${a.participant_id}/performance`)}
+                            title={a.participant_id ? 'Open candidate dashboard' : undefined}
                             className={`text-sm sm:text-base font-extrabold text-slate-900 truncate ${
-                              !isInProgress ? 'hover:text-indigo-600 cursor-pointer' : ''
+                              a.participant_id ? 'hover:text-indigo-600 cursor-pointer' : ''
                             }`}
                           >
                             {a.participant_name || 'Anonymous Candidate'}
@@ -1248,7 +1407,7 @@ export default function ExamAttempts() {
                       )}
 
                       {/* Action Button */}
-                      {!isInProgress && (
+                      {canGrade && !isInProgress && (
                         <button
                           type="button"
                           onClick={() => setGradingId(a.id)}
@@ -1263,7 +1422,7 @@ export default function ExamAttempts() {
                         </button>
                       )}
 
-                      {canDelete && (
+                      {canDeleteResults && (
                         <button
                           type="button"
                           onClick={() => handleDelete(a)}
@@ -1275,6 +1434,56 @@ export default function ExamAttempts() {
                       )}
                     </div>
                   </div>
+
+                  {/* Certificate bar — passed candidates only */}
+                  {canManageCerts && a.passed === true && (
+                    <div className="flex flex-wrap items-center justify-between gap-3 px-4 sm:px-5 py-3 border-t border-slate-100 bg-slate-50/60">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <HiOutlineDocumentText className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                        {a.certificate ? (
+                          <div className="min-w-0">
+                            <button type="button" onClick={() => handleCertView(a)}
+                              className="block max-w-full truncate text-xs font-bold text-slate-800 hover:text-blue-600 hover:underline cursor-pointer text-left"
+                              title="Open the uploaded certificate">
+                              {a.certificate.original_name || 'Certificate'}
+                            </button>
+                            <p className="text-[11px] font-medium text-slate-400 truncate">
+                              {a.certificate.emailed_at
+                                ? `Emailed to ${a.certificate.emailed_to} on ${new Date(a.certificate.emailed_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`
+                                : 'Uploaded, not emailed yet'}
+                            </p>
+                          </div>
+                        ) : (
+                          <span className="text-xs font-medium text-slate-500">No certificate uploaded</span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        {a.certificate && (
+                          <button type="button" onClick={() => handleCertSend(a)}
+                            disabled={!a.participant_email || certBusy === `${a.id}:send`}
+                            title={a.participant_email ? `Email to ${a.participant_email}` : 'This candidate has no email address on file'}
+                            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white shadow-2xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
+                            <HiOutlineMail className="w-3.5 h-3.5" />
+                            {certBusy === `${a.id}:send` ? 'Sending…' : a.certificate.emailed_at ? 'Resend email' : 'Email certificate'}
+                          </button>
+                        )}
+                        <label className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 shadow-2xs cursor-pointer ${certBusy === `${a.id}:upload` ? 'opacity-60 pointer-events-none' : ''}`}>
+                          <HiOutlineUpload className="w-3.5 h-3.5" />
+                          {certBusy === `${a.id}:upload` ? 'Uploading…' : a.certificate ? 'Replace' : 'Upload certificate'}
+                          <input type="file" accept="application/pdf,image/png,image/jpeg" className="hidden"
+                            onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; handleCertUpload(a, f); }} />
+                        </label>
+                        {a.certificate && (
+                          <button type="button" onClick={() => handleCertRemove(a)} disabled={certBusy === `${a.id}:remove`}
+                            title="Remove the uploaded certificate"
+                            className="p-2 rounded-xl border border-slate-200 bg-white text-slate-400 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 transition-all cursor-pointer disabled:opacity-50">
+                            <HiOutlineTrash className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Violation Expand Drawer */}
                   {isViolationExpanded && hasViolations && (
@@ -1314,6 +1523,70 @@ export default function ExamAttempts() {
         )}
 
         {ConfirmDialog}
+
+        {/* Bulk certificate upload: choose many files, match each to a passed candidate */}
+        {bulkUploadOpen && (
+          <Dialog open onOpenChange={(open) => !open && closeBulkUpload()}>
+            <DialogContent className="max-w-2xl w-full max-h-[88vh] flex flex-col p-0 overflow-hidden rounded-2xl border border-slate-200/80 shadow-2xl bg-white">
+              <div className="px-6 pt-5 pb-4 border-b border-slate-100">
+                <DialogTitle className="text-base font-semibold text-slate-900">Bulk upload certificates</DialogTitle>
+                <p className="text-xs text-slate-500 mt-1">
+                  Choose all the certificate files at once. A file is matched to a candidate when its name contains the candidate's name
+                  (for example "john-smith.pdf"). Check the matches below and fix any that are wrong.
+                </p>
+              </div>
+
+              <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between gap-3 flex-wrap">
+                <label className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white shadow-2xs cursor-pointer">
+                  <HiOutlineUpload className="w-3.5 h-3.5" />
+                  {bulkFiles.length ? 'Choose different files' : 'Choose files'}
+                  <input type="file" multiple accept="application/pdf,image/png,image/jpeg" className="hidden"
+                    onChange={(e) => { pickBulkFiles(e.target.files || []); e.target.value = ''; }} />
+                </label>
+                <span className="text-xs text-slate-500">
+                  {bulkFiles.length
+                    ? `${bulkFiles.length} file${bulkFiles.length === 1 ? '' : 's'} chosen, ${Object.values(bulkMap).filter((v) => v !== '' && v !== undefined).length} matched`
+                    : 'PDF, PNG or JPG, up to 10 MB each'}
+                </span>
+              </div>
+
+              <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
+                {passedAttempts.map((a) => (
+                  <div key={a.id} className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_260px] items-center gap-2 sm:gap-4 px-6 py-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-slate-900 truncate">{a.participant_name || 'Candidate'} <span className="text-xs font-medium text-slate-400">· Attempt #{a.attempt_number}</span></p>
+                      <p className="text-[11px] text-slate-400 truncate">
+                        {a.certificate ? `Already has: ${a.certificate.original_name} (will be replaced)` : 'No certificate yet'}
+                      </p>
+                    </div>
+                    <select
+                      value={bulkMap[a.id] ?? ''}
+                      disabled={!bulkFiles.length || !!bulkUploading}
+                      onChange={(e) => setBulkMap((prev) => ({ ...prev, [a.id]: e.target.value === '' ? '' : Number(e.target.value) }))}
+                      className="w-full h-9 px-2.5 rounded-xl border border-slate-200 bg-white text-xs font-medium text-slate-700 disabled:bg-slate-50 disabled:text-slate-400"
+                    >
+                      <option value="">No file</option>
+                      {bulkFiles.map((f, i) => <option key={i} value={i}>{f.name}</option>)}
+                    </select>
+                  </div>
+                ))}
+              </div>
+
+              <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-end gap-2">
+                <Button variant="outline" size="sm" onClick={closeBulkUpload} disabled={!!bulkUploading} className="rounded-xl px-4 text-xs font-semibold">
+                  Cancel
+                </Button>
+                <Button size="sm" onClick={handleBulkUpload}
+                  disabled={!!bulkUploading || !Object.values(bulkMap).some((v) => v !== '' && v !== undefined)}
+                  className="rounded-xl px-5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs">
+                  {bulkUploading
+                    ? `Uploading ${bulkUploading.done}/${bulkUploading.total}…`
+                    : `Upload ${Object.values(bulkMap).filter((v) => v !== '' && v !== undefined).length} certificate(s)`}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
         {gradingId && (
           <GradeModal
             attemptId={gradingId}

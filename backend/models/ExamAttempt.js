@@ -16,6 +16,9 @@ const answerSchema = new mongoose.Schema(
     points_awarded:        { type: Number, default: null },
     needs_manual_grading:  { type: Boolean, default: false },
     feedback:              { type: String, default: '' },
+    // Set when the candidate pressed "Check answer" (exams with instant
+    // feedback): the response is final and can no longer be changed.
+    locked:                { type: Boolean, default: false },
   },
   { _id: false }
 );
@@ -62,6 +65,19 @@ const examAttemptSchema = new mongoose.Schema(
     ],
     violation_count: { type: Number, default: 0 },
     auto_submitted:  { type: Boolean, default: false },
+
+    // Certificate the airline uploads for this candidate once they have passed
+    // (its own document — nothing is generated). Stored privately in R2 and
+    // emailed to the candidate on request.
+    certificate: {
+      r2_key:        { type: String, default: null },
+      original_name: { type: String, default: '' },
+      content_type:  { type: String, default: '' },
+      size:          { type: Number, default: 0 },
+      uploaded_at:   { type: Date, default: null },
+      emailed_at:    { type: Date, default: null },
+      emailed_to:    { type: String, default: '' },
+    },
   },
   { timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } }
 );
@@ -70,6 +86,9 @@ examAttemptSchema.methods.toJSON = function () {
   const obj = this.toObject();
   obj._id = String(obj._id);
   obj.id  = obj._id;
+  // Never expose the private storage key; no upload → null.
+  if (obj.certificate && obj.certificate.r2_key) delete obj.certificate.r2_key;
+  else obj.certificate = null;
   return obj;
 };
 

@@ -864,9 +864,10 @@ export default function Participants() {
       const params = {};
       if (search) params.search = search;
       if (filterType) params.training_type = filterType;
+      // Attendance needs its own permission — without it the list still loads.
       const [recRes, sheetRes] = await Promise.all([
         getParticipants(params),
-        listAttendanceSheets(),
+        listAttendanceSheets().catch(() => ({ data: [] })),
       ]);
 
       const sorted = recRes.data.sort((a, b) => {

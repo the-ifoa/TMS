@@ -1,12 +1,14 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Clock, CheckCircle2, Building2, GraduationCap, Users2, ShieldCheck, FileText, Mail, Settings2 } from 'lucide-react';
+import { Clock, CheckCircle2, Building2, GraduationCap, Users2, ShieldCheck, FileText, Mail, Settings2, KeyRound, ClipboardCheck } from 'lucide-react';
 import LogoAvatar from '../components/LogoAvatar';
 import AirlineSettingsDialog from '../components/AirlineSettingsDialog';
 import {
   HiOutlineUsers,
   HiOutlineChevronDown,
+  HiOutlineArrowsExpand,
   HiOutlineChevronUp,
   HiOutlinePencil,
   HiOutlineTrash,
@@ -66,6 +68,55 @@ const TRAINING_LABELS = {
 };
 
 const TRAINING_TYPES = Object.entries(TRAINING_LABELS).map(([v, l]) => ({ value: v, label: `${v} - ${l}` }));
+
+// ── Return-to-candidate (Edit → Save / Cancel → back here) ───────────────────
+// Clicking a candidate's Edit records which row and view the admin was on, so
+// coming back reopens that airline's list scrolled to the same candidate
+// instead of the collapsed airline list.
+const RETURN_KEY = 'airlines_return';
+const VIEW_KEY   = 'airlines_view';
+const RETURN_TTL = 30 * 60 * 1000;
+
+function rememberReturn(pid, aKey) {
+  try { sessionStorage.setItem(RETURN_KEY, JSON.stringify({ pid: String(pid), aKey, at: Date.now() })); } catch { /* ignore */ }
+}
+
+// { pid, aKey, view } when the admin is coming back from an edit, else null.
+function readReturn() {
+  try {
+    const ret = JSON.parse(sessionStorage.getItem(RETURN_KEY) || 'null');
+    if (!ret || Date.now() - ret.at > RETURN_TTL) return null;
+    return { ...ret, view: JSON.parse(sessionStorage.getItem(VIEW_KEY) || '{}') };
+  } catch { return null; }
+}
+
+// Order of candidates inside each airline card.
+const CANDIDATE_SORTS = {
+  training_desc: 'Training: newest',
+  training_asc:  'Training: oldest',
+  added_desc:    'Added: newest',
+  added_asc:     'Added: oldest',
+  name_asc:      'Name: A → Z',
+};
+
+function candidateComparator(key) {
+  const time = (v) => { const t = v ? new Date(v).getTime() : NaN; return Number.isNaN(t) ? null : t; };
+  // Undated rows always go last, whichever direction.
+  const byDate = (get, dir) => (a, b) => {
+    const x = get(a), y = get(b);
+    if (x === null || y === null) return x === y ? 0 : x === null ? 1 : -1;
+    return (x - y) * dir;
+  };
+  const added = (p) => time(p.created_at);
+  const training = (p) => time(p.training_date);
+  switch (key) {
+    case 'training_asc':  return (a, b) => byDate(training, 1)(a, b)  || byDate(added, 1)(a, b);
+    case 'added_desc':    return byDate(added, -1);
+    case 'added_asc':     return byDate(added, 1);
+    case 'name_asc':      return (a, b) => (a.participant_name || '').localeCompare(b.participant_name || '');
+    default:              return (a, b) => byDate(training, -1)(a, b) || byDate(added, -1)(a, b);
+  }
+}
 
 function badgeStyle() {
   return { background: '#eff6ff', color: '#0000ff', border: '1px solid #bfdbfe' };
@@ -421,6 +472,10 @@ function CounterResetModal({ open, onClose, counters, ALL_TYPES, resetting, onRe
 
 // ─── Mobile participant card (replaces table row on small screens) ─────────────
 function ParticipantCard({ p, checked, onCheck, onPreview, onDownload, onEdit, onDelete, downloadingId, certEdits, onStartEdit, onCancelEdit, onSaveEdit, setCertEdits, ndgScores, setNdgScores, onNdgScoreSave, fdrHours, setFdrHours, onFdrHoursSave, onFdrHoursToggle, onRemind }) {
+  // Sub-admins only see the actions their powers allow.
+  const { can } = useAuth();
+  const canEditP = can('participants.edit');
+  const canDeleteP = can('participants.delete');
   const pid      = p.id || p._id;
   const fullName = p.participant_name || `${p.first_name || ''} ${p.last_name || ''}`.trim();
   const isCk     = checked.has(pid);
@@ -590,7 +645,7 @@ function ParticipantCard({ p, checked, onCheck, onPreview, onDownload, onEdit, o
               PDF
             </button>
             <ValidityBadge participant={p} showDate={false} className="self-center" />
-            {certExpiry(p)?.expiresOn && (
+            {canEditP && certExpiry(p)?.expiresOn && (
               <button onClick={() => onRemind(p)} title="Email the airline an expiry reminder"
                 className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-amber-200 text-xs font-medium text-amber-700 bg-amber-50 hover:bg-amber-100">
                 <HiOutlineMail className="w-3.5 h-3.5" /> Remind
@@ -598,14 +653,14 @@ function ParticipantCard({ p, checked, onCheck, onPreview, onDownload, onEdit, o
             )}
           </>
         )}
-        <Link to={`/admin/participants/edit/${pid}`}
+        {canEditP && (<Link to={`/admin/participants/edit/${pid}`} onClick={() => onEdit(p)}
           className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-primary-200 text-xs font-medium text-primary-600 hover:bg-primary-100">
           <HiOutlinePencil className="w-3.5 h-3.5" /> Edit
-        </Link>
-        <button onClick={() => onDelete(pid, fullName)}
+        </Link>)}
+        {canDeleteP && (<button onClick={() => onDelete(pid, fullName)}
           className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-red-200 text-xs font-medium text-red-500 hover:bg-red-50">
           <HiOutlineTrash className="w-3.5 h-3.5" /> Delete
-        </button>
+        </button>)}
       </div>
     </div>
   );
@@ -662,6 +717,11 @@ const AirlineCardGroup = React.memo(function AirlineCardGroup({
   onRemind,
 }) {
   const isFilterActive = Boolean(filterKey && filterKey !== '__');
+  // Sub-admins only see the actions their powers allow.
+  const { can } = useAuth();
+  const canEditP = can('participants.edit');
+  const canDeleteP = can('participants.delete');
+  const canManageAirlines = can('airlines.manage');
   const [open, setOpen] = useState(() => initialOpen);
 
   const prevFilterKey = useRef(filterKey);
@@ -673,6 +733,15 @@ const AirlineCardGroup = React.memo(function AirlineCardGroup({
   }, [filterKey]);
 
   const isCardOpen = open;
+
+  // Every card opens enlarged (nearly the full window height); Shrink drops
+  // this one card back to the compact box until the page is reloaded.
+  const [tall, setTall] = useState(true);
+  const toggleTall = () => setTall(prev => {
+    const next = !prev;
+    if (next) setTimeout(() => airlineCardRefs.current?.[aKey]?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+    return next;
+  });
 
   const INITIAL_LIMIT = 15;
   const [displayLimit, setDisplayLimit] = useState(() => (initialOpen ? participants.length : INITIAL_LIMIT));
@@ -742,10 +811,18 @@ const AirlineCardGroup = React.memo(function AirlineCardGroup({
 
         {/* Airline action buttons */}
         <div className="flex items-center gap-2 flex-shrink-0">
-          {!airline.is_unassigned && <button type="button" onClick={() => openEditAirline(airline)}
+          {canManageAirlines && !airline.is_unassigned && <button type="button" onClick={() => openEditAirline(airline)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 hover:border-slate-300 transition-all shadow-2xs">
             <HiOutlinePencil className="w-3.5 h-3.5 text-slate-500" /> Edit
           </button>}
+          {isCardOpen && participants.length > 0 && (
+            <button type="button" onClick={toggleTall} title={tall ? 'Shrink the list' : 'Enlarge the list'}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all shadow-2xs ${
+                tall ? 'bg-slate-900 text-white border-slate-900' : 'border-slate-200 text-slate-700 bg-white hover:bg-slate-50 hover:border-slate-300'
+              }`}>
+              <HiOutlineArrowsExpand className="w-3.5 h-3.5" /> {tall ? 'Shrink' : 'Enlarge'}
+            </button>
+          )}
           <button type="button" onClick={toggle} className="p-1.5 rounded-xl hover:bg-slate-100 transition-all">
             <HiOutlineChevronDown className={`w-5 h-5 text-slate-400 transition-transform duration-300 ease-out ${isCardOpen ? 'rotate-180 text-slate-800' : 'rotate-0'}`} />
           </button>
@@ -763,7 +840,7 @@ const AirlineCardGroup = React.memo(function AirlineCardGroup({
             className="overflow-hidden bg-white"
           >
             <div
-              className="border-t border-slate-100 max-h-[460px] overflow-y-auto overflow-x-hidden"
+              className={`border-t border-slate-100 overflow-y-auto overflow-x-hidden ${tall ? 'max-h-[calc(100vh-6rem)]' : 'max-h-[460px]'}`}
               onWheel={e => {
                 const el = e.currentTarget;
                 const atTop    = el.scrollTop === 0;
@@ -778,7 +855,7 @@ const AirlineCardGroup = React.memo(function AirlineCardGroup({
                 {visibleParticipants.map(p => (
                   <div key={p.id || p._id} ref={el => { if (participantRowRefs.current) participantRowRefs.current[String(p.id || p._id)] = el; }}>
                     <ParticipantCard p={p} checked={checked} onCheck={toggleOne}
-                      onPreview={setRowPreview} onDownload={handleDownloadIssued} onEdit={() => {}}
+                      onPreview={setRowPreview} onDownload={handleDownloadIssued} onEdit={(pp) => rememberReturn(pp.id || pp._id, aKey)}
                       onDelete={handleDelete} downloadingId={downloadingId}
                       certEdits={certEdits} onStartEdit={startCertEdit}
                       onCancelEdit={cancelCertEdit} onSaveEdit={saveCertEdit}
@@ -1000,7 +1077,7 @@ const AirlineCardGroup = React.memo(function AirlineCardGroup({
                                     {downloadingId === pid ? <Spin cls="w-3.5 h-3.5 border-2 border-emerald-300 border-t-emerald-600" /> : <HiOutlineDocumentDownload className="w-3.5 h-3.5" />}
                                     PDF
                                   </button>
-                                  {certExpiry(p)?.expiresOn && (
+                                  {canEditP && certExpiry(p)?.expiresOn && (
                                     <button onClick={() => onRemind(p)} title="Email the airline an expiry reminder"
                                       className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-amber-200 text-xs font-medium text-amber-700 bg-amber-50 hover:bg-amber-100">
                                       <HiOutlineMail className="w-3.5 h-3.5" /> Remind
@@ -1021,14 +1098,14 @@ const AirlineCardGroup = React.memo(function AirlineCardGroup({
                                   </button>
                                 </>
                               )}
-                              <Link to={`/admin/participants/edit/${pid}`}
+                              {canEditP && (<Link to={`/admin/participants/edit/${pid}`} onClick={() => rememberReturn(pid, aKey)}
                                 className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-primary-200 text-xs font-medium text-primary-600 hover:bg-primary-100">
                                 <HiOutlinePencil className="w-3.5 h-3.5" /> Edit
-                              </Link>
-                              <button onClick={() => handleDelete(pid, fullName)}
+                              </Link>)}
+                              {canDeleteP && (<button onClick={() => handleDelete(pid, fullName)}
                                 className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-red-200 text-xs font-medium text-red-500 hover:bg-red-50">
                                 <HiOutlineTrash className="w-3.5 h-3.5" /> Delete
-                              </button>
+                              </button>)}
                             </div>
                           </td>
                         </tr>
@@ -1054,6 +1131,12 @@ const AirlineCardGroup = React.memo(function AirlineCardGroup({
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function Airlines() {
   const [searchParams] = useSearchParams();
+  // Sub-admins only see the actions their powers allow (super admin: all).
+  const { can } = useAuth();
+  const canManageAirlines = can('airlines.manage');
+  const canGenCerts = can('certificates.generate');
+  const canEditP = can('participants.edit');
+  const canDeleteP = can('participants.delete');
   const focusId = searchParams.get('focus') || null;
   const pendingCertsMode = searchParams.get('pendingCerts') === '1';
   const airlineCardRefs    = useRef({});
@@ -1061,16 +1144,20 @@ export default function Airlines() {
 
   const [data, setData]             = useState([]);
   const [loading, setLoading]       = useState(true);
-  const [search, setSearch]         = useState('');
+  // Set when the admin is coming back from editing a candidate — restores the
+  // view they left (see rememberReturn).
+  const [returnTo] = useState(readReturn);
+  const [search, setSearch]         = useState(() => returnTo?.view?.search || '');
   // Multi-select: empty array = no filter (all types). Any entries = OR match.
-  const [filterType, setFilterType] = useState([]);
+  const [filterType, setFilterType] = useState(() => returnTo?.view?.filterType || []);
   const toggleFilterType = v => setFilterType(prev =>
     prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]);
   // Persist which airline cards are open across navigation (e.g. Edit → Back)
   // so the accordion doesn't collapse when the page remounts.
   const [expanded, setExpanded]     = useState(() => {
-    try { return JSON.parse(sessionStorage.getItem('airlines_expanded') || '{}'); }
-    catch { return {}; }
+    let stored = {};
+    try { stored = JSON.parse(sessionStorage.getItem('airlines_expanded') || '{}'); } catch { /* ignore */ }
+    return returnTo?.aKey ? { ...stored, [returnTo.aKey]: true } : stored;
   });
   const [openedCards, setOpenedCards] = useState(() => {
     try { return JSON.parse(sessionStorage.getItem('airlines_expanded') || '{}'); }
@@ -1101,8 +1188,20 @@ export default function Airlines() {
   const [counterModal, setCounterModal] = useState(false);
   const [counters, setCounters]     = useState([]);
   const [resetting, setResetting]   = useState(null);
-  const [filterCertStatus, setFilterCertStatus] = useState(''); // '' | 'pending' | 'generated'
-  const [sortKey, setSortKey] = useState('name_asc');
+  const [filterCertStatus, setFilterCertStatus] = useState(() => returnTo?.view?.filterCertStatus || ''); // '' | 'pending' | 'generated'
+  const [sortKey, setSortKey] = useState(() => returnTo?.view?.sortKey || 'name_asc');
+  // Order of candidates inside each card — by training date unless changed.
+  const [candidateSort, setCandidateSort] = useState(() => {
+    try { const v = localStorage.getItem('airlines_candidate_sort'); return CANDIDATE_SORTS[v] ? v : 'training_desc'; }
+    catch { return 'training_desc'; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem('airlines_candidate_sort', candidateSort); } catch { /* ignore */ }
+  }, [candidateSort]);
+  // Remember the current view so an Edit → back round trip can restore it.
+  useEffect(() => {
+    try { sessionStorage.setItem(VIEW_KEY, JSON.stringify({ search, filterType, filterCertStatus, sortKey })); } catch { /* ignore */ }
+  }, [search, filterType, filterCertStatus, sortKey]);
   const [showEmptyAirlines, setShowEmptyAirlines] = useState(false); // also list airlines with no submissions
   const [attendanceModal, setAttendanceModal]   = useState(null);    // sheet object being marked
   const [addingAttendance, setAddingAttendance] = useState(false);
@@ -1117,10 +1216,10 @@ export default function Airlines() {
   const [reminderFor, setReminderFor] = useState(null); // participants to email an expiry reminder about
   const openReminder = useCallback(p => setReminderFor([p]), []);
   // Admin edit-airline modal: { open, id, airlineName, address }
-  const [editAirline, setEditAirline] = useState({ open: false, id: null, airlineName: '', address: '', can_author_exams: false, can_create_subusers: false, can_upload_internal_certs: false, email_use_airline_logo: false });
+  const [editAirline, setEditAirline] = useState({ open: false, id: null, airlineName: '', address: '', can_author_exams: false, can_create_subusers: false, can_upload_internal_certs: false, can_manage_internal_assessments: false, email_use_airline_logo: false, can_have_secondary_logins: false });
   const [savingAirline, setSavingAirline] = useState(false);
   // Admin create-airline modal (registers an airline on its behalf — no OTP)
-  const EMPTY_CREATE_AIRLINE = { open: false, name: '', airlineName: '', email: '', password: '', confirm: '', address: '', can_author_exams: false, can_create_subusers: false, can_upload_internal_certs: false, email_use_airline_logo: false };
+  const EMPTY_CREATE_AIRLINE = { open: false, name: '', airlineName: '', email: '', password: '', confirm: '', address: '', can_author_exams: false, can_create_subusers: false, can_upload_internal_certs: false, can_manage_internal_assessments: false, email_use_airline_logo: false, can_have_secondary_logins: false };
   const [createAirline, setCreateAirline] = useState(EMPTY_CREATE_AIRLINE);
   const [creatingAirline, setCreatingAirline] = useState(false);
   const [createLogoFile, setCreateLogoFile] = useState(null);
@@ -1183,6 +1282,22 @@ export default function Airlines() {
   useEffect(() => {
     try { sessionStorage.setItem('airlines_expanded', JSON.stringify(expanded)); } catch { /* ignore */ }
   }, [expanded]);
+
+  // Back from editing a candidate: the card is already open (see `expanded`),
+  // so just bring that candidate's row back into view.
+  const hasProcessedReturn = useRef(false);
+  useEffect(() => {
+    if (!returnTo || focusId || loading || data.length === 0 || hasProcessedReturn.current) return;
+    hasProcessedReturn.current = true;
+    try { sessionStorage.removeItem(RETURN_KEY); } catch { /* ignore */ }
+    setTimeout(() => {
+      const el = participantRowRefs.current[returnTo.pid];
+      if (!el) return;
+      el.scrollIntoView({ block: 'center' });
+      el.classList.add('notif-highlight');
+      el.addEventListener('animationend', () => el.classList.remove('notif-highlight'), { once: true });
+    }, 400);
+  }, [returnTo, focusId, loading, data]);
 
   const hasProcessedFocus = useRef(false);
   useEffect(() => {
@@ -1579,10 +1694,12 @@ export default function Airlines() {
       can_author_exams: !!airline.can_author_exams,
       can_create_subusers: !!airline.can_create_subusers,
       can_upload_internal_certs: !!airline.can_upload_internal_certs,
+      can_manage_internal_assessments: !!airline.can_manage_internal_assessments,
       email_use_airline_logo: !!airline.email_use_airline_logo,
+      can_have_secondary_logins: !!airline.can_have_secondary_logins,
     });
   };
-  const closeEditAirline = () => setEditAirline({ open: false, id: null, airlineName: '', address: '', can_author_exams: false, can_create_subusers: false, can_upload_internal_certs: false, email_use_airline_logo: false });
+  const closeEditAirline = () => setEditAirline({ open: false, id: null, airlineName: '', address: '', can_author_exams: false, can_create_subusers: false, can_upload_internal_certs: false, can_manage_internal_assessments: false, email_use_airline_logo: false, can_have_secondary_logins: false });
   const saveEditAirline = async () => {
     const name = editAirline.airlineName.trim();
     if (!name) { toast.error('Airline name cannot be empty'); return; }
@@ -1594,13 +1711,15 @@ export default function Airlines() {
         can_author_exams: editAirline.can_author_exams,
         can_create_subusers: editAirline.can_create_subusers,
         can_upload_internal_certs: editAirline.can_upload_internal_certs,
+        can_manage_internal_assessments: editAirline.can_manage_internal_assessments,
         email_use_airline_logo: editAirline.email_use_airline_logo,
+        can_have_secondary_logins: editAirline.can_have_secondary_logins,
       });
       const updated = res.data.airline;
       // Patch in-memory data so the change shows immediately without a full reload
       setData(prev => prev.map(d =>
         airlineKey(d.airline) === String(editAirline.id)
-          ? { ...d, airline: { ...d.airline, airlineName: updated.airlineName, address: updated.address, can_author_exams: updated.can_author_exams, can_create_subusers: updated.can_create_subusers, can_upload_internal_certs: updated.can_upload_internal_certs, email_use_airline_logo: updated.email_use_airline_logo } }
+          ? { ...d, airline: { ...d.airline, airlineName: updated.airlineName, address: updated.address, can_author_exams: updated.can_author_exams, can_create_subusers: updated.can_create_subusers, can_upload_internal_certs: updated.can_upload_internal_certs, can_manage_internal_assessments: updated.can_manage_internal_assessments, email_use_airline_logo: updated.email_use_airline_logo, can_have_secondary_logins: updated.can_have_secondary_logins } }
           : d
       ));
       toast.success('Airline updated');
@@ -1654,7 +1773,9 @@ export default function Airlines() {
         can_author_exams: createAirline.can_author_exams,
         can_create_subusers: createAirline.can_create_subusers,
         can_upload_internal_certs: createAirline.can_upload_internal_certs,
+        can_manage_internal_assessments: createAirline.can_manage_internal_assessments,
         email_use_airline_logo: createAirline.email_use_airline_logo,
+        can_have_secondary_logins: createAirline.can_have_secondary_logins,
       });
       toast.success(`Airline "${airlineName}" created`);
       closeCreateAirline();
@@ -1980,7 +2101,7 @@ export default function Airlines() {
             || (filterCertStatus === 'pending'   && !p.cert_released)
             || (filterCertStatus === 'generated' &&  p.cert_released);
           return nm && typeMatch && statusMatch;
-        }),
+        }).sort(candidateComparator(candidateSort)),
       };
     }).filter(({ airline, participants }) => {
       if (participants.length > 0) return true;
@@ -1998,7 +2119,7 @@ export default function Airlines() {
         default:           return 0;
       }
     });
-  }, [data, search, filterType, filterCertStatus, sortKey, showEmptyAirlines]);
+  }, [data, search, filterType, filterCertStatus, sortKey, showEmptyAirlines, candidateSort]);
 
   // ── Select-all — scoped to the visible (filtered) rows only ──────────────────
   // "Select all candidates" / "select all airlines" must touch exactly the rows
@@ -2165,6 +2286,15 @@ export default function Airlines() {
                         onChange={val => setEditAirline(prev => ({ ...prev, can_upload_internal_certs: val }))}
                       />
                       <PermissionToggleCard
+                        icon={ClipboardCheck}
+                        iconColor="text-teal-600"
+                        iconBg="bg-teal-50 border-teal-200/80"
+                        title="Allow this airline to run its own internal assessments"
+                        description="Adds an 'Internal Assessment' area where the airline creates assessments, enrols candidates and uploads a certificate per candidate. The airline can pass this power on to its departments."
+                        checked={editAirline.can_manage_internal_assessments}
+                        onChange={val => setEditAirline(prev => ({ ...prev, can_manage_internal_assessments: val }))}
+                      />
+                      <PermissionToggleCard
                         icon={Mail}
                         iconColor="text-sky-600"
                         iconBg="bg-sky-50 border-sky-200/80"
@@ -2172,6 +2302,15 @@ export default function Airlines() {
                         description="Exam invites, enrollment confirmations and expiry reminders sent for this airline or its departments carry the airline's logo (a department uses its own logo if it has one). Falls back to IFOA if no logo is uploaded."
                         checked={editAirline.email_use_airline_logo}
                         onChange={val => setEditAirline(prev => ({ ...prev, email_use_airline_logo: val }))}
+                      />
+                      <PermissionToggleCard
+                        icon={KeyRound}
+                        iconColor="text-amber-600"
+                        iconBg="bg-amber-50 border-amber-200/80"
+                        title="Allow this airline to add extra logins for the same account"
+                        description="Adds an 'Additional logins' section to the airline's Profile where it can create more email + password pairs that sign in to this same account (same data and exams — not a separate department)."
+                        checked={editAirline.can_have_secondary_logins}
+                        onChange={val => setEditAirline(prev => ({ ...prev, can_have_secondary_logins: val }))}
                       />
                     </div>
                   </div>
@@ -2353,6 +2492,15 @@ export default function Airlines() {
                         onChange={val => setCreateAirline(prev => ({ ...prev, can_upload_internal_certs: val }))}
                       />
                       <PermissionToggleCard
+                        icon={ClipboardCheck}
+                        iconColor="text-teal-600"
+                        iconBg="bg-teal-50 border-teal-200/80"
+                        title="Allow this airline to run its own internal assessments"
+                        description="Adds an 'Internal Assessment' area where the airline creates assessments, enrols candidates and uploads a certificate per candidate. The airline can pass this power on to its departments."
+                        checked={createAirline.can_manage_internal_assessments}
+                        onChange={val => setCreateAirline(prev => ({ ...prev, can_manage_internal_assessments: val }))}
+                      />
+                      <PermissionToggleCard
                         icon={Mail}
                         iconColor="text-sky-600"
                         iconBg="bg-sky-50 border-sky-200/80"
@@ -2360,6 +2508,15 @@ export default function Airlines() {
                         description="Exam invites, enrollment confirmations and expiry reminders sent for this airline or its departments carry the airline's logo (a department uses its own logo if it has one). Falls back to IFOA if no logo is uploaded."
                         checked={createAirline.email_use_airline_logo}
                         onChange={val => setCreateAirline(prev => ({ ...prev, email_use_airline_logo: val }))}
+                      />
+                      <PermissionToggleCard
+                        icon={KeyRound}
+                        iconColor="text-amber-600"
+                        iconBg="bg-amber-50 border-amber-200/80"
+                        title="Allow this airline to add extra logins for the same account"
+                        description="Adds an 'Additional logins' section to the airline's Profile where it can create more email + password pairs that sign in to this same account (same data and exams — not a separate department)."
+                        checked={createAirline.can_have_secondary_logins}
+                        onChange={val => setCreateAirline(prev => ({ ...prev, can_have_secondary_logins: val }))}
                       />
                     </div>
                   </div>
@@ -2506,20 +2663,20 @@ export default function Airlines() {
           <p className="text-xs text-primary-400 mt-0.5 hidden sm:block">View airline submissions, generate and manage certificates</p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
-          <button type="button" onClick={() => setSettingsOpen(true)} title="Manage settings for all airlines"
+          {canManageAirlines && (<button type="button" onClick={() => setSettingsOpen(true)} title="Manage settings for all airlines"
             className="btn-outline flex items-center justify-center gap-1.5 text-xs px-3 py-1.5 sm:px-4 sm:py-2 whitespace-nowrap">
             <Settings2 className="w-4 h-4" />
             <span className="hidden sm:inline">Settings</span>
-          </button>
-          <button type="button" onClick={openCreateAirline}
+          </button>)}
+          {canManageAirlines && (<button type="button" onClick={openCreateAirline}
             className="btn-outline flex items-center justify-center gap-1.5 text-xs px-3 py-1.5 sm:px-4 sm:py-2 whitespace-nowrap">
             <HiOutlinePlusCircle className="w-4 h-4" />
             <span>Create Airline</span>
-          </button>
-          <Link to="/admin/participants/add" className="btn-primary flex items-center justify-center gap-1.5 text-xs px-3 py-1.5 sm:px-4 sm:py-2 whitespace-nowrap">
+          </button>)}
+          {can('participants.create') && (<Link to="/admin/participants/add" className="btn-primary flex items-center justify-center gap-1.5 text-xs px-3 py-1.5 sm:px-4 sm:py-2 whitespace-nowrap">
             <HiOutlinePlusCircle className="w-4 h-4" />
             <span>Add</span>
-          </Link>
+          </Link>)}
         </div>
       </div>
 
@@ -2529,8 +2686,8 @@ export default function Airlines() {
       {/* ── Unified Compact Control & Filter Bar ── */}
       {(() => {
         const hasSelection = checked.size > 0 || checkedAirlines.size > 0;
-        const hasNdg = Object.values(ndgScores).some(e => e?.value);
-        const hasFdrHours = Object.values(fdrHours).some(e => e?.enabled && e?.value);
+        const hasNdg = canEditP && Object.values(ndgScores).some(e => e?.value);
+        const hasFdrHours = canEditP && Object.values(fdrHours).some(e => e?.enabled && e?.value);
 
         return (
           <div className="sticky top-0 z-20 bg-gray-50/95 backdrop-blur-md py-1.5 -mx-3.5 px-3.5 sm:-mx-6 sm:px-6 transition-all mb-3">
@@ -2567,7 +2724,7 @@ export default function Airlines() {
                 {/* Right: Quick Action Buttons (Outside when screen has space) + Actions Dropdown */}
                 <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0 ml-auto flex-wrap sm:flex-nowrap justify-end">
                   {/* 1. Generate Selected Certs (Visible on sm+ screens) */}
-                  {checked.size > 0 && (
+                  {canGenCerts && checked.size > 0 && (
                     <button
                       onClick={handleGenerateSelected}
                       disabled={generating}
@@ -2579,7 +2736,7 @@ export default function Airlines() {
                   )}
 
                   {/* 2. Revoke Selected Certs (Visible on md+ screens) */}
-                  {checked.size > 0 && (
+                  {canGenCerts && checked.size > 0 && (
                     <button
                       onClick={handleRevokeSelected}
                       disabled={revoking}
@@ -2591,7 +2748,7 @@ export default function Airlines() {
                   )}
 
                   {/* 3. Generate DHL Extra Cert (Visible on lg+ screens) */}
-                  {allParticipants.some(p => checked.has(p.id || p._id) && eligibleForDhlExtra(p) && !p.dhl_cert_released) && (
+                  {canGenCerts && allParticipants.some(p => checked.has(p.id || p._id) && eligibleForDhlExtra(p) && !p.dhl_cert_released) && (
                     <button
                       onClick={handleGenerateDhlSelected}
                       disabled={generatingDhl}
@@ -2603,7 +2760,7 @@ export default function Airlines() {
                   )}
 
                   {/* 4. Revoke DHL Extra Cert (Visible on lg+ screens) */}
-                  {allParticipants.some(p => checked.has(p.id || p._id) && p.dhl_cert_released) && (
+                  {canGenCerts && allParticipants.some(p => checked.has(p.id || p._id) && p.dhl_cert_released) && (
                     <button
                       onClick={handleRevokeDhlSelected}
                       disabled={revokingDhlBulk}
@@ -2655,24 +2812,24 @@ export default function Airlines() {
                   <DropdownMenuContent align="end" className="w-56">
                     <DropdownMenuLabel>Batch Actions</DropdownMenuLabel>
                     
-                    <DropdownMenuItem className="sm:hidden" onClick={handleGenerateSelected} disabled={checked.size === 0 || generating}>
+                    {canGenCerts && (<DropdownMenuItem className="sm:hidden" onClick={handleGenerateSelected} disabled={checked.size === 0 || generating}>
                       <HiOutlineDocumentDownload className="w-4 h-4 text-slate-500" />
                       <span>{generating ? 'Generating…' : checked.size > 0 ? `Generate (${checked.size}) Certs` : 'Generate Selected'}</span>
-                    </DropdownMenuItem>
+                    </DropdownMenuItem>)}
 
-                    <DropdownMenuItem className="md:hidden" onClick={handleRevokeSelected} disabled={checked.size === 0 || revoking}>
+                    {canGenCerts && (<DropdownMenuItem className="md:hidden" onClick={handleRevokeSelected} disabled={checked.size === 0 || revoking}>
                       <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>
                       <span>{revoking ? 'Revoking…' : 'Revoke Certificates'}</span>
-                    </DropdownMenuItem>
+                    </DropdownMenuItem>)}
 
-                    {allParticipants.some(p => checked.has(p.id || p._id) && eligibleForDhlExtra(p) && !p.dhl_cert_released) && (
+                    {canGenCerts && allParticipants.some(p => checked.has(p.id || p._id) && eligibleForDhlExtra(p) && !p.dhl_cert_released) && (
                       <DropdownMenuItem className="lg:hidden" onClick={handleGenerateDhlSelected} disabled={generatingDhl}>
                         <HiOutlineDocumentDownload className="w-4 h-4 text-violet-600" />
                         <span>{generatingDhl ? 'Generating…' : 'Generate DHL Extra Cert'}</span>
                       </DropdownMenuItem>
                     )}
 
-                    {allParticipants.some(p => checked.has(p.id || p._id) && p.dhl_cert_released) && (
+                    {canGenCerts && allParticipants.some(p => checked.has(p.id || p._id) && p.dhl_cert_released) && (
                       <DropdownMenuItem className="lg:hidden" onClick={handleRevokeDhlSelected} disabled={revokingDhlBulk}>
                         <HiOutlineX className="w-4 h-4 text-violet-600" />
                         <span>{revokingDhlBulk ? 'Revoking…' : 'Revoke DHL Extra Cert'}</span>
@@ -2695,28 +2852,28 @@ export default function Airlines() {
 
                     <DropdownMenuSeparator />
 
-                    {allParticipants.some(p => checked.has(p.id || p._id) && certExpiry(p)?.expiresOn) && (
+                    {canEditP && allParticipants.some(p => checked.has(p.id || p._id) && certExpiry(p)?.expiresOn) && (
                       <DropdownMenuItem onClick={() => setReminderFor(allParticipants.filter(p => checked.has(p.id || p._id)))}>
                         <HiOutlineMail className="w-4 h-4 text-amber-600" />
                         <span>Send Expiry Reminder ({checked.size})</span>
                       </DropdownMenuItem>
                     )}
 
-                    {checked.size > 0 && (
+                    {can('attendance.manage') && checked.size > 0 && (
                       <DropdownMenuItem onClick={handleAddAttendance} disabled={addingAttendance}>
                         <HiOutlineClipboardCheck className="w-4 h-4 text-emerald-600" />
                         <span>{addingAttendance ? 'Preparing…' : `Add Attendance (${checked.size})`}</span>
                       </DropdownMenuItem>
                     )}
 
-                    {checked.size > 0 && (
+                    {canDeleteP && checked.size > 0 && (
                       <DropdownMenuItem onClick={handleDeleteSelected} disabled={deletingSelected} danger>
                         <HiOutlineTrash className="w-4 h-4" />
                         <span>{deletingSelected ? 'Deleting…' : `Delete (${checked.size}) Candidates`}</span>
                       </DropdownMenuItem>
                     )}
 
-                    {checkedAirlines.size > 0 && (
+                    {canManageAirlines && checkedAirlines.size > 0 && (
                       <DropdownMenuItem onClick={handleDeleteSelectedAirlines} disabled={deletingAirlines} danger>
                         <HiOutlineTrash className="w-4 h-4" />
                         <span>{deletingAirlines ? 'Deleting…' : `Delete (${checkedAirlines.size}) Airlines`}</span>
@@ -2725,12 +2882,12 @@ export default function Airlines() {
 
                     <DropdownMenuSeparator />
 
-                    <DropdownMenuItem onClick={openCounterModal}>
+                    {canGenCerts && (<DropdownMenuItem onClick={openCounterModal}>
                       <svg className="w-4 h-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                       </svg>
                       <span>Reset Cert Counters</span>
-                    </DropdownMenuItem>
+                    </DropdownMenuItem>)}
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
@@ -2819,6 +2976,21 @@ export default function Airlines() {
                           <SelectLabel>Participants</SelectLabel>
                           <SelectItem value="count_desc">Most Participants</SelectItem>
                           <SelectItem value="count_asc">Fewest Participants</SelectItem>
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* 3b. Candidate order inside each airline */}
+                  <div className="w-full sm:w-[140px]" title="Order of candidates inside each airline">
+                    <Select value={candidateSort} onValueChange={setCandidateSort}>
+                      <SelectTrigger className="px-2 text-xs py-1 h-7 font-semibold text-slate-700 rounded-lg bg-white border border-slate-200 w-full"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          <SelectLabel>Candidates</SelectLabel>
+                          {Object.entries(CANDIDATE_SORTS).map(([v, label]) => (
+                            <SelectItem key={v} value={v}>{label}</SelectItem>
+                          ))}
                         </SelectGroup>
                       </SelectContent>
                     </Select>

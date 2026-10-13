@@ -39,11 +39,33 @@ function stripTempIds(value) {
   return value;
 }
 
+// Returns a message for the first incomplete question, or null when all are fine.
+const CHOICE_TYPES = new Set(['mcq', 'true_false', 'select_list', 'multi_response']);
+function findQuestionProblem(questions) {
+  for (let i = 0; i < questions.length; i += 1) {
+    const q = questions[i];
+    const label = `Question ${i + 1}${q.section ? ` (${q.section})` : ''}`;
+    if (!String(q.prompt || '').trim() && !q.image_url && !(q.images || []).length) {
+      return `${label}: enter the question text.`;
+    }
+    if (CHOICE_TYPES.has(q.type)) {
+      const options = q.options || [];
+      const filled = options.filter((o) => String(o.text || '').trim() || o.image_url);
+      if (filled.length < 2) return `${label}: add at least two answer options with text.`;
+      if (options.some((o) => !String(o.text || '').trim() && !o.image_url)) {
+        return `${label}: fill in or remove the empty answer options.`;
+      }
+      if (!options.some((o) => o.is_correct)) return `${label}: mark the correct answer.`;
+    }
+  }
+  return null;
+}
+
 const emptyExam = () => ({
   title: '', description: '', duration_minutes: 30, pass_percentage: 75,
   max_attempts: 1, shuffle_questions: false, shuffle_options: false,
   lockdown_enabled: true, max_violations: 4, questions: [], sections: [],
-  show_review: false, issue_certificate: false,
+  show_review: false, instant_feedback: false,
   opens_at: null, closes_at: null, section_settings: [],
 });
 
@@ -812,6 +834,10 @@ export default function ExamBuilder() {
 
   const save = async () => {
     if (!exam.title.trim()) return toast.error('Exam title is required.');
+    // Never save a half-finished question: candidates would see a blank
+    // question with empty options (and it could never be answered correctly).
+    const problem = findQuestionProblem(exam.questions || []);
+    if (problem) return toast.error(problem);
     setSaving(true);
     try {
       const payload = stripTempIds(exam);
@@ -1140,20 +1166,20 @@ export default function ExamBuilder() {
                 <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3.5 space-y-3">
                   <p className="font-bold text-slate-900 text-xs">Candidate experience</p>
                   <label className="flex items-start gap-2.5 cursor-pointer select-none">
-                    <Checkbox checked={!!exam.show_review} onCheckedChange={(c) => set('show_review', !!c)} className="mt-0.5" />
+                    <Checkbox checked={!!exam.instant_feedback} onCheckedChange={(c) => set('instant_feedback', !!c)} className="mt-0.5" />
                     <div className="space-y-0.5 min-w-0">
-                      <span className="font-bold text-slate-900 text-xs block">Show answer review &amp; explanations</span>
+                      <span className="font-bold text-slate-900 text-xs block">Instant feedback while answering</span>
                       <span className="text-[11px] text-slate-500 leading-snug block font-medium">
-                        After submitting, the candidate sees each question with their answer, the correct answer and the explanation. Reveals the answer key — leave off for graded exams that are re-used.
+                        The candidate can check each answer during the exam: right or wrong, the correct answer, the explanation and a running score. A checked answer is locked and can't be changed. This reveals the answer key, so it is best for practice and learning exams.
                       </span>
                     </div>
                   </label>
                   <label className="flex items-start gap-2.5 cursor-pointer select-none">
-                    <Checkbox checked={!!exam.issue_certificate} onCheckedChange={(c) => set('issue_certificate', !!c)} className="mt-0.5" />
+                    <Checkbox checked={!!exam.show_review} onCheckedChange={(c) => set('show_review', !!c)} className="mt-0.5" />
                     <div className="space-y-0.5 min-w-0">
-                      <span className="font-bold text-slate-900 text-xs block">Issue completion certificate</span>
+                      <span className="font-bold text-slate-900 text-xs block">Show answer review &amp; explanations</span>
                       <span className="text-[11px] text-slate-500 leading-snug block font-medium">
-                        Candidates who pass can download a certificate of completion (PDF).
+                        After submitting, the candidate sees each question with their answer, the correct answer and the explanation. This reveals the answer key, so leave it off for graded exams that are re-used.
                       </span>
                     </div>
                   </label>
@@ -1504,6 +1530,12 @@ export default function ExamBuilder() {
           exam={exam}
           onBack={exitPreview}
           onSaveAnswer={() => {}}
+          onCheckAnswer={async (qId) => {
+            // Preview never grades server-side; show the question's own explanation
+            // so the author can see how the feedback panel will look.
+            const qq = (exam.questions || []).find((x) => String(x._id || x.id) === String(qId));
+            return { feedback: { preview: true, question_id: qId, is_correct: null, explanation: qq?.explanation || '', correct_answer: '', correct_regions: (qq?.hotspot_regions || []).filter((r) => r.is_correct) }, progress: null };
+          }}
           onSubmit={async () => { toast.success('Preview finished — nothing was saved.'); }}
           onReportViolation={async () => ({ violation_count: 0, auto_submitted_now: false })}
           onFinished={exitPreview}

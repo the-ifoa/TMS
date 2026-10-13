@@ -23,6 +23,11 @@ const PERMISSIONS = {
   // INTERNAL_CERT_KEY in middleware/permissions.js.
   'internalCerts.manage': { label: 'Upload internal certificates',  group: 'Internal Certificates', scopes: ['airline'] },
 
+  // Create the airline's OWN internal assessments, enrol candidates and upload
+  // a certificate per candidate. Only effective when an admin has switched on
+  // `can_manage_internal_assessments` for the top-level airline.
+  'internalAssessments.manage': { label: 'Manage internal assessments', group: 'Internal Assessments', scopes: ['airline'] },
+
   'attendance.view':     { label: 'View attendance',              group: 'Attendance',   scopes: ['admin'] },
   'attendance.manage':   { label: 'Manage attendance sheets',     group: 'Attendance',   scopes: ['admin'] },
 
@@ -45,6 +50,11 @@ const PERMISSIONS = {
 };
 
 const ALL_KEYS = Object.keys(PERMISSIONS);
+
+// Any of these opens the exam area for a department; each action inside is
+// still gated by its own key.
+const EXAM_KEYS = ['exams.author', 'exams.assign', 'exams.grade'];
+const hasExamPower = (permissions) => (permissions || []).some((k) => EXAM_KEYS.includes(k));
 
 const keysForScope = (scope) =>
   ALL_KEYS.filter((k) => PERMISSIONS[k].scopes.includes(scope));
@@ -69,4 +79,4 @@ const clampPermissions = (requested, scope, granterCeiling) => {
   );
 };
 
-module.exports = { PERMISSIONS, ALL_KEYS, keysForScope, catalogForScope, clampPermissions };
+module.exports = { PERMISSIONS, ALL_KEYS, EXAM_KEYS, hasExamPower, keysForScope, catalogForScope, clampPermissions };

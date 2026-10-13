@@ -18,6 +18,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 const Airline = require('../models/Airline');
 const Admin = require('../models/Admin');
+const { LOGIN_POWER_KEYS } = require('../controllers/secondaryLoginController');
 
 function isAdminRole(role) {
   return role === 'admin' || role === 'Administrator';
@@ -77,16 +78,29 @@ async function loadScope(req, _res, next) {
     let topCanCreateSubusers = false;
     // Admin-granted on the top-level airline; the ceiling for the whole tree.
     let topCanUploadInternalCerts = false;
+    let topCanManageInternalAssessments = false;
+    // Set (to its granted keys) when the session came from an additional login
+    // that the airline limited; null = the full powers of the account.
+    let loginPermissions = null;
     if (!isDepartment) {
-      const me = await Airline.findById(c.id).select('can_create_subusers can_upload_internal_certs').lean();
+      const me = await Airline.findById(c.id)
+        .select(`can_create_subusers can_upload_internal_certs can_manage_internal_assessments${c.secondaryLoginId ? ' secondary_logins' : ''}`).lean();
+      if (c.secondaryLoginId) {
+        const login = (me?.secondary_logins || []).find((l) => String(l._id) === String(c.secondaryLoginId));
+        // Removed while signed in → no powers at all.
+        if (!login) loginPermissions = [];
+        else if (login.full_access === false) loginPermissions = login.permissions || [];
+      }
       topCanCreateSubusers = !!me?.can_create_subusers;
       topCanUploadInternalCerts = !!me?.can_upload_internal_certs;
+      topCanManageInternalAssessments = !!me?.can_manage_internal_assessments;
       // A top-level airline that already has departments can always view/manage
       // its own team, even if the flag was never explicitly set.
       if (!topCanCreateSubusers && departmentIds.length > 0) topCanCreateSubusers = true;
     } else {
-      const top = await Airline.findById(topAirlineId).select('can_upload_internal_certs').lean();
+      const top = await Airline.findById(topAirlineId).select('can_upload_internal_certs can_manage_internal_assessments').lean();
       topCanUploadInternalCerts = !!top?.can_upload_internal_certs;
+      topCanManageInternalAssessments = !!top?.can_manage_internal_assessments;
     }
 
     let visibleAirlineIds;
@@ -110,9 +124,11 @@ async function loadScope(req, _res, next) {
       visibleAirlineIds,
       topCanCreateSubusers,
       topCanUploadInternalCerts,
+      topCanManageInternalAssessments,
+      loginPermissions,
       canManageTeam: isDepartment
         ? permissions.includes('team.manage')
-        : topCanCreateSubusers,
+        : topCanCreateSubusers && (!loginPermissions || loginPermissions.includes('team.manage')),
     };
     return next();
   } catch (err) {
@@ -126,6 +142,7 @@ async function loadScope(req, _res, next) {
 // airline. Without it, neither the airline nor its departments hold the key.
 const ADMIN_GATED_AIRLINE_KEYS = {
   'internalCerts.manage': 'topCanUploadInternalCerts',
+  'internalAssessments.manage': 'topCanManageInternalAssessments',
 };
 
 // Does the current request satisfy at least one of `keys`?
@@ -140,7 +157,14 @@ function hasPermission(req, keys) {
     return list.some((k) => (s.permissions || []).includes(k));
   }
   if (s.kind === 'airline') {
-    if (s.isTopLevel) return list.length > 0; // implicit full airline access
+    // Implicit full airline access — unless signed in through a limited login.
+    // A limited login is only held back on the powers the airline can tick
+    // (LOGIN_POWER_KEYS); every other key behaves as for the main credential.
+    if (s.isTopLevel) {
+      return s.loginPermissions
+        ? list.some((k) => !LOGIN_POWER_KEYS.includes(k) || s.loginPermissions.includes(k))
+        : list.length > 0;
+    }
     return list.some((k) => (s.permissions || []).includes(k));
   }
   return false;

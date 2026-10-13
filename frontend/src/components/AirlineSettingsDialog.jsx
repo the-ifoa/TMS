@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { HiOutlineX, HiOutlineSearch } from 'react-icons/hi';
-import { GraduationCap, Users2, FileText, Mail, Settings2 } from 'lucide-react';
+import { GraduationCap, Users2, FileText, Mail, Settings2, KeyRound, ClipboardCheck } from 'lucide-react';
 import LogoAvatar from './LogoAvatar';
 import { getAirlineSettings, bulkUpdateAirlineSettings } from '../api';
 
@@ -12,7 +12,9 @@ const SETTINGS = [
   { key: 'can_author_exams', label: 'Manage exams', hint: 'Build exams and email them to its own students', icon: GraduationCap, color: 'text-blue-600' },
   { key: 'can_create_subusers', label: 'Sub-users', hint: 'Create department logins', icon: Users2, color: 'text-purple-600' },
   { key: 'can_upload_internal_certs', label: 'Internal certs', hint: "Upload the airline's own certificate PDFs", icon: FileText, color: 'text-emerald-600' },
+  { key: 'can_manage_internal_assessments', label: 'Internal assessments', hint: 'Run its own assessments with a certificate per candidate', icon: ClipboardCheck, color: 'text-teal-600' },
   { key: 'email_use_airline_logo', label: 'Logo in emails', hint: "Airline's logo instead of IFOA's in outgoing emails", icon: Mail, color: 'text-sky-600' },
+  { key: 'can_have_secondary_logins', label: 'Extra logins', hint: 'Add more email + password logins to the same account', icon: KeyRound, color: 'text-amber-600' },
 ];
 
 const initials = (name = '') => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('') || '?';

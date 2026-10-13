@@ -2,7 +2,28 @@ const express = require('express');
 const router = express.Router();
 const { authMiddleware } = require('../middleware/auth');
 const { loadScope, requirePermission } = require('../middleware/permissions');
+const multer = require('multer');
 const examsController = require('../controllers/examsController');
+
+// Airline-uploaded exam certificates: kept in memory, then pushed to R2.
+const CERT_TYPES = ['application/pdf', 'image/png', 'image/jpeg'];
+const certUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (!CERT_TYPES.includes(file.mimetype)) return cb(new Error('Upload a PDF, PNG or JPG file.'), false);
+    cb(null, true);
+  },
+});
+// Uploading / removing / emailing a passed candidate's certificate.
+const canManageCerts = requirePermission('exams.grade', 'exams.author');
+
+function handleCertUpload(req, res, next) {
+  certUpload.single('file')(req, res, (err) => {
+    if (!err) return next();
+    res.status(400).json({ error: err.code === 'LIMIT_FILE_SIZE' ? 'The certificate must be 10 MB or smaller.' : err.message });
+  });
+}
 
 router.use(authMiddleware, loadScope);
 
@@ -37,6 +58,15 @@ router.get('/participants/:participantId/performance', examsController.participa
 
 // ─── PUT /exams/attempts/:attemptId/answer — autosave one answer ────────────────
 router.put('/attempts/:attemptId/answer', examsController.saveAttemptAnswer);
+
+// ─── Airline-uploaded certificate for a passed attempt ──────────────────────────
+router.post('/attempts/:attemptId/certificate', canManageCerts, handleCertUpload, examsController.uploadAttemptCertificate);
+router.get('/attempts/:attemptId/certificate', examsController.getAttemptCertificate);
+router.delete('/attempts/:attemptId/certificate', canManageCerts, examsController.deleteAttemptCertificate);
+router.post('/attempts/:attemptId/certificate/send', canManageCerts, examsController.sendAttemptCertificate);
+
+// ─── POST /exams/attempts/:attemptId/check — instant feedback, locks the answer ─
+router.post('/attempts/:attemptId/check', examsController.checkAttemptAnswer);
 
 // ─── POST /exams/attempts/:attemptId/submit — grade + finalize ──────────────────
 router.post('/attempts/:attemptId/submit', examsController.submitAttempt);

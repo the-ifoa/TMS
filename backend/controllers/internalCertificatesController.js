@@ -54,6 +54,8 @@ function accessibleParticipantFilter(req) {
   return { $or: clauses };
 }
 
+exports.accessibleParticipantFilter = accessibleParticipantFilter;
+
 async function uploaderName(req) {
   if (req.scope.kind === 'airline') {
     const me = await Airline.findById(req.admin.id).select('department_name airlineName').lean();

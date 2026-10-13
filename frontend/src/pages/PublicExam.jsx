@@ -5,11 +5,11 @@ import {
   HiOutlineClock, HiOutlineExclamationCircle,
   HiOutlineCheckCircle, HiOutlineAcademicCap, HiOutlineLockClosed,
   HiOutlineArrowsExpand, HiOutlineShieldExclamation,
-  HiOutlineCheck, HiOutlineX, HiOutlineDownload,
+  HiOutlineCheck, HiOutlineX,
 } from 'react-icons/hi';
 import {
-  getPublicExam, startPublicExam, savePublicAnswer, submitPublicExam,
-  reportPublicViolation, getPublicExamResult, getPublicExamCertificate,
+  getPublicExam, startPublicExam, savePublicAnswer, checkPublicAnswer, submitPublicExam,
+  reportPublicViolation, getPublicExamResult,
 } from '../api';
 import ExamRunner from '../components/ExamRunner';
 import AnswerReviewList from '../components/AnswerReviewList';
@@ -88,8 +88,14 @@ function Centered({ children }) {
 
 // ─── Landing card ─────────────────────────────────────────────────────────────
 function Landing({ info, onBegin, starting, onViewResult }) {
-  const { exam, participant_name, attempts_left, active_attempt_id, status, last_attempt_id, scheduling_error } = info;
-  const noAttemptsLeft = attempts_left <= 0 && !active_attempt_id;
+  const { exam, participant_name, attempts_left, active_attempt_id, status, last_attempt_id, scheduling_error, has_passed, awaiting_review } = info;
+  // No new attempt once passed, while an attempt awaits grading, or when none are left.
+  const noAttemptsLeft = !active_attempt_id && (attempts_left <= 0 || has_passed || awaiting_review);
+  const doneMessage = has_passed
+    ? 'You have passed this exam.'
+    : awaiting_review
+      ? 'Your exam has been submitted and is being graded.'
+      : 'You have completed this exam.';
 
   return (
     <div className="fixed inset-0 bg-gray-100 overflow-y-auto">
@@ -110,7 +116,7 @@ function Landing({ info, onBegin, starting, onViewResult }) {
             <Row label="Candidate" value={participant_name} />
             <Row label="Questions" value={exam.question_count} />
             <Row label="Time allowed" value={exam.duration_minutes ? `${exam.duration_minutes} minutes` : 'No limit'} />
-            <Row label="Attempts left" value={attempts_left} />
+            <Row label="Attempts left" value={has_passed ? 0 : attempts_left} />
             <Row label="Pass mark" value={`${exam.pass_percentage}%`} />
           </div>
 
@@ -124,7 +130,7 @@ function Landing({ info, onBegin, starting, onViewResult }) {
           {noAttemptsLeft ? (
             <div className="space-y-3">
               <div className="rounded-2xl bg-emerald-50 border border-emerald-200/80 p-4 text-sm font-semibold text-emerald-800 flex items-center gap-2">
-                <HiOutlineCheckCircle className="w-5 h-5" /> You have completed this exam.
+                <HiOutlineCheckCircle className="w-5 h-5" /> {doneMessage}
               </div>
               {last_attempt_id && (
                 <button onClick={onViewResult} className="w-full py-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold transition-all">
@@ -141,6 +147,13 @@ function Landing({ info, onBegin, starting, onViewResult }) {
               className="w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold transition-all shadow-sm inline-flex items-center justify-center gap-2 disabled:opacity-60">
               {exam.lockdown_enabled ? <HiOutlineArrowsExpand className="w-4 h-4" /> : <HiOutlineAcademicCap className="w-4 h-4" />}
               {starting ? 'Starting…' : active_attempt_id ? 'Resume Exam' : exam.lockdown_enabled ? 'Start Exam in Fullscreen' : 'Start Exam'}
+            </button>
+          )}
+
+          {/* A finished attempt's result stays reachable even while another attempt is open */}
+          {!noAttemptsLeft && last_attempt_id && (
+            <button onClick={onViewResult} className="w-full py-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 text-sm font-bold transition-all">
+              View My Previous Result
             </button>
           )}
         </div>
@@ -168,6 +181,7 @@ function TakeShell({ token, initial, onFinished, setResultAttempt }) {
       attempt={attempt}
       exam={exam}
       onSaveAnswer={(qId, response) => savePublicAnswer(token, attemptId, qId, response)}
+      onCheckAnswer={(qId, response) => checkPublicAnswer(token, attemptId, qId, response).then((r) => r.data)}
       onSubmit={() => submitPublicExam(token, attemptId)}
       onReportViolation={(type) => reportPublicViolation(token, attemptId, type).then((r) => r.data)}
       onFinished={() => { setResultAttempt(attemptId); onFinished(); }}
@@ -179,23 +193,6 @@ function TakeShell({ token, initial, onFinished, setResultAttempt }) {
 function ResultSummary({ token, attemptId }) {
   const [attempt, setAttempt] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [certLoading, setCertLoading] = useState(false);
-
-  const downloadCertificate = async () => {
-    setCertLoading(true);
-    try {
-      const res = await getPublicExamCertificate(token, attemptId);
-      const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
-      const a = document.createElement('a');
-      a.href = url; a.download = 'certificate.pdf'; a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 10000);
-    } catch {
-      toast.error('Could not download the certificate.');
-    } finally {
-      setCertLoading(false);
-    }
-  };
-
   useEffect(() => {
     if (!attemptId) { setLoading(false); return; }
     getPublicExamResult(token, attemptId)
@@ -217,11 +214,13 @@ function ResultSummary({ token, attemptId }) {
   const percentage = Math.min(100, Math.max(0, Math.round(rawPct * 10) / 10));
   const displayPercentage = Number.isInteger(percentage) ? percentage : percentage.toFixed(1);
 
-  return (
-    <div className="fixed inset-0 bg-slate-100/90 overflow-y-auto">
-      <div className="min-h-full flex items-center justify-center p-4 sm:p-6">
-        <div className={`w-full ${attempt?.review_enabled ? 'max-w-2xl' : 'max-w-md'} bg-white rounded-3xl border border-slate-200/80 shadow-xl p-7 sm:p-8 text-center space-y-6`}>
-          <img src={logoImg} alt="IFOA" className="h-9 w-auto mx-auto" />
+  const showReview = !!attempt?.review_enabled;
+
+  // Summary card: logo, status / score, certificate. Stands alone when there is
+  // no answer review, and becomes the sticky left column when there is.
+  const summary = (
+    <div className="bg-white rounded-3xl border border-slate-200/80 shadow-[0_1px_2px_rgba(15,23,42,0.05),0_16px_40px_-18px_rgba(15,23,42,0.25)] p-6 sm:p-7 text-center space-y-6">
+      <img src={logoImg} alt="IFOA" className="h-9 w-auto mx-auto" />
 
           {attempt?.auto_submitted && (
             <div className="rounded-2xl bg-rose-50 border border-rose-200/80 p-3 text-xs font-semibold text-rose-800 text-left flex items-start gap-2">
@@ -323,18 +322,33 @@ function ResultSummary({ token, attemptId }) {
             </div>
           )}
 
-          {attempt?.certificate_available && (
-            <button onClick={downloadCertificate} disabled={certLoading}
-              className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold transition-all inline-flex items-center justify-center gap-2 disabled:opacity-60">
-              <HiOutlineDownload className="w-4 h-4" /> {certLoading ? 'Preparing…' : 'Download Certificate'}
-            </button>
-          )}
 
-          {attempt?.review_enabled && <AnswerReviewList attempt={attempt} />}
 
-          <div className="pt-3 border-t border-slate-100 flex items-center justify-center gap-1.5 text-xs text-slate-400 font-medium">
-            <span>You may now close this window.</span>
-          </div>
+      <p className="pt-4 border-t border-slate-100 text-xs text-slate-400 font-medium">You may now close this window.</p>
+    </div>
+  );
+
+  if (!showReview) {
+    return (
+      <div className="fixed inset-0 bg-slate-100/90 overflow-y-auto">
+        <div className="min-h-full flex items-center justify-center p-4 sm:p-6">
+          <div className="w-full max-w-md">{summary}</div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 bg-slate-100/90 overflow-y-auto">
+      <div className="w-full max-w-6xl mx-auto p-4 sm:p-6 lg:p-8">
+        <div className="grid grid-cols-1 lg:grid-cols-[340px_minmax(0,1fr)] gap-5 lg:gap-6 items-start">
+          {/* Left: result summary (stays in view while the review scrolls) */}
+          <aside className="lg:sticky lg:top-6">{summary}</aside>
+
+          {/* Right: answer review */}
+          <main className="bg-white rounded-3xl border border-slate-200/80 shadow-[0_1px_2px_rgba(15,23,42,0.05),0_16px_40px_-18px_rgba(15,23,42,0.25)] p-5 sm:p-7">
+            <AnswerReviewList attempt={attempt} />
+          </main>
         </div>
       </div>
     </div>

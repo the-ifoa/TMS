@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { getExam, getExamAttempt, saveExamAnswer, submitExamAttempt, reportExamViolation } from '../api';
+import { getExam, getExamAttempt, saveExamAnswer, checkExamAnswer, submitExamAttempt, reportExamViolation } from '../api';
 import ExamRunner from '../components/ExamRunner';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -41,6 +41,7 @@ export default function ExamTake() {
       attempt={attempt}
       exam={exam}
       onSaveAnswer={(qId, response) => saveExamAnswer(attemptId, qId, response)}
+      onCheckAnswer={(qId, response) => checkExamAnswer(attemptId, qId, response).then((r) => r.data)}
       onSubmit={() => submitExamAttempt(attemptId)}
       onReportViolation={(type) => reportExamViolation(attemptId, type).then((r) => r.data)}
       onFinished={() => navigate(`/airline/exams/${examId}/result/${attemptId}`, { replace: true })}

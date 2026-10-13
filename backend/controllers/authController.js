@@ -1,6 +1,8 @@
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
+const { emailAvailable, LOGIN_POWER_KEYS } = require('./secondaryLoginController');
+const { hasExamPower } = require('../config/permissions');
 const Admin = require('../models/Admin');
 const Airline = require('../models/Airline');
 const { sendPasswordResetEmail, sendOtpEmail } = require('../services/emailService');
@@ -30,10 +32,13 @@ function signAdminToken(admin) {
   );
 }
 
-function signAirlineToken(airline) {
+function signAirlineToken(airline, secondaryLoginId = null) {
   const isDept = !!airline.parent_airline;
   return jwt.sign(
     {
+      // secondaryLoginId is set when the sign-in used an additional credential —
+      // such a session works on the same account but can't manage the logins.
+      secondaryLoginId: secondaryLoginId ? String(secondaryLoginId) : null,
       id: airline._id, email: airline.email, name: airline.name,
       airlineName: airline.airlineName, role: 'airline',
       parentAirline: isDept ? String(airline.parent_airline) : null,
@@ -134,7 +139,9 @@ exports.airlineSignup = async (req, res) => {
     if (password.length < 6)
       return res.status(400).json({ error: 'Password must be at least 6 characters.' });
 
-    // Check duplicate email
+    // Check duplicate email (also against additional logins of other airlines)
+    if (await Airline.findOne({ 'secondary_logins.email': email.toLowerCase().trim() }))
+      return res.status(400).json({ error: 'An account with this email already exists.' });
     const existing = await Airline.findOne({ email: email.toLowerCase().trim() });
     if (existing && existing.emailVerified)
       return res.status(400).json({ error: 'An account with this email already exists.' });
@@ -313,12 +320,22 @@ exports.airlineLogin = async (req, res) => {
     if (!email || !password)
       return res.status(400).json({ error: 'Email and password are required.' });
 
-    const airline = await Airline.findOne({ email });
-    if (!airline)
-      return res.status(401).json({ error: 'Invalid email or password.' });
-
-    const isMatch = await airline.comparePassword(password);
-    if (!isMatch)
+    let airline = await Airline.findOne({ email });
+    let secondary = null;   // set when an additional credential was used
+    let isMatch = false;
+    if (airline) {
+      isMatch = await airline.comparePassword(password);
+    } else {
+      // Not a primary email — maybe an additional login of an airline that is
+      // allowed to have them (admin-granted, top-level accounts only).
+      const holder = await Airline.findOne({ 'secondary_logins.email': String(email).toLowerCase().trim() });
+      const entry = holder && holder.secondary_logins.find((l) => l.email === String(email).toLowerCase().trim());
+      if (holder && entry && holder.can_have_secondary_logins && !holder.parent_airline) {
+        isMatch = await bcrypt.compare(password, entry.password);
+        if (isMatch) { airline = holder; secondary = entry; }
+      }
+    }
+    if (!airline || !isMatch)
       return res.status(401).json({ error: 'Invalid email or password.' });
 
     // Block login for unverified accounts
@@ -333,17 +350,28 @@ exports.airlineLogin = async (req, res) => {
       return res.status(403).json({ error: 'This account has been disabled. Contact your airline administrator.' });
 
     airline.lastLogin = new Date();
+    if (secondary) secondary.last_login = new Date();
     await airline.save();
 
-    const token = signAirlineToken(airline);
+    const token = signAirlineToken(airline, secondary && secondary._id);
 
     const adminOut = { ...airline.toJSON(), role: 'airline' };
+    if (secondary) {
+      adminOut.logged_in_as = secondary.email; adminOut.logged_in_label = secondary.label || '';
+      // A limited login only holds the powers the airline ticked for it.
+      adminOut.login_restricted = secondary.full_access === false;
+      adminOut.login_permissions = secondary.permissions || [];
+      adminOut.login_power_keys = LOGIN_POWER_KEYS;
+    }
     if (airline.parent_airline) {
-      const parent = await Airline.findById(airline.parent_airline).select('logo_url can_upload_internal_certs');
+      const parent = await Airline.findById(airline.parent_airline).select('logo_url can_upload_internal_certs can_manage_internal_assessments');
       // A department with no logo of its own inherits the parent airline's.
       if (!adminOut.logo_url && parent?.logo_url) { adminOut.logo_url = parent.logo_url; adminOut.logo_inherited = true; }
       // Internal cert upload is gated by the admin switch on the parent airline.
       adminOut.can_upload_internal_certs = !!parent?.can_upload_internal_certs;
+      adminOut.can_manage_internal_assessments = !!parent?.can_manage_internal_assessments;
+      // Any exam power opens the exam area for a department.
+      adminOut.can_author_exams = hasExamPower(airline.permissions);
     }
     // Self-heal: a top-level airline that already has departments must be able to
     // see & manage its own team.
@@ -372,12 +400,25 @@ exports.getMe = async (req, res) => {
       const airline = await Airline.findById(req.admin.id);
       if (!airline) return res.status(404).json({ error: 'Airline user not found.' });
       const out = { ...airline.toJSON(), role: 'airline' };
+      if (req.admin.secondaryLoginId) {
+        const sec = airline.secondary_logins.id(req.admin.secondaryLoginId);
+        if (sec) {
+          out.logged_in_as = sec.email; out.logged_in_label = sec.label || '';
+          out.login_restricted = sec.full_access === false;
+          out.login_permissions = sec.permissions || [];
+          out.login_power_keys = LOGIN_POWER_KEYS;
+        }
+        else return res.status(401).json({ error: 'This login has been removed.' }); // revoked while signed in
+      }
       if (airline.parent_airline) {
-        const parent = await Airline.findById(airline.parent_airline).select('logo_url can_upload_internal_certs');
+        const parent = await Airline.findById(airline.parent_airline).select('logo_url can_upload_internal_certs can_manage_internal_assessments');
         // A department with no logo of its own inherits the parent airline's.
         if (!out.logo_url && parent?.logo_url) { out.logo_url = parent.logo_url; out.logo_inherited = true; }
         // Internal cert upload is gated by the admin switch on the parent airline.
         out.can_upload_internal_certs = !!parent?.can_upload_internal_certs;
+        out.can_manage_internal_assessments = !!parent?.can_manage_internal_assessments;
+        // Any exam power opens the exam area for a department.
+        out.can_author_exams = hasExamPower(airline.permissions);
       }
       // Self-heal: a top-level airline that already has departments (e.g. an admin
       // created them) must be able to see & manage its own team.
@@ -446,6 +487,8 @@ exports.updateProfile = async (req, res) => {
       // Check if email is already in use by another user
       const existingUser = await Model.findOne({ email: newEmail.trim(), _id: { $ne: user._id } });
       if (existingUser)
+        return res.status(400).json({ error: 'This email is already in use.' });
+      if (req.admin.role === 'airline' && !(await emailAvailable(newEmail.trim().toLowerCase(), {})) && newEmail.trim().toLowerCase() !== user.email)
         return res.status(400).json({ error: 'This email is already in use.' });
 
       user.email = newEmail.trim();
@@ -546,6 +589,7 @@ exports.adminCreateAirline = async (req, res) => {
     const {
       name, airlineName, email, password, address, logo_url,
       can_author_exams, can_create_subusers, can_upload_internal_certs, email_use_airline_logo,
+      can_have_secondary_logins, can_manage_internal_assessments,
     } = req.body;
 
     if (!name || !airlineName || !email || !password)
@@ -554,6 +598,8 @@ exports.adminCreateAirline = async (req, res) => {
       return res.status(400).json({ error: 'Password must be at least 6 characters.' });
 
     const cleanEmail = email.toLowerCase().trim();
+    if (await Airline.findOne({ 'secondary_logins.email': cleanEmail }))
+      return res.status(400).json({ error: 'This email is already used as an additional login.' });
     const existing = await Airline.findOne({ email: cleanEmail });
     if (existing && existing.emailVerified)
       return res.status(400).json({ error: 'An account with this email already exists.' });
@@ -574,6 +620,8 @@ exports.adminCreateAirline = async (req, res) => {
       if (typeof can_create_subusers === 'boolean')  existing.can_create_subusers = can_create_subusers;
       if (typeof can_upload_internal_certs === 'boolean') existing.can_upload_internal_certs = can_upload_internal_certs;
       if (typeof email_use_airline_logo === 'boolean') existing.email_use_airline_logo = email_use_airline_logo;
+      if (typeof can_have_secondary_logins === 'boolean') existing.can_have_secondary_logins = can_have_secondary_logins;
+      if (typeof can_manage_internal_assessments === 'boolean') existing.can_manage_internal_assessments = can_manage_internal_assessments;
       await existing.save();
       airline = existing;
     } else {
@@ -589,6 +637,8 @@ exports.adminCreateAirline = async (req, res) => {
         can_create_subusers:  typeof can_create_subusers === 'boolean' ? can_create_subusers : false,
         can_upload_internal_certs: typeof can_upload_internal_certs === 'boolean' ? can_upload_internal_certs : false,
         email_use_airline_logo: typeof email_use_airline_logo === 'boolean' ? email_use_airline_logo : false,
+        can_have_secondary_logins: typeof can_have_secondary_logins === 'boolean' ? can_have_secondary_logins : false,
+        can_manage_internal_assessments: typeof can_manage_internal_assessments === 'boolean' ? can_manage_internal_assessments : false,
       });
     }
 
@@ -612,7 +662,7 @@ exports.adminUpdateAirline = async (req, res) => {
     const airline = await Airline.findById(req.params.id);
     if (!airline) return res.status(404).json({ error: 'Airline not found.' });
 
-    const { airlineName, address, can_author_exams, can_create_subusers, can_upload_internal_certs, email_use_airline_logo } = req.body;
+    const { airlineName, address, can_author_exams, can_create_subusers, can_upload_internal_certs, email_use_airline_logo, can_have_secondary_logins, can_manage_internal_assessments } = req.body;
     if (airlineName !== undefined) {
       if (!airlineName.trim()) return res.status(400).json({ error: 'Airline name cannot be empty.' });
       airline.airlineName = airlineName.trim();
@@ -621,6 +671,8 @@ exports.adminUpdateAirline = async (req, res) => {
     if (typeof can_author_exams === 'boolean') airline.can_author_exams = can_author_exams;
     if (typeof can_create_subusers === 'boolean') airline.can_create_subusers = can_create_subusers;
     if (typeof can_upload_internal_certs === 'boolean') airline.can_upload_internal_certs = can_upload_internal_certs;
+    if (typeof can_have_secondary_logins === 'boolean') airline.can_have_secondary_logins = can_have_secondary_logins;
+    if (typeof can_manage_internal_assessments === 'boolean') airline.can_manage_internal_assessments = can_manage_internal_assessments;
     if (typeof email_use_airline_logo === 'boolean') airline.email_use_airline_logo = email_use_airline_logo;
 
     await airline.save();
@@ -637,7 +689,7 @@ exports.adminUpdateAirline = async (req, res) => {
 //  PATCH /api/auth/admin/airlines/settings — Body: { updates: [{ id, <flag>: bool, … }] }
 //  Only the admin-granted feature flags below can be changed here.
 // ─────────────────────────────────────────────
-const AIRLINE_SETTING_KEYS = ['can_author_exams', 'can_create_subusers', 'can_upload_internal_certs', 'email_use_airline_logo'];
+const AIRLINE_SETTING_KEYS = ['can_author_exams', 'can_create_subusers', 'can_upload_internal_certs', 'email_use_airline_logo', 'can_have_secondary_logins', 'can_manage_internal_assessments'];
 
 exports.adminListAirlineSettings = async (req, res) => {
   try {

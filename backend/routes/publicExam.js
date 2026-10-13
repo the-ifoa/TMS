@@ -18,6 +18,9 @@ router.post('/:token/start', loadInvite, publicExamController.startAttempt);
 // ─── PUT /public-exam/:token/attempts/:attemptId/answer — autosave ────────────
 router.put('/:token/attempts/:attemptId/answer', loadInvite, publicExamController.saveAnswer);
 
+// ─── POST /public-exam/:token/attempts/:attemptId/check — instant feedback ────
+router.post('/:token/attempts/:attemptId/check', loadInvite, publicExamController.checkAnswer);
+
 // ─── POST /public-exam/:token/attempts/:attemptId/submit — grade + finalize ───
 router.post('/:token/attempts/:attemptId/submit', loadInvite, publicExamController.submitAttempt);
 
@@ -26,8 +29,5 @@ router.post('/:token/attempts/:attemptId/violation', loadInvite, publicExamContr
 
 // ─── GET /public-exam/:token/attempts/:attemptId/result — full graded result ──
 router.get('/:token/attempts/:attemptId/result', loadInvite, publicExamController.getResult);
-
-// Completion certificate (PDF) — only for exams with it enabled, once passed
-router.get('/:token/attempts/:attemptId/certificate', loadInvite, publicExamController.getCertificate);
 
 module.exports = router;

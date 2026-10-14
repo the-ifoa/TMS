@@ -99,4 +99,11 @@ examAttemptSchema.methods.toJSON = function () {
   return obj;
 };
 
+// Lookups the results, analytics and performance pages run on every load —
+// without these each one scans the whole (large) attempts collection.
+examAttemptSchema.index({ exam_id: 1, created_at: -1 });
+examAttemptSchema.index({ participant_id: 1, submitted_at: 1 });
+examAttemptSchema.index({ airline_id: 1, created_at: -1 });
+examAttemptSchema.index({ status: 1, submitted_at: -1 }); // notifications feed
+
 module.exports = mongoose.model('ExamAttempt', examAttemptSchema);

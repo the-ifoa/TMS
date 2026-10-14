@@ -59,6 +59,7 @@ const examInviteSchema = new mongoose.Schema(
 
 // One invite per participant per exam — re-sending updates the existing one.
 examInviteSchema.index({ exam_id: 1, participant_id: 1 }, { unique: true });
+examInviteSchema.index({ airline_id: 1, created_at: -1 }); // airline Exam Results page
 
 examInviteSchema.methods.toJSON = function () {
   const obj = this.toObject();

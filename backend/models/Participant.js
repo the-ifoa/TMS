@@ -84,6 +84,10 @@ participantSchema.pre('save', function () {
 // cert_sequence is a real integer > 0. Documents without the field, or with
 // null, are completely ignored by this index — eliminating all E11000 errors
 // on unissued participants regardless of how Mongoose handles the field.
+// List pages: newest first, and an airline's own submissions.
+participantSchema.index({ created_at: -1 });
+participantSchema.index({ submitted_by: 1, created_at: -1 });
+
 participantSchema.index(
   { training_type: 1, cert_sequence: 1 },
   {

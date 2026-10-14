@@ -155,6 +155,7 @@ exports.listNotifications = async (req, res) => {
     const examAttemptFilter = { status: { $in: ['submitted', 'pending_review', 'graded'] }, submitted_at: { $ne: null } };
     if (!isAdmin) examAttemptFilter.airline_id = req.admin.id;
     const examAttempts = await ExamAttempt.find(examAttemptFilter)
+      .select('participant_name exam_title_snapshot exam_id percentage status submitted_at')
       .sort({ submitted_at: -1 })
       .limit(30)
       .lean();

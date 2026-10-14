@@ -178,10 +178,11 @@ exports.listAssigned = async (req, res) => {
     const exams = await Exam.find({
       status: 'published',
       'assignments.airline_id': req.admin.id,
-    }).sort({ created_at: -1 });
+    }).select('-questions').sort({ created_at: -1 });
 
     const examIds = exams.map((e) => e._id);
-    const attempts = await ExamAttempt.find({ exam_id: { $in: examIds }, airline_id: req.admin.id });
+    const attempts = await ExamAttempt.find({ exam_id: { $in: examIds }, airline_id: req.admin.id })
+      .select('-questions_snapshot -answers');
     const participantIds = [...new Set(exams.flatMap((e) => e.assignments.map((a) => String(a.participant_id))))];
     const participants = await Participant.find({ _id: { $in: participantIds } }).select('participant_name');
     const nameById = Object.fromEntries(participants.map((p) => [String(p._id), p.participant_name]));
@@ -736,13 +737,16 @@ exports.listAttempts = async (req, res) => {
   try {
     const filter = await attemptScopeFilter(req);
 
-    const attempts = await ExamAttempt.find(filter).sort({ created_at: -1 });
+    // The list never shows questions or answers (grading fetches the full
+    // attempt on demand), so don't pull those heavy arrays out of the DB.
+    const attempts = await ExamAttempt.find(filter)
+      .select('-questions_snapshot -answers')
+      .sort({ created_at: -1 });
     // Candidate emails — the UI needs them to offer "email certificate".
     const people = await Participant.find({ _id: { $in: attempts.map((a) => a.participant_id) } }).select('email').lean();
     const emailById = Object.fromEntries(people.map((p) => [String(p._id), p.email || '']));
     res.json(attempts.map((a) => {
       const json = a.toJSON();
-      json.questions_snapshot = undefined; // list view, keep it light
       json.participant_email = emailById[String(a.participant_id)] || '';
       json.certificate = certificateSummary(a);
       return json;
@@ -810,10 +814,18 @@ exports.participantPerformance = async (req, res) => {
       if (!visible) return res.status(403).json({ error: 'Access denied.' });
     }
 
+    // Only what the report reads — skip question text, options and responses.
     const attempts = await ExamAttempt.find({
       participant_id: participant._id,
       status: { $ne: 'in_progress' },
-    }).sort({ submitted_at: 1 });
+    })
+      .select([
+        'exam_id', 'exam_title_snapshot', 'attempt_number', 'percentage', 'passed', 'status',
+        'submitted_at', 'time_taken_seconds',
+        'answers.question_id', 'answers.type', 'answers.is_correct', 'answers.needs_manual_grading',
+        'questions_snapshot._id', 'questions_snapshot.section',
+      ].join(' '))
+      .sort({ submitted_at: 1 });
 
     // Aggregate every scored answer across every finished attempt, broken
     // down by section (where in the syllabus they lag) and by question type
@@ -1106,11 +1118,24 @@ exports.deleteQuestionImage = async (req, res) => {
 };
 
 // ─── GET /exams — list exams ──────────────────────────────────────────────────
+// The list page only needs a question count, not every question (with its
+// answers and image URLs) — so skip the array and count it in the database.
+const LIST_EXCLUDE = '-questions';
+async function withQuestionCounts(exams) {
+  if (!exams.length) return {};
+  const rows = await Exam.aggregate([
+    { $match: { _id: { $in: exams.map((e) => e._id) } } },
+    { $project: { n: { $size: { $ifNull: ['$questions', []] } } } },
+  ]);
+  return Object.fromEntries(rows.map((r) => [String(r._id), r.n]));
+}
+
 exports.listExams = async (req, res) => {
   try {
     let exams;
     if (isAdmin(req)) {
-      exams = await Exam.find({}).sort({ created_at: -1 });
+      exams = await Exam.find({}).select(LIST_EXCLUDE).sort({ created_at: -1 });
+      const counts = await withQuestionCounts(exams);
       // Tag airline/department-created exams with readable owner names for the admin UI.
       const airlineIds = [...new Set([
         ...exams.filter((e) => e.owner_airline).map((e) => String(e.owner_airline)),
@@ -1122,6 +1147,7 @@ exports.listExams = async (req, res) => {
         const byId = Object.fromEntries(owners.map((a) => [String(a._id), a]));
         return res.json(exams.map((e) => {
           const json = e.toJSON();
+          json.question_count = counts[String(e._id)] || 0;
           if (json.owner_airline) json.owner_airline_name = byId[String(json.owner_airline)]?.airlineName || 'Airline';
           if (json.owner_department) {
             const d = byId[String(json.owner_department)];
@@ -1130,7 +1156,7 @@ exports.listExams = async (req, res) => {
           return json;
         }));
       }
-      return res.json(exams.map((e) => e.toJSON()));
+      return res.json(exams.map((e) => ({ ...e.toJSON(), question_count: counts[String(e._id)] || 0 })));
     } else if (req.scope && req.scope.isDepartment) {
       // A plain department manages ONLY the exams it authored itself. It must not
       // see the parent airline's own exams or sibling departments' exams (both
@@ -1142,7 +1168,7 @@ exports.listExams = async (req, res) => {
           { owner_department: selfId },
           { status: 'published', 'assignments.airline_id': selfId },
         ],
-      }).sort({ created_at: -1 });
+      }).select(LIST_EXCLUDE).sort({ created_at: -1 });
     } else {
       // Top-level airline: exams it owns (any status, which covers every exam its
       // departments authored) + published exams assigned anywhere in its tree.
@@ -1153,9 +1179,10 @@ exports.listExams = async (req, res) => {
           { owner_department: { $in: visibleIds } },
           { status: 'published', 'assignments.airline_id': { $in: visibleIds } },
         ],
-      }).sort({ created_at: -1 });
+      }).select(LIST_EXCLUDE).sort({ created_at: -1 });
     }
-    res.json(exams.map((e) => e.toJSON()));
+    const counts = await withQuestionCounts(exams);
+    res.json(exams.map((e) => ({ ...e.toJSON(), question_count: counts[String(e._id)] || 0 })));
   } catch (err) {
     console.error('GET /exams error:', err.message);
     res.status(500).json({ error: err.message });
@@ -1190,6 +1217,20 @@ exports.createExam = async (req, res) => {
 // ─── GET /exams/:id — single exam ─────────────────────────────────────────────
 exports.getExam = async (req, res) => {
   try {
+    // ?summary=1 — just the header fields (results page), skipping the
+    // question list. Same access rules as the full fetch below.
+    if (req.query.summary) {
+      const exam = await Exam.findById(req.params.id)
+        .select('title status pass_percentage owner_airline owner_department assignments.airline_id');
+      if (!exam) return res.status(404).json({ error: 'Exam not found.' });
+      if (!isAdmin(req) && !ownsExam(req, exam)) {
+        const assigned = exam.assignments.some((a) => String(a.airline_id) === String(req.admin.id));
+        if (exam.status !== 'published' || !assigned) return res.status(403).json({ error: 'Access denied.' });
+      }
+      const { _id, title, status, pass_percentage, owner_airline, owner_department } = exam;
+      return res.json({ id: String(_id), _id, title, status, pass_percentage, owner_airline, owner_department });
+    }
+
     const exam = await Exam.findById(req.params.id);
     if (!exam) return res.status(404).json({ error: 'Exam not found.' });
 

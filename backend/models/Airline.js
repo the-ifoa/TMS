@@ -88,4 +88,7 @@ airlineSchema.methods.toJSON = function () {
   return obj;
 };
 
+// Every airline request looks up the account's departments by parent.
+airlineSchema.index({ parent_airline: 1 });
+
 module.exports = mongoose.model('Airline', airlineSchema);

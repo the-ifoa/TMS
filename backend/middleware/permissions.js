@@ -69,10 +69,10 @@ async function loadScope(req, _res, next) {
     }
 
     // Department ids that belong to this airline tree (used for "see all").
-    const siblings = await Airline.find({ parent_airline: topAirlineId })
+    // Run together with the account lookup below rather than one after the other.
+    const siblingsQuery = Airline.find({ parent_airline: topAirlineId })
       .select('_id')
       .lean();
-    const departmentIds = siblings.map((d) => String(d._id));
 
     // A top-level airline may only manage sub-users if an admin granted it.
     let topCanCreateSubusers = false;
@@ -82,9 +82,14 @@ async function loadScope(req, _res, next) {
     // Set (to its granted keys) when the session came from an additional login
     // that the airline limited; null = the full powers of the account.
     let loginPermissions = null;
+    let departmentIds;
     if (!isDepartment) {
-      const me = await Airline.findById(c.id)
-        .select(`can_create_subusers can_upload_internal_certs can_manage_internal_assessments${c.secondaryLoginId ? ' secondary_logins' : ''}`).lean();
+      const [me, siblings] = await Promise.all([
+        Airline.findById(c.id)
+          .select(`can_create_subusers can_upload_internal_certs can_manage_internal_assessments${c.secondaryLoginId ? ' secondary_logins' : ''}`).lean(),
+        siblingsQuery,
+      ]);
+      departmentIds = siblings.map((d) => String(d._id));
       if (c.secondaryLoginId) {
         const login = (me?.secondary_logins || []).find((l) => String(l._id) === String(c.secondaryLoginId));
         // Removed while signed in → no powers at all.
@@ -98,7 +103,11 @@ async function loadScope(req, _res, next) {
       // its own team, even if the flag was never explicitly set.
       if (!topCanCreateSubusers && departmentIds.length > 0) topCanCreateSubusers = true;
     } else {
-      const top = await Airline.findById(topAirlineId).select('can_upload_internal_certs can_manage_internal_assessments').lean();
+      const [top, siblings] = await Promise.all([
+        Airline.findById(topAirlineId).select('can_upload_internal_certs can_manage_internal_assessments').lean(),
+        siblingsQuery,
+      ]);
+      departmentIds = siblings.map((d) => String(d._id));
       topCanUploadInternalCerts = !!top?.can_upload_internal_certs;
       topCanManageInternalAssessments = !!top?.can_manage_internal_assessments;
     }

@@ -6,6 +6,7 @@ dns.setServers(['8.8.8.8', '8.8.4.4']);
 require('dotenv').config();
 // Load first so every console.* below is also written to logs/backend.log
 const { requestLogger } = require('./utils/logger');
+const compression = require('compression');
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -66,6 +67,8 @@ app.use(cors({
 
 // Handle preflight OPTIONS requests for every route
 app.options('*', cors({ origin: true, credentials: true }));
+// Gzip JSON responses — the list endpoints shrink ~5-10x over the wire.
+app.use(compression());
 app.use(express.json({ limit: '20mb' }));
 app.use(requestLogger);
 

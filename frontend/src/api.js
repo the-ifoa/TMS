@@ -15,6 +15,46 @@ const api = axios.create({
   },
 });
 
+// Short-lived cache for GET requests. Going back to a page within a few
+// seconds reuses the last response instead of waiting on the network again,
+// and identical requests fired at once share one call. Any write
+// (POST/PUT/PATCH/DELETE) clears the whole cache so edits always show up.
+const GET_CACHE_MS = 30_000;
+const NEVER_CACHE = [/\/notifications/, /\/auth\/me/];
+const getCache = new Map();     // key -> { at, res }
+const inFlight = new Map();     // key -> Promise<res>
+const networkAdapter = axios.getAdapter(axios.defaults.adapter);
+
+export function clearApiCache() {
+  getCache.clear();
+}
+
+api.defaults.adapter = async (config) => {
+  const method = (config.method || 'get').toLowerCase();
+  if (method !== 'get') {
+    getCache.clear();
+    return networkAdapter(config);
+  }
+  if (config.responseType === 'blob' || config.responseType === 'arraybuffer' || config.cache === false
+    || NEVER_CACHE.some((rx) => rx.test(config.url || ''))) {
+    return networkAdapter(config);
+  }
+  // Keyed per signed-in user so switching accounts never shows the other's data.
+  const key = `${config.headers?.Authorization || ''}|${axios.getUri(config)}`;
+  const hit = getCache.get(key);
+  if (hit && Date.now() - hit.at < GET_CACHE_MS) return { ...hit.res, config };
+  if (inFlight.has(key)) return { ...(await inFlight.get(key)), config };
+
+  const pending = networkAdapter(config)
+    .then((res) => {
+      if (res.status >= 200 && res.status < 300) getCache.set(key, { at: Date.now(), res });
+      return res;
+    })
+    .finally(() => inFlight.delete(key));
+  inFlight.set(key, pending);
+  return pending;
+};
+
 // Attach token to every request if available
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useBack } from '@/hooks/use-history-state';
 import { motion } from 'framer-motion';
 import { HiOutlineArrowLeft } from 'react-icons/hi';
 import toast from 'react-hot-toast';
@@ -29,6 +30,7 @@ export default function EditParticipant() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { isAdmin } = useAuth();
+  const goBack = useBack(isAdmin ? '/admin/participants' : '/airline/submissions');
   const [saving, setSaving]   = useState(false);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({
@@ -76,7 +78,7 @@ export default function EditParticipant() {
         });
       } catch {
         toast.error('Failed to load record');
-        navigate(-1);
+        goBack();
       } finally {
         setLoading(false);
       }
@@ -105,7 +107,7 @@ export default function EditParticipant() {
       setSaving(true);
       await updateParticipant(id, form);
       toast.success('Record updated');
-      navigate(-1);
+      goBack();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to update');
     } finally {
@@ -129,7 +131,7 @@ export default function EditParticipant() {
           <div className="flex items-center gap-3 min-w-0">
             <button 
               type="button"
-              onClick={() => navigate(-1)}
+              onClick={() => goBack()}
               className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 hover:text-slate-900 bg-white border border-slate-200 shadow-2xs hover:bg-slate-50 transition-all flex-shrink-0"
               title="Go back"
             >
@@ -314,7 +316,7 @@ export default function EditParticipant() {
         </div>
 
         <div className="flex flex-wrap items-center justify-end gap-3 pt-4 border-t border-primary-200">
-          <button type="button" onClick={() => navigate(-1)} className="btn-outline">Cancel</button>
+          <button type="button" onClick={() => goBack()} className="btn-outline">Cancel</button>
           <button type="submit" disabled={saving} className="btn-primary">
             {saving ? 'Saving...' : 'Update Record'}
           </button>

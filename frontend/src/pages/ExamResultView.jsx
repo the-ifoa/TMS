@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useBack } from '@/hooks/use-history-state';
 import toast from 'react-hot-toast';
 import {
   HiOutlineArrowLeft,
@@ -32,6 +33,7 @@ function accuracyStatusColor(pct) {
 export default function ExamResultView() {
   const { attemptId } = useParams();
   const navigate = useNavigate();
+  const goBack = useBack('/airline/exams');
   const [attempt, setAttempt] = useState(null);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all'); // 'all' | 'correct' | 'incorrect'
@@ -157,7 +159,7 @@ export default function ExamResultView() {
         {/* ── Top Bar Action Header ── */}
         <div className="print:hidden flex items-center justify-between">
           <button
-            onClick={() => navigate(-1)}
+            onClick={() => goBack()}
             className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold transition-all border border-slate-200/90 shadow-2xs"
           >
             <HiOutlineArrowLeft className="w-4 h-4 text-slate-500" />

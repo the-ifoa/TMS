@@ -3,9 +3,32 @@ import { getMe } from '../api';
 
 const AuthContext = createContext(null);
 
+// Last /me response, cached so a reload can render the app straight away
+// instead of blocking on a full-screen spinner until /me answers. /me still
+// runs on every load and replaces it; the server enforces permissions anyway.
+const USER_CACHE_KEY = 'authUser';
+
+function readCachedUser() {
+  try {
+    if (!localStorage.getItem('token')) return null;
+    const raw = localStorage.getItem(USER_CACHE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedUser(user) {
+  try {
+    if (user) localStorage.setItem(USER_CACHE_KEY, JSON.stringify(user));
+    else localStorage.removeItem(USER_CACHE_KEY);
+  } catch { /* storage unavailable — cache is optional */ }
+}
+
 export function AuthProvider({ children }) {
-  const [admin, setAdmin] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [admin, setAdmin] = useState(readCachedUser);
+  // Only block rendering when there is a token but nothing cached to show yet.
+  const [loading, setLoading] = useState(() => !!localStorage.getItem('token') && !readCachedUser());
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -20,29 +43,37 @@ export function AuthProvider({ children }) {
       } catch { /* ignore decode errors */ }
 
       getMe()
-        .then((res) => setAdmin(res.data))
+        .then((res) => {
+          setAdmin(res.data);
+          writeCachedUser(res.data);
+        })
         .catch(() => {
           localStorage.removeItem('token');
+          writeCachedUser(null);
           setAdmin(null);
         })
         .finally(() => setLoading(false));
     } else {
+      writeCachedUser(null);
       setLoading(false);
     }
   }, []);
 
   const loginAdmin = (token, adminData) => {
     localStorage.setItem('token', token);
+    writeCachedUser(adminData);
     setAdmin(adminData);
   };
 
   const updateAdmin = (token, adminData) => {
     if (token) localStorage.setItem('token', token);
+    writeCachedUser(adminData);
     setAdmin(adminData);
   };
 
   const logout = () => {
     localStorage.removeItem('token');
+    writeCachedUser(null);
     setAdmin(null);
   };
 

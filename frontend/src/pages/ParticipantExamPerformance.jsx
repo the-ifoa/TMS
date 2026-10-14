@@ -1,32 +1,46 @@
-import { useEffect, useState, useMemo } from 'react';
-import { useHistoryState } from '@/hooks/use-history-state';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useEffect, useLayoutEffect, useRef, useState, useMemo } from 'react';
+import { useHistoryState, useBack } from '@/hooks/use-history-state';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
-  HiOutlineArrowLeft,
-  HiOutlineChevronLeft,
-  HiOutlineChevronRight,
-  HiOutlineAcademicCap,
-  HiOutlineTrendingUp,
-  HiOutlineCheckCircle,
-  HiOutlineXCircle,
-  HiOutlineExclamationCircle,
-  HiOutlineChartBar,
-  HiOutlineChartPie,
-  HiOutlineCalendar,
-  HiOutlineX,
-  HiOutlineBadgeCheck,
-} from 'react-icons/hi';
-import { FaPlaneDeparture } from 'react-icons/fa';
-import { getParticipantExamPerformance, getExamAttemptResult } from '../api';
+  ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
+  X,
+  Plane,
+  Layers,
+  CalendarDays,
+  CircleCheck,
+  Clock,
+  Timer,
+  Trophy,
+  ShieldCheck,
+  TriangleAlert,
+  TrendingUp,
+  GraduationCap,
+  FileText,
+  ListChecks,
+  ChartBarDecreasing,
+  ChartPie,
+  Hourglass,
+} from 'lucide-react';
+import { getParticipantExamPerformance } from '../api';
 import { useAuth } from '../context/AuthContext';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 
-const BLUE_HERO = '#3b41e3';
-const GOOD = '#10b981';
-const WARNING = '#f59e0b';
-const CRITICAL = '#f43f5e';
+const GOOD = '#059669';
+const INFO = '#2563eb';
+const WARNING = '#d97706';
+const CRITICAL = '#e11d48';
 const NEUTRAL = '#94a3b8';
+const ACCENT = '#4f46e5';
+
+const ALL_EXAMS = 'all';
+
+const CARD = 'bg-white rounded-2xl border border-slate-200/80 shadow-[0_1px_2px_rgba(15,23,42,0.04)]';
 
 function fmtDate(v) {
   if (!v) return '—';
@@ -36,6 +50,13 @@ function fmtDate(v) {
 function fmtShortDate(v) {
   if (!v) return '';
   return new Date(v).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+}
+
+function fmtDuration(sec) {
+  if (sec == null) return '—';
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return m > 0 ? `${m}m ${String(s).padStart(2, '0')}s` : `${s}s`;
 }
 
 function toISOKey(v) {
@@ -58,342 +79,566 @@ function fmtStatus(a) {
   return a.passed === true ? 'Passed' : a.passed === false ? 'Failed' : (a.status || '').replace(/_/g, ' ');
 }
 
-function getGradeLetter(avgPct) {
-  if (avgPct == null) return { letter: 'N/A', label: 'No Data', color: NEUTRAL };
-  if (avgPct >= 90) return { letter: 'A+', label: 'Outstanding Performance', color: '#10b981' };
-  if (avgPct >= 80) return { letter: 'A', label: 'Very Good Performance', color: '#3b82f6' };
-  if (avgPct >= 70) return { letter: 'B', label: 'Good - Meets Expectations', color: '#6366f1' };
-  if (avgPct >= 60) return { letter: 'C', label: 'Satisfactory - Needs Review', color: '#f59e0b' };
-  return { letter: 'F', label: 'Needs Immediate Attention', color: '#f43f5e' };
+function round1(v) {
+  return Math.round(v * 10) / 10;
 }
 
-// ─── Graph 1: Performance Line Chart (Left Graph) ─────────────────────────────
-function PerformanceLineChart({ attempts, onSelectAttempt }) {
-  const scored = attempts.filter(a => a.percentage != null);
+function getGradeLetter(avgPct) {
+  if (avgPct == null) return { letter: '—', label: 'No graded attempts', color: NEUTRAL };
+  if (avgPct >= 90) return { letter: 'A+', label: 'Outstanding', color: GOOD };
+  if (avgPct >= 80) return { letter: 'A', label: 'Very good', color: INFO };
+  if (avgPct >= 70) return { letter: 'B', label: 'Meets expectations', color: '#6366f1' };
+  if (avgPct >= 60) return { letter: 'C', label: 'Needs review', color: WARNING };
+  return { letter: 'F', label: 'Below standard', color: CRITICAL };
+}
+
+function accuracyTone(p) {
+  if (p >= 80) return { color: GOOD, label: 'Strong' };
+  if (p >= 60) return { color: WARNING, label: 'Moderate' };
+  return { color: CRITICAL, label: 'Needs practice' };
+}
+
+// Summary numbers for any set of attempts — the whole history or one exam.
+function summarise(attempts) {
+  const scored = attempts.filter((a) => a.percentage != null);
+  const passed = attempts.filter((a) => a.passed === true).length;
+  const failed = attempts.filter((a) => a.passed === false).length;
+  const avg = scored.length ? round1(scored.reduce((s, a) => s + a.percentage, 0) / scored.length) : null;
+  const best = scored.length ? Math.max(...scored.map((a) => a.percentage)) : null;
+  return {
+    total: attempts.length,
+    passed,
+    failed,
+    pending: attempts.length - passed - failed,
+    avg,
+    best,
+    passRate: attempts.length ? Math.round((passed / attempts.length) * 100) : 0,
+  };
+}
+
+// Merge each attempt's per-section tally into one accuracy row per section.
+function sectionRows(attempts) {
+  const by = {};
+  attempts.forEach((a) => (a.sections || []).forEach((s) => {
+    if (!by[s.section]) by[s.section] = { section: s.section, total: 0, correct: 0 };
+    by[s.section].total += s.total;
+    by[s.section].correct += s.correct;
+  }));
+  return Object.values(by)
+    .filter((s) => s.total > 0)
+    .map((s) => ({ ...s, pct: Math.round((s.correct / s.total) * 100) }))
+    .sort((a, b) => a.pct - b.pct);
+}
+
+function getCandidateCondition(stats) {
+  if (stats.total === 0) {
+    return { key: 'none', label: 'Awaiting assessment', icon: Hourglass, color: NEUTRAL, desc: 'No exam attempts have been submitted yet.' };
+  }
+  if (stats.passRate >= 80 && (stats.avg == null || stats.avg >= 80)) {
+    return { key: 'good', label: 'High proficiency', icon: ShieldCheck, color: GOOD, desc: 'Consistently meets and exceeds the required standard.' };
+  }
+  if (stats.passRate >= 50 || (stats.avg != null && stats.avg >= 60)) {
+    return { key: 'mid', label: 'Progressing', icon: TrendingUp, color: WARNING, desc: 'Meets the minimum threshold but would benefit from targeted review.' };
+  }
+  return { key: 'bad', label: 'Needs attention', icon: TriangleAlert, color: CRITICAL, desc: 'Falling short on assessments. Supplementary training is recommended.' };
+}
+
+// ─── Building blocks ──────────────────────────────────────────────────────────
+function ScoreRing({ value, size = 120, stroke = 10, color = ACCENT, track = '#eef2f6', children }) {
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  const pct = Math.max(0, Math.min(100, value ?? 0));
+  return (
+    <div className="relative flex-shrink-0" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="-rotate-90">
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={track} strokeWidth={stroke} />
+        {pct > 0 && (
+          <circle
+            cx={size / 2} cy={size / 2} r={r} fill="none"
+            stroke={color} strokeWidth={stroke} strokeLinecap="round"
+            strokeDasharray={`${(pct / 100) * c} ${c}`}
+            className="transition-[stroke-dasharray] duration-700 ease-out"
+          />
+        )}
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center text-center">{children}</div>
+    </div>
+  );
+}
+
+function IconChip({ icon: Icon, tone = 'indigo' }) {
+  const tones = {
+    indigo: 'bg-indigo-50 text-indigo-600',
+    emerald: 'bg-emerald-50 text-emerald-600',
+    sky: 'bg-sky-50 text-sky-600',
+    violet: 'bg-violet-50 text-violet-600',
+    amber: 'bg-amber-50 text-amber-600',
+    slate: 'bg-slate-100 text-slate-600',
+  };
+  return (
+    <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${tones[tone]}`}>
+      <Icon className="w-[18px] h-[18px]" strokeWidth={1.75} />
+    </div>
+  );
+}
+
+function CardHeader({ icon, tone, title, subtitle, right }) {
+  return (
+    <div className="flex items-start justify-between gap-3 mb-5">
+      <div className="flex items-center gap-3 min-w-0">
+        {icon && <IconChip icon={icon} tone={tone} />}
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold text-slate-900 tracking-tight">{title}</h3>
+          {subtitle && <p className="text-xs text-slate-500 mt-0.5 truncate">{subtitle}</p>}
+        </div>
+      </div>
+      {right}
+    </div>
+  );
+}
+
+function EmptyState({ icon: Icon, text }) {
+  return (
+    <div className="py-10 flex flex-col items-center justify-center text-center">
+      <div className="w-11 h-11 rounded-2xl bg-slate-50 border border-slate-200/80 text-slate-400 flex items-center justify-center mb-3">
+        <Icon className="w-5 h-5" strokeWidth={1.75} />
+      </div>
+      <p className="text-xs text-slate-500">{text}</p>
+    </div>
+  );
+}
+
+function StatusPill({ passed, status, className = '' }) {
+  const color = statusColor(passed);
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-md capitalize flex-shrink-0 ${className}`}
+      style={{ color, backgroundColor: `${color}14` }}
+    >
+      <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color }} />
+      {fmtStatus({ passed, status })}
+    </span>
+  );
+}
+
+// Width of an element in CSS pixels, so SVG charts draw at true size instead
+// of scaling their text up with the container.
+function useWidth() {
+  const ref = useRef(null);
+  const [width, setWidth] = useState(0);
+  useLayoutEffect(() => {
+    if (!ref.current) return undefined;
+    const ro = new ResizeObserver(([entry]) => setWidth(Math.round(entry.contentRect.width)));
+    ro.observe(ref.current);
+    return () => ro.disconnect();
+  }, []);
+  return [ref, width];
+}
+
+// ─── Score trend ──────────────────────────────────────────────────────────────
+function TrendChart({ attempts, passMark, selectedId, onSelect }) {
+  const [ref, W] = useWidth();
+  const scored = attempts.filter((a) => a.percentage != null);
 
   if (!scored.length) {
-    return (
-      <div className="py-16 text-center text-xs text-slate-400 font-medium">
-        No graded exam attempts recorded yet.
-      </div>
-    );
+    return <EmptyState icon={TrendingUp} text="No graded attempts to plot yet." />;
   }
 
-  const W = 600;
-  const H = 340;
-  const padL = 60;
-  const padR = 25;
-  const padT = 12;
-  const padB = 38;
-  
-  const plotW = W - padL - padR;
+  const H = 220, padL = 36, padR = 12, padT = 20, padB = 28;
+  const plotW = Math.max(0, W - padL - padR);
   const plotH = H - padT - padB;
-
-  const x = i => padL + (scored.length === 1 ? plotW / 2 : (i / (scored.length - 1)) * plotW);
-  const y = v => padT + plotH - (v / 100) * plotH;
-
-  const points = scored.map((a, i) => ({
-    x: x(i),
-    y: y(a.percentage),
-    val: a.percentage,
-    dateStr: fmtShortDate(a.submitted_at),
-    attempt: a,
-  }));
-
-  const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
-  const areaPath = `${linePath} L ${x(scored.length - 1)} ${padT + plotH} L ${x(0)} ${padT + plotH} Z`;
+  const x = (i) => padL + (scored.length === 1 ? plotW / 2 : (i / (scored.length - 1)) * plotW);
+  const y = (v) => padT + plotH - (v / 100) * plotH;
+  const pts = scored.map((a, i) => ({ x: x(i), y: y(a.percentage), a }));
+  const line = pts.map((p, i) => `${i ? 'L' : 'M'} ${p.x} ${p.y}`).join(' ');
+  const area = `${line} L ${pts[pts.length - 1].x} ${padT + plotH} L ${pts[0].x} ${padT + plotH} Z`;
+  const labelEvery = Math.max(1, Math.ceil(scored.length / Math.max(1, Math.floor(plotW / 70))));
 
   return (
-    <div className="w-full relative">
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto overflow-visible block">
-        <defs>
-          <linearGradient id="perfOverviewGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#4f46e5" stopOpacity="0.25" />
-            <stop offset="100%" stopColor="#4f46e5" stopOpacity="0.0" />
-          </linearGradient>
-        </defs>
+    <div ref={ref} className="w-full" style={{ height: H }}>
+      {W > 0 && (
+        <svg width={W} height={H} className="block overflow-visible">
+          <defs>
+            <linearGradient id="trendFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={ACCENT} stopOpacity="0.14" />
+              <stop offset="100%" stopColor={ACCENT} stopOpacity="0" />
+            </linearGradient>
+          </defs>
 
-        {/* Horizontal Grid lines */}
-        {[0, 25, 50, 75, 100].map(g => (
-          <g key={g}>
-            <line x1={padL} y1={y(g)} x2={W - padR} y2={y(g)} stroke="#cbd5e1" strokeDasharray="4 4" strokeWidth="1.5" />
-            {/* Y-Axis Label: Large High Contrast Dark Slate */}
-            <text x={padL - 10} y={y(g)} textAnchor="end" dominantBaseline="middle" fontSize="13" fontWeight="900" fill="#020617">
-              {g}%
-            </text>
-          </g>
-        ))}
-
-        {/* Indigo Gradient Area */}
-        <path d={areaPath} fill="url(#perfOverviewGrad)" />
-
-        {/* Solid Line */}
-        <path
-          d={linePath}
-          fill="none"
-          stroke="#4f46e5"
-          strokeWidth="4"
-          strokeLinejoin="round"
-          strokeLinecap="round"
-        />
-
-        {/* Data Points & Score Badges */}
-        {points.map((p, i) => (
-          <g
-            key={i}
-            className="cursor-pointer group"
-            onClick={() => onSelectAttempt && onSelectAttempt(p.attempt.id)}
-          >
-            {/* Large Score Label Above Point */}
-            <text
-              x={p.x}
-              y={p.y - 14}
-              textAnchor="middle"
-              fontSize="13"
-              fontWeight="900"
-              fill="#4f46e5"
-            >
-              {p.val != null ? `${p.val}%` : ''}
-            </text>
-
-            <circle cx={p.x} cy={p.y} r="8" fill="white" stroke="#4f46e5" strokeWidth="3.5" className="transition-transform [transform-box:fill-box] [transform-origin:center] group-hover:scale-125" />
-            <circle cx={p.x} cy={p.y} r="3" fill="#4f46e5" />
-
-            {/* X-Axis Date Label: Large High Contrast Dark Slate */}
-            <text x={p.x} y={H - 8} textAnchor="middle" fontSize="13" fontWeight="900" fill="#020617">
-              {p.dateStr}
-            </text>
-          </g>
-        ))}
-      </svg>
-    </div>
-  );
-}
-
-// ─── Graph 2: Score Distribution Donut Chart (Right Graph) ────────────────────
-function ScoreDistributionDonut({ attempts }) {
-  const scored = attempts.filter(a => a.percentage != null);
-
-  const brackets = [
-    { label: '90 – 100%', tag: 'High', color: '#10b981', count: 0 },
-    { label: '80 – 89%',  tag: 'Good', color: '#3b82f6', count: 0 },
-    { label: '70 – 79%',  tag: 'Pass', color: '#f59e0b', count: 0 },
-    { label: 'Below 70%', tag: 'Review', color: '#f43f5e', count: 0 },
-  ];
-
-  scored.forEach(a => {
-    const val = a.percentage;
-    if (val >= 90) brackets[0].count++;
-    else if (val >= 80) brackets[1].count++;
-    else if (val >= 70) brackets[2].count++;
-    else brackets[3].count++;
-  });
-
-  const total = scored.length;
-
-  // Calculate SVG Donut Slices
-  let cumulativeAngle = 0;
-  const radius = 58;
-  const strokeWidth = 14;
-  const cx = 75;
-  const cy = 75;
-  const circumference = 2 * Math.PI * radius;
-
-  const slices = brackets.map(b => {
-    const pct = total > 0 ? (b.count / total) * 100 : 0;
-    const strokeDasharray = `${(pct / 100) * circumference} ${circumference}`;
-    const strokeDashoffset = -((cumulativeAngle / 100) * circumference);
-    cumulativeAngle += pct;
-    return { ...b, pct: Math.round(pct), strokeDasharray, strokeDashoffset };
-  });
-
-  return (
-    <div className="flex flex-col sm:flex-row items-center justify-between gap-6 py-2">
-      {/* SVG Donut Ring */}
-      <div className="relative flex-shrink-0 w-36 h-36 flex items-center justify-center">
-        <svg width="150" height="150" viewBox="0 0 150 150" className="transform -rotate-90">
-          <circle cx={cx} cy={cy} r={radius} stroke="#f1f5f9" strokeWidth={strokeWidth} fill="transparent" />
-          {total > 0 && slices.map((s, i) => (
-            s.count > 0 && (
-              <circle
-                key={i}
-                cx={cx}
-                cy={cy}
-                r={radius}
-                stroke={s.color}
-                strokeWidth={strokeWidth}
-                strokeDasharray={s.strokeDasharray}
-                strokeDashoffset={s.strokeDashoffset}
-                strokeLinecap={slices.filter(x => x.count > 0).length === 1 ? 'butt' : 'round'}
-                fill="transparent"
-                className="transition-all duration-700 ease-out"
-              />
-            )
+          {[0, 25, 50, 75, 100].map((g) => (
+            <g key={g}>
+              <line x1={padL} x2={W - padR} y1={y(g)} y2={y(g)} stroke="#f1f5f9" />
+              <text x={padL - 8} y={y(g)} textAnchor="end" dominantBaseline="middle" fontSize="11" fill="#94a3b8">{g}</text>
+            </g>
           ))}
-        </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-          <span className="text-3xl font-black text-slate-900 leading-none">{total}</span>
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Exams</span>
-        </div>
-      </div>
 
-      {/* Sleek Structured Legend List */}
-      <div className="flex-1 space-y-2 w-full">
-        {brackets.map((b, i) => {
-          const pct = total > 0 ? Math.round((b.count / total) * 100) : 0;
-          const isActive = b.count > 0;
-          return (
-            <div
-              key={i}
-              className={`flex items-center justify-between text-xs px-3.5 py-2 rounded-xl border transition-all ${
-                isActive
-                  ? 'bg-slate-50/70 hover:bg-slate-50 border-slate-200/80 shadow-2xs'
-                  : 'bg-transparent border-transparent opacity-40'
-              }`}
-            >
-              <div className="flex items-center gap-2.5 min-w-0">
-                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: b.color }} />
-                <span className={`font-bold truncate ${isActive ? 'text-slate-800' : 'text-slate-400'}`}>
-                  {b.label}
-                </span>
-              </div>
-              <div className="flex items-center gap-1.5 flex-shrink-0 text-right">
-                <span className={`font-extrabold ${isActive ? 'text-slate-900' : 'text-slate-400'}`}>
-                  {b.count}
-                </span>
-                <span className="text-[11px] font-medium text-slate-400">
-                  ({pct}%)
-                </span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+          {passMark != null && (
+            <g>
+              <line x1={padL} x2={W - padR} y1={y(passMark)} y2={y(passMark)} stroke={GOOD} strokeOpacity="0.6" strokeDasharray="4 4" />
+              <text x={W - padR} y={y(passMark) - 6} textAnchor="end" fontSize="10.5" fontWeight="500" fill={GOOD}>
+                Pass {passMark}%
+              </text>
+            </g>
+          )}
+
+          {scored.length > 1 && <path d={area} fill="url(#trendFill)" />}
+          {scored.length > 1 && (
+            <path d={line} fill="none" stroke={ACCENT} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+          )}
+
+          {pts.map((p, i) => {
+            const sel = p.a.id === selectedId;
+            const color = statusColor(p.a.passed);
+            return (
+              <g key={p.a.id} className="cursor-pointer group" onClick={() => onSelect(p.a.id)}>
+                <title>{`${p.a.exam_title || 'Exam'} · Attempt #${p.a.attempt_number} · ${p.a.percentage}% · ${fmtDate(p.a.submitted_at)}`}</title>
+                <circle cx={p.x} cy={p.y} r="14" fill="transparent" />
+                <circle cx={p.x} cy={p.y} r={sel ? 9 : 7} fill={color} fillOpacity="0.15" />
+                <circle cx={p.x} cy={p.y} r="4" fill={color} stroke="white" strokeWidth="1.5" />
+                <text x={p.x} y={p.y - 13} textAnchor="middle" fontSize="11" fontWeight="600" fill="#334155">{p.a.percentage}%</text>
+                {i % labelEvery === 0 && (
+                  <text x={p.x} y={H - 6} textAnchor="middle" fontSize="11" fill="#94a3b8">{fmtShortDate(p.a.submitted_at)}</text>
+                )}
+              </g>
+            );
+          })}
+        </svg>
+      )}
     </div>
   );
 }
 
-// ─── Bottom Banner: Overall Grade Evaluation ──────────────────────────────────
-function OverallGradeBanner({ overall }) {
-  const avg = overall.avg_percentage;
-  const grade = getGradeLetter(avg);
+// ─── Outcomes ─────────────────────────────────────────────────────────────────
+function OutcomeCard({ attempts, stats }) {
+  const slices = [
+    { label: 'Passed', value: stats.passed, color: GOOD },
+    { label: 'Failed', value: stats.failed, color: CRITICAL },
+    { label: 'Pending', value: stats.pending, color: '#cbd5e1' },
+  ];
+  const size = 104, stroke = 10, r = (size - stroke) / 2, c = 2 * Math.PI * r;
+  const active = slices.filter((s) => s.value > 0);
+  const gap = active.length > 1 ? 3 : 0;
+  let offset = 0;
+
+  const scored = attempts.filter((a) => a.percentage != null);
+  const bands = [
+    { label: '90–100', color: GOOD, test: (v) => v >= 90 },
+    { label: '80–89', color: INFO, test: (v) => v >= 80 && v < 90 },
+    { label: '70–79', color: WARNING, test: (v) => v >= 70 && v < 80 },
+    { label: '< 70', color: CRITICAL, test: (v) => v < 70 },
+  ].map((b) => ({ ...b, count: scored.filter((a) => b.test(a.percentage)).length }));
 
   return (
-    <div className="bg-white rounded-2xl p-6 border border-slate-200/70 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-6">
-      <div className="flex items-center gap-5">
-        {/* Large Grade Circle */}
-        <div
-          className="w-16 h-16 rounded-full flex items-center justify-center text-2xl font-black shadow-inner flex-shrink-0"
-          style={{ color: grade.color, backgroundColor: `${grade.color}15`, border: `2px solid ${grade.color}30` }}
-        >
-          {grade.letter}
-        </div>
+    <div className={`${CARD} p-5 h-full`}>
+      <CardHeader icon={ChartPie} tone="violet" title="Outcomes" subtitle="Pass / fail split and score bands" />
 
-        <div className="space-y-0.5">
-          <p className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider">Overall Grade</p>
-          <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-black text-slate-900">{avg != null ? `${avg}%` : '—'}</span>
-            <span className="text-xs font-bold" style={{ color: grade.color }}>
-              {grade.label}
-            </span>
+      <div className="flex items-center gap-5">
+        <div className="relative flex-shrink-0" style={{ width: size, height: size }}>
+          <svg width={size} height={size} className="-rotate-90">
+            <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#f1f5f9" strokeWidth={stroke} />
+            {stats.total > 0 && active.map((s) => {
+              const len = (s.value / stats.total) * c;
+              const el = (
+                <circle
+                  key={s.label} cx={size / 2} cy={size / 2} r={r} fill="none"
+                  stroke={s.color} strokeWidth={stroke}
+                  strokeDasharray={`${Math.max(0, len - gap)} ${c}`} strokeDashoffset={-offset}
+                />
+              );
+              offset += len;
+              return el;
+            })}
+          </svg>
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
+            <span className="text-xl font-semibold text-slate-900 leading-none tabular-nums">{stats.passRate}%</span>
+            <span className="text-[10px] text-slate-500 mt-1">pass rate</span>
           </div>
-          <p className="text-xs text-slate-500 font-medium">
-            Based on {overall.total_exams_taken} total exam attempt(s) recorded.
-          </p>
+        </div>
+        <div className="flex-1 space-y-2 min-w-0">
+          {slices.map((s) => (
+            <div key={s.label} className="flex items-center justify-between text-[13px]">
+              <span className="flex items-center gap-2 text-slate-600">
+                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: s.color }} />
+                {s.label}
+              </span>
+              <span className="font-semibold text-slate-900 tabular-nums">{s.value}</span>
+            </div>
+          ))}
         </div>
       </div>
 
-      <div className="flex items-center gap-2 bg-indigo-50 px-4 py-2.5 rounded-xl border border-indigo-100/80">
-        <HiOutlineBadgeCheck className="w-5 h-5 text-indigo-600 flex-shrink-0" />
-        <span className="text-xs font-bold text-indigo-900">
-          Pass Rate: {overall.total_exams_taken > 0 ? Math.round((overall.passed_count / overall.total_exams_taken) * 100) : 0}%
-        </span>
+      <div className="mt-5 pt-4 border-t border-slate-100">
+        <div className="flex items-center justify-between mb-2.5">
+          <p className="text-xs font-medium text-slate-600">Score bands</p>
+          <p className="text-[11px] text-slate-400">{scored.length} graded</p>
+        </div>
+        <div className="flex h-2 rounded-full overflow-hidden bg-slate-100 gap-0.5">
+          {scored.length > 0 && bands.filter((b) => b.count).map((b) => (
+            <div key={b.label} className="h-full transition-all duration-700" style={{ width: `${(b.count / scored.length) * 100}%`, backgroundColor: b.color }} />
+          ))}
+        </div>
+        <div className="grid grid-cols-4 gap-2 mt-3">
+          {bands.map((b) => (
+            <div key={b.label} className={`rounded-lg px-2 py-1.5 text-center ${b.count ? 'bg-slate-50' : ''}`}>
+              <p className={`text-sm font-semibold tabular-nums ${b.count ? 'text-slate-900' : 'text-slate-300'}`}>{b.count}</p>
+              <p className="text-[10px] text-slate-500 flex items-center justify-center gap-1 mt-0.5">
+                <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: b.color }} />
+                {b.label}
+              </p>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
 }
 
-// ─── Dot-Free Interactive Calendar Widget ──────────────────────────────────────
+// ─── Section accuracy ─────────────────────────────────────────────────────────
+function SectionAccuracy({ rows, subtitle }) {
+  const correct = rows.reduce((s, r) => s + r.correct, 0);
+  const total = rows.reduce((s, r) => s + r.total, 0);
+  const overall = total ? Math.round((correct / total) * 100) : null;
+  const overallTone = overall != null ? accuracyTone(overall) : null;
+
+  return (
+    <div className={`${CARD} p-5 sm:p-6 h-full`}>
+      <CardHeader icon={ChartBarDecreasing} tone="sky" title="Accuracy by section" subtitle={subtitle} />
+      {rows.length === 0 ? (
+        <EmptyState icon={ChartBarDecreasing} text="No auto-graded answers to break down yet." />
+      ) : (
+        <div className="flex flex-col sm:flex-row gap-6">
+          <div className="flex sm:flex-col items-center gap-4 sm:gap-2 sm:w-36 flex-shrink-0 sm:border-r sm:border-slate-100 sm:pr-6">
+            <ScoreRing value={overall} size={96} stroke={9} color={overallTone.color}>
+              <span className="text-xl font-semibold text-slate-900 tabular-nums leading-none">{overall}%</span>
+            </ScoreRing>
+            <div className="sm:text-center">
+              <p className="text-xs font-medium text-slate-700">Overall accuracy</p>
+              <p className="text-[11px] text-slate-500 tabular-nums">{correct} of {total} correct</p>
+            </div>
+          </div>
+
+          <div className="flex-1 min-w-0 divide-y divide-slate-100">
+            {rows.map((s) => {
+              const tone = accuracyTone(s.pct);
+              return (
+                <div key={s.section || '_'} className="py-3 first:pt-0 last:pb-0">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-slate-800 truncate" title={s.section || 'Ungrouped'}>
+                        {s.section || 'Ungrouped'}
+                      </p>
+                      <p className="text-[11px] text-slate-500 tabular-nums">{s.correct} of {s.total} correct · {tone.label}</p>
+                    </div>
+                    <span
+                      className="text-xs font-semibold tabular-nums px-2 py-0.5 rounded-md flex-shrink-0"
+                      style={{ color: tone.color, backgroundColor: `${tone.color}14` }}
+                    >
+                      {s.pct}%
+                    </span>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden mt-2">
+                    <div className="h-full rounded-full transition-all duration-700 ease-out" style={{ width: `${s.pct}%`, backgroundColor: tone.color }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Lists with a "view all" pop-up ───────────────────────────────────────────
+// Cards show the first few rows so paired cards stay level; the full list
+// opens in a dialog.
+const PREVIEW_ROWS = 3;
+
+function ListCard({ icon, tone, title, subtitle, right, items, renderRow, empty, dialogTitle, dialogSubtitle }) {
+  const [open, setOpen] = useState(false);
+  const rest = items.length - PREVIEW_ROWS;
+  return (
+    <div className={`${CARD} p-5 sm:p-6 h-full flex flex-col`}>
+      <CardHeader icon={icon} tone={tone} title={title} subtitle={subtitle} right={right} />
+      {items.length === 0 ? (
+        <div className="flex-1 flex items-center justify-center">{empty}</div>
+      ) : (
+        <div className="flex-1 -mx-2 space-y-0.5">
+          {items.slice(0, PREVIEW_ROWS).map((it) => renderRow(it, () => {}))}
+        </div>
+      )}
+      {rest > 0 && (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="mt-4 w-full h-9 rounded-xl border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50 flex items-center justify-center gap-1.5 transition"
+        >
+          View all {items.length}
+          <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+        </button>
+      )}
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>{dialogTitle}</DialogTitle>
+            {dialogSubtitle && <DialogDescription>{dialogSubtitle}</DialogDescription>}
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto p-3 space-y-0.5">
+            {items.map((it) => renderRow(it, () => setOpen(false)))}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function ExamList({ exams, selectedExamId, onSelect }) {
+  return (
+    <ListCard
+      icon={Layers}
+      tone="indigo"
+      title="Exams taken"
+      subtitle="Best score per exam · click to focus"
+      items={exams}
+      dialogTitle="Exams taken"
+      dialogSubtitle={`${exams.length} exams · best score per exam`}
+      empty={<EmptyState icon={Layers} text="No exams taken yet." />}
+      renderRow={(e, close) => {
+        const active = e.id === selectedExamId;
+        const color = e.passed ? GOOD : e.best == null ? NEUTRAL : CRITICAL;
+        return (
+          <button
+            key={e.id}
+            type="button"
+            onClick={() => { onSelect(active ? ALL_EXAMS : e.id); close(); }}
+            className={`w-full flex items-center gap-3 px-2 py-2.5 rounded-xl text-left transition-colors ${active ? 'bg-indigo-50/70 ring-1 ring-indigo-200/80' : 'hover:bg-slate-50'}`}
+          >
+            <ScoreRing value={e.best} size={42} stroke={3.5} color={color}>
+              <span className="text-[11px] font-semibold text-slate-700 tabular-nums">{e.best != null ? Math.round(e.best) : '—'}</span>
+            </ScoreRing>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-slate-900 truncate">{e.title}</p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {e.attempts.length} attempt{e.attempts.length === 1 ? '' : 's'} · {fmtShortDate(e.latest)}
+              </p>
+            </div>
+            <StatusPill passed={e.passed ? true : e.best == null ? null : false} status="pending" />
+          </button>
+        );
+      }}
+    />
+  );
+}
+
+// ─── Verdict ──────────────────────────────────────────────────────────────────
+function VerdictCard({ condition, weakest, strongest }) {
+  const Icon = condition.icon;
+  const areas = [
+    strongest && { label: 'Strongest', color: GOOD, s: strongest },
+    weakest && { label: 'Focus area', color: CRITICAL, s: weakest },
+  ].filter(Boolean);
+
+  return (
+    <div className={`${CARD} p-5 h-full`}>
+      <CardHeader icon={GraduationCap} tone="slate" title="Assessment verdict" />
+      <div className="flex items-start gap-3 p-3.5 rounded-xl border" style={{ backgroundColor: `${condition.color}0d`, borderColor: `${condition.color}33` }}>
+        <Icon className="w-5 h-5 flex-shrink-0 mt-0.5" style={{ color: condition.color }} strokeWidth={2} />
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-slate-900">{condition.label}</p>
+          <p className="text-xs text-slate-600 mt-0.5 leading-relaxed">{condition.desc}</p>
+        </div>
+      </div>
+
+      {areas.length > 0 && (
+        <div className="mt-3 divide-y divide-slate-100 rounded-xl border border-slate-200/80">
+          {areas.map(({ label, color, s }) => (
+            <div key={label} className="flex items-center justify-between gap-3 px-3.5 py-2.5">
+              <div className="min-w-0">
+                <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color }}>{label}</p>
+                <p className="text-sm font-medium text-slate-900 truncate" title={s.section || 'Ungrouped'}>{s.section || 'Ungrouped'}</p>
+              </div>
+              <span className="text-sm font-semibold tabular-nums" style={{ color }}>{s.pct}%</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Calendar (opens from the top bar) ─────────────────────────────────────────────────────────────────
 function CalendarWidget({ attempts, selectedDateKey, onSelectDate }) {
-  const latestAttemptDate = attempts[0]?.submitted_at ? new Date(attempts[0].submitted_at) : new Date();
+  const latest = attempts[0]?.submitted_at ? new Date(attempts[0].submitted_at) : new Date();
   const [viewDate, setViewDate] = useState(
-    isNaN(latestAttemptDate.getTime()) ? new Date() : new Date(latestAttemptDate.getFullYear(), latestAttemptDate.getMonth(), 1)
+    isNaN(latest.getTime()) ? new Date() : new Date(latest.getFullYear(), latest.getMonth(), 1)
   );
 
   const year = viewDate.getFullYear();
   const month = viewDate.getMonth();
   const monthName = viewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-  const daysOfWeek = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-
   const firstDayIndex = (new Date(year, month, 1).getDay() + 6) % 7;
   const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-  const attemptDatesMap = useMemo(() => {
+  const byDate = useMemo(() => {
     const map = {};
-    attempts.forEach(a => {
+    attempts.forEach((a) => {
       const key = toISOKey(a.submitted_at);
-      if (key) {
-        if (!map[key]) map[key] = [];
-        map[key].push(a);
-      }
+      if (key) (map[key] = map[key] || []).push(a);
     });
     return map;
   }, [attempts]);
 
-  const gridCells = [];
-  for (let i = 0; i < firstDayIndex; i++) gridCells.push(null);
-  for (let d = 1; d <= daysInMonth; d++) gridCells.push(d);
+  const cells = [];
+  for (let i = 0; i < firstDayIndex; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
 
   return (
-    <div className="bg-white rounded-3xl p-5 border border-slate-200/90 shadow-2xs space-y-3">
-      <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-        <button
-          onClick={() => setViewDate(new Date(year, month - 1, 1))}
-          className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition"
-        >
-          <HiOutlineChevronLeft className="w-4 h-4" />
-        </button>
-        <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">
-          {monthName}
-        </h3>
-        <button
-          onClick={() => setViewDate(new Date(year, month + 1, 1))}
-          className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition"
-        >
-          <HiOutlineChevronRight className="w-4 h-4" />
-        </button>
+    <div className="w-[300px] p-4">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <p className="text-sm font-semibold text-slate-900">{monthName}</p>
+          <p className="text-[11px] text-slate-500">Pick a day with attempts</p>
+        </div>
+        <div className="flex items-center gap-0.5 flex-shrink-0">
+            <button type="button" onClick={() => setViewDate(new Date(year, month - 1, 1))} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition" aria-label="Previous month">
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button type="button" onClick={() => setViewDate(new Date(year, month + 1, 1))} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition" aria-label="Next month">
+              <ChevronRight className="w-4 h-4" />
+            </button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-7 text-center text-[10px] font-black text-slate-400 uppercase tracking-wider">
-        {daysOfWeek.map((d, i) => <div key={i} className="py-1">{d}</div>)}
+      <div className="grid grid-cols-7 text-center text-[10px] font-medium text-slate-400 uppercase mb-1">
+        {['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map((d) => <div key={d} className="py-1">{d}</div>)}
       </div>
-
-      <div className="grid grid-cols-7 text-center text-xs font-semibold gap-y-1">
-        {gridCells.map((d, i) => {
+      <div className="grid grid-cols-7 text-center text-xs gap-y-1">
+        {cells.map((d, i) => {
           if (!d) return <div key={i} />;
-
-          const monthStr = String(month + 1).padStart(2, '0');
-          const dayStr = String(d).padStart(2, '0');
-          const dateKey = `${year}-${monthStr}-${dayStr}`;
-
-          const isSelected = selectedDateKey === dateKey;
-          const dayAttempts = attemptDatesMap[dateKey] || [];
-          const hasAttempts = dayAttempts.length > 0;
-
+          const key = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+          const isSelected = selectedDateKey === key;
+          const dayAttempts = byDate[key] || [];
+          const has = dayAttempts.length > 0;
+          const anyPass = dayAttempts.some((a) => a.passed === true);
           return (
-            <div key={i} className="flex flex-col items-center justify-center py-0.5">
+            <div key={i} className="flex justify-center">
               <button
                 type="button"
-                onClick={() => onSelectDate(isSelected ? null : dateKey)}
-                className={`w-7 h-7 flex items-center justify-center rounded-lg text-xs transition-all ${
+                disabled={!has && !isSelected}
+                onClick={() => onSelectDate(isSelected ? null : key)}
+                title={has ? `${dayAttempts.length} attempt(s)` : undefined}
+                className={`relative w-8 h-8 flex items-center justify-center rounded-lg transition-colors tabular-nums ${
                   isSelected
-                    ? 'bg-indigo-600 text-white font-extrabold shadow-2xs'
-                    : hasAttempts
-                    ? 'bg-indigo-50 text-indigo-700 font-black border border-indigo-200/80 hover:bg-indigo-100'
-                    : 'text-slate-600 hover:bg-slate-100'
+                    ? 'bg-indigo-600 text-white font-semibold'
+                    : has
+                    ? 'text-slate-900 font-semibold ring-1 ring-inset ring-slate-200 hover:bg-slate-50'
+                    : 'text-slate-400 cursor-default'
                 }`}
               >
                 {d}
+                {has && !isSelected && (
+                  <span className="absolute bottom-1 w-1 h-1 rounded-full" style={{ backgroundColor: anyPass ? GOOD : CRITICAL }} />
+                )}
               </button>
             </div>
           );
@@ -403,109 +648,200 @@ function CalendarWidget({ attempts, selectedDateKey, onSelectDate }) {
   );
 }
 
-// ─── Single Attempt Detail Inspection View ────────────────────────────────────
-function computeAttemptBreakdown(full) {
-  const bySection = {};
-  const byType = {};
-  (full.answers || []).forEach((ans) => {
-    if (ans.needs_manual_grading || ans.is_correct == null) return;
-    const q = (full.questions_snapshot || []).find((qq) => String(qq._id) === String(ans.question_id));
-    const sectionName = q ? (q.section || '') : '';
-
-    if (!bySection[sectionName]) bySection[sectionName] = { section: sectionName, total: 0, correct: 0 };
-    bySection[sectionName].total += 1;
-    if (ans.is_correct) bySection[sectionName].correct += 1;
-
-    if (!byType[ans.type]) byType[ans.type] = { type: ans.type, total: 0, correct: 0 };
-    byType[ans.type].total += 1;
-    if (ans.is_correct) byType[ans.type].correct += 1;
-  });
-  const withAccuracy = (obj) => Object.values(obj)
-    .map((s) => ({ ...s, accuracy: s.total > 0 ? Math.round((s.correct / s.total) * 10000) / 100 : null }))
-    .sort((a, b) => (a.accuracy ?? 101) - (b.accuracy ?? 101));
-  return { section_breakdown: withAccuracy(bySection), type_breakdown: withAccuracy(byType) };
+// ─── Attempt history ──────────────────────────────────────────────────────────
+function AttemptHistory({ attempts, selectedId, onSelect, title, onClearDate, totalCount }) {
+  return (
+    <ListCard
+      icon={ListChecks}
+      tone="emerald"
+      title={title}
+      subtitle="Select an attempt to see its breakdown"
+      items={attempts}
+      dialogTitle={title}
+      dialogSubtitle={`${attempts.length} attempts · newest first`}
+      empty={<EmptyState icon={ListChecks} text="No attempts match this filter." />}
+      right={onClearDate && (
+        <button
+          type="button"
+          onClick={onClearDate}
+          className="text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 transition flex-shrink-0"
+        >
+          <X className="w-3.5 h-3.5" /> Show all ({totalCount})
+        </button>
+      )}
+      renderRow={(a, close) => {
+        const color = statusColor(a.passed);
+        const sel = a.id === selectedId;
+        return (
+          <button
+            key={a.id}
+            type="button"
+            onClick={() => { onSelect(sel ? null : a.id); close(); }}
+            className={`group w-full flex items-center gap-4 px-2 py-2.5 text-left rounded-xl transition-colors ${sel ? 'bg-indigo-50/70 ring-1 ring-indigo-200/80' : 'hover:bg-slate-50'}`}
+          >
+            <ScoreRing value={a.percentage} size={42} stroke={3.5} color={color}>
+              <span className="text-[11px] font-semibold text-slate-800 tabular-nums">{a.percentage != null ? Math.round(a.percentage) : '—'}</span>
+            </ScoreRing>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-slate-900 truncate">{a.exam_title || 'Exam'}</p>
+              <p className="text-xs text-slate-500 mt-0.5 flex flex-wrap items-center gap-x-3">
+                <span>Attempt #{a.attempt_number}</span>
+                <span className="inline-flex items-center gap-1"><CalendarDays className="w-3 h-3" />{fmtDate(a.submitted_at)}</span>
+                {a.time_taken_seconds != null && (
+                  <span className="inline-flex items-center gap-1"><Timer className="w-3 h-3" />{fmtDuration(a.time_taken_seconds)}</span>
+                )}
+              </p>
+            </div>
+            <StatusPill passed={a.passed} status={a.status} />
+            <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500 flex-shrink-0 transition-colors" />
+          </button>
+        );
+      }}
+    />
+  );
 }
 
-function SingleAttemptDetail({ attemptId, onBack }) {
-  const [full, setFull] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    setFull(null);
-    setLoading(true);
-    getExamAttemptResult(attemptId)
-      .then((res) => setFull(res.data))
-      .catch(() => toast.error('Failed to load attempt details.'))
-      .finally(() => setLoading(false));
-  }, [attemptId]);
-
-  if (loading) {
-    return (
-      <div className="space-y-6">
-        <Skeleton className="h-36 w-full rounded-3xl" />
-        <Skeleton className="h-64 w-full rounded-2xl" />
-      </div>
-    );
-  }
-  if (!full) return null;
-
-  const clr = statusColor(full.passed);
+// ─── Single attempt summary (replaces the trend while an attempt is open) ────
+function AttemptSummary({ attempt, onBack, resultLink }) {
+  const color = statusColor(attempt.passed);
+  const rows = sectionRows([attempt]);
+  const correct = rows.reduce((s, r) => s + r.correct, 0);
+  const total = rows.reduce((s, r) => s + r.total, 0);
 
   return (
-    <div className="space-y-6">
-      <div className="bg-slate-900 rounded-3xl p-6 text-white flex flex-col sm:flex-row items-center justify-between gap-6 shadow-md border border-slate-800">
-        <div className="space-y-2 text-center sm:text-left">
-          <button
-            type="button"
-            onClick={onBack}
-            className="inline-flex items-center gap-1.5 text-[11px] font-bold text-indigo-200 hover:text-white bg-white/10 hover:bg-white/20 px-3 py-1 rounded-xl transition"
-          >
-            <HiOutlineArrowLeft className="w-3.5 h-3.5" /> Back to Performance Overview
-          </button>
-          <h2 className="text-2xl font-black tracking-tight mt-1">{full.exam_title_snapshot || 'Exam'}</h2>
-          <div className="flex items-center justify-center sm:justify-start gap-4 text-xs text-slate-300 font-medium">
-            <span>Attempt #{full.attempt_number}</span>
-            <span>·</span>
-            <span>{fmtDate(full.submitted_at)}</span>
+    <div className={`${CARD} p-5 sm:p-6 h-full flex flex-col`}>
+      <div className="flex items-center justify-between gap-3 mb-5">
+        <button
+          type="button"
+          onClick={onBack}
+          className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg transition"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" /> Back to overview
+        </button>
+        {resultLink && (
+          <Link to={resultLink} className="inline-flex items-center gap-1.5 text-xs font-medium text-indigo-600 hover:text-indigo-800">
+            <FileText className="w-4 h-4" strokeWidth={1.75} /> Full answer sheet
+          </Link>
+        )}
+      </div>
+      <div className="flex-1 flex flex-col sm:flex-row items-center gap-6">
+        <ScoreRing value={attempt.percentage} size={120} stroke={10} color={color}>
+          <span className="text-2xl font-semibold text-slate-900 leading-none tabular-nums">{attempt.percentage != null ? `${Math.round(attempt.percentage)}%` : '—'}</span>
+          <span className="text-[11px] font-medium mt-1 capitalize" style={{ color }}>{fmtStatus(attempt)}</span>
+        </ScoreRing>
+        <div className="flex-1 min-w-0 w-full text-center sm:text-left">
+          <h2 className="text-lg font-semibold text-slate-900 tracking-tight">{attempt.exam_title || 'Exam'}</h2>
+          <p className="text-sm text-slate-500 mt-0.5">Attempt #{attempt.attempt_number} · {fmtDate(attempt.submitted_at)}</p>
+          <div className="grid grid-cols-3 gap-3 mt-4">
+            <MiniStat icon={CircleCheck} label="Correct" value={total ? `${correct}/${total}` : '—'} />
+            <MiniStat icon={Timer} label="Time taken" value={fmtDuration(attempt.time_taken_seconds)} />
+            <MiniStat icon={ShieldCheck} label="Pass mark" value={attempt.pass_percentage != null ? `${attempt.pass_percentage}%` : '—'} />
           </div>
-        </div>
-
-        <div className="flex-shrink-0 text-center bg-white/10 px-6 py-3.5 rounded-2xl backdrop-blur-xs border border-white/15">
-          <p className="text-3xl font-black">{full.percentage != null ? `${full.percentage}%` : '—'}</p>
-          <span className="inline-block mt-1 px-3 py-0.5 rounded-full text-[10px] font-extrabold bg-white/15 uppercase">
-            {fmtStatus(full)}
-          </span>
         </div>
       </div>
     </div>
   );
 }
 
-// ─── Main Participant Performance View ──────────────────────────────────────────
+function MiniStat({ icon: Icon, label, value }) {
+  return (
+    <div className="rounded-xl bg-slate-50 border border-slate-200/70 px-3 py-2.5 text-left">
+      <p className="text-[11px] text-slate-500 flex items-center gap-1.5">
+        <Icon className="w-3.5 h-3.5" strokeWidth={1.75} /> {label}
+      </p>
+      <p className="text-base font-semibold text-slate-900 mt-0.5 tabular-nums">{value}</p>
+    </div>
+  );
+}
+
+function HeroStat({ icon: Icon, label, value, hint, accent = '#a5b4fc' }) {
+  return (
+    <div className="rounded-xl bg-white/[0.04] ring-1 ring-inset ring-white/10 p-4">
+      <div className="flex items-center gap-2">
+        <span className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${accent}26`, color: accent }}>
+          <Icon className="w-4 h-4" strokeWidth={1.75} />
+        </span>
+        <span className="text-xs text-slate-400">{label}</span>
+      </div>
+      <p className="text-2xl font-semibold text-white mt-3 tabular-nums leading-none">{value}</p>
+      {hint && <p className="text-[11px] text-slate-400 mt-1.5 truncate">{hint}</p>}
+    </div>
+  );
+}
+
+// Lighter tints of the status colours, readable on the dark hero.
+const HERO_TINT = { good: '#6ee7b7', mid: '#fcd34d', bad: '#fda4af', none: '#cbd5e1' };
+
+function Row({ left, right }) {
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div className="lg:col-span-8 min-w-0">{left}</div>
+      <div className="lg:col-span-4 min-w-0">{right}</div>
+    </div>
+  );
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 export default function ParticipantExamPerformance() {
   const { participantId } = useParams();
   const navigate = useNavigate();
   const { isAdmin } = useAuth();
+  const goBack = useBack(isAdmin ? '/admin/participants' : '/airline/participants');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [selectedExamId, setSelectedExamId] = useHistoryState('selectedExamId', ALL_EXAMS);
   const [selectedDateKey, setSelectedDateKey] = useHistoryState('selectedDateKey', null);
   const [selectedAttemptId, setSelectedAttemptId] = useHistoryState('selectedAttemptId', null);
+  const [calendarOpen, setCalendarOpen] = useState(false);
 
   useEffect(() => {
     getParticipantExamPerformance(participantId)
-      .then(res => setData(res.data))
-      .catch(err => toast.error(err.response?.data?.error || 'Failed to load report.'))
+      .then((res) => setData(res.data))
+      .catch((err) => toast.error(err.response?.data?.error || 'Failed to load report.'))
       .finally(() => setLoading(false));
   }, [participantId]);
 
+  // The API returns attempts oldest first; the trend reads left-to-right in
+  // that order while lists show the newest first.
+  const chrono = data?.attempts || [];
+  const exams = useMemo(() => {
+    const by = new Map();
+    chrono.forEach((a) => {
+      const key = a.exam_id || a.exam_title;
+      if (!by.has(key)) by.set(key, { id: key, title: a.exam_title || 'Exam', attempts: [], pass_percentage: a.pass_percentage });
+      by.get(key).attempts.push(a);
+    });
+    return [...by.values()]
+      .map((e) => {
+        const scored = e.attempts.filter((a) => a.percentage != null);
+        return {
+          ...e,
+          best: scored.length ? Math.max(...scored.map((a) => a.percentage)) : null,
+          passed: e.attempts.some((a) => a.passed === true),
+          latest: e.attempts[e.attempts.length - 1].submitted_at,
+        };
+      })
+      .sort((a, b) => new Date(b.latest) - new Date(a.latest));
+  }, [chrono]);
+
+  const activeExam = exams.find((e) => e.id === selectedExamId) || null;
+  const scoped = activeExam ? activeExam.attempts : chrono;
+  const recent = useMemo(() => [...scoped].reverse(), [scoped]);
+
+  const selectExam = (id) => {
+    setSelectedExamId(id);
+    setSelectedAttemptId(null);
+    setSelectedDateKey(null);
+  };
+
   if (loading) {
     return (
-      <div className="p-6 space-y-6">
-        <Skeleton className="h-16 w-full rounded-2xl" />
-        <Skeleton className="h-48 w-full rounded-3xl" />
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Skeleton className="h-72 col-span-2 rounded-3xl" />
-          <Skeleton className="h-72 rounded-3xl" />
+      <div className="p-4 sm:p-6 space-y-6">
+        <Skeleton className="h-14 w-full rounded-2xl" />
+        <Skeleton className="h-56 w-full rounded-3xl" />
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <Skeleton className="h-80 lg:col-span-8 rounded-2xl" />
+          <Skeleton className="h-80 lg:col-span-4 rounded-2xl" />
         </div>
       </div>
     );
@@ -514,433 +850,205 @@ export default function ParticipantExamPerformance() {
   if (!data) {
     return (
       <div className="max-w-4xl mx-auto p-12 text-center">
-        <p className="text-sm font-semibold text-slate-500">Could not load candidate information.</p>
-        <button
-          onClick={() => navigate(-1)}
-          className="mt-4 px-4 py-2 bg-indigo-600 text-white text-xs font-bold rounded-xl shadow-xs"
-        >
-          Back to List
+        <p className="text-sm font-medium text-slate-500">Could not load candidate information.</p>
+        <button onClick={() => goBack()} className="mt-4 px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-xl">
+          Back to list
         </button>
       </div>
     );
   }
 
-  const { participant, overall, attempts, section_breakdown } = data;
-  const weakest = section_breakdown.filter(s => s.total > 0)[0];
+  const { participant } = data;
+  const stats = summarise(scoped);
+  const grade = getGradeLetter(stats.avg);
+  const condition = getCandidateCondition(stats);
+  const sections = sectionRows(scoped);
+  const weakest = sections.length && sections[0].pct < 60 ? sections[0] : null;
+  const strongest = sections.length > 1 ? sections[sections.length - 1] : null;
+  const initials = (participant.name || 'C A').split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase();
+  const scopeLabel = activeExam ? activeExam.title : 'All exams';
 
-  const filteredAttempts = selectedDateKey
-    ? attempts.filter(a => toISOKey(a.submitted_at) === selectedDateKey)
-    : attempts;
+  const passMarks = [...new Set(scoped.map((a) => a.pass_percentage).filter((v) => v != null))];
+  const passMark = passMarks.length === 1 ? passMarks[0] : null;
 
-  const selectedDateFormatted = selectedDateKey ? fmtDate(selectedDateKey) : null;
-  const avgPct = overall.avg_percentage;
-  const grade = getGradeLetter(avgPct);
-  const passRate = overall.total_exams_taken > 0 ? Math.round((overall.passed_count / overall.total_exams_taken) * 100) : 0;
-
-  // Condition Status Determination for Airline Administrative View (Dot-Free)
-  const getCandidateCondition = () => {
-    if (overall.total_exams_taken === 0) {
-      return { label: 'Awaiting Assessment', bg: 'bg-slate-100 text-slate-700 border-slate-200', desc: 'Candidate has not submitted any exam attempts yet.' };
-    }
-    if (passRate >= 80 && (avgPct == null || avgPct >= 80)) {
-      return { label: 'High Proficiency', bg: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30', desc: 'Candidate consistently meets and exceeds operational standards.' };
-    }
-    if (passRate >= 50 || (avgPct != null && avgPct >= 60)) {
-      return { label: 'Progressing — Moderate Risk', bg: 'bg-amber-500/15 text-amber-300 border-amber-500/30', desc: 'Candidate meets minimum threshold but requires targeted review.' };
-    }
-    return { label: 'Requires Immediate Attention', bg: 'bg-rose-500/20 text-rose-300 border-rose-500/40', desc: 'Candidate is failing multiple assessments. Supplementary training required.' };
-  };
-
-  const condition = getCandidateCondition();
-  const initials = (participant.name || 'C A').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+  const filtered = selectedDateKey ? recent.filter((a) => toISOKey(a.submitted_at) === selectedDateKey) : recent;
+  const selectedAttempt = scoped.find((a) => a.id === selectedAttemptId) || null;
+  const resultLink = selectedAttempt && !isAdmin && selectedAttempt.exam_id
+    ? `/airline/exams/${selectedAttempt.exam_id}/result/${selectedAttempt.id}`
+    : null;
 
   return (
-    <div className="min-h-screen bg-slate-50/70 text-slate-800 pb-20">
-      
-      {/* Executive Top Navbar Header */}
-      <header className="bg-white/90 backdrop-blur-md border-b border-slate-200/80 px-6 py-4 sticky top-0 z-30 shadow-2xs">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
+    <div className="min-h-full bg-slate-50 text-slate-800 pb-16">
+      {/* Top bar */}
+      <header className="bg-white border-b border-slate-200/80 px-4 sm:px-6 py-3 sticky top-0 z-30">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
             <button
-              onClick={() => navigate(-1)}
-              className="h-9 px-3 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-100 flex items-center gap-2 transition-all shadow-2xs"
+              onClick={() => goBack()}
+              className="h-9 px-3 rounded-xl border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-1.5 transition"
             >
-              <HiOutlineArrowLeft className="w-4 h-4 text-slate-500" />
-              <span>Back</span>
+              <ArrowLeft className="w-4 h-4 text-slate-500" />
+              Back
             </button>
-            <div className="h-4 w-px bg-slate-200" />
-            <div>
-              <h1 className="text-sm font-black text-slate-900 tracking-tight leading-tight">
-                Candidate Performance Analytics
-              </h1>
-              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Operational Assessment Report</p>
+            <div className="h-5 w-px bg-slate-200" />
+            <div className="min-w-0">
+              <h1 className="text-sm font-semibold text-slate-900 leading-tight">Candidate performance</h1>
+              <p className="text-xs text-slate-500 truncate">{participant.name}</p>
             </div>
           </div>
 
-          {isAdmin && participant.company && (
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2 bg-indigo-50/80 border border-indigo-100/80 px-3.5 py-1.5 rounded-xl text-xs font-extrabold text-indigo-900">
-                <FaPlaneDeparture className="w-4 h-4 text-indigo-600" />
-                <span>{participant.company}</span>
+          <div className="flex items-center gap-2">
+            <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+              <div className={`flex items-center h-9 rounded-xl border transition ${selectedDateKey ? 'border-indigo-200 bg-indigo-50 text-indigo-700' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'}`}>
+                <PopoverTrigger asChild>
+                  <button type="button" className="h-full flex items-center gap-2 pl-3 pr-3 text-xs font-medium">
+                    <CalendarDays className={`w-4 h-4 ${selectedDateKey ? 'text-indigo-500' : 'text-slate-400'}`} strokeWidth={1.75} />
+                    {selectedDateKey ? fmtDate(selectedDateKey) : 'Calendar'}
+                  </button>
+                </PopoverTrigger>
+                {selectedDateKey && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDateKey(null)}
+                    className="h-full pr-2.5 pl-0.5 text-indigo-400 hover:text-indigo-700"
+                    aria-label="Clear date filter"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
-            </div>
-          )}
+              <PopoverContent align="end" alignOffset={0}>
+                <CalendarWidget
+                  key={activeExam?.id || ALL_EXAMS}
+                  attempts={recent}
+                  selectedDateKey={selectedDateKey}
+                  onSelectDate={(k) => { setSelectedDateKey(k); setSelectedAttemptId(null); setCalendarOpen(false); }}
+                />
+              </PopoverContent>
+            </Popover>
+            {isAdmin && participant.company && (
+              <span className="hidden md:inline-flex items-center gap-2 h-9 px-3 rounded-xl border border-slate-200 text-xs font-medium text-slate-700">
+                <Plane className="w-3.5 h-3.5 text-slate-400" strokeWidth={1.75} />
+                {participant.company}
+              </span>
+            )}
+            <Select value={activeExam ? activeExam.id : ALL_EXAMS} onValueChange={selectExam} disabled={exams.length === 0}>
+              <SelectTrigger className="h-9 w-[240px] bg-white">
+                <span className="flex items-center gap-2 min-w-0">
+                  <Layers className="w-4 h-4 text-slate-400 flex-shrink-0" strokeWidth={1.75} />
+                  <SelectValue placeholder="All exams" />
+                </span>
+              </SelectTrigger>
+              <SelectContent align="end">
+                <SelectItem value={ALL_EXAMS}>All exams ({chrono.length} attempts)</SelectItem>
+                {exams.map((e) => (
+                  <SelectItem key={e.id} value={e.id}>
+                    {e.title} ({e.attempts.length})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </header>
 
-      {/* Main Layout Container */}
       <main className="px-4 sm:px-6 pt-6 space-y-6">
-        
-        {/* ── 1. EXECUTIVE DARK HERO BANNER ── */}
-        <div className="bg-slate-900 text-white rounded-3xl p-6 sm:p-7 shadow-xl border border-slate-800 relative overflow-hidden space-y-6">
-          <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none" />
-          
-          <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
-            
-            {/* Candidate Identity Details */}
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-2xl bg-indigo-600 text-white font-black text-xl flex items-center justify-center shadow-md flex-shrink-0">
+        {/* Hero */}
+        <section className="relative overflow-hidden rounded-3xl bg-slate-900 text-white p-6 sm:p-7">
+          <div className="absolute -top-24 -right-24 w-80 h-80 rounded-full bg-indigo-500/15 blur-3xl pointer-events-none" />
+          <div className="relative flex flex-col lg:flex-row lg:items-center gap-6">
+            <div className="flex items-center gap-4 flex-1 min-w-0">
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white font-semibold text-lg flex items-center justify-center flex-shrink-0">
                 {initials}
               </div>
-              <div className="space-y-1.5">
-                <div className="flex flex-wrap items-center gap-2.5">
-                  <h2 className="text-2xl font-black text-white tracking-tight leading-none">
-                    {participant.name}
-                  </h2>
-                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${condition.bg}`}>
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-2xl font-semibold tracking-tight truncate">{participant.name}</h2>
+                  <span
+                    className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium"
+                    style={{ color: HERO_TINT[condition.key], backgroundColor: `${condition.color}2e` }}
+                  >
+                    <condition.icon className="w-3.5 h-3.5" strokeWidth={2} />
                     {condition.label}
                   </span>
                 </div>
-                <p className="text-xs text-slate-400 font-medium">
+                <p className="text-sm text-slate-400 mt-1 truncate">
                   {isAdmin && participant.company ? `${participant.company} · ` : ''}
-                  <span className="text-slate-300">Total Attempts: <strong>{overall.total_exams_taken} Exams</strong></span>
+                  Showing <span className="text-slate-200 font-medium">{scopeLabel}</span>
                 </p>
               </div>
             </div>
 
-            {/* Quick Overview Grade Badge */}
-            <div className="flex items-center gap-3.5 bg-slate-800/80 backdrop-blur-md px-4 py-3 rounded-2xl border border-slate-700/80 flex-shrink-0">
-              <div
-                className="w-11 h-11 rounded-xl flex items-center justify-center text-xl font-black shadow-inner flex-shrink-0"
-                style={{ color: grade.color, backgroundColor: `${grade.color}20`, border: `1px solid ${grade.color}40` }}
-              >
-                {grade.letter}
-              </div>
-              <div className="text-left space-y-0.5">
-                <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider block">Average Grade</span>
-                <div className="text-lg font-black text-white leading-none">{avgPct != null ? `${avgPct}%` : '—'}</div>
+            <div className="flex items-center gap-4 rounded-2xl bg-white/[0.04] ring-1 ring-inset ring-white/10 px-5 py-4 flex-shrink-0">
+              <ScoreRing value={stats.avg} size={80} stroke={7} color={grade.color} track="rgba(255,255,255,0.08)">
+                <span className="text-lg font-semibold leading-none">{grade.letter}</span>
+              </ScoreRing>
+              <div>
+                <p className="text-xs text-slate-400">Average score</p>
+                <p className="text-3xl font-semibold tabular-nums leading-tight">{stats.avg != null ? `${stats.avg}%` : '—'}</p>
+                <p className="text-xs text-slate-300">{grade.label}</p>
               </div>
             </div>
-
           </div>
 
-          {/* KPI Metrics Strip */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-5 border-t border-slate-800 text-xs">
-            <div className="bg-slate-800/50 border border-slate-800 p-3 rounded-2xl space-y-0.5">
-              <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider block">Total Attempts</span>
-              <div className="text-xl font-black text-white">{overall.total_exams_taken}</div>
-              <p className="text-[10px] text-slate-400">Recorded assessments</p>
-            </div>
-            <div className="bg-slate-800/50 border border-slate-800 p-3 rounded-2xl space-y-0.5">
-              <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider block">Passed Exams</span>
-              <div className="text-xl font-black text-emerald-400">{overall.passed_count || 0}</div>
-              <p className="text-[10px] text-slate-400">Out of {overall.total_exams_taken}</p>
-            </div>
-            <div className="bg-slate-800/50 border border-slate-800 p-3 rounded-2xl space-y-0.5">
-              <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider block">Pass Rate</span>
-              <div className="text-xl font-black text-indigo-300">{passRate}%</div>
-              <p className="text-[10px] text-slate-400">Overall success ratio</p>
-            </div>
-            <div className="bg-slate-800/50 border border-slate-800 p-3 rounded-2xl space-y-0.5">
-              <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider block">Latest Activity</span>
-              <div className="text-xl font-black text-white">{attempts[0] ? fmtShortDate(attempts[0].submitted_at) : '—'}</div>
-              <p className="text-[10px] text-slate-400">Most recent submission</p>
-            </div>
+          <div className="relative grid grid-cols-2 lg:grid-cols-4 gap-3 mt-6">
+            <HeroStat icon={ListChecks} accent="#a5b4fc" label="Attempts" value={stats.total} hint={activeExam ? 'On this exam' : `Across ${exams.length} exam${exams.length === 1 ? '' : 's'}`} />
+            <HeroStat icon={CircleCheck} accent="#6ee7b7" label="Passed" value={`${stats.passed}/${stats.total}`} hint={`${stats.passRate}% pass rate`} />
+            <HeroStat icon={Trophy} accent="#fcd34d" label="Best score" value={stats.best != null ? `${stats.best}%` : '—'} hint={passMark != null ? `Pass mark ${passMark}%` : 'Highest graded attempt'} />
+            <HeroStat icon={Clock} accent="#7dd3fc" label="Last attempt" value={recent[0] ? fmtShortDate(recent[0].submitted_at) : '—'} hint={recent[0] ? recent[0].exam_title : 'No attempts yet'} />
           </div>
-        </div>
+        </section>
 
-        {/* ── 2. TWO-COLUMN MAIN ANALYTICAL DASHBOARD ── */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-
-          {/* MAIN COLUMN (Left lg:col-span-8) */}
-          <div className="lg:col-span-8 space-y-6">
-
-            {selectedAttemptId ? (
-              <SingleAttemptDetail
-                attemptId={selectedAttemptId}
-                onBack={() => setSelectedAttemptId(null)}
-              />
-            ) : (
-            <>
-            {/* TWO CHARTS SIDE BY SIDE */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              
-              {/* Left Chart: Score Progression */}
-              <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-2xs space-y-3">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                  <div>
-                    <h3 className="text-sm font-extrabold text-slate-900 tracking-tight">Score Progression</h3>
-                    <p className="text-[11px] text-slate-400 font-medium">Trajectory curve across attempts</p>
-                  </div>
-                  <span className="text-[10px] font-extrabold text-indigo-700 bg-indigo-50 border border-indigo-100 px-2.5 py-1 rounded-xl">
-                    Score (%)
-                  </span>
-                </div>
-                <PerformanceLineChart attempts={attempts} onSelectAttempt={setSelectedAttemptId} />
-              </div>
-
-              {/* Right Chart: Score Distribution Donut */}
-              <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-2xs space-y-4 flex flex-col justify-between">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                  <div>
-                    <h3 className="text-sm font-extrabold text-slate-900 tracking-tight">Score Brackets</h3>
-                    <p className="text-[11px] text-slate-400 font-medium">Distribution across performance tiers</p>
-                  </div>
-                  <span className="text-[10px] font-extrabold text-slate-600 bg-slate-50 border border-slate-200/80 px-2.5 py-1 rounded-xl">
-                    Tiers
-                  </span>
-                </div>
-                <ScoreDistributionDonut attempts={attempts} />
-              </div>
-
-            </div>
-
-            {/* Per-Section Performance (across all graded attempts) */}
-            {(() => {
-              const rows = (section_breakdown || [])
-                .filter((s) => (s.section || '').trim() && s.total > 0)
-                .map((s) => ({ ...s, pct: s.accuracy == null ? 0 : Math.round(s.accuracy) }))
-                .sort((a, b) => b.pct - a.pct);
-              if (rows.length === 0) return null;
-              const tier = (p) => p >= 80
-                ? { badge: 'bg-emerald-50 border-emerald-200/80', text: 'text-emerald-700', bar: 'bg-gradient-to-r from-emerald-500 to-teal-400', label: 'High Accuracy' }
-                : p >= 60
-                ? { badge: 'bg-amber-50 border-amber-200/80', text: 'text-amber-700', bar: 'bg-gradient-to-r from-amber-500 to-orange-400', label: 'Moderate' }
-                : { badge: 'bg-rose-50 border-rose-200/80', text: 'text-rose-700', bar: 'bg-gradient-to-r from-rose-500 to-red-400', label: 'Needs Practice' };
-              const strong = rows[0];
-              const weak = rows[rows.length - 1];
-              return (
-                <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-2xs space-y-5">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 gap-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 flex-shrink-0 shadow-2xs">
-                        <HiOutlineChartBar className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <h3 className="text-sm font-bold text-slate-900 tracking-tight">Accuracy Breakdown by Section</h3>
-                        <p className="text-xs text-slate-400 font-medium">Aggregated across every graded attempt</p>
-                      </div>
-                    </div>
-                    {rows.length > 1 && (
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-emerald-800 bg-emerald-50/90 border border-emerald-200/80 px-3 py-1 rounded-xl shadow-2xs">
-                          <span className="font-extrabold text-slate-700">Strongest:</span> {strong.section} ({strong.pct}%)
-                        </span>
-                        {weak.pct < 60 && (
-                          <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-rose-800 bg-rose-50/90 border border-rose-200/80 px-3 py-1 rounded-xl shadow-2xs">
-                            <span className="font-extrabold text-slate-700">Focus:</span> {weak.section} ({weak.pct}%)
-                          </span>
-                        )}
-                      </div>
+        {/* Paired rows: each left card shares its row (and height) with the
+            card beside it. */}
+        <Row
+          left={selectedAttempt ? (
+            <AttemptSummary attempt={selectedAttempt} onBack={() => setSelectedAttemptId(null)} resultLink={resultLink} />
+          ) : (
+            <div className={`${CARD} p-5 sm:p-6 h-full flex flex-col`}>
+              <CardHeader
+                icon={TrendingUp}
+                tone="indigo"
+                title="Score trend"
+                subtitle={`${scopeLabel} · oldest to newest`}
+                right={(
+                  <div className="hidden sm:flex items-center gap-3 text-[11px] text-slate-500 flex-shrink-0">
+                    <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full" style={{ backgroundColor: GOOD }} />Passed</span>
+                    <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full" style={{ backgroundColor: CRITICAL }} />Failed</span>
+                    {passMark != null && (
+                      <span className="flex items-center gap-1.5"><span className="w-3 border-t border-dashed" style={{ borderColor: GOOD }} />Pass mark</span>
                     )}
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                    {rows.map((s, idx) => {
-                      const c = tier(s.pct);
-                      return (
-                        <div
-                          key={s.section}
-                          className="group relative bg-slate-50/40 hover:bg-slate-50/80 border border-slate-200/80 hover:border-slate-300 rounded-2xl p-4 transition-all duration-200 shadow-2xs hover:shadow-xs flex flex-col justify-between gap-3"
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="flex items-center gap-2.5 min-w-0">
-                              <span className="w-6 h-6 rounded-lg bg-white border border-slate-200 text-slate-500 text-[10px] font-black flex items-center justify-center flex-shrink-0 shadow-2xs">
-                                {String(idx + 1).padStart(2, '0')}
-                              </span>
-                              <span className="font-bold text-slate-800 text-xs sm:text-sm truncate" title={s.section}>
-                                {s.section}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-2 flex-shrink-0">
-                              <span className="text-[11px] font-semibold text-slate-400">
-                                {s.correct}/{s.total} <span className="text-[10px] text-slate-300">pts</span>
-                              </span>
-                              <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-black border ${c.badge} ${c.text}`}>
-                                {s.pct}%
-                              </span>
-                            </div>
-                          </div>
-                          <div className="space-y-1">
-                            <div className="h-2 w-full rounded-full bg-slate-200/60 overflow-hidden p-[0.5px]">
-                              <div
-                                className={`h-full rounded-full transition-all duration-700 ease-out ${c.bar}`}
-                                style={{ width: `${s.pct}%` }}
-                              />
-                            </div>
-                            <div className="flex items-center justify-between text-[10px] text-slate-400 font-medium px-0.5">
-                              <span>{c.label}</span>
-                              <span>{s.pct}% accuracy</span>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* Complete Attempt Log Table */}
-            <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-2xs space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <div>
-                  <h3 className="text-base font-extrabold text-slate-900 tracking-tight">
-                    {selectedDateKey ? `Attempts on ${selectedDateFormatted}` : 'Complete Attempt History'}
-                  </h3>
-                  <p className="text-xs text-slate-500 font-medium">Click any row to inspect full attempt report</p>
-                </div>
-
-                {selectedDateKey && (
-                  <button
-                    onClick={() => setSelectedDateKey(null)}
-                    className="text-xs font-extrabold text-slate-600 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition-all"
-                  >
-                    <HiOutlineX className="w-3.5 h-3.5" /> Clear Filter ({attempts.length})
-                  </button>
                 )}
-              </div>
-
-              {filteredAttempts.length === 0 ? (
-                <p className="text-xs text-slate-400 py-8 text-center font-medium">
-                  {selectedDateKey ? `No exam attempts recorded on ${selectedDateFormatted}.` : 'No exam attempts recorded.'}
-                </p>
-              ) : (
-                <div className="max-h-80 overflow-y-auto overflow-x-auto pr-1">
-                  <table className="w-full text-left text-xs">
-                    <thead className="sticky top-0 bg-white z-10 border-b border-slate-100">
-                      <tr className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                        <th className="py-2.5 pr-4 bg-white">Exam Title</th>
-                        <th className="py-2.5 pr-4 bg-white">Attempt #</th>
-                        <th className="py-2.5 pr-4 bg-white">Submitted Date</th>
-                        <th className="py-2.5 pr-4 bg-white">Score</th>
-                        <th className="py-2.5 bg-white">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {filteredAttempts.map(a => {
-                        const isSelected = selectedAttemptId === a.id;
-                        return (
-                          <tr
-                            key={a.id}
-                            onClick={() => setSelectedAttemptId(isSelected ? null : a.id)}
-                            className={`cursor-pointer transition-all ${isSelected ? 'bg-indigo-50/80 font-bold' : 'hover:bg-slate-50/80'}`}
-                          >
-                            <td className="py-3.5 pr-4 font-extrabold text-slate-900">
-                              {a.exam_title || 'Exam'}
-                            </td>
-                            <td className="py-3.5 pr-4">
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-bold text-[11px]">
-                                #{a.attempt_number}
-                              </span>
-                            </td>
-                            <td className="py-3.5 pr-4 text-slate-600 font-semibold">
-                              {fmtDate(a.submitted_at)}
-                            </td>
-                            <td className="py-3.5 pr-4 font-black text-slate-900 text-sm">
-                              {a.percentage != null ? `${a.percentage}%` : '—'}
-                            </td>
-                            <td className="py-3.5">
-                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase border ${
-                                a.passed === true
-                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200/80'
-                                  : a.passed === false
-                                  ? 'bg-rose-50 text-rose-700 border-rose-200/80'
-                                  : 'bg-slate-100 text-slate-700 border-slate-200'
-                              }`}>
-                                {fmtStatus(a)}
-                              </span>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-            </>
-            )}
-
-          </div>
-
-          {/* SECONDARY SIDEBAR COLUMN (Right lg:col-span-4) */}
-          <div className="lg:col-span-4 space-y-6 lg:sticky lg:top-24">
-
-            {/* Airline Administrative Assessment Verdict Card */}
-            <div className="bg-white rounded-3xl border border-slate-200/90 p-5 shadow-2xs space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <div className="flex items-center gap-2">
-                  <div className="p-1.5 rounded-xl bg-indigo-50 text-indigo-600 border border-indigo-100/80">
-                    <HiOutlineAcademicCap className="w-4 h-4" />
-                  </div>
-                  <span className="text-xs font-black uppercase text-slate-900 tracking-wider">Airline Assessment Verdict</span>
-                </div>
-              </div>
-
-              <div className="space-y-3.5 text-xs">
-                <div className="space-y-1.5">
-                  <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider block">Candidate Condition</span>
-                  <div className="p-3.5 rounded-2xl bg-slate-50/90 border border-slate-200/90 space-y-1">
-                    <span className="font-black text-slate-900 block">{condition.label}</span>
-                    <p className="text-[11px] text-slate-600 leading-relaxed font-medium">{condition.desc}</p>
-                  </div>
-                </div>
-
-                {weakest && weakest.accuracy != null && weakest.accuracy < 60 && (
-                  <div className="space-y-1.5">
-                    <span className="text-[10px] font-black uppercase text-rose-700 tracking-wider block">Weakest Assessment Area</span>
-                    <div className="p-3.5 rounded-2xl bg-rose-50/70 border border-rose-200/80 space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-black text-rose-900">{weakest.section || 'Ungrouped'}</span>
-                        <span className="bg-rose-100 text-rose-800 border border-rose-200/80 px-2 py-0.5 rounded-md font-black text-[10px]">{weakest.accuracy}% Accuracy</span>
-                      </div>
-                      <p className="text-[11px] text-rose-700 leading-relaxed font-medium">
-                        Candidate requires focused retraining in <strong className="text-rose-900">{weakest.section || 'this topic'}</strong> prior to re-assessment.
-                      </p>
-                    </div>
-                  </div>
-                )}
+              />
+              <div className="flex-1 flex items-center">
+                <TrendChart attempts={scoped} passMark={passMark} selectedId={selectedAttemptId} onSelect={setSelectedAttemptId} />
               </div>
             </div>
+          )}
+          right={<VerdictCard condition={condition} weakest={weakest} strongest={strongest} />}
+        />
 
-            {/* Interactive Calendar Date Filter Widget */}
-            <CalendarWidget
-              attempts={attempts}
-              selectedDateKey={selectedDateKey}
-              onSelectDate={setSelectedDateKey}
+        <Row
+          left={selectedAttempt
+            ? <SectionAccuracy rows={sectionRows([selectedAttempt])} subtitle="Auto-graded answers in this attempt" />
+            : <SectionAccuracy rows={sections} subtitle={`${scopeLabel} · weakest first`} />}
+          right={<OutcomeCard attempts={scoped} stats={stats} />}
+        />
+
+        <Row
+          left={(
+            <AttemptHistory
+              attempts={filtered}
+              selectedId={selectedAttemptId}
+              onSelect={setSelectedAttemptId}
+              title={selectedDateKey ? `Attempts on ${fmtDate(selectedDateKey)}` : 'Attempt history'}
+              onClearDate={selectedDateKey ? () => setSelectedDateKey(null) : null}
+              totalCount={recent.length}
             />
-
-            {/* Date Filter Active Banner */}
-            {selectedDateKey && (
-              <div className="bg-indigo-50/90 border border-indigo-100 rounded-2xl p-4 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-extrabold text-indigo-900">Date Filter Active</span>
-                  <button
-                    onClick={() => setSelectedDateKey(null)}
-                    className="text-[10px] font-extrabold text-indigo-600 hover:underline"
-                  >
-                    Clear Filter
-                  </button>
-                </div>
-                <p className="text-xs text-indigo-800 font-medium">
-                  Showing <strong>{filteredAttempts.length} attempt(s)</strong> submitted on {selectedDateFormatted}.
-                </p>
-              </div>
-            )}
-
-          </div>
-
-        </div>
+          )}
+          right={<ExamList exams={exams} selectedExamId={activeExam?.id} onSelect={selectExam} />}
+        />
       </main>
     </div>
   );

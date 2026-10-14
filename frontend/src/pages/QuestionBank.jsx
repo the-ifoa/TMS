@@ -11,6 +11,7 @@ import {
   listQuestionBankItems, getQuestionBankTopics, createQuestionBankItem, updateQuestionBankItem, deleteQuestionBankItem,
 } from '../api';
 import QuestionEditor, { QUESTION_TYPES, createEmptyQuestion } from '../components/examQuestions/QuestionEditor';
+import { Library, FileQuestion, ArrowRight, Pencil, Trash2, CalendarClock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -303,73 +304,87 @@ export default function QuestionBankList({ embedded = false, showCreateState, se
             );
           }
           return (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4">
             {shown.map((g) => (
-              <Card key={g.id} className="group p-5 sm:p-6 rounded-3xl border border-slate-200/90 shadow-2xs hover:shadow-lg hover:border-slate-300 transition-all duration-200 flex flex-col justify-between">
+              <div
+                key={g.id}
+                className="group relative flex flex-col rounded-2xl bg-white border border-slate-200/80 shadow-[0_1px_2px_rgba(15,23,42,0.04)] hover:shadow-[0_10px_28px_-14px_rgba(15,23,42,0.25)] hover:border-slate-300 hover:-translate-y-0.5 transition-all duration-200"
+              >
                 {editingId === g.id ? (
-                  <div className="space-y-3">
+                  <div className="p-5 space-y-3">
                     <input value={editName} onChange={(e) => setEditName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && commitEdit()}
-                      className="w-full px-3 py-1.5 text-sm font-bold border border-blue-400 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20" autoFocus />
+                      className="w-full h-9 px-3 text-sm font-semibold border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" autoFocus />
                     <input value={editDesc} onChange={(e) => setEditDesc(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && commitEdit()}
-                      placeholder="Description" className="w-full px-3 py-1.5 text-xs border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20" />
+                      placeholder="Description" className="w-full h-9 px-3 text-xs border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" />
                     <div className="flex items-center gap-2 justify-end">
-                      <Button variant="ghost" size="sm" onClick={() => setEditingId(null)} className="h-8 rounded-xl text-xs font-bold">Cancel</Button>
-                      <Button size="sm" onClick={commitEdit} className="h-8 rounded-xl bg-slate-900 text-white text-xs font-bold px-3">Save</Button>
+                      <Button variant="ghost" size="sm" onClick={() => setEditingId(null)} className="h-8 rounded-lg text-xs font-semibold">Cancel</Button>
+                      <Button size="sm" onClick={commitEdit} className="h-8 rounded-lg bg-slate-900 text-white text-xs font-semibold px-3">Save</Button>
                     </div>
                   </div>
                 ) : (
-                  <div className="space-y-3 cursor-pointer" onClick={() => navigate(`/admin/question-bank/${g.id}`)}>
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-2xl bg-indigo-600/90 text-white flex items-center justify-center flex-shrink-0 shadow-2xs group-hover:scale-105 transition-transform">
-                        <HiOutlineCollection className="w-5 h-5 text-white" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <h3 className="text-sm sm:text-base font-extrabold text-slate-900 break-words group-hover:text-indigo-600 transition-colors" title={g.name}>
-                          {g.name}
-                        </h3>
-                        <span className="inline-block mt-0.5 text-[11px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-2.5 py-0.5 rounded-full">
-                          {g.question_count} question{g.question_count !== 1 ? 's' : ''}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="h-9 flex items-center">
-                      <p className="text-xs text-slate-500 leading-relaxed line-clamp-2">
-                        {g.description || <span className="italic text-slate-300">No description provided</span>}
-                      </p>
-                    </div>
-                  </div>
-                )}
-                {editingId !== g.id && (
-                  <div className="flex items-center gap-2 pt-3.5 mt-3.5 border-t border-slate-100/90">
-                    <Button
+                  <>
+                    <button
                       type="button"
                       onClick={() => navigate(`/admin/question-bank/${g.id}`)}
-                      className="flex-1 rounded-xl text-xs font-bold text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200/90 h-8 shadow-2xs"
+                      className="flex-1 text-left p-5 pb-4 cursor-pointer rounded-t-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/30"
                     >
-                      Open Bank
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => startEdit(g)}
-                      title="Rename"
-                      className="h-8 w-8 p-0 rounded-xl bg-white border border-slate-200/90 hover:bg-slate-50 text-slate-500 hover:text-slate-900"
-                    >
-                      <HiOutlinePencilAlt className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => deleteGroup(g)}
-                      title="Delete"
-                      className="h-8 w-8 p-0 rounded-xl bg-white border border-slate-200/90 hover:bg-rose-50 hover:border-rose-200 text-slate-400 hover:text-rose-600"
-                    >
-                      <HiOutlineTrash className="w-4 h-4" />
-                    </Button>
-                  </div>
+                      <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-4">
+                        <Library className="w-5 h-5" strokeWidth={1.75} />
+                      </div>
+                      <h3 className="text-[15px] font-semibold text-slate-900 tracking-tight line-clamp-1 pr-16 group-hover:text-indigo-600 transition-colors" title={g.name}>
+                        {g.name}
+                      </h3>
+                      <p className={`text-xs leading-relaxed mt-1 line-clamp-2 min-h-[2.5rem] ${g.description ? 'text-slate-500' : 'text-slate-400'}`}>
+                        {g.description || 'No description'}
+                      </p>
+                    </button>
+
+                    {/* Rename / delete — top-right, quiet until hovered */}
+                    <div className="absolute top-4 right-4 flex items-center gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
+                      <button
+                        type="button"
+                        onClick={() => startEdit(g)}
+                        title="Rename"
+                        className="w-8 h-8 inline-flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition cursor-pointer"
+                      >
+                        <Pencil className="w-4 h-4" strokeWidth={1.75} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => deleteGroup(g)}
+                        title="Delete"
+                        className="w-8 h-8 inline-flex items-center justify-center rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+                      >
+                        <Trash2 className="w-4 h-4" strokeWidth={1.75} />
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-3 px-5 py-3 border-t border-slate-100">
+                      <div className="flex items-center gap-3 text-xs text-slate-500 min-w-0">
+                        <span className="inline-flex items-center gap-1.5">
+                          <FileQuestion className="w-3.5 h-3.5 text-slate-400" strokeWidth={1.75} />
+                          <span className="font-semibold text-slate-700 tabular-nums">{g.question_count}</span>
+                          question{g.question_count !== 1 ? 's' : ''}
+                        </span>
+                        {g.updated_at && (
+                          <span className="hidden sm:inline-flex items-center gap-1.5 truncate">
+                            <CalendarClock className="w-3.5 h-3.5 text-slate-400" strokeWidth={1.75} />
+                            {new Date(g.updated_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                          </span>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/admin/question-bank/${g.id}`)}
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800 cursor-pointer flex-shrink-0"
+                      >
+                        Open
+                        <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" strokeWidth={2} />
+                      </button>
+                    </div>
+                  </>
                 )}
-              </Card>
+              </div>
             ))}
           </div>
           );

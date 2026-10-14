@@ -818,9 +818,14 @@ exports.participantPerformance = async (req, res) => {
     // Aggregate every scored answer across every finished attempt, broken
     // down by section (where in the syllabus they lag) and by question type
     // (what kind of question trips them up).
+    // Each attempt also keeps its own per-section tally so the report can be
+    // narrowed to a single exam on the client.
     const bySection = {};
     const byType = {};
+    const attemptSections = new Map();
     attempts.forEach((a) => {
+      const own = {};
+      attemptSections.set(String(a._id), own);
       a.answers.forEach((ans) => {
         if (ans.needs_manual_grading || ans.is_correct == null) return;
         const q = a.questions_snapshot.id(ans.question_id);
@@ -830,6 +835,10 @@ exports.participantPerformance = async (req, res) => {
         bySection[sectionName].total += 1;
         if (ans.is_correct) bySection[sectionName].correct += 1;
 
+        if (!own[sectionName]) own[sectionName] = { section: sectionName, total: 0, correct: 0 };
+        own[sectionName].total += 1;
+        if (ans.is_correct) own[sectionName].correct += 1;
+
         if (!byType[ans.type]) byType[ans.type] = { type: ans.type, total: 0, correct: 0 };
         byType[ans.type].total += 1;
         if (ans.is_correct) byType[ans.type].correct += 1;
@@ -838,6 +847,9 @@ exports.participantPerformance = async (req, res) => {
     const withAccuracy = (obj) => Object.values(obj)
       .map((s) => ({ ...s, accuracy: s.total > 0 ? Math.round((s.correct / s.total) * 10000) / 100 : null }))
       .sort((a, b) => (a.accuracy ?? 101) - (b.accuracy ?? 101)); // weakest first
+
+    const exams = await Exam.find({ _id: { $in: [...new Set(attempts.map((a) => String(a.exam_id)))] } }).select('pass_percentage');
+    const passMark = new Map(exams.map((e) => [String(e._id), e.pass_percentage]));
 
     const scored = attempts.filter((a) => a.percentage != null);
     res.json({
@@ -854,6 +866,8 @@ exports.participantPerformance = async (req, res) => {
         id: String(a._id), exam_id: String(a.exam_id), exam_title: a.exam_title_snapshot,
         attempt_number: a.attempt_number, percentage: a.percentage, passed: a.passed, status: a.status,
         submitted_at: a.submitted_at, time_taken_seconds: a.time_taken_seconds,
+        pass_percentage: passMark.get(String(a.exam_id)) ?? null,
+        sections: Object.values(attemptSections.get(String(a._id)) || {}),
       })),
       section_breakdown: withAccuracy(bySection),
       type_breakdown: withAccuracy(byType),

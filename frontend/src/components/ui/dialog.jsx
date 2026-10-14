@@ -7,10 +7,21 @@ import {
   DialogTitle as TitlePrimitive, DialogDescription as DescriptionPrimitive,
 } from '@/components/animate-ui/primitives/radix/dialog';
 
-// App dialog, animated by Animate UI (spring tilt-in + blur). Same API as the
-// shadcn one it replaced.
+// App dialog built on Animate UI. Same API as the shadcn one it replaced.
+// The stock tilt-in animates `filter: blur` and a 3D transform, which janks on
+// tall dialogs (e.g. the grading modal) — so both layers use a short
+// opacity/scale fade that stays on the GPU, and the overlay skips backdrop blur.
+const FADE = { duration: 0.16, ease: 'easeOut' };
+
 const DialogOverlay = ({ className, ...props }) => (
-  <OverlayPrimitive className={cn('fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs', className)} {...props} />
+  <OverlayPrimitive
+    initial={{ opacity: 0 }}
+    animate={{ opacity: 1 }}
+    exit={{ opacity: 0 }}
+    transition={FADE}
+    className={cn('fixed inset-0 z-50 bg-slate-900/50', className)}
+    {...props}
+  />
 );
 
 // The panel animates its own `transform`, so it is centred by a flex wrapper
@@ -23,7 +34,10 @@ const DialogContent = ({ className, children, hideClose, ...props }) => (
     <DialogOverlay />
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
       <ContentPrimitive
-        transition={{ type: 'spring', stiffness: 260, damping: 28 }}
+        initial={{ opacity: 0, scale: 0.97, y: 8 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.97, y: 8 }}
+        transition={FADE}
         className={cn(
           'pointer-events-auto relative w-full max-w-lg flex flex-col max-h-[85vh] overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-2xl outline-none',
           className

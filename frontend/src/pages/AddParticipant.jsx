@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import DatePicker from '../components/DatePicker';
 import { useNavigate } from 'react-router-dom';
+import { useBack } from '@/hooks/use-history-state';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   HiOutlineArrowLeft,
@@ -1007,6 +1008,7 @@ function BulkForm({ isAdmin, isDepartment, departmentLabel, airlineName, airline
 export default function AddParticipant() {
   const navigate = useNavigate();
   const { admin, isAdmin, isDepartment } = useAuth();
+  const goBack = useBack(isAdmin ? '/admin/participants' : '/airline/submissions');
   const airlineName = admin?.airlineName || '';
   const departmentLabel = admin?.department_name || 'this department';
   const [mode, setMode] = useState('bulk'); // 'single' | 'bulk'
@@ -1036,7 +1038,7 @@ export default function AddParticipant() {
           <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
             <button 
               type="button"
-              onClick={() => navigate(-1)}
+              onClick={() => goBack()}
               className="inline-flex items-center gap-1 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-lg text-xs font-semibold text-slate-700 hover:text-slate-900 bg-white border border-slate-200 shadow-2xs hover:bg-slate-50 transition-all flex-shrink-0"
               title="Go back"
             >

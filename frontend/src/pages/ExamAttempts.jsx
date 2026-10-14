@@ -9,22 +9,13 @@ import {
   HiOutlineXCircle,
   HiOutlineExclamationCircle,
   HiOutlineSearch,
-  HiOutlineAcademicCap,
-  HiOutlineUsers,
-  HiOutlineClipboardCheck,
-  HiOutlinePencilAlt,
   HiOutlineX,
-  HiOutlineShieldExclamation,
-  HiOutlineChartBar,
-  HiOutlineChevronDown,
-  HiOutlineChevronUp,
-  HiOutlineTrash,
   HiOutlineDownload,
   HiOutlineUpload,
-  HiOutlineMail,
-  HiOutlineDocumentText,
 } from 'react-icons/hi';
+import { ChartSpline, CalendarDays, Clock, ShieldAlert, ChevronDown, ChevronUp, PenLine, Trash2, MonitorX, FileText, Mail, Upload, Hourglass, CircleX, ListChecks, Trophy, Minimize2, ArrowLeftRight, CodeXml, CircleCheck, Gauge, ChartBarDecreasing, ClipboardCheck, CircleHelp, ChartPie } from 'lucide-react';
 import { listExamAttempts, getExam, getExamAttemptResult, gradeExamAttempt, getExamAnalytics, exportExamAttempts, deleteExamAttempt, bulkDeleteExamAttempts, uploadAttemptCertificate, getAttemptCertificate, deleteAttemptCertificate, sendAttemptCertificate } from '../api';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useConfirm } from '@/hooks/use-confirm';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -154,6 +145,27 @@ const STATUS_VARIANT = {
   graded: 'emerald',
 };
 
+// Row status pill for each attempt state.
+const ATTEMPT_STATUS = {
+  in_progress:    { label: 'In progress',    cls: 'bg-amber-50 text-amber-700 ring-amber-600/20' },
+  pending_review: { label: 'Pending review', cls: 'bg-blue-50 text-blue-700 ring-blue-600/20' },
+  submitted:      { label: 'Submitted',      cls: 'bg-emerald-50 text-emerald-700 ring-emerald-600/20' },
+  graded:         { label: 'Graded',         cls: 'bg-emerald-50 text-emerald-700 ring-emerald-600/20' },
+};
+
+const VIOLATION_ICONS = {
+  fullscreen_exit: Minimize2,
+  tab_switch: ArrowLeftRight,
+  devtools_suspected: CodeXml,
+};
+
+const VIOLATION_TONES = {
+  fullscreen_exit:    { icon: 'bg-amber-50 text-amber-600',   chip: 'bg-amber-50 text-amber-700' },
+  tab_switch:         { icon: 'bg-rose-50 text-rose-600',     chip: 'bg-rose-50 text-rose-700' },
+  devtools_suspected: { icon: 'bg-violet-50 text-violet-600', chip: 'bg-violet-50 text-violet-700' },
+  default:            { icon: 'bg-slate-100 text-slate-600',  chip: 'bg-slate-100 text-slate-700' },
+};
+
 const VIOLATION_LABELS = {
   fullscreen_exit: 'Exited fullscreen',
   tab_switch: 'Switched tab/window',
@@ -271,6 +283,327 @@ function AttemptImageGallery({ gallery }) {
           />
         </div>
       ))}
+    </div>
+  );
+}
+
+// ─── Analytics panel ──────────────────────────────────────────────────────────
+// Same look as the candidate performance page: dark summary hero, then white
+// cards with tinted icon chips.
+const A_GOOD = '#059669';
+const A_BAD = '#e11d48';
+const A_WARN = '#d97706';
+const A_CARD = 'bg-white rounded-2xl border border-slate-200/80 shadow-[0_1px_2px_rgba(15,23,42,0.04)]';
+const BAR_AREA = 150;
+
+const A_TONES = {
+  indigo: 'bg-indigo-50 text-indigo-600',
+  sky: 'bg-sky-50 text-sky-600',
+  violet: 'bg-violet-50 text-violet-600',
+};
+
+function ARing({ value, color, size = 80, stroke = 7, track = 'rgba(255,255,255,0.08)', children }) {
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  const pct = Math.max(0, Math.min(100, value ?? 0));
+  return (
+    <div className="relative flex-shrink-0" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="-rotate-90">
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={track} strokeWidth={stroke} />
+        {pct > 0 && (
+          <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={stroke}
+            strokeLinecap="round" strokeDasharray={`${(pct / 100) * c} ${c}`} className="transition-[stroke-dasharray] duration-700" />
+        )}
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center text-center">{children}</div>
+    </div>
+  );
+}
+
+function AHeroStat({ icon: Icon, label, value, hint, accent }) {
+  return (
+    <div className="rounded-xl bg-white/[0.04] ring-1 ring-inset ring-white/10 p-4">
+      <div className="flex items-center gap-2">
+        <span className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${accent}26`, color: accent }}>
+          <Icon className="w-4 h-4" strokeWidth={1.75} />
+        </span>
+        <span className="text-xs text-slate-400">{label}</span>
+      </div>
+      <p className="text-2xl font-semibold text-white mt-3 tabular-nums leading-none">{value}</p>
+      {hint && <p className="text-[11px] text-slate-400 mt-1.5 truncate">{hint}</p>}
+    </div>
+  );
+}
+
+function ACardHeader({ icon: Icon, tone, title, subtitle, right }) {
+  return (
+    <div className="flex items-start justify-between gap-3 mb-5">
+      <div className="flex items-center gap-3 min-w-0">
+        <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${A_TONES[tone]}`}>
+          <Icon className="w-[18px] h-[18px]" strokeWidth={1.75} />
+        </div>
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold text-slate-900 tracking-tight">{title}</h3>
+          {subtitle && <p className="text-xs text-slate-500 mt-0.5 truncate">{subtitle}</p>}
+        </div>
+      </div>
+      {right}
+    </div>
+  );
+}
+
+function shortDay(iso) {
+  return new Date(`${iso}T00:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+}
+
+function AnalyticsPanel({ analytics, examTitle, passMark, inProgress }) {
+  const [qFilter, setQFilter] = useState('all');
+  const o = analytics.overall;
+  const passRate = o.finished_attempts ? Math.round((o.passed / o.finished_attempts) * 100) : null;
+  const avg = o.avg_percentage != null ? Math.round(o.avg_percentage * 10) / 10 : null;
+  const avgColor = avg == null ? '#94a3b8' : passMark != null ? (avg >= passMark ? A_GOOD : A_BAD) : '#6366f1';
+
+  const scoredQs = analytics.per_question.filter((q) => q.miss_rate != null);
+  const avgMiss = scoredQs.length ? Math.round(scoredQs.reduce((s, q) => s + q.miss_rate, 0) / scoredQs.length) : null;
+  const tiers = {
+    hard: scoredQs.filter((q) => q.miss_rate > 50).length,
+    medium: scoredQs.filter((q) => q.miss_rate > 20 && q.miss_rate <= 50).length,
+    easy: scoredQs.filter((q) => q.miss_rate <= 20).length,
+  };
+
+  const sessions = analytics.pass_rate_over_time;
+  const maxTotal = Math.max(1, ...sessions.map((d) => d.total));
+
+  return (
+    <div className="space-y-6">
+      {/* Hero */}
+      <section className="relative overflow-hidden rounded-3xl bg-slate-900 text-white p-6 sm:p-7">
+        <div className="absolute -top-24 -right-24 w-80 h-80 rounded-full bg-indigo-500/15 blur-3xl pointer-events-none" />
+        <div className="relative flex flex-col lg:flex-row lg:items-center gap-6">
+          <div className="flex items-center gap-4 flex-1 min-w-0">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center flex-shrink-0">
+              <ChartSpline className="w-6 h-6" strokeWidth={1.75} />
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-2xl font-semibold tracking-tight truncate">Performance analytics</h2>
+              <p className="text-sm text-slate-400 mt-1 truncate">
+                {examTitle ? <><span className="text-slate-200 font-medium">{examTitle}</span> · </> : ''}
+                How candidates are doing on this exam
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4 rounded-2xl bg-white/[0.04] ring-1 ring-inset ring-white/10 px-5 py-4 flex-shrink-0">
+            <ARing value={avg} color={avgColor}>
+              <Gauge className="w-7 h-7" style={{ color: avgColor }} strokeWidth={1.5} />
+            </ARing>
+            <div>
+              <p className="text-xs text-slate-400">Average score</p>
+              <p className="text-3xl font-semibold tabular-nums leading-tight">{avg != null ? `${avg}%` : '—'}</p>
+              <p className="text-xs text-slate-300">{passMark != null ? `Pass mark ${passMark}%` : 'Across graded attempts'}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="relative grid grid-cols-2 lg:grid-cols-4 gap-3 mt-6">
+          <AHeroStat icon={CircleCheck} accent="#6ee7b7" label="Pass rate" value={passRate != null ? `${passRate}%` : '—'} hint={`${o.passed} of ${o.finished_attempts} passed`} />
+          <AHeroStat icon={ClipboardCheck} accent="#a5b4fc" label="Finished" value={o.finished_attempts} hint="Submitted attempts" />
+          <AHeroStat icon={Hourglass} accent="#fcd34d" label="In progress" value={inProgress} hint={inProgress ? 'Still taking the exam' : 'Nobody mid-exam'} />
+          <AHeroStat icon={CircleHelp} accent="#fda4af" label="Avg. miss rate" value={avgMiss != null ? `${avgMiss}%` : '—'} hint={`${analytics.per_question.length} questions · ${tiers.hard} hard`} />
+        </div>
+      </section>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Sessions — stacked passed / failed columns */}
+        <section className={`${A_CARD} p-5 sm:p-6 flex flex-col lg:col-span-7`}>
+          <ACardHeader
+            icon={CalendarDays}
+            tone="indigo"
+            title="Results by session"
+            subtitle="Attempts per exam day, split by outcome"
+            right={(
+              <div className="hidden sm:flex items-center gap-3 text-[11px] text-slate-500 flex-shrink-0">
+                <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full" style={{ backgroundColor: A_GOOD }} />Passed</span>
+                <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full" style={{ backgroundColor: A_BAD }} />Failed</span>
+              </div>
+            )}
+          />
+          {sessions.length === 0 ? (
+            <p className="flex-1 flex items-center justify-center text-xs text-slate-500 py-10">No submitted attempts yet.</p>
+          ) : (
+            <>
+              <div className="flex-1 overflow-x-auto overflow-y-hidden">
+                <div className="relative flex items-end gap-4 min-w-full" style={{ minWidth: sessions.length * 48, height: BAR_AREA + 44 }}>
+                  {[0, 0.5, 1].map((g) => (
+                    <div key={g} className="absolute left-0 right-0 border-t border-slate-100" style={{ bottom: 22 + g * BAR_AREA }} />
+                  ))}
+                  {sessions.map((d) => {
+                    const failed = d.total - d.passed;
+                    const h = Math.max(8, Math.round((d.total / maxTotal) * BAR_AREA));
+                    return (
+                      <div key={d.date} className="relative flex-1 min-w-[32px] h-full flex flex-col items-center justify-end group"
+                        title={`${shortDay(d.date)}: ${d.passed} passed, ${failed} failed (${Math.round(d.pass_rate)}% pass rate)`}>
+                        <span className="text-[11px] font-semibold text-slate-700 tabular-nums mb-1">{d.total}</span>
+                        <div className="w-full max-w-[34px] flex flex-col gap-px rounded-lg overflow-hidden group-hover:opacity-85 transition" style={{ height: h }}>
+                          {failed > 0 && <div style={{ flex: failed, backgroundColor: A_BAD }} />}
+                          {d.passed > 0 && <div style={{ flex: d.passed, backgroundColor: A_GOOD }} />}
+                        </div>
+                        <span className="h-[22px] pt-1.5 text-[11px] text-slate-500 whitespace-nowrap">{shortDay(d.date)}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="mt-4 pt-3 border-t border-slate-100 grid grid-cols-3 gap-3 text-center">
+                {[
+                  ['Sessions', sessions.length],
+                  ['Busiest day', `${maxTotal} attempts`],
+                  ['Best day', `${Math.round(Math.max(...sessions.map((d) => d.pass_rate)))}% pass`],
+                ].map(([k, v]) => (
+                  <div key={k}>
+                    <p className="text-sm font-semibold text-slate-900 tabular-nums">{v}</p>
+                    <p className="text-[11px] text-slate-500">{k}</p>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </section>
+
+        {/* Outcome split */}
+        <section className={`${A_CARD} p-5 sm:p-6 lg:col-span-5 flex flex-col`}>
+          <ACardHeader icon={ChartPie} tone="violet" title="Outcomes" subtitle="How submitted attempts ended" />
+          <div className="flex-1 flex items-center gap-6">
+            <ARing value={passRate} color={A_GOOD} size={128} stroke={12} track="#fee2e2">
+              <span className="text-2xl font-semibold text-slate-900 tabular-nums leading-none">{passRate != null ? `${passRate}%` : '—'}</span>
+              <span className="text-[11px] text-slate-500 mt-1">pass rate</span>
+            </ARing>
+            <div className="flex-1 space-y-3 min-w-0">
+              {[
+                ['Passed', o.passed, A_GOOD],
+                ['Failed', o.finished_attempts - o.passed, A_BAD],
+                ['In progress', inProgress, '#cbd5e1'],
+              ].map(([label, n, c]) => (
+                <div key={label}>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="flex items-center gap-2 text-slate-600">
+                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: c }} />{label}
+                    </span>
+                    <span className="font-semibold text-slate-900 tabular-nums">{n}</span>
+                  </div>
+                  <div className="mt-1.5 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                    <div className="h-full rounded-full" style={{ width: `${(n / Math.max(1, o.finished_attempts + inProgress)) * 100}%`, backgroundColor: c }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      </div>
+
+      {/* Question difficulty */}
+      {analytics.per_question.length > 0 && (() => {
+        const rows = analytics.per_question.map((q, idx) => ({
+          ...q,
+          no: idx + 1,
+          tier: q.miss_rate == null ? 'none' : q.miss_rate > 50 ? 'hard' : q.miss_rate > 20 ? 'medium' : 'easy',
+        }));
+        const shown = qFilter === 'all' ? rows : rows.filter((r) => r.tier === qFilter);
+        const TIER = {
+          hard:   { label: 'Hard',   dot: 'bg-rose-400',    text: 'text-rose-600' },
+          medium: { label: 'Medium', dot: 'bg-amber-400',   text: 'text-amber-600' },
+          easy:   { label: 'Easy',   dot: 'bg-emerald-400', text: 'text-emerald-600' },
+          none:   { label: 'No data', dot: 'bg-slate-300',  text: 'text-slate-400' },
+        };
+        return (
+          <section className={`${A_CARD} overflow-hidden`}>
+            <div className="p-5 sm:p-6 pb-4">
+              <ACardHeader
+                icon={ChartBarDecreasing}
+                tone="sky"
+                title="Question difficulty"
+                subtitle="How often each question was answered wrong · hardest first"
+              />
+              {/* Filter tabs */}
+              <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl w-fit max-w-full overflow-x-auto [scrollbar-width:none] -mt-1">
+                {[
+                  ['all', 'All', rows.length],
+                  ['hard', 'Hard', tiers.hard],
+                  ['medium', 'Medium', tiers.medium],
+                  ['easy', 'Easy', tiers.easy],
+                ].map(([k, label, n]) => (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => setQFilter(k)}
+                    className={`inline-flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-xs whitespace-nowrap transition cursor-pointer ${
+                      qFilter === k ? 'bg-white text-slate-900 font-semibold shadow-sm' : 'text-slate-600 hover:text-slate-900 font-medium'
+                    }`}
+                  >
+                    {k !== 'all' && <span className={`w-1.5 h-1.5 rounded-full ${TIER[k].dot}`} />}
+                    {label}
+                    <span className="text-[10px] text-slate-400 tabular-nums">{n}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Table head (desktop) */}
+            <div className="hidden md:grid grid-cols-[2.5rem_1fr_6rem_11rem_4.5rem] gap-4 px-6 py-2 bg-slate-50 border-y border-slate-100 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+              <span>#</span>
+              <span>Question</span>
+              <span>Difficulty</span>
+              <span>Correct / missed</span>
+              <span className="text-right">Missed</span>
+            </div>
+
+            <div className="max-h-[28rem] overflow-y-auto divide-y divide-slate-100">
+              {shown.length === 0 && (
+                <p className="px-6 py-10 text-center text-xs text-slate-500">No questions in this group.</p>
+              )}
+              {shown.map((q) => {
+                const t = TIER[q.tier];
+                return (
+                  <div key={q.question_id || q.no} className="grid grid-cols-[2.5rem_1fr_4.5rem] md:grid-cols-[2.5rem_1fr_6rem_11rem_4.5rem] items-center gap-x-4 gap-y-2 px-5 sm:px-6 py-3 hover:bg-slate-50/70 transition-colors">
+                    <span className="w-7 h-7 rounded-lg bg-slate-100 text-slate-500 text-[11px] font-semibold flex items-center justify-center tabular-nums">
+                      {q.no}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-sm text-slate-800 truncate" title={q.prompt}>{q.prompt || '(untitled question)'}</p>
+                      {(q.section || q.pending > 0) && (
+                        <p className="text-[11px] text-slate-400 truncate">
+                          {q.section}
+                          {q.section && q.pending > 0 ? ' · ' : ''}
+                          {q.pending > 0 ? `${q.pending} awaiting grading` : ''}
+                        </p>
+                      )}
+                    </div>
+                    <span className="hidden md:inline-flex items-center gap-1.5 text-xs text-slate-600">
+                      <span className={`w-1.5 h-1.5 rounded-full ${t.dot}`} />{t.label}
+                    </span>
+                    <div className="hidden md:block">
+                      {q.total > 0 ? (
+                        <>
+                          <div className="flex h-1.5 rounded-full overflow-hidden bg-slate-100 gap-px">
+                            {q.correct > 0 && <div className="bg-emerald-400" style={{ flex: q.correct }} />}
+                            {q.incorrect > 0 && <div className="bg-rose-300" style={{ flex: q.incorrect }} />}
+                          </div>
+                          <p className="text-[11px] text-slate-400 mt-1 tabular-nums">{q.correct} correct · {q.incorrect} missed</p>
+                        </>
+                      ) : (
+                        <p className="text-[11px] text-slate-400">Not answered yet</p>
+                      )}
+                    </div>
+                    <span className={`text-right text-sm font-semibold tabular-nums ${t.text}`}>
+                      {q.miss_rate != null ? `${Math.round(q.miss_rate)}%` : '—'}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        );
+      })()}
     </div>
   );
 }
@@ -717,6 +1050,13 @@ export default function ExamAttempts() {
   const [analytics, setAnalytics] = useState(null);
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [expandedViolations, setExpandedViolations] = useState(() => new Set());
+  // Candidate cards start collapsed; this holds the ones the user opened.
+  const [openGroups, setOpenGroups] = useState(() => new Set());
+  const toggleGroup = (key) => setOpenGroups((prev) => {
+    const next = new Set(prev);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    return next;
+  });
   const { confirm, ConfirmDialog } = useConfirm();
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [showExport, setShowExport] = useState(false);
@@ -972,32 +1312,45 @@ export default function ExamAttempts() {
     return matchesSearch && matchesStatus;
   });
 
+  // One card per candidate, holding every attempt they made (newest first,
+  // in the order the list already arrives in).
+  const attemptGroups = [];
+  {
+    const byKey = new Map();
+    filteredAttempts.forEach((a) => {
+      const key = a.participant_id || a.participant_name || a.id;
+      if (!byKey.has(key)) {
+        byKey.set(key, { key, attempts: [] });
+        attemptGroups.push(byKey.get(key));
+      }
+      byKey.get(key).attempts.push(a);
+    });
+  }
+
   return (
     <div className="w-full min-h-full pb-20 flex flex-col">
-      {/* Integrated Sticky Top Header & Search/Filter Bar */}
-      <div className="sticky top-0 z-20 w-full bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-2xs">
-        <div className="w-full px-4 sm:px-6 lg:px-8 py-3 space-y-2.5">
-          {/* Top Row: Navigation, Title & Right Controls */}
-          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-            <div className="flex items-center gap-2.5 min-w-0 flex-1 basis-60">
+      {/* Sticky header: title & actions · search & filters · list toolbar · column titles */}
+      <div className="sticky top-0 z-20 w-full bg-white/95 backdrop-blur-md border-b border-slate-200/80">
+        <div className="w-full px-4 sm:px-6 lg:px-8 pt-3 pb-3 space-y-3">
+          {/* Row 1 — back, title, page actions */}
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
               <button
                 type="button"
-                className="h-8 px-3 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:border-slate-300 flex items-center gap-1.5 flex-shrink-0 shadow-2xs transition-all cursor-pointer"
                 onClick={goBack}
                 title="Back"
+                className="h-9 w-9 sm:w-auto sm:px-3 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:border-slate-300 inline-flex items-center justify-center gap-1.5 flex-shrink-0 transition cursor-pointer"
               >
-                <HiOutlineArrowLeft className="w-3.5 h-3.5 text-slate-500" />
+                <HiOutlineArrowLeft className="w-4 h-4 text-slate-500" />
                 <span className="hidden sm:inline">Back</span>
-                <span className="sm:hidden">Back</span>
               </button>
-
-              <div className="flex items-center gap-2 min-w-0 border-l border-slate-200 pl-3">
-                <h1 className="text-sm sm:text-base font-bold text-slate-900 tracking-tight line-clamp-2 sm:line-clamp-1" title={exam?.title}>
+              <div className="min-w-0">
+                <h1 className="text-sm sm:text-base font-semibold text-slate-900 tracking-tight truncate" title={exam?.title}>
                   {exam?.title || 'Exam'}
                 </h1>
-                <span className="hidden sm:inline-block text-[10px] font-bold text-slate-600 bg-slate-100 border border-slate-200/70 px-2 py-0.5 rounded-md flex-shrink-0">
-                  Results
-                </span>
+                <p className="text-[11px] sm:text-xs text-slate-500 truncate">
+                  Results · {attempts.length} attempt{attempts.length === 1 ? '' : 's'}
+                </p>
               </div>
             </div>
 
@@ -1005,26 +1358,36 @@ export default function ExamAttempts() {
               {analytics && (
                 <button
                   type="button"
-                  onClick={() => setShowAnalytics((s) => !s)}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold shadow-2xs border transition-all cursor-pointer ${
+                  title="Analytics"
+                  onClick={() => {
+                    const opening = !showAnalytics;
+                    setShowAnalytics(opening);
+                    // The panel sits at the top of the page — bring it into view.
+                    if (opening) {
+                      const scroller = document.querySelector('main');
+                      (scroller || window).scrollTo({ top: 0, behavior: 'smooth' });
+                    }
+                  }}
+                  className={`h-9 w-9 sm:w-auto sm:px-3 inline-flex items-center justify-center gap-1.5 rounded-xl text-xs font-semibold border transition cursor-pointer ${
                     showAnalytics
-                      ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                      ? 'bg-slate-900 text-white border-slate-900'
                       : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300'
                   }`}
                 >
-                  <HiOutlineChartBar className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Analytics</span>
+                  {showAnalytics ? <HiOutlineX className="w-4 h-4" /> : <ChartSpline className="w-4 h-4" strokeWidth={1.75} />}
+                  <span className="hidden sm:inline">{showAnalytics ? 'Close analytics' : 'Analytics'}</span>
                 </button>
               )}
               {attempts.length > 0 && (
                 <div className="relative">
                   <button
                     type="button"
+                    title="Export"
                     disabled={exporting}
                     onClick={() => setShowExport((v) => !v)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold shadow-2xs border bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300 transition-all cursor-pointer disabled:opacity-60"
+                    className="h-9 w-9 sm:w-auto sm:px-3 inline-flex items-center justify-center gap-1.5 rounded-xl text-xs font-semibold border bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300 transition cursor-pointer disabled:opacity-60"
                   >
-                    <HiOutlineDownload className="w-3.5 h-3.5" />
+                    <HiOutlineDownload className="w-4 h-4" />
                     <span className="hidden sm:inline">{exporting ? 'Exporting…' : 'Export'}</span>
                   </button>
                   {showExport && (
@@ -1042,16 +1405,12 @@ export default function ExamAttempts() {
                   )}
                 </div>
               )}
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 text-white text-xs font-semibold shadow-2xs">
-                <HiOutlineUsers className="w-3.5 h-3.5 text-slate-300" />
-                <span>{attempts.length} <span className="hidden sm:inline">Attempt{attempts.length !== 1 ? 's' : ''}</span></span>
-              </span>
             </div>
           </div>
 
-          {/* Bottom Row: Search Input & Filter Tabs */}
-          {!loading && attempts.length > 0 && (
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-2 border-t border-slate-100">
+          {/* Row 2 — search & status filter */}
+          {!showAnalytics && !loading && attempts.length > 0 && (
+            <div className="flex flex-col md:flex-row md:items-center gap-2.5">
               <div className="relative flex-1 min-w-0">
                 <HiOutlineSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                 <input
@@ -1059,7 +1418,7 @@ export default function ExamAttempts() {
                   placeholder="Search candidate by name…"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="w-full pl-10 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                  className="w-full h-9 pl-10 pr-8 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition"
                 />
                 {search && (
                   <button
@@ -1072,13 +1431,12 @@ export default function ExamAttempts() {
                 )}
               </div>
 
-              {/* Status Filter Segmented Tabs */}
-              <div className="inline-flex items-center gap-1 p-1 bg-slate-100/90 rounded-xl border border-slate-200/80 overflow-x-auto flex-shrink-0">
+              <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl overflow-x-auto [scrollbar-width:none] flex-shrink-0">
                 {[
                   { id: 'all', label: 'All', count: attempts.length },
-                  { id: 'pending_review', label: 'Pending Review', count: attempts.filter((a) => a.status === 'pending_review').length },
+                  { id: 'pending_review', label: 'Pending review', count: attempts.filter((a) => a.status === 'pending_review').length },
                   { id: 'graded', label: 'Graded', count: attempts.filter((a) => a.status === 'graded' || a.status === 'submitted').length },
-                  { id: 'in_progress', label: 'In Progress', count: attempts.filter((a) => a.status === 'in_progress').length },
+                  { id: 'in_progress', label: 'In progress', count: attempts.filter((a) => a.status === 'in_progress').length },
                 ].map((tab) => {
                   const active = statusFilter === tab.id;
                   return (
@@ -1086,16 +1444,12 @@ export default function ExamAttempts() {
                       key={tab.id}
                       type="button"
                       onClick={() => setStatusFilter(tab.id)}
-                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs transition-all cursor-pointer whitespace-nowrap ${
-                        active
-                          ? 'bg-white text-slate-900 shadow-2xs font-bold'
-                          : 'text-slate-600 hover:text-slate-900 hover:bg-white/60 font-medium'
+                      className={`flex-1 md:flex-none inline-flex items-center justify-center gap-1.5 h-7 px-2.5 rounded-lg text-xs transition cursor-pointer whitespace-nowrap ${
+                        active ? 'bg-white text-slate-900 shadow-sm font-semibold' : 'text-slate-600 hover:text-slate-900 font-medium'
                       }`}
                     >
-                      <span>{tab.label}</span>
-                      <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded-md ${
-                        active ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-600'
-                      }`}>
+                      {tab.label}
+                      <span className={`text-[10px] font-semibold px-1.5 rounded-md tabular-nums ${active ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-600'}`}>
                         {tab.count}
                       </span>
                     </button>
@@ -1105,6 +1459,87 @@ export default function ExamAttempts() {
             </div>
           )}
         </div>
+
+        {/* Row 3 — list toolbar (selection, counts, bulk actions) */}
+        {!showAnalytics && !loading && filteredAttempts.length > 0 && (
+          <div className="border-t border-slate-100 bg-slate-50/80">
+            <div className="w-full px-4 sm:px-6 lg:px-8 py-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+              <div className="flex items-center gap-3 min-w-0">
+                {canSelect && (
+                  <label className="inline-flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer select-none whitespace-nowrap">
+                    <input
+                      type="checkbox"
+                      className="w-4 h-4 rounded border-slate-300 cursor-pointer"
+                      checked={filteredAttempts.length > 0 && filteredAttempts.every((x) => selectedIds.has(x.id))}
+                      onChange={(e) => setSelectedIds(e.target.checked ? new Set(filteredAttempts.map((x) => x.id)) : new Set())}
+                    />
+                    {selectedIds.size > 0 ? `${selectedIds.size} selected` : 'Select all'}
+                  </label>
+                )}
+                <span className="hidden sm:inline h-4 w-px bg-slate-200" />
+                <span className="text-xs text-slate-500 whitespace-nowrap">
+                  <span className="font-semibold text-slate-700 tabular-nums">{attemptGroups.length}</span> candidate{attemptGroups.length === 1 ? '' : 's'}
+                  <span className="text-slate-300 mx-1.5">·</span>
+                  <span className="font-semibold text-slate-700 tabular-nums">{filteredAttempts.length}</span> attempt{filteredAttempts.length === 1 ? '' : 's'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setOpenGroups(
+                    attemptGroups.every((g) => openGroups.has(g.key)) ? new Set() : new Set(attemptGroups.map((g) => g.key))
+                  )}
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800 cursor-pointer whitespace-nowrap"
+                >
+                  <ChevronDown className={`w-3.5 h-3.5 transition-transform ${attemptGroups.every((g) => openGroups.has(g.key)) ? 'rotate-180' : ''}`} strokeWidth={2} />
+                  {attemptGroups.every((g) => openGroups.has(g.key)) ? 'Collapse all' : 'Expand all'}
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap justify-end">
+                {canManageCerts && passedAttempts.length > 0 && (
+                  <>
+                    <button type="button" onClick={() => setBulkUploadOpen(true)} title="Bulk upload certificates"
+                      className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-semibold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition cursor-pointer">
+                      <Upload className="w-3.5 h-3.5" strokeWidth={2} />
+                      <span className="hidden sm:inline">Bulk upload certificates</span>
+                      <span className="sm:hidden">Upload</span>
+                    </button>
+                    <button type="button" onClick={handleBulkEmail} disabled={!!bulkSending}
+                      className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-semibold bg-slate-900 hover:bg-slate-800 text-white transition cursor-pointer disabled:opacity-60">
+                      <Mail className="w-3.5 h-3.5" strokeWidth={2} />
+                      {bulkSending
+                        ? `Sending ${bulkSending.done}/${bulkSending.total}…`
+                        : selectedIds.size > 0
+                          ? `Email selected (${bulkEmailTargets().length})`
+                          : `Email pending (${bulkEmailTargets().length})`}
+                    </button>
+                  </>
+                )}
+                {canDeleteResults && selectedIds.size > 0 && (
+                  <button type="button" onClick={handleBulkDelete} disabled={deleting}
+                    className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white transition cursor-pointer disabled:opacity-60">
+                    <Trash2 className="w-3.5 h-3.5" strokeWidth={2} />
+                    {deleting ? 'Deleting…' : `Delete (${selectedIds.size})`}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Column titles (desktop) — widths match the card cells below */}
+            <div className="hidden md:block border-t border-slate-100">
+              <div className="w-full px-4 sm:px-6 lg:px-8">
+                <div className="flex items-center gap-4 px-5 py-2 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                  <span className={`flex-1 ${canSelect ? 'pl-[5.5rem]' : 'pl-[3.625rem]'}`}>Candidate</span>
+                  <div className="flex items-center gap-3">
+                    <span className="w-[5.5rem]">Score</span>
+                    <span className="w-[7.5rem]">Status</span>
+                    <span className="w-[6.5rem] text-right">Flags</span>
+                    <span className="w-[9.5rem] text-right">Actions</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Main Content Area */}
@@ -1112,126 +1547,16 @@ export default function ExamAttempts() {
 
         {/* Analytics Panel */}
         {showAnalytics && analytics && (
-          <div className="space-y-4">
-            {/* Header */}
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3 min-w-0">
-                <span className="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center flex-shrink-0 shadow-[0_6px_16px_-8px_rgba(15,23,42,0.5)]">
-                  <HiOutlineChartBar className="w-5 h-5" />
-                </span>
-                <div className="min-w-0">
-                  <h2 className="text-base font-semibold text-slate-900 leading-tight">Performance Analytics</h2>
-                  <p className="text-xs text-slate-500 mt-0.5 truncate">Exam metrics, historical pass rates and question performance</p>
-                </div>
-              </div>
-            </div>
-
-            {/* KPI cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              {(() => {
-                const o = analytics.overall;
-                const passRate = o.finished_attempts ? Math.round((o.passed / o.finished_attempts) * 100) : null;
-                return [
-                  { label: 'Finished', value: o.finished_attempts, icon: HiOutlineClipboardCheck, hint: 'Completed attempts' },
-                  { label: 'Passed', value: o.passed, icon: HiOutlineCheckCircle, hint: passRate != null ? `${passRate}% pass rate` : 'No finished attempts' },
-                  { label: 'Average score', value: o.avg_percentage != null ? `${o.avg_percentage}%` : '—', icon: HiOutlineAcademicCap, hint: 'Across graded attempts' },
-                  { label: 'Total attempts', value: o.total_attempts, icon: HiOutlineUsers, hint: 'Including in progress' },
-                ];
-              })().map(({ label, value, icon: Icon, hint }) => (
-                <div key={label} className="bg-white rounded-2xl border border-slate-100 p-5 shadow-[0_1px_2px_rgba(15,23,42,0.05),0_12px_32px_-14px_rgba(15,23,42,0.22)]">
-                  <div className="flex items-start justify-between">
-                    <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">{label}</p>
-                    <span className="w-9 h-9 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center">
-                      <Icon className="w-[18px] h-[18px]" />
-                    </span>
-                  </div>
-                  <p className="text-2xl font-bold text-slate-900 tracking-tight leading-none mt-3">{value}</p>
-                  <p className="text-xs text-slate-400 mt-2 truncate">{hint}</p>
-                </div>
-              ))}
-            </div>
-
-            {/* Detail cards */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
-              {/* Pass Rate Over Time */}
-              {analytics.pass_rate_over_time.length > 0 && (
-                <section className="bg-white rounded-2xl border border-slate-100 flex flex-col overflow-hidden shadow-[0_1px_2px_rgba(15,23,42,0.05),0_12px_32px_-14px_rgba(15,23,42,0.22)]">
-                  <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-                    <div>
-                      <h3 className="text-sm font-semibold text-slate-900">Pass rate over time</h3>
-                      <p className="text-xs text-slate-400 mt-0.5">By exam session date</p>
-                    </div>
-                    <span className="text-[11px] font-semibold text-slate-600 bg-slate-100 rounded-full px-2.5 py-1">
-                      {analytics.pass_rate_over_time.length} session{analytics.pass_rate_over_time.length === 1 ? '' : 's'}
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-[110px_1fr_64px_52px] items-center gap-3 px-5 py-2 bg-slate-50/70 border-b border-slate-100 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
-                    <span>Date</span><span>Pass rate</span><span className="text-right">Passed</span><span className="text-right">%</span>
-                  </div>
-                  <ul className="flex-1 max-h-80 overflow-y-auto divide-y divide-slate-100">
-                    {analytics.pass_rate_over_time.map((d) => (
-                      <li key={d.date} className="grid grid-cols-[110px_1fr_64px_52px] items-center gap-3 px-5 py-3 hover:bg-slate-50/60 transition-colors">
-                        <span className="text-xs font-semibold text-slate-800 tabular-nums">{d.date}</span>
-                        <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                          <div className="h-full bg-[#7fb89a] rounded-full transition-all duration-500" style={{ width: `${d.pass_rate}%` }} />
-                        </div>
-                        <span className="text-xs text-slate-400 tabular-nums text-right">{d.passed}/{d.total}</span>
-                        <span className={`text-xs font-bold tabular-nums text-right ${d.pass_rate > 0 ? 'text-[#3f8a65]' : 'text-slate-400'}`}>{d.pass_rate}%</span>
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              )}
-
-              {/* Per-Question Miss Rate */}
-              {analytics.per_question.length > 0 && (
-                <section className="bg-white rounded-2xl border border-slate-100 flex flex-col overflow-hidden shadow-[0_1px_2px_rgba(15,23,42,0.05),0_12px_32px_-14px_rgba(15,23,42,0.22)]">
-                  <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-slate-100">
-                    <div>
-                      <h3 className="text-sm font-semibold text-slate-900">Question miss rate</h3>
-                      <p className="text-xs text-slate-400 mt-0.5">{analytics.per_question.length} questions</p>
-                    </div>
-                    <span className="flex items-center gap-3 text-[11px] text-slate-500 flex-shrink-0">
-                      <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[#d98c96]" />Above 50%</span>
-                      <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[#d9b36c]" />21 to 50%</span>
-                      <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[#7fb89a]" />Up to 20%</span>
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-[40px_1fr_96px_48px] items-center gap-3 px-5 py-2 bg-slate-50/70 border-b border-slate-100 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
-                    <span>No.</span><span>Question</span><span>Miss rate</span><span className="text-right">%</span>
-                  </div>
-                  <ul className="flex-1 max-h-80 overflow-y-auto divide-y divide-slate-100">
-                    {analytics.per_question.map((q, idx) => {
-                      // Three muted, distinct tones: high miss = dusty rose, medium = sand, low = sage.
-                      const hard = q.miss_rate > 50 ? 0 : q.miss_rate > 20 ? 1 : 2;
-                      const bar = ['bg-[#d98c96]', 'bg-[#d9b36c]', 'bg-[#7fb89a]'][hard];
-                      const text = ['text-[#b4505c]', 'text-[#9a7428]', 'text-[#3f8a65]'][hard];
-                      return (
-                        <li key={q.question_id || idx} className="grid grid-cols-[40px_1fr_96px_48px] items-center gap-3 px-5 py-3 hover:bg-slate-50/60 transition-colors">
-                          <span className="text-[11px] font-semibold text-slate-400 tabular-nums">Q{idx + 1}</span>
-                          <p className="text-xs font-medium text-slate-800 truncate" title={q.prompt}>{q.prompt || '(untitled question)'}</p>
-                          {q.miss_rate != null ? (
-                            <>
-                              <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                                <div className={`h-full rounded-full transition-all duration-500 ${bar}`} style={{ width: `${q.miss_rate}%` }} />
-                              </div>
-                              <span className={`text-xs font-bold tabular-nums text-right ${text}`}>{q.miss_rate}%</span>
-                            </>
-                          ) : (
-                            <span className="col-span-2 text-[11px] font-medium text-slate-400 text-right">No data</span>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </section>
-              )}
-            </div>
-          </div>
+          <AnalyticsPanel
+            analytics={analytics}
+            examTitle={exam?.title}
+            passMark={exam?.pass_percentage ?? null}
+            inProgress={attempts.filter((a) => a.status === 'in_progress').length}
+          />
         )}
 
         {/* Attempts Card List */}
-        {loading ? (
+        {showAnalytics ? null : loading ? (
           <div className="space-y-3">
             <Skeleton className="h-20 w-full rounded-2xl" />
             <Skeleton className="h-20 w-full rounded-2xl" />
@@ -1243,250 +1568,300 @@ export default function ExamAttempts() {
           </Card>
         ) : (
           <div className="space-y-3">
-            {canSelect && (
-              <div className="flex items-center justify-between gap-3 px-1">
-                <label className="inline-flex items-center gap-2 text-xs font-semibold text-slate-600 cursor-pointer select-none whitespace-nowrap flex-shrink-0">
-                  <input
-                    type="checkbox"
-                    className="w-4 h-4 rounded border-slate-300 cursor-pointer"
-                    checked={filteredAttempts.length > 0 && filteredAttempts.every((x) => selectedIds.has(x.id))}
-                    onChange={(e) => setSelectedIds(e.target.checked ? new Set(filteredAttempts.map((x) => x.id)) : new Set())}
-                  />
-                  Select all
-                </label>
-                <div className="flex items-center gap-2 flex-wrap justify-end">
-                {canManageCerts && passedAttempts.length > 0 && (
-                  <>
-                    <button type="button" onClick={() => setBulkUploadOpen(true)}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 shadow-2xs cursor-pointer">
-                      <HiOutlineUpload className="w-3.5 h-3.5" />
-                      Bulk upload certificates
-                    </button>
-                    <button type="button" onClick={handleBulkEmail} disabled={!!bulkSending}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white shadow-2xs cursor-pointer disabled:opacity-60">
-                      <HiOutlineMail className="w-3.5 h-3.5" />
-                      {bulkSending
-                        ? `Sending ${bulkSending.done}/${bulkSending.total}…`
-                        : selectedIds.size > 0
-                          ? `Email selected (${bulkEmailTargets().length})`
-                          : `Email all pending (${bulkEmailTargets().length})`}
-                    </button>
-                  </>
-                )}
-                {canDeleteResults && selectedIds.size > 0 && (
-                  <button type="button" onClick={handleBulkDelete} disabled={deleting}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-2xs cursor-pointer disabled:opacity-60">
-                    <HiOutlineTrash className="w-3.5 h-3.5" />
-                    {deleting ? 'Deleting…' : `Delete selected (${selectedIds.size})`}
-                  </button>
-                )}
-                </div>
-              </div>
-            )}
-            {filteredAttempts.map((a) => {
-              const isPending = a.status === 'pending_review';
-              const isGraded = a.status === 'graded' || a.status === 'submitted';
-              const isInProgress = a.status === 'in_progress';
-              const hasViolations = a.violation_count > 0;
-              const isViolationExpanded = expandedViolations.has(a.id);
-              const initials = a.participant_name
-                ? a.participant_name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()
+            {/* Cards — the page itself scrolls; no inner scrollbar */}
+            <div className="space-y-2.5">
+            {attemptGroups.map((g) => {
+              const first = g.attempts[0];
+              const groupIds = g.attempts.map((x) => x.id);
+              const groupSelected = groupIds.every((id) => selectedIds.has(id));
+              const groupPartial = !groupSelected && groupIds.some((id) => selectedIds.has(id));
+              const initials = first.participant_name
+                ? first.participant_name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()
                 : 'CA';
+              const scored = g.attempts.filter((x) => x.percentage != null);
+              const best = scored.length ? Math.max(...scored.map((x) => Number(x.percentage))) : null;
+              const everPassed = g.attempts.some((x) => x.passed === true);
+              const fmtPct = (v) => (Number.isInteger(v) ? v : Number(v.toFixed(1)));
+              const isOpen = openGroups.has(g.key);
+              const latestStatus = ATTEMPT_STATUS[first.status] || ATTEMPT_STATUS.submitted;
+              const flagged = g.attempts.reduce((n, x) => n + (x.violation_count || 0), 0);
 
               return (
                 <div
-                  key={a.id}
-                  className="rounded-3xl bg-white border border-slate-200/90 shadow-2xs hover:shadow-md hover:border-slate-300 transition-all duration-200 overflow-hidden"
+                  key={g.key}
+                  className={`rounded-2xl bg-white border overflow-hidden transition-all duration-200 ${
+                    groupSelected || groupPartial
+                      ? 'border-indigo-300 ring-2 ring-indigo-100'
+                      : 'border-slate-200/80 shadow-[0_1px_2px_rgba(15,23,42,0.04)] hover:shadow-[0_8px_24px_-12px_rgba(15,23,42,0.18)] hover:border-slate-300'
+                  }`}
                 >
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 sm:p-5 gap-4">
-                    {/* Left: Avatar & Candidate info */}
+                  {/* Candidate header — its cells sit in the same columns as the attempt rows */}
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    aria-expanded={isOpen}
+                    onClick={() => toggleGroup(g.key)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleGroup(g.key); } }}
+                    className={`flex flex-col md:flex-row md:items-center gap-3 md:gap-4 px-4 sm:px-5 py-3.5 cursor-pointer select-none transition-colors hover:bg-slate-50 ${isOpen ? 'bg-slate-50/60 border-b border-slate-100' : ''}`}
+                  >
+                    <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                      {canSelect && (
+                        <input
+                          type="checkbox"
+                          title="Select all attempts by this candidate"
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-4 h-4 rounded border-slate-300 cursor-pointer flex-shrink-0"
+                          checked={groupSelected}
+                          ref={(el) => { if (el) el.indeterminate = groupPartial; }}
+                          onChange={() => setSelectedIds((prev) => {
+                            const next = new Set(prev);
+                            groupIds.forEach((id) => (groupSelected ? next.delete(id) : next.add(id)));
+                            return next;
+                          })}
+                        />
+                      )}
+                      <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-slate-800 to-slate-950 text-white flex items-center justify-center font-semibold text-xs tracking-wide flex-shrink-0 shadow-[0_4px_10px_-4px_rgba(15,23,42,0.5)]">
+                        {initials}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <button
+                            type="button"
+                            disabled={!first.participant_id}
+                            onClick={(e) => { e.stopPropagation(); navigate(`/${isAdmin ? 'admin' : 'airline'}/participants/${first.participant_id}/performance`); }}
+                            title={first.participant_id ? 'Open candidate dashboard' : undefined}
+                            className="text-[15px] font-semibold text-slate-900 truncate text-left enabled:hover:text-indigo-600 enabled:cursor-pointer disabled:cursor-default transition-colors"
+                          >
+                            {first.participant_name || 'Anonymous Candidate'}
+                          </button>
+                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md flex-shrink-0 tabular-nums">
+                            <ListChecks className="w-3 h-3" strokeWidth={2} />
+                            {g.attempts.length} attempt{g.attempts.length === 1 ? '' : 's'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          Latest {new Date(first.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Summary cells: best score · latest status · total flags · toggle */}
+                    <div className="flex items-center gap-2 md:gap-3 flex-wrap md:flex-nowrap flex-shrink-0">
+                      <div className="md:w-[5.5rem]">
+                        {best != null ? (
+                          <span
+                            title="Best score across attempts"
+                            className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-semibold tabular-nums ring-1 ring-inset ${
+                              everPassed ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/20' : 'bg-white text-slate-700 ring-slate-200'
+                            }`}
+                          >
+                            <Trophy className="w-3.5 h-3.5" strokeWidth={2} />
+                            {fmtPct(best)}%
+                          </span>
+                        ) : (
+                          <span className="hidden md:inline text-sm text-slate-300">—</span>
+                        )}
+                      </div>
+                      <div className="md:w-[7.5rem]">
+                        <span title="Latest attempt" className={`inline-flex items-center h-8 px-3 rounded-lg text-xs font-semibold whitespace-nowrap ring-1 ring-inset ${latestStatus.cls}`}>
+                          {latestStatus.label}
+                        </span>
+                      </div>
+                      <div className="flex items-center md:w-[6.5rem] md:justify-end">
+                        {flagged > 0 && (
+                          <span title="Security violations across all attempts" className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-lg text-xs font-semibold bg-rose-50 text-rose-700 ring-1 ring-inset ring-rose-600/20 tabular-nums">
+                            <ShieldAlert className="w-3.5 h-3.5" strokeWidth={2} />{flagged}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-end ml-auto md:ml-0 md:w-[9.5rem]">
+                        <span className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-semibold text-slate-600 ring-1 ring-inset ring-slate-200 bg-white">
+                          {isOpen ? 'Hide' : 'View'} attempts
+                          <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} strokeWidth={2} />
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Attempts — shown when the card is open */}
+                  <AnimatePresence initial={false}>
+                  {isOpen && (
+                  <motion.div
+                    key="attempts"
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2, ease: 'easeOut' }}
+                    className="overflow-hidden divide-y divide-slate-100"
+                  >
+                  {g.attempts.map((a, ai) => {
+              const isPending = a.status === 'pending_review';
+              const isInProgress = a.status === 'in_progress';
+              const hasViolations = a.violation_count > 0;
+              const isViolationExpanded = expandedViolations.has(a.id);
+              const status = ATTEMPT_STATUS[a.status] || ATTEMPT_STATUS.submitted;
+              const pct = a.percentage != null
+                ? (Number.isInteger(Number(a.percentage)) ? Number(a.percentage) : Number(Number(a.percentage).toFixed(1)))
+                : null;
+              const selected = selectedIds.has(a.id);
+
+              return (
+                <div key={a.id} className={`transition-colors ${selected ? 'bg-indigo-50/40' : 'hover:bg-slate-50/50'}`}>
+                  <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4 px-4 sm:px-5 py-3">
+                    {/* Attempt identity */}
                     <div className="flex items-center gap-3.5 min-w-0 flex-1">
                       {canSelect && (
                         <input
                           type="checkbox"
                           className="w-4 h-4 rounded border-slate-300 cursor-pointer flex-shrink-0"
-                          checked={selectedIds.has(a.id)}
+                          checked={selected}
                           onChange={() => toggleSelected(a.id)}
                         />
                       )}
-                      <div className="w-11 h-11 rounded-2xl bg-black text-white flex items-center justify-center font-black text-xs shadow-xs flex-shrink-0 tracking-wider">
-                        {initials}
+                      <div className="w-11 h-9 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center text-xs font-semibold tabular-nums flex-shrink-0">
+                        #{a.attempt_number}
                       </div>
-
-                      <div className="min-w-0 space-y-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p
-                            onClick={() => a.participant_id && navigate(`/${isAdmin ? 'admin' : 'airline'}/participants/${a.participant_id}/performance`)}
-                            title={a.participant_id ? 'Open candidate dashboard' : undefined}
-                            className={`text-sm sm:text-base font-extrabold text-slate-900 truncate ${
-                              a.participant_id ? 'hover:text-indigo-600 cursor-pointer' : ''
-                            }`}
-                          >
-                            {a.participant_name || 'Anonymous Candidate'}
-                          </p>
-                          <span className="text-[10px] font-extrabold text-slate-600 bg-slate-100 border border-slate-200/80 px-2.5 py-0.5 rounded-lg flex-shrink-0">
-                            Attempt #{a.attempt_number}
-                          </span>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-slate-800">Attempt {a.attempt_number}</span>
+                          {ai === 0 && g.attempts.length > 1 && (
+                            <span className="text-[10px] font-semibold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">Latest</span>
+                          )}
                         </div>
-
-                        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400 font-medium">
-                          <span>
-                            {new Date(a.created_at).toLocaleDateString('en-GB', {
-                              day: 'numeric',
-                              month: 'short',
-                              year: 'numeric',
-                            })}
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5 text-xs text-slate-500">
+                          <span className="inline-flex items-center gap-1">
+                            <CalendarDays className="w-3.5 h-3.5 text-slate-400" strokeWidth={1.75} />
+                            {new Date(a.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                           </span>
                           {a.submitted_at && (
-                            <>
-                              <span>·</span>
-                              <span>
-                                Completed at{' '}
-                                {new Date(a.submitted_at).toLocaleTimeString([], {
-                                  hour: '2-digit',
-                                  minute: '2-digit',
-                                })}
-                              </span>
-                            </>
+                            <span className="inline-flex items-center gap-1">
+                              <Clock className="w-3.5 h-3.5 text-slate-400" strokeWidth={1.75} />
+                              Completed at {new Date(a.submitted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
                           )}
                         </div>
                       </div>
                     </div>
 
-                    {/* Right: Score, Status & Actions */}
-                    <div className="flex items-center justify-between sm:justify-end gap-2.5 flex-wrap sm:flex-nowrap pt-3 sm:pt-0 border-t sm:border-t-0 border-slate-100 flex-shrink-0">
-                      {/* Score Badge */}
-                      {a.percentage != null && (
-                        <div
-                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-black shadow-2xs ${
-                            a.passed
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                              : 'bg-rose-50 text-rose-700 border-rose-200'
-                          }`}
-                        >
-                          {a.passed ? (
-                            <HiOutlineCheckCircle className="w-4 h-4 text-emerald-600 stroke-[2.5]" />
-                          ) : (
-                            <HiOutlineXCircle className="w-4 h-4 text-rose-600 stroke-[2.5]" />
-                          )}
-                          <span>{Number.isInteger(Number(a.percentage)) ? a.percentage : Number(Number(a.percentage).toFixed(1))}%</span>
-                        </div>
+                    {/* Chips & actions */}
+                    <div className="flex items-center gap-2 md:gap-3 flex-wrap md:flex-nowrap flex-shrink-0">
+                      <div className="md:w-[5.5rem]">
+                      {pct != null ? (
+                        <span className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-semibold tabular-nums ring-1 ring-inset ${
+                          a.passed ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/20' : 'bg-rose-50 text-rose-700 ring-rose-600/20'
+                        }`}>
+                          {a.passed
+                            ? <CircleCheck className="w-3.5 h-3.5" strokeWidth={2} />
+                            : <CircleX className="w-3.5 h-3.5" strokeWidth={2} />}
+                          {pct}%
+                        </span>
+                      ) : (
+                        <span className="hidden md:inline text-sm text-slate-300">—</span>
                       )}
+                      </div>
 
-                      {/* Status Badge */}
-                      <span
-                        className={`inline-flex items-center px-3 py-1.5 rounded-xl border text-xs font-bold capitalize shadow-2xs ${
-                          isGraded
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                            : isPending
-                            ? 'bg-blue-50 text-blue-700 border-blue-200'
-                            : 'bg-amber-50 text-amber-700 border-amber-200'
-                        }`}
-                      >
-                        {a.status.replace('_', ' ')}
-                      </span>
+                      <div className="md:w-[7.5rem]">
+                        <span className={`inline-flex items-center h-8 px-3 rounded-lg text-xs font-semibold whitespace-nowrap ring-1 ring-inset ${status.cls}`}>
+                          {status.label}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 md:w-[6.5rem] md:justify-end">
 
                       {/* Times the candidate closed the exam window and came back */}
                       {a.window_close_count > 0 && (
                         <span
-                          title={`Closed the exam window and came back ${a.window_close_count} time${a.window_close_count === 1 ? '' : 's'}: ${(a.window_closes || []).map((w) => new Date(w.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })).join(', ')}`}
-                          className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold border whitespace-nowrap ${
-                            a.auto_submit_reason === 'window_closed'
-                              ? 'bg-rose-50 text-rose-700 border-rose-200'
-                              : 'bg-amber-50 text-amber-700 border-amber-200'
+                          title={`Closed the exam window and came back ${a.window_close_count} time${a.window_close_count === 1 ? '' : 's'}${a.auto_submit_reason === 'window_closed' ? ' · auto-submitted' : ''}: ${(a.window_closes || []).map((w) => new Date(w.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })).join(', ')}`}
+                          className={`inline-flex items-center gap-1.5 h-8 px-2.5 rounded-lg text-xs font-semibold ring-1 ring-inset ${
+                            a.auto_submit_reason === 'window_closed' ? 'bg-rose-50 text-rose-700 ring-rose-600/20' : 'bg-amber-50 text-amber-700 ring-amber-600/20'
                           }`}
                         >
-                          Window closed ×{a.window_close_count}
-                          {a.auto_submit_reason === 'window_closed' && <span className="font-extrabold">· auto-submitted</span>}
+                          <MonitorX className="w-3.5 h-3.5" strokeWidth={2} />
+                          {a.window_close_count}
                         </span>
                       )}
-
-                      {/* Violation Badge */}
                       {hasViolations && (
                         <button
                           type="button"
                           onClick={() => toggleViolations(a.id)}
-                          className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl border transition-all cursor-pointer shadow-2xs ${
-                            isViolationExpanded
-                              ? 'bg-rose-600 text-white border-rose-600'
-                              : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
-                          }`}
                           title="View security violations"
+                          className={`inline-flex items-center gap-1.5 h-8 px-2.5 rounded-lg text-xs font-semibold ring-1 ring-inset transition-colors cursor-pointer ${
+                            isViolationExpanded ? 'bg-rose-600 text-white ring-rose-600' : 'bg-rose-50 text-rose-700 ring-rose-600/20 hover:bg-rose-100'
+                          }`}
                         >
-                          <HiOutlineShieldExclamation className="w-4 h-4" />
-                          <span>{a.violation_count}</span>
-                          {isViolationExpanded ? (
-                            <HiOutlineChevronUp className="w-3.5 h-3.5" />
-                          ) : (
-                            <HiOutlineChevronDown className="w-3.5 h-3.5" />
-                          )}
+                          <ShieldAlert className="w-3.5 h-3.5" strokeWidth={2} />
+                          {a.violation_count}
+                          {isViolationExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                         </button>
                       )}
+                      </div>
 
-                      {/* Action Button */}
+                      <div className="flex items-center justify-end gap-2 ml-auto md:ml-0 md:w-[9.5rem]">
                       {canGrade && !isInProgress && (
                         <button
                           type="button"
                           onClick={() => setGradingId(a.id)}
-                          className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-2xs active:scale-[0.98] ${
+                          className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-semibold whitespace-nowrap transition cursor-pointer active:scale-[0.98] ${
                             isPending
                               ? 'bg-slate-900 hover:bg-slate-800 text-white'
-                              : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300'
+                              : 'bg-white text-slate-700 ring-1 ring-inset ring-slate-200 hover:bg-slate-50 hover:ring-slate-300'
                           }`}
                         >
-                          <HiOutlinePencilAlt className="w-3.5 h-3.5" />
-                          <span>{isPending ? 'Grade Attempt' : 'Edit Grade'}</span>
+                          <PenLine className="w-3.5 h-3.5" strokeWidth={2} />
+                          {isPending ? 'Grade' : 'Edit grade'}
                         </button>
                       )}
-
                       {canDeleteResults && (
                         <button
                           type="button"
                           onClick={() => handleDelete(a)}
                           title="Delete this result"
-                          className="p-2 rounded-xl border border-slate-200 bg-white text-slate-400 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 transition-all cursor-pointer"
+                          className="w-8 h-8 inline-flex items-center justify-center rounded-lg ring-1 ring-inset ring-slate-200 bg-white text-slate-400 hover:text-rose-600 hover:ring-rose-200 hover:bg-rose-50 transition cursor-pointer"
                         >
-                          <HiOutlineTrash className="w-4 h-4" />
+                          <Trash2 className="w-4 h-4" strokeWidth={1.75} />
                         </button>
                       )}
+                      </div>
                     </div>
                   </div>
 
                   {/* Certificate bar — passed candidates only */}
                   {canManageCerts && a.passed === true && (
-                    <div className="flex flex-wrap items-center justify-between gap-3 px-4 sm:px-5 py-3 border-t border-slate-100 bg-slate-50/60">
+                    <div className="flex flex-wrap items-center justify-between gap-3 px-4 sm:px-5 py-2.5 border-t border-slate-100 bg-slate-50/60">
                       <div className="flex items-center gap-2.5 min-w-0">
-                        <HiOutlineDocumentText className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                        <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${a.certificate ? 'bg-emerald-100 text-emerald-700' : 'bg-white border border-slate-200 text-slate-400'}`}>
+                          <FileText className="w-3.5 h-3.5" strokeWidth={1.75} />
+                        </div>
                         {a.certificate ? (
                           <div className="min-w-0">
                             <button type="button" onClick={() => handleCertView(a)}
-                              className="block max-w-full truncate text-xs font-bold text-slate-800 hover:text-blue-600 hover:underline cursor-pointer text-left"
+                              className="block max-w-full truncate text-xs font-medium text-slate-800 hover:text-indigo-600 hover:underline cursor-pointer text-left"
                               title="Open the uploaded certificate">
                               {a.certificate.original_name || 'Certificate'}
                             </button>
-                            <p className="text-[11px] font-medium text-slate-400 truncate">
+                            <p className="text-[11px] text-slate-500 truncate">
                               {a.certificate.emailed_at
                                 ? `Emailed to ${a.certificate.emailed_to} on ${new Date(a.certificate.emailed_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`
                                 : 'Uploaded, not emailed yet'}
                             </p>
                           </div>
                         ) : (
-                          <span className="text-xs font-medium text-slate-500">No certificate uploaded</span>
+                          <span className="text-xs text-slate-500">No certificate uploaded</span>
                         )}
                       </div>
 
-                      <div className="flex items-center gap-2 flex-shrink-0">
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
                         {a.certificate && (
                           <button type="button" onClick={() => handleCertSend(a)}
                             disabled={!a.participant_email || certBusy === `${a.id}:send`}
                             title={a.participant_email ? `Email to ${a.participant_email}` : 'This candidate has no email address on file'}
-                            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white shadow-2xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
-                            <HiOutlineMail className="w-3.5 h-3.5" />
-                            {certBusy === `${a.id}:send` ? 'Sending…' : a.certificate.emailed_at ? 'Resend email' : 'Email certificate'}
+                            className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-xs font-medium bg-slate-900 hover:bg-slate-800 text-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
+                            <Mail className="w-3.5 h-3.5" strokeWidth={1.75} />
+                            {certBusy === `${a.id}:send` ? 'Sending…' : a.certificate.emailed_at ? 'Resend' : 'Email'}
                           </button>
                         )}
-                        <label className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 shadow-2xs cursor-pointer ${certBusy === `${a.id}:upload` ? 'opacity-60 pointer-events-none' : ''}`}>
-                          <HiOutlineUpload className="w-3.5 h-3.5" />
+                        <label className={`inline-flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-xs font-medium border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 cursor-pointer ${certBusy === `${a.id}:upload` ? 'opacity-60 pointer-events-none' : ''}`}>
+                          <Upload className="w-3.5 h-3.5" strokeWidth={1.75} />
                           {certBusy === `${a.id}:upload` ? 'Uploading…' : a.certificate ? 'Replace' : 'Upload certificate'}
                           <input type="file" accept="application/pdf,image/png,image/jpeg" className="hidden"
                             onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; handleCertUpload(a, f); }} />
@@ -1494,48 +1869,94 @@ export default function ExamAttempts() {
                         {a.certificate && (
                           <button type="button" onClick={() => handleCertRemove(a)} disabled={certBusy === `${a.id}:remove`}
                             title="Remove the uploaded certificate"
-                            className="p-2 rounded-xl border border-slate-200 bg-white text-slate-400 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 transition-all cursor-pointer disabled:opacity-50">
-                            <HiOutlineTrash className="w-4 h-4" />
+                            className="w-7 h-7 inline-flex items-center justify-center rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer disabled:opacity-50">
+                            <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
                           </button>
                         )}
                       </div>
                     </div>
                   )}
 
-                  {/* Violation Expand Drawer */}
-                  {isViolationExpanded && hasViolations && (
-                    <div className="px-5 py-4 border-t border-rose-100 bg-rose-50/40 space-y-2.5">
-                      <div className="flex items-center justify-between">
-                        <p className="text-[11px] font-black text-rose-700 uppercase tracking-wider flex items-center gap-1.5">
-                          <HiOutlineShieldExclamation className="w-4 h-4 text-rose-600" />
-                          Security Violations Log ({a.violations?.length || a.violation_count})
-                        </p>
-                        {a.auto_submitted && (
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-rose-100 text-rose-800 border border-rose-200">
-                            Auto-submitted
-                          </span>
-                        )}
-                      </div>
-                      <div className="space-y-1.5">
-                        {(a.violations || []).map((v, vi) => (
-                          <div
-                            key={vi}
-                            className="flex items-center justify-between text-xs bg-white/90 border border-rose-100 px-3.5 py-2 rounded-xl shadow-2xs"
-                          >
-                            <span className="font-bold text-rose-900">
-                              {VIOLATION_LABELS[v.type] || v.type}
+                  {/* Violation log — expands under the row */}
+                  <AnimatePresence initial={false}>
+                  {isViolationExpanded && hasViolations && (() => {
+                    const list = a.violations || [];
+                    const counts = list.reduce((m, v) => ({ ...m, [v.type]: (m[v.type] || 0) + 1 }), {});
+                    const first = list.length ? new Date(list[0].at).getTime() : 0;
+                    return (
+                      <motion.div
+                        key="violations"
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.2, ease: 'easeOut' }}
+                        className="overflow-hidden"
+                      >
+                      <div className="mx-4 sm:mx-5 mb-4 rounded-xl bg-slate-50 border border-slate-200/70 p-1.5">
+                        <div className="flex flex-wrap items-center justify-between gap-2 px-2.5 py-2">
+                          <div className="flex items-center gap-2">
+                            <span className="w-6 h-6 rounded-md bg-rose-100 text-rose-600 flex items-center justify-center">
+                              <ShieldAlert className="w-3.5 h-3.5" strokeWidth={2} />
                             </span>
-                            <span className="text-rose-500 font-semibold text-[11px]">
-                              {new Date(v.at).toLocaleString()}
-                            </span>
+                            <span className="text-xs font-semibold text-slate-800">Security log</span>
+                            <span className="text-xs text-slate-400">· {list.length || a.violation_count} events</span>
                           </div>
-                        ))}
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {Object.entries(counts).map(([type, n]) => {
+                              const tone = VIOLATION_TONES[type] || VIOLATION_TONES.default;
+                              return (
+                                <span key={type} className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md ${tone.chip}`}>
+                                  {VIOLATION_LABELS[type] || type}
+                                  <span className="tabular-nums opacity-70">×{n}</span>
+                                </span>
+                              );
+                            })}
+                            {a.auto_submitted && (
+                              <span className="text-[11px] font-medium text-white bg-rose-600 px-2 py-0.5 rounded-md">Auto-submitted</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="rounded-lg bg-white border border-slate-200/70 divide-y divide-slate-100">
+                          {list.map((v, vi) => {
+                            const V = VIOLATION_ICONS[v.type] || ShieldAlert;
+                            const tone = VIOLATION_TONES[v.type] || VIOLATION_TONES.default;
+                            const at = new Date(v.at);
+                            const offsetMin = Math.round((at.getTime() - first) / 60000);
+                            return (
+                              <div key={vi} className="flex items-center gap-3 px-3 py-2">
+                                <span className="text-[11px] text-slate-400 tabular-nums w-5 text-right">{vi + 1}</span>
+                                <span className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${tone.icon}`}>
+                                  <V className="w-3.5 h-3.5" strokeWidth={1.75} />
+                                </span>
+                                <span className="text-xs font-medium text-slate-800 flex-1">{VIOLATION_LABELS[v.type] || v.type}</span>
+                                {vi > 0 && (
+                                  <span className="hidden sm:inline text-[11px] text-slate-400 tabular-nums">+{offsetMin} min</span>
+                                )}
+                                <span className="text-xs text-slate-600 tabular-nums w-[7.5rem] text-right">
+                                  {at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                                </span>
+                                <span className="hidden sm:inline text-xs text-slate-400 tabular-nums w-14 text-right">
+                                  {at.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
-                    </div>
+                      </motion.div>
+                    );
+                  })()}
+                  </AnimatePresence>
+                </div>
+              );
+                  })}
+                  </motion.div>
                   )}
+                  </AnimatePresence>
                 </div>
               );
             })}
+            </div>
           </div>
         )}
 

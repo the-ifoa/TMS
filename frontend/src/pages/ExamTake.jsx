@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useBack } from '@/hooks/use-history-state';
 import toast from 'react-hot-toast';
 import { getExam, getExamAttempt, saveExamAnswer, checkExamAnswer, submitExamAttempt, reportExamViolation } from '../api';
 import ExamRunner from '../components/ExamRunner';
@@ -10,6 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 export default function ExamTake() {
   const { examId, attemptId } = useParams();
   const navigate = useNavigate();
+  const goBack = useBack('/airline/exams');
   const [attempt, setAttempt] = useState(null);
   const [exam, setExam] = useState(null);
 
@@ -45,7 +47,7 @@ export default function ExamTake() {
       onSubmit={() => submitExamAttempt(attemptId)}
       onReportViolation={(type) => reportExamViolation(attemptId, type).then((r) => r.data)}
       onFinished={() => navigate(`/airline/exams/${examId}/result/${attemptId}`, { replace: true })}
-      onBack={() => navigate(-1)}
+      onBack={() => goBack()}
     />
   );
 }

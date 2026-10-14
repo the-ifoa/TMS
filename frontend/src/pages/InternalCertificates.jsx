@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { useHistoryState } from '@/hooks/use-history-state';
 import toast from 'react-hot-toast';
 import {
-  HiOutlineDocumentText, HiOutlineSearch, HiOutlineEye, HiOutlineDownload, HiOutlineTrash,
-} from 'react-icons/hi';
+  FileBadge, FileText, Eye, Download, Trash2, Search, ShieldCheck, Clock, TriangleAlert, Files,
+} from 'lucide-react';
 import {
   listAllInternalCertificates, deleteInternalCertificate,
   getParticipants, downloadIssuedCertificate, previewIssuedCertificate,
@@ -15,21 +15,12 @@ import { useConfirm } from '@/hooks/use-confirm';
 import { openInternalCertificate } from '../components/InternalCertificatesDialog';
 import ValidityBadge from '../components/ValidityBadge';
 import SegmentedToggle from '../components/SegmentedToggle';
-import { CountingNumber } from '@/components/animate-ui/primitives/texts/counting-number';
 import { internalCertExpiry, certExpiry } from '../utils/certValidity';
 
 function fmtDate(v) {
   if (!v) return '—';
   return new Date(v).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 }
-
-const BUCKETS = [
-  { key: 'all', label: 'All', dot: 'bg-slate-400' },
-  { key: 'expired', label: 'Expired', dot: 'bg-red-500' },
-  { key: 'expiring', label: 'Expiring soon', dot: 'bg-amber-500' },
-  { key: 'valid', label: 'Valid', dot: 'bg-emerald-500' },
-  { key: 'none', label: 'No expiry set', dot: 'bg-slate-300' },
-];
 
 function bucketOf(expiry) {
   if (!expiry) return 'none';
@@ -106,8 +97,8 @@ async function openAssessmentCertificate(c, download) {
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
-// Row actions sit in one joined control: neutral icons, colour only on hover.
-const ACTION = 'h-8 w-8 inline-flex items-center justify-center text-slate-500 hover:bg-slate-50 hover:text-blue-600 transition-colors disabled:opacity-50';
+// Row actions: quiet icon buttons, colour only on hover.
+const ACTION = 'h-8 w-8 inline-flex items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-900 transition-colors disabled:opacity-50 cursor-pointer';
 
 const COLS = 'md:grid md:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_6.5rem_9.5rem_8.5rem_6.5rem] md:items-center md:gap-4';
 
@@ -250,31 +241,31 @@ export default function InternalCertificates() {
     return canManage && (!isDepartment || String(c.uploaded_by) === String(admin?._id || admin?.id));
   };
 
+  // Summary tiles double as the status filter.
+  const TILES = [
+    { key: 'all', label: 'All certificates', icon: Files, tone: 'bg-slate-100 text-slate-600', ring: 'ring-slate-900' },
+    { key: 'valid', label: 'Valid', icon: ShieldCheck, tone: 'bg-emerald-50 text-emerald-600', ring: 'ring-emerald-500' },
+    { key: 'expiring', label: 'Expiring soon', icon: Clock, tone: 'bg-amber-50 text-amber-600', ring: 'ring-amber-500' },
+    { key: 'expired', label: 'Expired', icon: TriangleAlert, tone: 'bg-rose-50 text-rose-600', ring: 'ring-rose-500' },
+  ];
+
   return (
     <div className="w-full min-h-full flex flex-col">
       {/* Header */}
-      <div className="sticky top-0 z-20 w-full bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-2xs">
-        <div className="w-full px-3.5 sm:px-6 lg:px-8 py-3 flex flex-col sm:flex-row sm:items-center gap-3">
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 min-w-0">
-              <div className="w-7 h-7 rounded-lg bg-slate-900 text-white flex items-center justify-center shadow-2xs flex-shrink-0">
-                <HiOutlineDocumentText className="w-4 h-4" />
-              </div>
-              <h1 className="text-sm font-extrabold text-slate-900 tracking-tight leading-none">Certificates</h1>
-              <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-100 text-[11px] font-bold flex-shrink-0">
-                <CountingNumber number={rows.length} />
-              </span>
+      <div className="sticky top-0 z-20 w-full bg-white/95 backdrop-blur-md border-b border-slate-200/80">
+        <div className="w-full px-4 sm:px-6 lg:px-8 py-3.5 flex flex-col sm:flex-row sm:items-center gap-3">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center flex-shrink-0">
+              <FileBadge className="w-5 h-5" strokeWidth={1.75} />
             </div>
-            <p className="text-[11px] text-slate-400 mt-1">
-              {isIfoa ? (
-                <>Every certificate IFOA has released for your {isDepartment ? 'team' : 'candidates'}.</>
-              ) : (
-                <>
-                  Every internal certificate uploaded for your {isDepartment ? 'team' : 'candidates and departments'}.
-                  Upload new ones from a candidate&apos;s Certificates button.
-                </>
-              )}
-            </p>
+            <div className="min-w-0">
+              <h1 className="text-base font-semibold text-slate-900 tracking-tight leading-tight">Certificates</h1>
+              <p className="text-xs text-slate-500 mt-0.5 truncate">
+                {isIfoa
+                  ? `Certificates IFOA has released for your ${isDepartment ? 'team' : 'candidates'}`
+                  : `Internal certificates for your ${isDepartment ? 'team' : 'candidates and departments'} · upload new ones from Internal Assessments`}
+              </p>
+            </div>
           </div>
 
           {/* Source toggle */}
@@ -283,59 +274,75 @@ export default function InternalCertificates() {
         </div>
       </div>
 
-      <div className="w-full px-3.5 sm:px-6 lg:px-8 py-5">
-        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden flex flex-col">
-          {/* Toolbar */}
-          <div className="p-3 border-b border-slate-200/80 space-y-2.5">
-            <div className="flex flex-col sm:flex-row gap-2">
-              <div className="relative flex-1">
-                <HiOutlineSearch className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
-                <input value={search} onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search by candidate, email or certificate title…"
-                  className="w-full pl-8 pr-3 h-9 bg-slate-50 border border-slate-200/80 rounded-lg text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" />
-              </div>
-              {!isIfoa && assessmentOptions.length > 0 && (
-                <Select value={assessment || 'all'} onValueChange={(v) => setAssessment(v === 'all' ? '' : v)}>
-                  <SelectTrigger className="w-full sm:w-56 h-9 text-xs bg-slate-50 rounded-lg border-slate-200/80 flex-shrink-0">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All internal assessments</SelectItem>
-                    {assessmentOptions.map((a) => <SelectItem key={a.id} value={a.id}>{a.title}</SelectItem>)}
-                    <SelectItem value={NO_ASSESSMENT}>Not in an assessment</SelectItem>
-                  </SelectContent>
-                </Select>
-              )}
-              {owners.length > 1 && (
-                <select value={owner} onChange={(e) => setOwner(e.target.value)}
-                  className="h-9 px-3 bg-slate-50 border border-slate-200/80 rounded-lg text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500">
-                  <option value="">All departments</option>
-                  {owners.map((o) => <option key={o} value={o}>{o}</option>)}
-                </select>
-              )}
-            </div>
+      <div className="w-full px-4 sm:px-6 lg:px-8 py-5 space-y-4">
+        {/* Summary tiles (also filter the list) */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {TILES.map((t) => {
+            const active = status === t.key;
+            const n = counts[t.key] ?? 0;
+            return (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => setStatus(active && t.key !== 'all' ? 'all' : t.key)}
+                className={`flex items-center gap-3 p-4 rounded-2xl bg-white border text-left transition-all cursor-pointer ${
+                  active
+                    ? `border-transparent ring-2 ${t.ring} shadow-sm`
+                    : 'border-slate-200/80 shadow-[0_1px_2px_rgba(15,23,42,0.04)] hover:border-slate-300'
+                }`}
+              >
+                <span className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${t.tone}`}>
+                  <t.icon className="w-5 h-5" strokeWidth={1.75} />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-2xl font-semibold text-slate-900 tabular-nums leading-none">{loading ? '–' : n}</span>
+                  <span className="block text-xs text-slate-500 mt-1 truncate">{t.label}</span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
 
-            {/* Status filter */}
-            {rows.length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
-                {BUCKETS.filter((b) => b.key === 'all' || counts[b.key] > 0).map((b) => (
-                  <button key={b.key} onClick={() => setStatus(b.key)}
-                    className={`inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full border text-[11px] font-semibold transition-colors ${
-                      status === b.key
-                        ? 'bg-slate-900 border-slate-900 text-white'
-                        : 'bg-white border-slate-200/80 text-slate-600 hover:border-slate-300'
-                    }`}>
-                    <span className={`w-1.5 h-1.5 rounded-full ${b.dot}`} />
-                    {b.label}
-                    <span className={status === b.key ? 'text-white/70' : 'text-slate-400'}>{counts[b.key]}</span>
-                  </button>
-                ))}
-              </div>
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-[0_1px_2px_rgba(15,23,42,0.04)] overflow-hidden flex flex-col">
+          {/* Toolbar */}
+          <div className="p-3 sm:p-4 border-b border-slate-100 flex flex-col sm:flex-row gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" strokeWidth={1.75} />
+              <input value={search} onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search by candidate, email or certificate title…"
+                className="w-full pl-9 pr-3 h-9 bg-slate-50 border border-slate-200/80 rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition" />
+            </div>
+            {!isIfoa && assessmentOptions.length > 0 && (
+              <Select value={assessment || 'all'} onValueChange={(v) => setAssessment(v === 'all' ? '' : v)}>
+                <SelectTrigger className="w-full sm:w-56 h-9 text-xs bg-slate-50 rounded-xl border-slate-200/80 flex-shrink-0">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All internal assessments</SelectItem>
+                  {assessmentOptions.map((a) => <SelectItem key={a.id} value={a.id}>{a.title}</SelectItem>)}
+                  <SelectItem value={NO_ASSESSMENT}>Not in an assessment</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+            {owners.length > 1 && (
+              <select value={owner} onChange={(e) => setOwner(e.target.value)}
+                className="h-9 px-3 bg-slate-50 border border-slate-200/80 rounded-xl text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
+                <option value="">All departments</option>
+                {owners.map((o) => <option key={o} value={o}>{o}</option>)}
+              </select>
+            )}
+            {counts.none > 0 && (
+              <button type="button" onClick={() => setStatus(status === 'none' ? 'all' : 'none')}
+                className={`h-9 px-3 rounded-xl text-xs font-medium border whitespace-nowrap transition cursor-pointer ${
+                  status === 'none' ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200/80 hover:border-slate-300'
+                }`}>
+                No expiry set · {counts.none}
+              </button>
             )}
           </div>
 
           {/* Column header */}
-          <div className={`hidden ${COLS} px-4 py-2 bg-slate-50/80 border-b border-slate-200/80 text-[10px] font-bold uppercase tracking-wider text-slate-400`}>
+          <div className={`hidden ${COLS} px-5 py-2.5 bg-slate-50 border-b border-slate-100 text-[11px] font-semibold uppercase tracking-wider text-slate-400`}>
             <span>Candidate</span>
             <span>Certificate</span>
             <span>Issued</span>
@@ -344,16 +351,23 @@ export default function InternalCertificates() {
             <span className="text-right">Actions</span>
           </div>
 
-          {/* List — fixed height, scrolls internally */}
-          <div className="h-[calc(100vh-21rem)] min-h-[18rem] overflow-y-auto">
+          {/* List — grows with its rows, scrolls once it gets long */}
+          <div className="max-h-[calc(100vh-24rem)] min-h-[12rem] overflow-y-auto">
             {loading ? (
-              <div className="h-full flex items-center justify-center">
+              <div className="py-16 flex items-center justify-center">
                 <div className="w-6 h-6 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" />
               </div>
             ) : filtered.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center gap-2 text-sm text-slate-400 font-medium">
-                <HiOutlineDocumentText className="w-7 h-7 text-slate-300" />
-                {rows.length > 0 ? 'No matches.' : isIfoa ? 'No IFOA certificates released yet.' : 'No certificates uploaded yet.'}
+              <div className="py-16 flex flex-col items-center justify-center text-center">
+                <div className="w-12 h-12 rounded-2xl bg-slate-50 border border-slate-200/80 text-slate-400 flex items-center justify-center mb-3">
+                  <FileText className="w-6 h-6" strokeWidth={1.5} />
+                </div>
+                <p className="text-sm font-medium text-slate-700">
+                  {rows.length > 0 ? 'No matching certificates' : isIfoa ? 'No IFOA certificates yet' : 'No certificates uploaded yet'}
+                </p>
+                <p className="text-xs text-slate-500 mt-1">
+                  {rows.length > 0 ? 'Try a different search or filter.' : isIfoa ? 'Released certificates will appear here.' : 'Upload certificates from Internal Assessments.'}
+                </p>
               </div>
             ) : (
               <div className="divide-y divide-slate-100">
@@ -361,60 +375,59 @@ export default function InternalCertificates() {
                   const name = c.participant?.participant_name || 'Unknown candidate';
                   const title = c.title || c.original_name;
                   return (
-                  <div key={c.id} className={`${COLS} px-4 py-3 hover:bg-slate-50/60 transition-colors`}>
+                  <div key={c.id} className={`${COLS} px-5 py-3.5 hover:bg-slate-50/70 transition-colors`}>
                     {/* Candidate */}
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center flex-shrink-0 text-[10px] font-bold">
+                      <div className="w-9 h-9 rounded-full bg-indigo-50 text-indigo-700 flex items-center justify-center flex-shrink-0 text-[11px] font-semibold">
                         {initials(c.participant?.participant_name)}
                       </div>
                       <div className="min-w-0">
-                        <p className="text-sm font-semibold text-slate-900 truncate capitalize" title={name}>{name}</p>
-                        <p className="text-[11px] text-slate-400 truncate">
-                          {c.participant?.email || 'No email'}
-                        </p>
+                        <p className="text-sm font-medium text-slate-900 truncate capitalize" title={name}>{name}</p>
+                        <p className="text-xs text-slate-500 truncate">{c.participant?.email || 'No email'}</p>
                       </div>
                     </div>
 
                     {/* Certificate */}
-                    <div className="mt-2 md:mt-0 flex items-center gap-2 min-w-0">
-                      <HiOutlineDocumentText className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                    <div className="mt-3 md:mt-0 flex items-center gap-2.5 min-w-0">
+                      <span className="w-8 h-9 rounded-md bg-rose-50 text-rose-500 border border-rose-100 flex flex-col items-center justify-center flex-shrink-0">
+                        <FileText className="w-3.5 h-3.5" strokeWidth={1.75} />
+                        <span className="text-[7px] font-bold leading-none mt-0.5">PDF</span>
+                      </span>
                       <div className="min-w-0">
-                        <p className="text-xs font-medium text-slate-700 truncate" title={title}>{title}</p>
+                        <p className="text-xs font-medium text-slate-800 truncate" title={title}>{title}</p>
                         {c.assessment ? (
-                          <p className="text-[10px] text-slate-400 truncate" title={`Internal assessment: ${c.assessment.title}`}>{c.assessment.title}</p>
+                          <p className="text-[11px] text-slate-500 truncate" title={`Internal assessment: ${c.assessment.title}`}>{c.assessment.title}</p>
                         ) : !isDepartment && c.participant?.owner_name && (
-                          <p className="text-[10px] text-slate-400 font-medium truncate">{c.participant.owner_name}</p>
+                          <p className="text-[11px] text-slate-500 truncate">{c.participant.owner_name}</p>
                         )}
                       </div>
                     </div>
 
-                    <div className="mt-2.5 md:mt-0 flex items-center gap-x-4 gap-y-2 flex-wrap md:contents">
-                      <div className="text-[11px] text-slate-500 whitespace-nowrap">
+                    <div className="mt-3 md:mt-0 flex items-center gap-x-4 gap-y-2 flex-wrap md:contents">
+                      <div className="text-xs text-slate-600 whitespace-nowrap tabular-nums">
                         <span className="md:hidden text-slate-400">Issued </span>{fmtDate(c.issued_on)}
                       </div>
                       <div>
                         <ValidityBadge expiry={c.expiry}
-                          fallback={<span className="text-[11px] text-slate-400">{isIfoa ? '—' : 'No expiry set'}</span>} />
+                          fallback={<span className="text-xs text-slate-400">{isIfoa ? '—' : 'No expiry set'}</span>} />
                       </div>
-                      <div className="hidden md:block min-w-0 text-[11px]">
-                        <p className="text-slate-600 truncate" title={c.uploaded_by_name || ''}>{c.uploaded_by_name || '—'}</p>
-                        {!isIfoa && <p className="text-slate-400">{fmtDate(c.createdAt)}</p>}
+                      <div className="hidden md:block min-w-0 text-xs">
+                        <p className="text-slate-700 truncate" title={c.uploaded_by_name || ''}>{c.uploaded_by_name || '—'}</p>
+                        {!isIfoa && <p className="text-slate-400 tabular-nums">{fmtDate(c.createdAt)}</p>}
                       </div>
-                      <div className="flex ml-auto md:ml-0 md:justify-end">
-                        <div className="inline-flex items-center rounded-lg border border-slate-200 bg-white divide-x divide-slate-200 overflow-hidden shadow-2xs">
-                          <button onClick={() => open(c, false)} disabled={busyId === c.id} title="View" className={ACTION}>
-                            <HiOutlineEye className="w-4 h-4" />
+                      <div className="flex ml-auto md:ml-0 md:justify-end gap-0.5">
+                        <button onClick={() => open(c, false)} disabled={busyId === c.id} title="View" className={ACTION}>
+                          <Eye className="w-4 h-4" strokeWidth={1.75} />
+                        </button>
+                        <button onClick={() => open(c, true)} disabled={busyId === c.id} title="Download" className={ACTION}>
+                          <Download className="w-4 h-4" strokeWidth={1.75} />
+                        </button>
+                        {canDeleteCert(c) && (
+                          <button onClick={() => remove(c)} disabled={busyId === c.id} title="Delete"
+                            className={`${ACTION} hover:!bg-rose-50 hover:!text-rose-600`}>
+                            <Trash2 className="w-4 h-4" strokeWidth={1.75} />
                           </button>
-                          <button onClick={() => open(c, true)} disabled={busyId === c.id} title="Download" className={ACTION}>
-                            <HiOutlineDownload className="w-4 h-4" />
-                          </button>
-                          {canDeleteCert(c) && (
-                            <button onClick={() => remove(c)} disabled={busyId === c.id} title="Delete"
-                              className={`${ACTION} hover:!bg-red-50 hover:!text-red-600`}>
-                              <HiOutlineTrash className="w-4 h-4" />
-                            </button>
-                          )}
-                        </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -425,9 +438,9 @@ export default function InternalCertificates() {
           </div>
 
           {/* Footer */}
-          <div className="px-4 py-2 bg-slate-50/80 border-t border-slate-200/80 text-[11px] text-slate-400 font-medium flex items-center justify-between">
+          <div className="px-5 py-2.5 bg-slate-50 border-t border-slate-100 text-xs text-slate-500 flex items-center justify-between">
             <span>{isIfoa ? 'Issued by IFOA' : 'Uploaded internally'}</span>
-            <span>{loading ? '…' : `${filtered.length} of ${rows.length}`}</span>
+            <span className="tabular-nums">{loading ? '…' : `Showing ${filtered.length} of ${rows.length}`}</span>
           </div>
         </div>
       </div>

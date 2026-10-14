@@ -5,7 +5,7 @@ import toast from 'react-hot-toast';
 import {
   HiOutlineUsers, HiOutlineSearch, HiOutlineMail, HiOutlineCheck, HiOutlineX,
   HiOutlineFilter, HiOutlinePresentationChartLine, HiOutlinePlus, HiOutlineCalendar,
-  HiOutlinePencil, HiOutlineTrash, HiOutlineDocumentText, HiOutlineUpload,
+  HiOutlinePencil, HiOutlineTrash, HiOutlineDocumentText,
 } from 'react-icons/hi';
 import { getParticipants, updateParticipantEmail, deleteParticipant } from '../api';
 import { useAuth } from '../context/AuthContext';
@@ -84,7 +84,6 @@ export default function AirlineParticipants() {
   const canDelete = !can || can('participants.delete');
   // Admin-enabled for this airline: internal certificate PDFs per candidate.
   const internalCertsOn = !!admin?.can_upload_internal_certs;
-  const canUploadCerts = can('internalCerts.manage');
   const [certsFor, setCertsFor] = useState(null); // { participant, mode: 'upload' | 'view' }
   const [certCounts, , certExpiries, reloadCerts] = useInternalCertCounts(internalCertsOn);
   // Row grid: participant · training · email · (certificates) · actions.
@@ -348,12 +347,6 @@ export default function AirlineParticipants() {
                   <Link to={`/airline/participants/${id}/performance`} title="Performance dashboard" className={ACTION}>
                     <HiOutlinePresentationChartLine className="w-4 h-4" />
                   </Link>
-                  {internalCertsOn && canUploadCerts && (
-                    <button type="button" onClick={() => setCertsFor({ participant: r, mode: 'upload' })}
-                      title="Upload a certificate" className={ACTION}>
-                      <HiOutlineUpload className="w-4 h-4" />
-                    </button>
-                  )}
                   {canEdit && (
                     <button type="button" onClick={() => navigate(`/airline/enrollment/${id}/edit`)}
                       title="Edit participant" className={ACTION}>

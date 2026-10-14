@@ -181,6 +181,7 @@ export const deleteDgrForm  = (id)          => api.delete(`/dgr/${id}`);
 export const getExamAirlines  = ()         => api.get('/exams/airlines');        // admin: airlines + students
 export const listExams        = (params = {}) => api.get('/exams', { params });
 export const getExam          = (id)       => api.get(`/exams/${id}`);
+export const getExamSummary   = (id)       => api.get(`/exams/${id}`, { params: { summary: 1 } });
 export const createExam       = (data)     => api.post('/exams', data);
 export const updateExam       = (id, data) => api.put(`/exams/${id}`, data);
 export const deleteExam       = (id)       => api.delete(`/exams/${id}`);

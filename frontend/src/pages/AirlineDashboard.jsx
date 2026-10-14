@@ -20,7 +20,6 @@ export default function AirlineDashboard() {
   const [people, setPeople] = useState([]);
   const [perf, setPerf] = useState(null);
   const [invites, setInvites] = useState([]);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const quiet = (p, set, pick = (r) => r.data) => p.then((r) => set(pick(r))).catch(() => {});
@@ -28,7 +27,7 @@ export default function AirlineDashboard() {
       can('participants.view') ? quiet(getParticipants(), setPeople, (r) => r.data || []) : null,
       quiet(getTeamPerformance(), setPerf),
       quiet(getAirlineExamResults(), setInvites, (r) => r.data || []),
-    ]).finally(() => setLoading(false));
+    ]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -109,7 +108,7 @@ export default function AirlineDashboard() {
   ];
 
   return (
-    <div className={`p-4 sm:p-6 space-y-5 transition-opacity ${loading ? 'opacity-60' : ''}`}>
+    <div className="p-4 sm:p-6 space-y-5">
       {/* Hero band: greeting + the four headline numbers */}
       <div className="rounded-3xl bg-gradient-to-br from-slate-900 via-slate-900 to-slate-800 p-5 sm:p-7 shadow-[0_20px_40px_-24px_rgba(15,23,42,0.55)]">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">

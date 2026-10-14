@@ -14,7 +14,7 @@ import {
   HiOutlineUpload,
 } from 'react-icons/hi';
 import { ChartSpline, CalendarDays, Clock, ShieldAlert, ChevronDown, ChevronUp, PenLine, Trash2, MonitorX, FileText, Mail, Upload, Hourglass, CircleX, ListChecks, Trophy, Minimize2, ArrowLeftRight, CodeXml, CircleCheck, Gauge, ChartBarDecreasing, ClipboardCheck, CircleHelp, ChartPie } from 'lucide-react';
-import { listExamAttempts, getExam, getExamAttemptResult, gradeExamAttempt, getExamAnalytics, exportExamAttempts, deleteExamAttempt, bulkDeleteExamAttempts, uploadAttemptCertificate, getAttemptCertificate, deleteAttemptCertificate, sendAttemptCertificate } from '../api';
+import { listExamAttempts, getExamSummary, getExamAttemptResult, gradeExamAttempt, getExamAnalytics, exportExamAttempts, deleteExamAttempt, bulkDeleteExamAttempts, uploadAttemptCertificate, getAttemptCertificate, deleteAttemptCertificate, sendAttemptCertificate } from '../api';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useConfirm } from '@/hooks/use-confirm';
 import { useAuth } from '../context/AuthContext';
@@ -1288,7 +1288,7 @@ export default function ExamAttempts() {
   };
 
   const load = () => {
-    Promise.all([getExam(id), listExamAttempts({ exam_id: id })])
+    Promise.all([getExamSummary(id), listExamAttempts({ exam_id: id })])
       .then(([examRes, attemptsRes]) => {
         setExam(examRes.data);
         setAttempts(attemptsRes.data);

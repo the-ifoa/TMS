@@ -480,7 +480,7 @@ export default function ExamSystem() {
                   {exam.title}
                 </h2>
                 <div className="text-[11px] font-medium text-slate-400 mt-1 flex items-center gap-1.5 flex-wrap">
-                  <span>{exam.questions?.length || 0} Questions · {exam.duration_minutes} Mins</span>
+                  <span>{exam.question_count ?? exam.questions?.length ?? 0} Questions · {exam.duration_minutes} Mins</span>
                   {isAdmin && airlineOwned && (
                     <span
                       className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200/80 truncate max-w-full"

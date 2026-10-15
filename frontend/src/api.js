@@ -20,7 +20,7 @@ const api = axios.create({
 // and identical requests fired at once share one call. Any write
 // (POST/PUT/PATCH/DELETE) clears the whole cache so edits always show up.
 const GET_CACHE_MS = 30_000;
-const NEVER_CACHE = [/\/notifications/, /\/auth\/me/];
+const NEVER_CACHE = [/\/notifications/, /\/auth\/me/, /\/public-feedback\//];
 const getCache = new Map();     // key -> { at, res }
 const inFlight = new Map();     // key -> Promise<res>
 const networkAdapter = axios.getAdapter(axios.defaults.adapter);
@@ -238,7 +238,11 @@ export const getAssignedExams     = ()                        => api.get('/exams
 export const startExamAttempt     = (examId, participantId)   => api.post(`/exams/${examId}/attempts`, { participant_id: participantId });
 export const getExamAttempt       = (attemptId)                => api.get(`/exams/attempts/${attemptId}`);
 export const checkExamAnswer      = (attemptId, questionId, response) => api.post(`/exams/attempts/${attemptId}/check`, { question_id: questionId, response });
-export const saveExamAnswer       = (attemptId, questionId, response) => api.put(`/exams/attempts/${attemptId}/answer`, { question_id: questionId, response });
+// keepalive: the exam page is closing — a fetch keepalive request survives the
+// unload (Safari cancels a normal XHR, losing the last answers).
+const KEEPALIVE = { adapter: 'fetch', fetchOptions: { keepalive: true } };
+// Autosave: { answers: [{ question_id, response }], timers: { key: seconds } } in one request.
+export const saveExamAnswers      = (attemptId, payload, { keepalive } = {}) => api.put(`/exams/attempts/${attemptId}/answers`, payload, keepalive ? KEEPALIVE : undefined);
 export const submitExamAttempt    = (attemptId)                => api.post(`/exams/attempts/${attemptId}/submit`);
 export const reportExamViolation  = (attemptId, type)           => api.post(`/exams/attempts/${attemptId}/violation`, { type });
 export const listExamAttempts     = (params = {})              => api.get('/exams/attempts', { params });
@@ -274,6 +278,7 @@ export const sendExamInvites       = (examId, participantIds, opts = {}) => api.
 // same link, so a participant who already finished can take the exam again.
 export const reassignExamInvites   = (examId, participantIds, opts = {}) => api.post(`/exams/${examId}/send-invites`, { participant_ids: participantIds, reassign: true, ...opts });
 export const getExamInvites        = (examId)                 => api.get(`/exams/${examId}/invites`);
+export const getExamAssignments    = (examId)                 => api.get(`/exams/${examId}/assignments`);
 // Take one candidate off an exam: their assignment, invite link and any result.
 export const removeExamCandidate   = (examId, participantId)  => api.delete(`/exams/${examId}/candidates/${participantId}`);
 export const getAirlineExamResults = ()                       => api.get('/exams/airline-results');
@@ -288,12 +293,21 @@ export const deleteTeamMember = (id)      => api.delete(`/team/members/${id}`);
 
 // ── Public token-based exam taking (no auth) ─────────────────────────────────
 export const getPublicExam        = (token)                          => api.get(`/public-exam/${token}`);
-export const startPublicExam      = (token)                          => api.post(`/public-exam/${token}/start`);
+// body { resume: 'refresh' } — the candidate refreshed the exam page: resume without counting a window close.
+export const startPublicExam      = (token, body)                    => api.post(`/public-exam/${token}/start`, body);
 export const checkPublicAnswer    = (token, attemptId, questionId, response) => api.post(`/public-exam/${token}/attempts/${attemptId}/check`, { question_id: questionId, response });
-export const savePublicAnswer     = (token, attemptId, questionId, response) => api.put(`/public-exam/${token}/attempts/${attemptId}/answer`, { question_id: questionId, response });
+export const savePublicAnswers    = (token, attemptId, payload, { keepalive } = {}) => api.put(`/public-exam/${token}/attempts/${attemptId}/answers`, payload, keepalive ? KEEPALIVE : undefined);
 export const submitPublicExam     = (token, attemptId)              => api.post(`/public-exam/${token}/attempts/${attemptId}/submit`);
 export const reportPublicViolation = (token, attemptId, type)       => api.post(`/public-exam/${token}/attempts/${attemptId}/violation`, { type });
 export const getPublicExamResult  = (token, attemptId)              => api.get(`/public-exam/${token}/attempts/${attemptId}/result`);
+
+// ── Customer Training Feedback ──────────────────────────────────────────────
+// Admin (IFOA exams only): send status + responses, and email the form.
+export const getExamFeedback      = (examId)                 => api.get(`/feedback/exams/${examId}`);
+export const sendExamFeedback     = (examId, participantIds) => api.post(`/feedback/exams/${examId}/send`, { participant_ids: participantIds });
+// Public, passwordless form opened from the emailed link.
+export const getPublicFeedback    = (token)                  => api.get(`/public-feedback/${token}`);
+export const submitPublicFeedback = (token, data)            => api.post(`/public-feedback/${token}/submit`, data);
 
 // ── Exam results: team KPIs, downloadable report, delete ─────────────────────
 export const getTeamPerformance   = (params)       => api.get('/exams/team-performance', { params });

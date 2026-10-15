@@ -1191,7 +1191,7 @@ export default function ExamBuilder() {
                     <div className="space-y-0.5 min-w-0">
                       <span className="font-bold text-slate-900 text-xs block">Limit closing the exam window</span>
                       <span className="text-[11px] text-slate-500 leading-snug block font-medium">
-                        Counts each time a candidate closes (or refreshes) the exam and comes back. Works with or without lockdown.
+                        Counts each time a candidate closes the exam and comes back. Refreshing the page doesn't count. Works with or without lockdown.
                       </span>
                     </div>
                   </label>
@@ -1583,7 +1583,7 @@ export default function ExamBuilder() {
           attempt={previewAttempt}
           exam={exam}
           onBack={exitPreview}
-          onSaveAnswer={() => {}}
+          onSaveAnswers={() => {}}
           onCheckAnswer={async (qId) => {
             // Preview never grades server-side; show the question's own explanation
             // so the author can see how the feedback panel will look.

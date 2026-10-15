@@ -68,20 +68,37 @@ function CustomSelect({ value, options, placeholder = "Choose match...", onChang
   );
 }
 
-function shuffle(arr) {
+// Seeded by the question id, so the order is the same every time the candidate
+// comes back to the question (Math.random reshuffled it on every visit).
+function shuffle(arr, seed = '') {
   const a = [...arr];
+  let h = 2166136261;
+  for (let i = 0; i < seed.length; i += 1) h = Math.imul(h ^ seed.charCodeAt(i), 16777619);
+  let t = h >>> 0;
+  const rand = seed ? () => { // mulberry32
+    t = (t + 0x6D2B79F5) >>> 0;
+    let r = Math.imul(t ^ (t >>> 15), 1 | t);
+    r ^= r + Math.imul(r ^ (r >>> 7), 61 | r);
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  } : Math.random;
   for (let i = a.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = Math.floor(rand() * (i + 1));
     [a[i], a[j]] = [a[j], a[i]];
   }
   return a;
 }
 
+// A response with nothing left in it is reported as null, so clearing a
+// question makes it count as unanswered again (not as an empty answer).
+const emptyToNull = (arr) => (arr.some((v) => v !== undefined && v !== null && v !== '') ? arr : null);
+
 function ChoicePlayer({ q, response, onChange, multi, onImageClick }) {
+  // Clicking the selected option again clears it (single choice) / unticks it (multi).
   const toggle = (id) => {
-    if (!multi) return onChange(id);
+    if (!multi) return onChange(response === id ? null : id);
     const cur = Array.isArray(response) ? response : [];
-    onChange(cur.includes(id) ? cur.filter((v) => v !== id) : [...cur, id]);
+    const next = cur.includes(id) ? cur.filter((v) => v !== id) : [...cur, id];
+    onChange(next.length ? next : null);
   };
 
   const options = q.options || [];
@@ -158,26 +175,48 @@ function TextPlayer({ response, onChange, minWords }) {
   );
 }
 
+// Text field with a decimal keypad instead of <input type="number">: Safari's
+// number input accepts letters and reports them as "" (answer silently lost),
+// and some keyboards type a decimal comma. Keeps what was typed ("2.", "-")
+// while the stored answer is the parsed number (null until it is one).
 function NumericPlayer({ response, onChange }) {
+  const [text, setText] = useState(response ?? '');
+  useEffect(() => {
+    // Sync when the answer changes from outside (question switch, resume).
+    setText((cur) => (Number(String(cur).replace(',', '.')) === response ? cur : (response ?? '')));
+  }, [response]);
+  const parsed = String(text).trim() === '' ? null : Number(String(text).trim().replace(',', '.'));
+  const invalid = String(text).trim() !== '' && !Number.isFinite(parsed);
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/80 p-4 sm:p-5 shadow-2xs flex items-center gap-3">
-      <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Answer:</span>
-      <input
-        type="number"
-        value={response ?? ''}
-        onChange={(e) => onChange(e.target.value === '' ? null : Number(e.target.value))}
-        placeholder="Enter number..."
-        className="w-52 px-4 py-2.5 text-sm font-semibold border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 bg-slate-50/30 focus:bg-white transition-all shadow-2xs"
-      />
+    <div className="bg-white rounded-2xl border border-slate-200/80 p-4 sm:p-5 shadow-2xs space-y-2">
+      <div className="flex items-center gap-3">
+        <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Answer:</span>
+        <input
+          type="text"
+          inputMode="decimal"
+          autoComplete="off"
+          value={text}
+          onChange={(e) => {
+            const v = e.target.value.replace(/[^0-9.,\-+eE]/g, '');
+            setText(v);
+            const n = v.trim() === '' ? null : Number(v.trim().replace(',', '.'));
+            if (v.trim() === '') onChange(null);
+            else if (Number.isFinite(n)) onChange(n);
+          }}
+          placeholder="Enter number..."
+          className={`w-52 px-4 py-2.5 text-sm font-semibold border rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 bg-slate-50/30 focus:bg-white transition-all shadow-2xs ${invalid ? 'border-rose-400 focus:border-rose-500' : 'border-slate-200 focus:border-blue-600'}`}
+        />
+      </div>
+      {invalid && <p className="text-xs font-semibold text-rose-500">Enter a number, e.g. 12.5</p>}
     </div>
   );
 }
 
 function SequencePlayer({ q, response, onChange }) {
-  const order = useMemo(
-    () => (response && response.length ? response : shuffle((q.sequence_items || []).map((it) => it._idx))),
-    [q, response]
-  );
+  // The server already shuffled the items for this attempt — show them in that
+  // order (stable when navigating away and back) until the candidate answers.
+  const answered = Array.isArray(response) && response.length > 0;
+  const order = answered ? response : (q.sequence_items || []).map((it) => it._idx);
   const itemByIdx = useMemo(() => Object.fromEntries((q.sequence_items || []).map((it) => [it._idx, it])), [q]);
 
   const move = (pos, dir) => {
@@ -222,21 +261,37 @@ function SequencePlayer({ q, response, onChange }) {
           </div>
         </div>
       ))}
+      {/* Leaving the shown order untouched used to record NO answer — even when
+          it was already the right one. The candidate confirms it explicitly. */}
+      <div className="flex items-center justify-between gap-3 pt-2">
+        <span className={`text-[11px] font-semibold ${answered ? 'text-emerald-600' : 'text-slate-400'}`}>
+          {answered ? 'Order saved as your answer.' : 'Move items, or keep this order if it is already correct.'}
+        </span>
+        {!answered && (
+          <button
+            type="button"
+            onClick={() => onChange([...order])}
+            className="px-3 py-1.5 rounded-lg border border-blue-600 bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition-colors shadow-2xs"
+          >
+            Keep this order
+          </button>
+        )}
+      </div>
     </div>
   );
 }
 
 function MatchingPlayer({ q, response, onChange }) {
-  const rightOptions = useMemo(() => shuffle(q.matching_right_options || []), [q]);
+  const rightOptions = useMemo(() => shuffle(q.matching_right_options || [], `${q._id}r`), [q]);
   const displayOrder = useMemo(
-    () => shuffle((q.matching_pairs || []).map((_, idx) => idx)),
+    () => shuffle((q.matching_pairs || []).map((_, idx) => idx), `${q._id}l`),
     [q]
   );
   const chosen = response || [];
   const setPair = (idx, val) => {
-    const next = [...chosen];
+    const next = Array.from({ length: (q.matching_pairs || []).length }, (_, i) => chosen[i] || '');
     next[idx] = val;
-    onChange(next);
+    onChange(emptyToNull(next));
   };
   return (
     <div className="space-y-3 bg-white rounded-2xl border border-slate-200/80 p-4 sm:p-5 shadow-2xs">
@@ -290,7 +345,7 @@ function FillBlankPlayer({ q, response, onChange }) {
               onChange={(e) => {
                 const next = [...filled];
                 next[idx] = e.target.value;
-                onChange(next);
+                onChange(emptyToNull(next));
               }}
               className="mx-1.5 w-36 px-3 py-1 text-xs sm:text-sm font-bold border-b-2 border-blue-600 outline-none focus:border-blue-700 bg-blue-50/80 text-blue-950 rounded-t"
             />
@@ -427,7 +482,7 @@ function HotspotPlayer({ q, response, onChange, feedback }) {
     onChange({ x: ((e.clientX - rect.left) / rect.width) * 100, y: ((e.clientY - rect.top) / rect.height) * 100 });
   };
   return (
-    <div className="flex justify-center">
+    <div className="flex flex-col items-center gap-2">
       <div className="relative inline-block max-w-full cursor-crosshair rounded-2xl overflow-hidden border border-slate-200 shadow-2xs bg-slate-50" onClick={handleClick}>
         <img src={q.image_url} alt="" className="max-w-full max-h-72 rounded-2xl border border-primary-200 select-none object-contain" />
         {/* Correct area(s), revealed once the answer has been checked */}
@@ -447,6 +502,12 @@ function HotspotPlayer({ q, response, onChange, feedback }) {
           />
         )}
       </div>
+      {response && !feedback && (
+        <button type="button" onClick={() => onChange(null)}
+          className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-bold text-slate-600 hover:bg-slate-50 shadow-2xs">
+          Clear my selection
+        </button>
+      )}
     </div>
   );
 }
@@ -458,10 +519,15 @@ function DragDropPlayer({ q, response, onChange }) {
   const [selectedItem, setSelectedItem] = useState(null);
 
   const place = (label, targetIdx) => {
-    const next = placed.filter((p) => p.item_label !== label);
+    // One item per zone: whatever was there goes back to the list.
+    const next = placed.filter((p) => p.item_label !== label && p.target_index !== targetIdx);
     next.push({ item_label: label, target_index: targetIdx });
     onChange(next);
     setSelectedItem(null);
+  };
+  const removeFrom = (targetIdx) => {
+    const next = placed.filter((p) => p.target_index !== targetIdx);
+    onChange(next.length ? next : null);
   };
 
   const placedAt = (targetIdx) => placed.find((p) => p.target_index === targetIdx)?.item_label;
@@ -481,7 +547,8 @@ function DragDropPlayer({ q, response, onChange }) {
                   e.preventDefault();
                   place(e.dataTransfer.getData('text/plain'), idx);
                 }}
-                onClick={() => selectedItem && place(selectedItem, idx)}
+                onClick={() => (selectedItem ? place(selectedItem, idx) : placedAt(idx) && removeFrom(idx))}
+                title={!selectedItem && placedAt(idx) ? 'Tap to remove this item' : undefined}
                 className="absolute border-2 border-dashed border-blue-500 bg-blue-600/20 backdrop-blur-2xs rounded-xl flex items-center justify-center text-xs font-bold text-blue-950 text-center px-1 shadow-2xs transition-all hover:bg-blue-600/30 cursor-pointer"
                 style={{ left: `${t.x}%`, top: `${t.y}%`, width: `${t.width}%`, height: `${t.height}%` }}
               >
@@ -515,7 +582,7 @@ function DragDropPlayer({ q, response, onChange }) {
             </span>
           ))}
         </div>
-        <p className="text-[11px] text-slate-400 font-medium">Drag an item onto its zone on the image, or tap an item then tap a zone.</p>
+        <p className="text-[11px] text-slate-400 font-medium">Drag an item onto its zone on the image, or tap an item then tap a zone. Tap a filled zone to remove its item.</p>
       </div>
     </div>
   );
@@ -544,9 +611,9 @@ function LikertPlayer({ q, response, onChange }) {
                   key={lIdx}
                   type="button"
                   onClick={() => {
-                    const next = [...answers];
-                    next[sIdx] = lIdx;
-                    onChange(next);
+                    const next = Array.from({ length: (q.likert_statements || []).length }, (_, i) => answers[i] ?? null);
+                    next[sIdx] = checked ? null : lIdx; // clicking the chosen rating again clears it
+                    onChange(emptyToNull(next));
                   }}
                   className={`py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer select-none text-center ${
                     checked

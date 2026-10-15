@@ -1531,6 +1531,7 @@ export default function ExamAttempts() {
                   <span className={`flex-1 ${canSelect ? 'pl-[5.5rem]' : 'pl-[3.625rem]'}`}>Candidate</span>
                   <div className="flex items-center gap-3">
                     <span className="w-[5.5rem]">Score</span>
+                    <span className="w-[5.5rem]">Attempts</span>
                     <span className="w-[7.5rem]">Status</span>
                     <span className="w-[6.5rem] text-right">Flags</span>
                     <span className="w-[9.5rem] text-right">Actions</span>
@@ -1661,6 +1662,24 @@ export default function ExamAttempts() {
                         ) : (
                           <span className="hidden md:inline text-sm text-slate-300">—</span>
                         )}
+                      </div>
+                      <div className="md:w-[5.5rem]">
+                        {(() => {
+                          // Every attempt counts toward Max attempts; a reassign can add extra.
+                          if (exam?.max_attempts == null) return <span className="hidden md:inline text-sm text-slate-300">—</span>;
+                          const allowed = exam.max_attempts + (exam.extra_attempts?.[String(first.participant_id)] || 0);
+                          const used = g.attempts.length;
+                          const none = used >= allowed && !g.attempts.some((x) => x.status === 'in_progress');
+                          return (
+                            <span
+                              title={none ? 'All attempts used — Reassign to give a new attempt' : `${allowed - used} attempt${allowed - used === 1 ? '' : 's'} left`}
+                              className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-semibold tabular-nums ring-1 ring-inset ${none ? 'bg-rose-50 text-rose-700 ring-rose-600/20' : 'bg-white text-slate-700 ring-slate-200'}`}
+                            >
+                              <ListChecks className="w-3.5 h-3.5" strokeWidth={2} />
+                              {used}/{allowed}
+                            </span>
+                          );
+                        })()}
                       </div>
                       <div className="md:w-[7.5rem]">
                         <span title="Latest attempt" className={`inline-flex items-center h-8 px-3 rounded-lg text-xs font-semibold whitespace-nowrap ring-1 ring-inset ${latestStatus.cls}`}>

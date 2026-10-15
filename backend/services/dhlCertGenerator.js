@@ -1,5 +1,6 @@
 const { PDFDocument, PDFName, rgb, StandardFonts } = require('pdf-lib');
 const fs = require('fs');
+const { readFileCached } = require('../utils/fileCache');
 const path = require('path');
 
 const TEMPLATE_PATH = path.join(__dirname, '..', '..', 'DHL_ST001_FDR.pdf');
@@ -72,7 +73,7 @@ async function generateDhlCertificate(participant, sequence) {
     throw new Error(`DHL template not found: ${TEMPLATE_PATH}`);
   }
 
-  const templateBytes = fs.readFileSync(TEMPLATE_PATH);
+  const templateBytes = readFileCached(TEMPLATE_PATH);
   const templateDoc   = await PDFDocument.load(templateBytes);
 
   const pdfDoc = await PDFDocument.create();
@@ -171,7 +172,7 @@ async function generateDhlCertificate(participant, sequence) {
   // centered under the name (not spanning into the QA field to its right).
   const signaturePath = findSignaturePath();
   if (signaturePath) {
-    const sigBytes = fs.readFileSync(signaturePath);
+    const sigBytes = readFileCached(signaturePath);
     const isJpg    = /\.jpe?g$/i.test(signaturePath);
     const sigImage = isJpg ? await pdfDoc.embedJpg(sigBytes) : await pdfDoc.embedPng(sigBytes);
     const sigH = 34;

@@ -1,7 +1,9 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { Suspense, useLayoutEffect, useRef, useState } from 'react';
 import { Outlet, useLocation, useNavigationType } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Header from './Header';
+import PageLoader from './PageLoader';
+import ErrorBoundary from './ErrorBoundary';
 
 export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth >= 1024);
@@ -58,7 +60,11 @@ export default function Layout() {
         <main ref={mainRef} onScroll={rememberScroll} className="flex-1 overflow-y-auto overflow-x-hidden [scrollbar-gutter:stable] bg-slate-50 text-slate-800">
           {/* Keyed on the path so each page fades in when the route changes. */}
           <div key={pathname} className="page-enter min-h-full">
-            <Outlet />
+            <ErrorBoundary>
+              <Suspense fallback={<PageLoader />}>
+                <Outlet />
+              </Suspense>
+            </ErrorBoundary>
           </div>
         </main>
       </div>

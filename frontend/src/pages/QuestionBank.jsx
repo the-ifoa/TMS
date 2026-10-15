@@ -262,6 +262,9 @@ export default function QuestionBankList({ embedded = false, showCreateState, se
         )}
 
         {!loading && groups.length > 0 && (
+          // Sticky: stays just below the page header (--sticky-top, set by
+          // ExamSystem) while the bank cards scroll underneath it.
+          <div className="sticky top-[var(--sticky-top,0px)] z-10 -mt-2 pt-2 pb-2 bg-slate-50">
           <div className="relative max-w-md">
             <HiOutlineSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
             <input
@@ -277,6 +280,7 @@ export default function QuestionBankList({ embedded = false, showCreateState, se
                 <HiOutlineX className="w-3.5 h-3.5" />
               </button>
             )}
+          </div>
           </div>
         )}
 

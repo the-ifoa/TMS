@@ -1,6 +1,7 @@
 const { PDFDocument, rgb, StandardFonts } = require('pdf-lib');
 const fontkit = require('@pdf-lib/fontkit');
 const fs = require('fs');
+const { readFileCached } = require('../utils/fileCache');
 const path = require('path');
 
 const MODULES_LIST = [
@@ -172,7 +173,7 @@ async function generateCertificate(participant) {
     throw new Error(`Template not found: ${templatePath}`);
   }
 
-  const templateBytes = fs.readFileSync(templatePath);
+  const templateBytes = readFileCached(templatePath);
   const templateDoc   = await PDFDocument.load(templateBytes);
 
   const pdfDoc = await PDFDocument.create();

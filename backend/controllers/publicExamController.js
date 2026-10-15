@@ -2,32 +2,73 @@ const Exam = require('../models/Exam');
 const ExamAttempt = require('../models/ExamAttempt');
 const ExamInvite = require('../models/ExamInvite');
 const { sanitizeQuestionForTaking } = require('../services/examGrading');
-const { finalizeAttempt, schedulingError, closeOpenAttempts, checkAnswer, lockedFeedback } = require('../services/examAttemptFlow');
+const {
+  schedulingError, closeOpenAttempts, lockedFeedback, attemptCycleFilter, SAVE_PROJECTION,
+  attemptDeadlinePassed, saveAnswers, submitAttemptOnce, recordViolation, checkAnswerAtomic,
+} = require('../services/examAttemptFlow');
 
-// Loads the invite by token and attaches it + its exam to req. 404 on unknown token.
-// Exported so routes can mount it as per-route middleware.
-async function loadInvite(req, res, next) {
-  try {
-    const invite = await ExamInvite.findOne({ token: req.params.token });
-    if (!invite) return res.status(404).json({ error: 'This exam link is invalid or has expired.' });
-    if (invite.expires_at && invite.expires_at < new Date()) {
-      return res.status(410).json({ error: 'This exam link has expired.' });
-    }
-    const exam = await Exam.findById(invite.exam_id);
-    if (!exam) return res.status(404).json({ error: 'Exam not found.' });
-    req.invite = invite;
-    req.exam = exam;
-    next();
-  } catch (err) {
-    console.error('publicExam loadInvite error:', err.message);
-    res.status(500).json({ error: err.message });
+// Exam fields each kind of request needs. Autosaves arrive every few seconds
+// from every candidate, so they must not pull the full question list (or the
+// assignment list, which grows with every candidate) out of the database.
+const EXAM_FIELDS = {
+  landing: 'title description duration_minutes max_attempts questions._id lockdown_enabled allow_tab_switch limit_window_closes max_window_closes pass_percentage opens_at closes_at instant_feedback status',
+  start: '-assignments -airline_visibility',
+  light: 'status duration_minutes instant_feedback max_violations allow_tab_switch show_review',
+};
+
+// Builds middleware that loads the invite by token and attaches it + its exam
+// (only `examFields`) to req. 404 on an unknown token — including the old token
+// of a reassigned exam, which is replaced by a new one.
+// Exam settings read by autosave / check / submit / violation are cached for a
+// few seconds per process: with many candidates every autosave would otherwise
+// re-read the same exam document. A settings edit is picked up within EXAM_CACHE_MS.
+const EXAM_CACHE_MS = 15000;
+const examCache = new Map(); // `${examId}|${fields}` → { at, exam }
+
+async function findExam(examId, examFields, cache) {
+  const key = `${examId}|${examFields}`;
+  if (cache) {
+    const hit = examCache.get(key);
+    if (hit && Date.now() - hit.at < EXAM_CACHE_MS) return hit.exam;
   }
+  const query = Exam.findById(examId).select(examFields);
+  if (cache) query.lean();
+  const exam = await query;
+  if (cache && exam) {
+    if (examCache.size > 500) examCache.clear();
+    examCache.set(key, { at: Date.now(), exam });
+  }
+  return exam;
 }
-exports.loadInvite = loadInvite;
+
+function loadInviteWith(examFields, { cache = false } = {}) {
+  return async (req, res, next) => {
+    try {
+      const invite = await ExamInvite.findOne({ token: req.params.token });
+      if (!invite) return res.status(404).json({ error: 'This exam link is invalid or has expired. If the exam was reassigned to you, use the newest link from your email.', invalid_link: true });
+      if (invite.expires_at && invite.expires_at < new Date()) {
+        return res.status(410).json({ error: 'This exam link has expired.', invalid_link: true });
+      }
+      const exam = await findExam(invite.exam_id, examFields, cache);
+      if (!exam) return res.status(404).json({ error: 'Exam not found.' });
+      req.invite = invite;
+      req.exam = exam;
+      next();
+    } catch (err) {
+      console.error('publicExam loadInvite error:', err.message);
+      res.status(500).json({ error: err.message });
+    }
+  };
+}
+exports.loadInviteWith = loadInviteWith;
+exports.EXAM_FIELDS = EXAM_FIELDS;
+exports.loadInvite = loadInviteWith(EXAM_FIELDS.start);
 
 // Guard: the attempt must belong to this invite's participant + exam.
-async function loadOwnAttempt(req, res) {
-  const attempt = await ExamAttempt.findById(req.params.attemptId);
+async function loadOwnAttempt(req, res, projection = null) {
+  const query = ExamAttempt.findById(req.params.attemptId);
+  if (projection) query.select(projection).lean();
+  const attempt = await query;
   if (!attempt) { res.status(404).json({ error: 'Attempt not found.' }); return null; }
   if (String(attempt.exam_id) !== String(req.exam._id) ||
       String(attempt.participant_id) !== String(req.invite.participant_id)) {
@@ -36,44 +77,65 @@ async function loadOwnAttempt(req, res) {
   return attempt;
 }
 
-// Reasons a candidate may not START another attempt even with attempts left:
-// they already passed, or an earlier attempt is still awaiting manual grading.
-async function retakeBlockers(exam, participantId) {
-  const base = { exam_id: exam._id, participant_id: participantId };
-  const [passed, pending] = await Promise.all([
-    ExamAttempt.exists({ ...base, passed: true }),
-    ExamAttempt.exists({ ...base, status: 'pending_review' }),
-  ]);
-  return { hasPassed: !!passed, awaitingReview: !!pending };
+// Everything the landing page and Start need about one candidate's attempts on
+// one exam, from ONE small query (a candidate has a handful of attempts at most)
+// instead of a count + several exists/findOne calls per request. Expired open
+// attempts are closed first. Only the invite's current cycle counts for
+// attempts left / passed / awaiting review — a reassign starts from a clean slate.
+async function candidateSummary(exam, invite) {
+  const load = () => ExamAttempt.find({ exam_id: exam._id, participant_id: invite.participant_id })
+    .select('_id status passed created_at started_at window_close_count')
+    .sort({ created_at: -1 })
+    .lean();
+  let all = await load();
+  if (exam.duration_minutes > 0 && all.some((a) => a.status === 'in_progress')) {
+    const closed = await closeOpenAttempts(exam, invite.participant_id, { onlyExpired: true });
+    if (closed) all = await load();
+  }
+  const since = invite.cycle_started_at ? new Date(invite.cycle_started_at).getTime() : null;
+  const cycle = since == null ? all : all.filter((a) => new Date(a.created_at).getTime() >= since);
+  return {
+    totalAttempts: all.length,
+    usedInCycle: cycle.length,
+    active: cycle.find((a) => a.status === 'in_progress') || null,
+    lastFinished: cycle.find((a) => a.status !== 'in_progress') || null,
+    // Already passed, or an earlier attempt still waits for manual grading:
+    // no new attempt is offered.
+    hasPassed: cycle.some((a) => a.passed === true),
+    awaitingReview: cycle.some((a) => a.status === 'pending_review'),
+  };
+}
+
+// Total attempts this candidate may make on the exam: the exam's Max attempts
+// plus any extra granted by a reassign. Counted over ALL their attempts (a
+// reassign doesn't reset the count — it only adds what's needed for a new one).
+function attemptCapFor(exam, invite) {
+  return exam.max_attempts + (invite.bonus_attempts || 0);
+}
+
+async function markInviteCompleted(invite, attemptId) {
+  await ExamInvite.updateOne(
+    { _id: invite._id },
+    { $set: { status: 'completed', completed_at: new Date(), attempt_id: attemptId } }
+  );
 }
 
 // ─── GET /public-exam/:token — landing info (no questions yet) ─────────────────
 exports.getLandingInfo = async (req, res) => {
   try {
     const { invite, exam } = req;
-    if (invite.status === 'sent') {
-      invite.status = 'opened';
-      invite.opened_at = invite.opened_at || new Date();
-      await invite.save();
-    }
-
-    await closeOpenAttempts(exam, invite.participant_id, { onlyExpired: true });
-    const priorAttempts = await ExamAttempt.countDocuments({ exam_id: exam._id, participant_id: invite.participant_id });
-    const attemptCap = exam.max_attempts + (invite.bonus_attempts || 0);
-    const activeAttempt = await ExamAttempt.findOne({
-      exam_id: exam._id, participant_id: invite.participant_id, status: 'in_progress',
-    }).select('_id window_close_count');
-
-    // Latest finished attempt (for the "already completed" case).
-    const lastFinished = await ExamAttempt.findOne({
-      exam_id: exam._id, participant_id: invite.participant_id, status: { $ne: 'in_progress' },
-    }).sort({ created_at: -1 }).select('_id status');
-
-    // A candidate who already passed, or whose last attempt is still waiting
-    // for manual grading, must not be offered another attempt.
-    const { hasPassed, awaitingReview } = await retakeBlockers(exam, invite.participant_id);
+    const [summary] = await Promise.all([
+      candidateSummary(exam, invite),
+      invite.status === 'sent'
+        ? ExamInvite.updateOne({ _id: invite._id, status: 'sent' }, { $set: { status: 'opened', opened_at: invite.opened_at || new Date() } })
+        : null,
+    ]);
+    if (invite.status === 'sent') invite.status = 'opened';
+    const { totalAttempts: priorAttempts, active: activeAttempt, lastFinished, hasPassed, awaitingReview } = summary;
+    const attemptCap = attemptCapFor(exam, invite);
 
     res.json({
+      last_attempt_status: lastFinished ? lastFinished.status : null,
       has_passed: hasPassed,
       awaiting_review: awaitingReview,
       participant_name: invite.participant_name,
@@ -118,66 +180,70 @@ exports.startAttempt = async (req, res) => {
 
     // Resume an in-progress attempt if one exists (a timed-out one is closed
     // first so the candidate gets a fresh attempt instead of an instant submit).
-    await closeOpenAttempts(exam, invite.participant_id, { onlyExpired: true });
-    let attempt = await ExamAttempt.findOne({
-      exam_id: exam._id, participant_id: invite.participant_id, status: 'in_progress',
-    });
+    const summary = await candidateSummary(exam, invite);
+    const cycle = attemptCycleFilter(exam._id, invite.participant_id, invite);
 
-    if (attempt) {
-      // Coming back to an attempt already in progress means the exam window was
-      // closed (or refreshed) in between. Count it; past the exam's limit the
-      // attempt is submitted as it stands and cannot be resumed.
-      attempt.window_closes.push({ at: new Date() });
-      attempt.window_close_count = attempt.window_closes.length;
-      if (exam.limit_window_closes && attempt.window_close_count > (exam.max_window_closes ?? 0)) {
-        attempt.auto_submitted = true;
-        attempt.auto_submit_reason = 'window_closed';
-        await finalizeAttempt(attempt);
-        await attempt.save();
-        invite.status = 'completed';
-        invite.attempt_id = attempt._id;
-        invite.completed_at = new Date();
-        await invite.save();
-        return res.status(403).json({
-          error: 'You closed the exam window more times than this exam allows, so your attempt was submitted automatically.',
-          auto_submitted: true,
-          attempt_id: String(attempt._id),
-        });
-      }
-      await attempt.save();
+    // Coming back to an attempt already in progress means the exam window was
+    // closed in between. Count it atomically; past the exam's limit the attempt
+    // is submitted as it stands and cannot be resumed. A page REFRESH (the
+    // client says so: same browser tab, see PublicExam.jsx) just resumes —
+    // refreshing never counts against the candidate.
+    const isRefresh = req.body && req.body.resume === 'refresh';
+    let attempt = null;
+    if (summary.active) {
+      attempt = isRefresh
+        ? await ExamAttempt.findOne({ _id: summary.active._id, status: 'in_progress' })
+        : await ExamAttempt.findOneAndUpdate(
+          { _id: summary.active._id, status: 'in_progress' },
+          { $push: { window_closes: { at: new Date() } }, $inc: { window_close_count: 1 } },
+          { new: true }
+        );
+    }
+    if (attempt && exam.limit_window_closes && attempt.window_close_count > (exam.max_window_closes ?? 0)) {
+      await submitAttemptOnce(attempt._id, { auto_submitted: true, auto_submit_reason: 'window_closed' });
+      await markInviteCompleted(invite, attempt._id);
+      return res.status(403).json({
+        error: 'You closed the exam window more times than this exam allows, so your attempt was submitted automatically.',
+        auto_submitted: true,
+        attempt_id: String(attempt._id),
+      });
     }
 
     if (!attempt) {
       const schedErr = schedulingError(exam, { ignoreClose: invite.ignore_close });
       if (schedErr) return res.status(403).json({ error: schedErr });
 
-      const { hasPassed, awaitingReview } = await retakeBlockers(exam, invite.participant_id);
+      const { hasPassed, awaitingReview, totalAttempts: priorTotal } = summary;
       if (hasPassed) return res.status(400).json({ error: 'You have already passed this exam.' });
       if (awaitingReview) return res.status(400).json({ error: 'Your previous attempt is still being graded. You can try again once the result is published.' });
-
-      const priorAttempts = await ExamAttempt.countDocuments({ exam_id: exam._id, participant_id: invite.participant_id });
-      if (priorAttempts >= exam.max_attempts + (invite.bonus_attempts || 0)) {
+      if (priorTotal >= attemptCapFor(exam, invite)) {
         return res.status(400).json({ error: 'You have used all your attempts for this exam.' });
       }
       let questions = exam.questions.map((q) => q.toObject());
       if (exam.shuffle_questions) questions = questions.sort(() => Math.random() - 0.5);
 
-      attempt = await ExamAttempt.create({
-        exam_id: exam._id,
-        exam_title_snapshot: exam.title,
-        participant_id: invite.participant_id,
-        participant_name: invite.participant_name,
-        airline_id: invite.airline_id,
-        attempt_number: priorAttempts + 1,
-        questions_snapshot: questions,
-        status: 'in_progress',
-        started_at: new Date(),
-      });
+      try {
+        attempt = await ExamAttempt.create({
+          exam_id: exam._id,
+          exam_title_snapshot: exam.title,
+          participant_id: invite.participant_id,
+          participant_name: invite.participant_name,
+          airline_id: invite.airline_id,
+          attempt_number: priorTotal + 1,
+          questions_snapshot: questions,
+          status: 'in_progress',
+          started_at: new Date(),
+        });
+      } catch (err) {
+        // Two Start requests raced (double click / two tabs): the unique
+        // open-attempt index let only one through — continue with that one.
+        if (err.code !== 11000) throw err;
+        attempt = await ExamAttempt.findOne({ ...cycle, status: 'in_progress' });
+        if (!attempt) throw err;
+      }
     }
 
-    invite.status = 'in_progress';
-    invite.attempt_id = attempt._id;
-    await invite.save();
+    await ExamInvite.updateOne({ _id: invite._id }, { $set: { status: 'in_progress', attempt_id: attempt._id } });
 
     const json = attempt.toJSON();
     json.questions_snapshot = attempt.questions_snapshot.map(sanitizeQuestionForTaking);
@@ -209,26 +275,43 @@ exports.startAttempt = async (req, res) => {
   }
 };
 
-// ─── PUT /public-exam/:token/attempts/:attemptId/answer — autosave ────────────
+// Shared by the single-answer and batch autosave endpoints.
+async function saveForAttempt(req, res, answers, timers) {
+  const attempt = await loadOwnAttempt(req, res, SAVE_PROJECTION);
+  if (!attempt) return null;
+  if (attempt.status !== 'in_progress') { res.status(400).json({ error: 'This attempt is already submitted.', submitted: true }); return null; }
+  if (attemptDeadlinePassed(attempt, req.exam)) { res.status(400).json({ error: 'Time is up for this exam.', time_up: true }); return null; }
+  return saveAnswers(attempt, answers, timers);
+}
+
+// ─── PUT /public-exam/:token/attempts/:attemptId/answer — autosave one answer ──
 exports.saveAnswer = async (req, res) => {
   try {
-    const attempt = await loadOwnAttempt(req, res);
-    if (!attempt) return;
-    if (attempt.status !== 'in_progress') return res.status(400).json({ error: 'This attempt is already submitted.' });
-
     const { question_id, response } = req.body;
-    const question = attempt.questions_snapshot.id(question_id);
-    if (!question) return res.status(404).json({ error: 'Question not found in this attempt.' });
-    const entry = attempt.answers.find((a) => String(a.question_id) === String(question_id));
-    if (entry && entry.locked) {
-      return res.status(409).json({ error: 'This answer has been checked and can no longer be changed.', locked: true });
-    }
-    if (entry) entry.response = response;
-    else attempt.answers.push({ question_id, type: question.type, response });
-    await attempt.save();
+    const result = await saveForAttempt(req, res, [{ question_id, response }]);
+    if (!result) return;
+    const skip = result.skipped[0];
+    if (skip && skip.reason === 'locked') return res.status(409).json({ error: 'This answer has been checked and can no longer be changed.', locked: true });
+    if (skip) return res.status(404).json({ error: 'Question not found in this attempt.' });
     res.json({ ok: true });
   } catch (err) {
     console.error('PUT /public-exam answer error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// ─── PUT /public-exam/:token/attempts/:attemptId/answers — autosave a batch ────
+// Body: { answers: [{ question_id, response }], timers: { key: seconds } }.
+// One request (and one database write) per autosave tick instead of one per answer.
+exports.saveAnswers = async (req, res) => {
+  try {
+    const { answers = [], timers = null } = req.body || {};
+    if (!Array.isArray(answers) || answers.length > 500) return res.status(400).json({ error: 'Invalid answers.' });
+    const result = await saveForAttempt(req, res, answers, timers);
+    if (!result) return;
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    console.error('PUT /public-exam answers error:', err.message);
     res.status(500).json({ error: err.message });
   }
 };
@@ -238,15 +321,14 @@ exports.saveAnswer = async (req, res) => {
 // explanation and the running score. Only for exams with instant feedback on.
 exports.checkAnswer = async (req, res) => {
   try {
-    const attempt = await loadOwnAttempt(req, res);
+    const attempt = await loadOwnAttempt(req, res, 'status exam_id participant_id');
     if (!attempt) return;
-    if (attempt.status !== 'in_progress') return res.status(400).json({ error: 'This attempt is already submitted.' });
+    if (attempt.status !== 'in_progress') return res.status(400).json({ error: 'This attempt is already submitted.', submitted: true });
     if (!req.exam.instant_feedback) return res.status(400).json({ error: 'Instant feedback is not enabled for this exam.' });
 
     const { question_id, response } = req.body;
-    const result = checkAnswer(attempt, question_id, response);
+    const result = await checkAnswerAtomic(attempt._id, question_id, response);
     if (!result) return res.status(404).json({ error: 'Question not found in this attempt.' });
-    await attempt.save();
     res.json(result);
   } catch (err) {
     console.error('POST /public-exam check error:', err.message);
@@ -257,19 +339,14 @@ exports.checkAnswer = async (req, res) => {
 // ─── POST /public-exam/:token/attempts/:attemptId/submit — grade + finalize ───
 exports.submitAttempt = async (req, res) => {
   try {
-    const attempt = await loadOwnAttempt(req, res);
-    if (!attempt) return;
-    if (attempt.status !== 'in_progress') return res.status(400).json({ error: 'This attempt is already submitted.' });
-
-    await finalizeAttempt(attempt);
-    await attempt.save();
-
-    req.invite.status = 'completed';
-    req.invite.completed_at = new Date();
-    req.invite.attempt_id = attempt._id;
-    await req.invite.save();
-
-    res.json({ attempt_id: String(attempt._id), status: attempt.status });
+    const own = await loadOwnAttempt(req, res, 'status exam_id participant_id');
+    if (!own) return;
+    // Idempotent: submitting an attempt that is already submitted (a retry after
+    // a dropped response, the timer and the button together, an auto-submit)
+    // succeeds instead of leaving the candidate stuck on an error.
+    const { attempt, alreadySubmitted } = await submitAttemptOnce(own._id);
+    await markInviteCompleted(req.invite, attempt._id);
+    res.json({ attempt_id: String(attempt._id), status: attempt.status, already_submitted: alreadySubmitted });
   } catch (err) {
     console.error('POST /public-exam submit error:', err.message);
     res.status(500).json({ error: err.message });
@@ -279,7 +356,7 @@ exports.submitAttempt = async (req, res) => {
 // ─── POST /public-exam/:token/attempts/:attemptId/violation — lockdown event ──
 exports.reportViolation = async (req, res) => {
   try {
-    const attempt = await loadOwnAttempt(req, res);
+    const attempt = await loadOwnAttempt(req, res, 'status exam_id participant_id violation_count');
     if (!attempt) return;
     if (attempt.status !== 'in_progress') return res.json({ violation_count: attempt.violation_count || 0 });
 
@@ -291,22 +368,10 @@ exports.reportViolation = async (req, res) => {
       return res.json({ violation_count: attempt.violation_count || 0, auto_submitted_now: false });
     }
 
-    attempt.violations.push({ type, at: new Date() });
-    attempt.violation_count = attempt.violations.length;
-
-    const maxViolations = req.exam.max_violations ?? 4;
-    let autoSubmitted = false;
-    if (attempt.violation_count >= maxViolations) {
-      attempt.auto_submitted = true;
-      attempt.auto_submit_reason = 'violations';
-      await finalizeAttempt(attempt);
-      autoSubmitted = true;
-      req.invite.status = 'completed';
-      req.invite.completed_at = new Date();
-      await req.invite.save();
-    }
-    await attempt.save();
-    res.json({ violation_count: attempt.violation_count, auto_submitted_now: autoSubmitted });
+    const result = await recordViolation(attempt._id, type, req.exam.max_violations ?? 4);
+    if (!result) return res.status(404).json({ error: 'Attempt not found.' });
+    if (result.auto_submitted_now) await markInviteCompleted(req.invite, attempt._id);
+    res.json(result);
   } catch (err) {
     console.error('POST /public-exam violation error:', err.message);
     res.status(500).json({ error: err.message });

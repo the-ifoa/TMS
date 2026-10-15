@@ -1,0 +1,99 @@
+# Render Blueprint for the TMS backend (https://render.com/docs/blueprint-spec).
+#
+# Describes the API web service and the daily certificate-expiry reminder job.
+# Secrets are NOT stored here: every `sync: false` variable is entered once in
+# the Render dashboard. The frontend is built separately and served from
+# tms.theifoa.com, so it is not part of this file.
+#
+# Before applying as a Blueprint, check `name`, `region` and `plan` against the
+# existing service in the dashboard (Settings) — a different name creates a
+# second service instead of updating the current one.
+
+services:
+  - type: web
+    name: ifoa-tms
+    runtime: node
+    region: oregon          # match the existing service's region
+    plan: starter           # match the existing paid plan
+    rootDir: backend
+    buildCommand: npm ci
+    startCommand: npm start
+    # Returns 503 until MongoDB is connected, so a deploy only receives traffic
+    # once it can actually serve requests.
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      # Frontend origin — used for links in emails and to allow certificate
+      # previews to be framed (see helmet setup in server.js).
+      - key: FRONTEND_URL
+        value: https://tms.theifoa.com
+      # Optional: comma-separated extra origins allowed to frame PDF previews.
+      - key: FRAME_ANCESTORS
+        sync: false
+      - key: EMAIL_VERIFICATION_ENABLED
+        value: "false"
+      # SMTP — enter the password WITHOUT surrounding quotes.
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_FROM_EMAIL
+        sync: false
+      - key: SMTP_FROM_NAME
+        value: IFOA
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      # Cloudflare R2 — uploaded attempt certificates
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET
+        sync: false
+
+  # Daily: email airlines about certificates expiring in 30 / 14 / 7 days.
+  # Each reminder is sent once per certificate, so re-runs are harmless.
+  - type: cron
+    name: ifoa-tms-expiry-reminders
+    runtime: node
+    region: oregon          # same region as the web service
+    plan: starter
+    rootDir: backend
+    schedule: "0 5 * * *"   # 05:00 UTC every day
+    buildCommand: npm ci
+    startCommand: node scripts/send-expiry-reminders.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URL
+        fromService: { type: web, name: ifoa-tms, envVarKey: MONGODB_URL }
+      - key: FRONTEND_URL
+        fromService: { type: web, name: ifoa-tms, envVarKey: FRONTEND_URL }
+      - key: SMTP_HOST
+        fromService: { type: web, name: ifoa-tms, envVarKey: SMTP_HOST }
+      - key: SMTP_PORT
+        fromService: { type: web, name: ifoa-tms, envVarKey: SMTP_PORT }
+      - key: SMTP_USER
+        fromService: { type: web, name: ifoa-tms, envVarKey: SMTP_USER }
+      - key: SMTP_PASS
+        fromService: { type: web, name: ifoa-tms, envVarKey: SMTP_PASS }
+      - key: SMTP_FROM_EMAIL
+        fromService: { type: web, name: ifoa-tms, envVarKey: SMTP_FROM_EMAIL }
+      - key: SMTP_FROM_NAME
+        value: IFOA

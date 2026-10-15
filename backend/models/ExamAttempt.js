@@ -73,6 +73,12 @@ const examAttemptSchema = new mongoose.Schema(
     window_closes: [{ _id: false, at: { type: Date, default: Date.now } }],
     window_close_count: { type: Number, default: 0 },
 
+    // Seconds spent on each timed question / section, reported by the client
+    // with every autosave and only ever raised ($max). Keys: `q_<questionId>`
+    // and `s_<hex(sectionName)>`. Lets a refresh resume the per-question and
+    // per-section clocks instead of resetting them.
+    timer_elapsed: { type: mongoose.Schema.Types.Mixed, default: () => ({}) },
+
     // Certificate the airline uploads for this candidate once they have passed
     // (its own document — nothing is generated). Stored privately in R2 and
     // emailed to the candidate on request.
@@ -105,5 +111,13 @@ examAttemptSchema.index({ exam_id: 1, created_at: -1 });
 examAttemptSchema.index({ participant_id: 1, submitted_at: 1 });
 examAttemptSchema.index({ airline_id: 1, created_at: -1 });
 examAttemptSchema.index({ status: 1, submitted_at: -1 }); // notifications feed
+// Take flow: every landing/start/submit looks up one candidate's attempts on one exam.
+examAttemptSchema.index({ exam_id: 1, participant_id: 1, status: 1 });
+// At most one open attempt per candidate per exam — two simultaneous Start
+// clicks (double click, two tabs) can't create two attempts.
+examAttemptSchema.index(
+  { participant_id: 1, exam_id: 1 },
+  { unique: true, partialFilterExpression: { status: 'in_progress' }, name: 'one_open_attempt_per_candidate' }
+);
 
 module.exports = mongoose.model('ExamAttempt', examAttemptSchema);

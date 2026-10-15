@@ -12,6 +12,7 @@
 const { PDFDocument, rgb, StandardFonts } = require('pdf-lib');
 const fontkit = require('@pdf-lib/fontkit');
 const fs   = require('fs');
+const { readFileCached } = require('../utils/fileCache');
 const path = require('path');
 
 const ASSETS    = path.join(__dirname, '..', 'assets');
@@ -70,7 +71,7 @@ function wrapText(text, font, size, maxWidth) {
 
 async function embedImg(pdfDoc, filePath) {
   if (!filePath || !fs.existsSync(filePath)) return null;
-  const bytes = fs.readFileSync(filePath);
+  const bytes = readFileCached(filePath);
   const ext = path.extname(filePath).toLowerCase();
   try {
     if (ext === '.png') return await pdfDoc.embedPng(bytes);

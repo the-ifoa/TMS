@@ -1,5 +1,4 @@
 const cloudinary = require('cloudinary').v2;
-const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const multer = require('multer');
 
 // Configure Cloudinary with credentials from .env
@@ -8,6 +7,29 @@ cloudinary.config({
   api_key:    process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
+
+// Multer storage engine that streams each upload straight to Cloudinary.
+// Sets file.path = secure URL, file.filename = public_id, file.size = bytes
+// (same fields multer-storage-cloudinary set, which this replaces — that
+// package pins cloudinary v1, which has a known vulnerability).
+class CloudinaryStorage {
+  constructor({ cloudinary: client, params = {} }) {
+    this.cloudinary = client;
+    this.params = params;
+  }
+
+  _handleFile(_req, file, cb) {
+    const stream = this.cloudinary.uploader.upload_stream({ ...this.params }, (err, resp) => {
+      if (err) return cb(err);
+      cb(null, { path: resp.secure_url, size: resp.bytes, filename: resp.public_id });
+    });
+    file.stream.pipe(stream);
+  }
+
+  _removeFile(_req, file, cb) {
+    this.cloudinary.uploader.destroy(file.filename, { invalidate: true }, () => cb(null));
+  }
+}
 
 // Cloudinary storage — logos stored in 'IFOA_LOGO' folder. quality/fetch_format
 // 'auto' shrink delivered bytes (bandwidth) the same way exam images do below;

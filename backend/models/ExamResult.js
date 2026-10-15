@@ -65,6 +65,11 @@ const examResultSchema = new mongoose.Schema(
 );
 
 // ── Pre-save: auto-compute participant_name and grades ─────────────────────
+// GET /exam-results lists newest first, optionally filtered by batch or course type.
+examResultSchema.index({ created_at: -1 });
+examResultSchema.index({ batch_name: 1, created_at: -1 });
+examResultSchema.index({ course_type: 1, created_at: -1 });
+
 examResultSchema.pre('save', function () {
   this.participant_name = `${this.first_name} ${this.last_name}`.trim();
 

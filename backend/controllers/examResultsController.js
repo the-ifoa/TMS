@@ -1,4 +1,5 @@
 const XLSX    = require('xlsx');
+const { parsePaging, pagedResponse } = require('../utils/pagination');
 const ExamResult = require('../models/ExamResult');
 const { generateExamResultPdf } = require('../services/examResultPdf');
 
@@ -309,11 +310,17 @@ exports.listResults = async (req, res) => {
     if (batch_name)  filter.batch_name  = batch_name;
     if (course_type) filter.course_type = course_type;
     if (search) {
-      const re = new RegExp(search, 'i');
+      // Escape so the search text is matched literally, not run as a regex.
+      const re = new RegExp(String(search).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
       filter.$or = [{ participant_name: re }, { first_name: re }, { last_name: re }, { company: re }, { batch_name: re }];
     }
-    const results = await ExamResult.find(filter).sort({ created_at: -1 });
-    res.json(results);
+    const paging = parsePaging(req.query);
+    if (!paging) return res.json(await ExamResult.find(filter).sort({ created_at: -1 }));
+    const [results, total] = await Promise.all([
+      ExamResult.find(filter).sort({ created_at: -1 }).skip(paging.skip).limit(paging.limit),
+      ExamResult.countDocuments(filter),
+    ]);
+    res.json(pagedResponse(results, total, paging));
   } catch (err) {
     console.error('GET /exam-results error:', err.message);
     res.status(500).json({ error: err.message });

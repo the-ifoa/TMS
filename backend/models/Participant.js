@@ -46,6 +46,14 @@ const participantSchema = new mongoose.Schema(
     online_synchronous: { type: Boolean, default: false },
     cert_validity:      { type: String, default: '36', enum: ['12', '24', '36', 'Unlimited'] },
     cert_released:      { type: Boolean, default: false },
+    // Daily expiry-reminder job bookkeeping (scripts/send-expiry-reminders.js):
+    // which day-before-expiry milestones were already emailed for the
+    // certificate that expires on `expires_on`. A renewed certificate has a new
+    // expiry date, so its milestones start over.
+    expiry_reminder: {
+      expires_on: { type: String, default: null },
+      milestones: { type: [Number], default: undefined },
+    },
   },
   {
     timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' },

@@ -1,48 +1,45 @@
+import { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { useAuth } from './context/AuthContext';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import PageLoader from './components/PageLoader';
 import Layout from './components/Layout';
 import LandingPage from './pages/LandingPage';
-import Login from './pages/Login';
-import Signup from './pages/Signup';
-import ResetPassword from './pages/ResetPassword';
-import AdminLogin from './pages/AdminLogin';
-import AdminSignup from './pages/AdminSignup';
-import Dashboard from './pages/Dashboard';
-import Participants from './pages/Participants';
-import AirlineParticipants from './pages/AirlineParticipants';
-import MyTeam from './pages/MyTeam';
-import InternalCertificates from './pages/InternalCertificates';
-import InternalAssessments from './pages/InternalAssessments';
-import AddParticipant from './pages/AddParticipant';
-import EditParticipant from './pages/EditParticipant';
-import Airlines from './pages/Airlines';
-import Contract from './pages/Contract';
-import Profile from './pages/Profile';
-import ExamResults from './pages/ExamResults';
-import AttendanceSheets from './pages/AttendanceSheets';
-import DgrForms from './pages/DgrForms';
-import ExamSystem from './pages/ExamSystem';
-import ExamBuilder from './pages/ExamBuilder';
-import ExamAttempts from './pages/ExamAttempts';
-import AirlineExams from './pages/AirlineExams';
-import ExamResultView from './pages/ExamResultView';
-import PublicExam from './pages/PublicExam';
-import ParticipantExamPerformance from './pages/ParticipantExamPerformance';
-import QuestionBank, { QuestionBankDetail } from './pages/QuestionBank';
-import TeamPage from './pages/TeamPage';
+const Login = lazy(() => import('./pages/Login'));
+const Signup = lazy(() => import('./pages/Signup'));
+const ResetPassword = lazy(() => import('./pages/ResetPassword'));
+const AdminLogin = lazy(() => import('./pages/AdminLogin'));
+const AdminSignup = lazy(() => import('./pages/AdminSignup'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Participants = lazy(() => import('./pages/Participants'));
+const AirlineParticipants = lazy(() => import('./pages/AirlineParticipants'));
+const MyTeam = lazy(() => import('./pages/MyTeam'));
+const InternalCertificates = lazy(() => import('./pages/InternalCertificates'));
+const InternalAssessments = lazy(() => import('./pages/InternalAssessments'));
+const AddParticipant = lazy(() => import('./pages/AddParticipant'));
+const EditParticipant = lazy(() => import('./pages/EditParticipant'));
+const Airlines = lazy(() => import('./pages/Airlines'));
+const Contract = lazy(() => import('./pages/Contract'));
+const Profile = lazy(() => import('./pages/Profile'));
+const ExamResults = lazy(() => import('./pages/ExamResults'));
+const AttendanceSheets = lazy(() => import('./pages/AttendanceSheets'));
+const DgrForms = lazy(() => import('./pages/DgrForms'));
+const ExamSystem = lazy(() => import('./pages/ExamSystem'));
+const ExamBuilder = lazy(() => import('./pages/ExamBuilder'));
+const ExamAttempts = lazy(() => import('./pages/ExamAttempts'));
+const AirlineExams = lazy(() => import('./pages/AirlineExams'));
+const ExamResultView = lazy(() => import('./pages/ExamResultView'));
+const PublicExam = lazy(() => import('./pages/PublicExam'));
+const PublicFeedback = lazy(() => import('./pages/PublicFeedback'));
+const ParticipantExamPerformance = lazy(() => import('./pages/ParticipantExamPerformance'));
+const QuestionBankDetail = lazy(() => import('./pages/QuestionBank').then((m) => ({ default: m.QuestionBankDetail })));
+const TeamPage = lazy(() => import('./pages/TeamPage'));
 
 // Requires any authenticated user (admin or airline)
 function ProtectedRoute({ children }) {
   const { admin, loading } = useAuth();
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="w-8 h-8 border-3 border-primary-300 border-t-primary-800 rounded-full animate-spin" />
-      </div>
-    );
-  }
+  if (loading) return <PageLoader fullScreen />;
   if (!admin) return <Navigate to="/login" replace />;
   return children;
 }
@@ -112,6 +109,7 @@ function App() {
           },
         }}
       />
+      <Suspense fallback={<PageLoader fullScreen />}>
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/login"       element={<GuestRoute><Login /></GuestRoute>} />
@@ -122,6 +120,9 @@ function App() {
 
         {/* Public, passwordless exam link — no login, token in the URL */}
         <Route path="/exam/:token" element={<PublicExam />} />
+
+        {/* Public Customer Training Feedback form — emailed link, no login */}
+        <Route path="/feedback/:token" element={<PublicFeedback />} />
 
         <Route path="/admin" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
           {/* Available to all authenticated users */}
@@ -169,6 +170,7 @@ function App() {
           <Route path="profile" element={<Profile />} />
         </Route>
       </Routes>
+      </Suspense>
     </TooltipProvider>
   );
 }

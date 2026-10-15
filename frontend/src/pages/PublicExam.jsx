@@ -8,16 +8,26 @@ import {
   HiOutlineCheck, HiOutlineX,
 } from 'react-icons/hi';
 import {
-  getPublicExam, startPublicExam, savePublicAnswer, checkPublicAnswer, submitPublicExam,
+  getPublicExam, startPublicExam, savePublicAnswers, checkPublicAnswer, submitPublicExam,
   reportPublicViolation, getPublicExamResult,
 } from '../api';
 import ExamRunner from '../components/ExamRunner';
+import { requestFullscreen, fullscreenSupported } from '@/lib/fullscreen';
 import AnswerReviewList from '../components/AnswerReviewList';
 import logoImg from '../assets/logo.png';
 
-function requestFullscreen(el) {
-  const fn = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
-  return fn ? fn.call(el) : Promise.reject(new Error('no fs'));
+// "This tab is taking attempt X" — kept in sessionStorage, which survives a
+// page refresh but not closing the tab. After a refresh the candidate goes
+// straight back into the exam (no landing page) and the refresh is not counted
+// as closing the window. Storage can be unavailable: then it just shows the
+// landing page with "Resume Exam", as before.
+const takingKey = (token) => `exam-taking:${token}`;
+function readTaking(token) { try { return sessionStorage.getItem(takingKey(token)); } catch { return null; } }
+function writeTaking(token, attemptId) {
+  try {
+    if (attemptId) sessionStorage.setItem(takingKey(token), attemptId);
+    else sessionStorage.removeItem(takingKey(token));
+  } catch { /* storage unavailable */ }
 }
 
 export default function PublicExam() {
@@ -29,17 +39,28 @@ export default function PublicExam() {
 
   const loadInfo = useCallback(() => {
     getPublicExam(token)
-      .then((res) => { setInfo(res.data); setPhase('landing'); })
+      .then((res) => {
+        setInfo(res.data);
+        const activeId = res.data.active_attempt_id;
+        // Refreshed mid-exam in this tab → resume right away.
+        if (activeId && readTaking(token) === activeId) { beginAttempt({ refresh: true }); return; }
+        if (!activeId) writeTaking(token, null);
+        setPhase('landing');
+      })
       .catch((err) => { setErrorMsg(err.response?.data?.error || 'This exam link is invalid.'); setPhase('error'); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
   useEffect(() => { loadInfo(); }, [loadInfo]);
 
-  const beginAttempt = async () => {
+  // refresh: resuming after a page refresh — no fullscreen request (no click to
+  // allow it; the exam asks for one) and the server doesn't count a window close.
+  const beginAttempt = async ({ refresh = false } = {}) => {
     setStarting(true);
-    if (info?.exam?.lockdown_enabled) requestFullscreen(document.documentElement).catch(() => {});
+    if (!refresh && info?.exam?.lockdown_enabled && fullscreenSupported()) requestFullscreen(document.documentElement).catch(() => {});
     try {
-      const res = await startPublicExam(token);
+      const res = await startPublicExam(token, refresh ? { resume: 'refresh' } : undefined);
+      writeTaking(token, res.data.attempt.id || res.data.attempt._id);
       setActive(res.data);
       setPhase('taking');
       // Coming back after closing the window: say how many returns are left.
@@ -52,9 +73,11 @@ export default function PublicExam() {
       }
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to start exam.', { duration: 8000 });
+      writeTaking(token, null);
       // Closed the window too often: the attempt is now submitted, so reload
       // the page state (it will offer the result instead of Resume).
       if (err.response?.data?.auto_submitted) loadInfo();
+      else if (refresh) setPhase('landing');
     } finally {
       setStarting(false);
     }
@@ -87,7 +110,7 @@ export default function PublicExam() {
     <TakeShell
       token={token}
       initial={active}
-      onFinished={() => setPhase('done')}
+      onFinished={() => { writeTaking(token, null); setPhase('done'); }}
       setResultAttempt={(id) => setActive({ resultOnly: id })}
     />
   );
@@ -105,8 +128,11 @@ function Landing({ info, onBegin, starting, onViewResult }) {
   const doneMessage = has_passed
     ? 'You have passed this exam.'
     : awaiting_review
-      ? 'Your exam has been submitted and is being graded.'
+      ? 'Your exam has been submitted and is under review. Your result will be available once it has been graded.'
       : 'You have completed this exam.';
+  const resultLabel = awaiting_review ? 'View Submission Status' : 'View My Result';
+  // iPhone Safari can't put a page in fullscreen; the lockdown still runs without it.
+  const canFullscreen = fullscreenSupported();
 
   return (
     <div className="fixed inset-0 bg-gray-100 overflow-y-auto">
@@ -127,26 +153,35 @@ function Landing({ info, onBegin, starting, onViewResult }) {
             <Row label="Candidate" value={participant_name} />
             <Row label="Questions" value={exam.question_count} />
             <Row label="Time allowed" value={exam.duration_minutes ? `${exam.duration_minutes} minutes` : 'No limit'} />
-            <Row label="Attempts left" value={has_passed ? 0 : attempts_left} />
+            <Row label="Attempts left" value={has_passed ? 0 : (awaiting_review && attempts_left > 0 ? `${attempts_left} (after grading)` : attempts_left)} />
             <Row label="Pass mark" value={`${exam.pass_percentage}%`} />
           </div>
 
-          {exam.lockdown_enabled && (
+          {exam.lockdown_enabled && !noAttemptsLeft && !scheduling_error && (
             <div className="rounded-2xl bg-amber-50 border border-amber-200/80 p-4 space-y-1.5 text-xs text-amber-900">
-              <p className="flex items-start gap-2 font-bold"><HiOutlineLockClosed className="w-4 h-4 flex-shrink-0 mt-0.5" /> This exam runs in a locked fullscreen session.</p>
-              <p className="flex items-start gap-2"><HiOutlineShieldExclamation className="w-4 h-4 flex-shrink-0 mt-0.5 text-amber-600" /> {exam.allow_tab_switch ? 'Exiting fullscreen is recorded as a violation' : 'Exiting fullscreen or switching tabs is recorded as a violation'}, and too many will auto submit your exam.</p>
+              {canFullscreen ? (
+                <>
+                  <p className="flex items-start gap-2 font-bold"><HiOutlineLockClosed className="w-4 h-4 flex-shrink-0 mt-0.5" /> This exam runs in a locked fullscreen session.</p>
+                  <p className="flex items-start gap-2"><HiOutlineShieldExclamation className="w-4 h-4 flex-shrink-0 mt-0.5 text-amber-600" /> {exam.allow_tab_switch ? 'Exiting fullscreen is recorded as a violation' : 'Exiting fullscreen or switching tabs is recorded as a violation'}, and too many will auto submit your exam.</p>
+                </>
+              ) : (
+                <>
+                  <p className="flex items-start gap-2 font-bold"><HiOutlineLockClosed className="w-4 h-4 flex-shrink-0 mt-0.5" /> This exam runs in a locked session.</p>
+                  <p className="flex items-start gap-2"><HiOutlineShieldExclamation className="w-4 h-4 flex-shrink-0 mt-0.5 text-amber-600" /> {exam.allow_tab_switch ? 'Your device cannot lock the screen to fullscreen.' : 'Leaving this page (switching apps or tabs, locking the screen) is recorded as a violation'}{exam.allow_tab_switch ? '' : ', and too many will auto submit your exam.'}</p>
+                </>
+              )}
             </div>
           )}
 
-          {exam.limit_window_closes && (
+          {exam.limit_window_closes && !noAttemptsLeft && !scheduling_error && (
             <div className="rounded-2xl bg-amber-50 border border-amber-200/80 p-4 text-xs text-amber-900">
               <p className="flex items-start gap-2">
                 <HiOutlineShieldExclamation className="w-4 h-4 flex-shrink-0 mt-0.5 text-amber-600" />
                 <span>
                   <span className="font-bold">Do not close this window during the exam.</span>{' '}
                   {exam.max_window_closes > 0
-                    ? `If you close or refresh it, you can come back ${exam.max_window_closes} time${exam.max_window_closes === 1 ? '' : 's'}; after that your attempt is submitted automatically.`
-                    : 'If you close or refresh it, your attempt is submitted automatically.'}
+                    ? `If you close it, you can come back ${exam.max_window_closes} time${exam.max_window_closes === 1 ? '' : 's'}; after that your attempt is submitted automatically. Refreshing the page is fine.`
+                    : 'If you close it, your attempt is submitted automatically. Refreshing the page is fine.'}
                   {window_closes_left != null && (
                     <span className="block mt-1 font-bold">
                       {window_closes_left > 0 ? `Returns left on this attempt: ${window_closes_left}` : 'No returns left: resuming now will submit your attempt.'}
@@ -164,7 +199,7 @@ function Landing({ info, onBegin, starting, onViewResult }) {
               </div>
               {last_attempt_id && (
                 <button onClick={onViewResult} className="w-full py-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold transition-all">
-                  View My Result
+                  {resultLabel}
                 </button>
               )}
             </div>
@@ -175,8 +210,8 @@ function Landing({ info, onBegin, starting, onViewResult }) {
           ) : (
             <button onClick={onBegin} disabled={starting}
               className="w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold transition-all shadow-sm inline-flex items-center justify-center gap-2 disabled:opacity-60">
-              {exam.lockdown_enabled ? <HiOutlineArrowsExpand className="w-4 h-4" /> : <HiOutlineAcademicCap className="w-4 h-4" />}
-              {starting ? 'Starting…' : active_attempt_id ? 'Resume Exam' : exam.lockdown_enabled ? 'Start Exam in Fullscreen' : 'Start Exam'}
+              {exam.lockdown_enabled && canFullscreen ? <HiOutlineArrowsExpand className="w-4 h-4" /> : <HiOutlineAcademicCap className="w-4 h-4" />}
+              {starting ? 'Starting…' : active_attempt_id ? 'Resume Exam' : exam.lockdown_enabled && canFullscreen ? 'Start Exam in Fullscreen' : 'Start Exam'}
             </button>
           )}
 
@@ -210,7 +245,7 @@ function TakeShell({ token, initial, onFinished, setResultAttempt }) {
     <ExamRunner
       attempt={attempt}
       exam={exam}
-      onSaveAnswer={(qId, response) => savePublicAnswer(token, attemptId, qId, response)}
+      onSaveAnswers={(payload, opts) => savePublicAnswers(token, attemptId, payload, opts)}
       onCheckAnswer={(qId, response) => checkPublicAnswer(token, attemptId, qId, response).then((r) => r.data)}
       onSubmit={() => submitPublicExam(token, attemptId)}
       onReportViolation={(type) => reportPublicViolation(token, attemptId, type).then((r) => r.data)}

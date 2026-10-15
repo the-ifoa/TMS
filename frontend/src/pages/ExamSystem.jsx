@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useHistoryState } from '@/hooks/use-history-state';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -8,11 +8,12 @@ import {
   HiOutlineUserAdd, HiOutlineClipboardCheck,
   HiOutlineSearch, HiOutlineX, HiOutlineUserGroup, HiChevronRight,
   HiOutlineClock, HiOutlineDocumentText, HiOutlineMail, HiOutlineCheckCircle,
-  HiOutlinePaperAirplane, HiOutlineCollection, HiOutlineRefresh,
+  HiOutlinePaperAirplane, HiOutlineCollection, HiOutlineRefresh, HiOutlineChatAlt2,
 } from 'react-icons/hi';
 import { FaPlaneDeparture } from 'react-icons/fa';
 import LogoAvatar from '../components/LogoAvatar';
-import { listExams, deleteExam, publishExam, getExamAirlines, updateExam, sendExamInvites, reassignExamInvites, getExamInvites, removeExamCandidate } from '../api';
+import FeedbackDialog from '../components/FeedbackDialog';
+import { listExams, deleteExam, publishExam, getExamAirlines, updateExam, sendExamInvites, reassignExamInvites, getExamInvites, removeExamCandidate, getExamAssignments } from '../api';
 import { useAuth } from '../context/AuthContext';
 import QuestionBankList from './QuestionBank';
 import { DateTimeInputCard } from './ExamBuilder';
@@ -48,6 +49,10 @@ function SendInviteModal({ exam, onClose, onSent }) {
   const [sending, setSending] = useState(false);
   const [reassigningPid, setReassigningPid] = useState(null);
   const [removingPid, setRemovingPid] = useState(null);
+  // Candidates an Assign skipped because they have no attempts left — offered
+  // a Reassign in a popup ([{ id, name }]).
+  const [needsReassign, setNeedsReassign] = useState([]);
+  const [reassigningAll, setReassigningAll] = useState(false);
   const { confirm, ConfirmDialog } = useConfirm();
 
   // Take one candidate off this exam: assignment, invite link and any result.
@@ -110,7 +115,7 @@ function SendInviteModal({ exam, onClose, onSent }) {
 
   const reassign = async (pid, name) => {
     const opts = resolveOpts();
-    if (opts === null) return;
+    if (opts === null) return false;
     setReassigningPid(pid);
     try {
       const res = await reassignExamInvites(exam.id, [pid], opts);
@@ -119,10 +124,36 @@ function SendInviteModal({ exam, onClose, onSent }) {
       else toast.error(`Reassign failed (${skipped[0]?.reason || 'unknown'}).`);
       load();
       onSent?.();
+      return sent.length > 0;
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to reassign.');
+      return false;
+    } finally {
+      setReassigningPid(null);
+    }
+  };
+
+  // From the "no attempts left" popup: reassign one person, or everyone listed.
+  const reassignFromPopup = async (person) => {
+    if (await reassign(person.id, person.name)) setNeedsReassign((list) => list.filter((x) => x.id !== person.id));
+  };
+  const reassignAllFromPopup = async () => {
+    const opts = resolveOpts();
+    if (opts === null) return;
+    setReassigningAll(true);
+    try {
+      const res = await reassignExamInvites(exam.id, needsReassign.map((x) => x.id), opts);
+      const { sent = [], skipped = [] } = res.data || {};
+      if (sent.length) toast.success(`${sent.length} reassigned — fresh exam link${sent.length > 1 ? 's' : ''} emailed.`);
+      if (skipped.length) toast.error(`${skipped.length} not reassigned (${skipped[0].reason}).`);
+      const done = new Set(sent.map((x) => String(x.id)));
+      setNeedsReassign((list) => list.filter((x) => !done.has(String(x.id))));
+      load();
+      onSent?.();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to reassign.');
     } finally {
-      setReassigningPid(null);
+      setReassigningAll(false);
     }
   };
 
@@ -134,8 +165,12 @@ function SendInviteModal({ exam, onClose, onSent }) {
     try {
       const res = await sendExamInvites(exam.id, [...selected], opts);
       const { sent = [], skipped = [] } = res.data || {};
+      // No attempts left → offer a Reassign in a popup instead of a toast.
+      const outOfAttempts = skipped.filter((x) => x.code === 'no_attempts_left');
+      const otherSkips = skipped.filter((x) => x.code !== 'no_attempts_left');
       if (sent.length) toast.success(`${sent.length} participant${sent.length > 1 ? 's' : ''} assigned, exam link${sent.length > 1 ? 's' : ''} emailed.`);
-      if (skipped.length) toast(`${skipped.length} skipped (${skipped[0].reason}${skipped.length > 1 ? ', …' : ''}).`, { icon: 'ℹ️' });
+      if (otherSkips.length) toast(`${otherSkips.length} skipped (${otherSkips[0].reason}${otherSkips.length > 1 ? ', …' : ''}).`, { icon: 'ℹ️' });
+      if (outOfAttempts.length) setNeedsReassign(outOfAttempts.map((x) => ({ id: x.id, name: x.name })));
       setSelected(new Set());
       load();
       onSent?.();
@@ -273,11 +308,11 @@ function SendInviteModal({ exam, onClose, onSent }) {
                             return (
                               <div key={p._id}
                                 onClick={() => email && toggle(p._id)}
-                                className={`flex items-center justify-between gap-3 px-3 py-2 rounded-xl border transition-all ${
+                                className={`flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 px-3 py-2 rounded-xl border transition-all ${
                                   !email ? 'bg-slate-50/70 border-slate-100 opacity-70 cursor-not-allowed'
                                   : isChecked ? 'bg-slate-900/5 border-slate-900/30 cursor-pointer shadow-2xs'
                                   : 'bg-white border-slate-100 hover:bg-slate-50 cursor-pointer'}`}>
-                                <div className="flex items-center gap-2.5 min-w-0">
+                                <div className="flex items-center gap-2.5 min-w-[12rem] flex-1">
                                   <Checkbox disabled={!email} checked={isChecked} onCheckedChange={() => email && toggle(p._id)} className="w-4 h-4 flex-shrink-0" />
                                   <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-extrabold text-slate-600 flex-shrink-0">{ini}</div>
                                   <div className="min-w-0">
@@ -289,7 +324,7 @@ function SendInviteModal({ exam, onClose, onSent }) {
                                     )}
                                   </div>
                                 </div>
-                                <div className="flex items-center gap-2 flex-shrink-0">
+                                <div className="flex items-center justify-end gap-1.5 flex-wrap ml-auto">
                                   {inv?.expires_at && (
                                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
                                       new Date(inv.expires_at) < new Date()
@@ -307,18 +342,26 @@ function SendInviteModal({ exam, onClose, onSent }) {
                                       {inv.attempt.percentage}%
                                     </span>
                                   )}
-                                  {inv?.bonus_attempts > 0 && (
-                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold border bg-slate-100 text-slate-600 border-slate-200" title="Extra attempts granted via reassign">
-                                      +{inv.bonus_attempts}
+                                  {inv?.attempts_allowed != null && (
+                                    <span
+                                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold border tabular-nums ${inv.needs_reassign ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-slate-100 text-slate-600 border-slate-200'}`}
+                                      title={`${inv.attempts_used} of ${inv.attempts_allowed} attempts used${inv.bonus_attempts > 0 ? ` (${inv.bonus_attempts} extra granted by reassign)` : ''}`}
+                                    >
+                                      Attempts {inv.attempts_used}/{inv.attempts_allowed}
                                     </span>
                                   )}
-                                  {email && inv && (inv.status === 'completed' || inv.attempt) && (
+                                  {inv?.needs_reassign && (
+                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold border bg-amber-50 text-amber-800 border-amber-300" title="All attempts used — Assign won't send anything. Use Reassign to give a new attempt.">
+                                      No attempts left
+                                    </span>
+                                  )}
+                                  {email && inv && (inv.status === 'completed' || inv.attempt || inv.attempts_used > 0) && (
                                     <button
                                       type="button"
                                       onClick={(e) => { e.stopPropagation(); reassign(p._id, p.participant_name); }}
                                       disabled={reassigningPid === p._id}
                                       title="Email a fresh link and let this participant take the exam again"
-                                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors disabled:opacity-50"
+                                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-colors disabled:opacity-50 ${inv.needs_reassign ? 'border-amber-400 bg-amber-500 text-white hover:bg-amber-600' : 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100'}`}
                                     >
                                       <HiOutlineRefresh className={`w-3 h-3 ${reassigningPid === p._id ? 'animate-spin' : ''}`} />
                                       {reassigningPid === p._id ? 'Reassigning…' : 'Reassign'}
@@ -364,6 +407,127 @@ function SendInviteModal({ exam, onClose, onSent }) {
         </DialogFooter>
         {ConfirmDialog}
       </DialogContent>
+
+      {/* Assign skipped people who have used every attempt — offer to reassign them. */}
+      <Dialog open={needsReassign.length > 0} onOpenChange={(open) => { if (!open && !reassigningAll && !reassigningPid) setNeedsReassign([]); }}>
+        {/* Closes only via its buttons / Esc — a button disabling itself while it
+            works moves focus, which Radix would otherwise treat as "clicked outside". */}
+        <DialogContent className="sm:max-w-md rounded-2xl p-0 overflow-hidden"
+          onInteractOutside={(e) => e.preventDefault()} onFocusOutside={(e) => e.preventDefault()}>
+          <DialogHeader className="px-6 pt-6 pb-3 text-left">
+            <DialogTitle className="flex items-center gap-2 text-base font-black text-slate-900">
+              <HiOutlineRefresh className="w-5 h-5 text-amber-600" />
+              {needsReassign.length === 1 ? 'No attempts left' : `${needsReassign.length} candidates have no attempts left`}
+            </DialogTitle>
+            <p className="text-xs leading-relaxed text-slate-500">
+              {needsReassign.length === 1 ? 'This candidate has' : 'These candidates have'} used all {exam.max_attempts} attempt{exam.max_attempts === 1 ? '' : 's'}, so assigning again doesn't send anything.
+              {' '}<span className="font-semibold text-slate-700">Reassign</span> gives one new attempt and emails a fresh link (the old link stops working).
+            </p>
+          </DialogHeader>
+          <div className="px-6 pb-2 max-h-64 overflow-y-auto space-y-2">
+            {needsReassign.map((person) => (
+              <div key={person.id} className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50/60">
+                <span className="text-sm font-bold text-slate-900 truncate">{person.name}</span>
+                <Button size="sm" variant="outline" onClick={() => reassignFromPopup(person)}
+                  disabled={reassigningAll || reassigningPid === person.id}
+                  className="rounded-xl text-xs font-bold border-amber-300 text-amber-700 hover:bg-amber-50 flex items-center gap-1.5 flex-shrink-0">
+                  <HiOutlineRefresh className={`w-3.5 h-3.5 ${reassigningPid === person.id ? 'animate-spin' : ''}`} />
+                  {reassigningPid === person.id ? 'Reassigning…' : 'Reassign'}
+                </Button>
+              </div>
+            ))}
+          </div>
+          <DialogFooter className="px-6 py-3.5 border-t border-slate-100 flex items-center justify-end gap-2">
+            <Button variant="ghost" onClick={() => setNeedsReassign([])} disabled={reassigningAll || !!reassigningPid} className="rounded-xl text-xs font-bold">Not now</Button>
+            {needsReassign.length > 1 && (
+              <Button onClick={reassignAllFromPopup} disabled={reassigningAll || !!reassigningPid}
+                className="bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold px-4">
+                {reassigningAll ? 'Reassigning…' : `Reassign all (${needsReassign.length})`}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </Dialog>
+  );
+}
+
+// ─── Assigned-participants list — opened from the card's "N Assigned" chip ────
+function attemptBadge(attempt) {
+  if (!attempt) return { label: 'Not started', cls: 'bg-slate-50 text-slate-500 border-slate-200' };
+  if (attempt.status === 'in_progress') return { label: 'In progress', cls: 'bg-violet-50 text-violet-700 border-violet-200' };
+  if (attempt.passed === true) return { label: `Passed${attempt.percentage != null ? ` · ${Math.round(attempt.percentage)}%` : ''}`, cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+  if (attempt.passed === false) return { label: `Failed${attempt.percentage != null ? ` · ${Math.round(attempt.percentage)}%` : ''}`, cls: 'bg-rose-50 text-rose-700 border-rose-200' };
+  return { label: 'Awaiting grading', cls: 'bg-amber-50 text-amber-700 border-amber-200' };
+}
+
+function AssignedListModal({ exam, onClose }) {
+  const [rows, setRows] = useState(null);
+  const [search, setSearch] = useState('');
+
+  useEffect(() => {
+    getExamAssignments(exam.id)
+      .then((res) => setRows(res.data || []))
+      .catch(() => { toast.error('Failed to load assigned participants'); setRows([]); });
+  }, [exam.id]);
+
+  const q = search.trim().toLowerCase();
+  const visible = (rows || []).filter((r) => !q
+    || r.name.toLowerCase().includes(q) || r.email.toLowerCase().includes(q) || r.airline.toLowerCase().includes(q));
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-lg w-[92vw] max-h-[80vh] flex flex-col p-0 overflow-hidden rounded-2xl border border-slate-200/80 shadow-2xl bg-white">
+        <DialogHeader className="flex-shrink-0 px-6 pt-5 pb-4 border-b border-slate-100 space-y-0 text-left">
+          <DialogTitle className="text-base font-bold text-slate-900 leading-snug pr-6">Assigned participants</DialogTitle>
+          <p className="text-xs text-slate-500 mt-1 line-clamp-1">
+            {exam.title}{rows ? ` · ${rows.length} ${rows.length === 1 ? 'person' : 'people'}` : ''}
+          </p>
+          {rows && rows.length > 6 && (
+            <div className="relative mt-3">
+              <HiOutlineSearch className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search name, email or airline"
+                className="w-full h-9 pl-9 pr-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-slate-200"
+              />
+            </div>
+          )}
+        </DialogHeader>
+
+        <div className="flex-1 overflow-y-auto px-3 py-2">
+          {!rows ? (
+            <div className="py-10 flex justify-center">
+              <div className="w-6 h-6 border-2 border-slate-200 border-t-slate-700 rounded-full animate-spin" />
+            </div>
+          ) : visible.length === 0 ? (
+            <p className="py-10 text-center text-sm text-slate-400">
+              {rows.length === 0 ? 'Nobody is assigned to this exam yet.' : 'No matches.'}
+            </p>
+          ) : (
+            <ul className="divide-y divide-slate-100">
+              {visible.map((r) => {
+                const badge = attemptBadge(r.attempt);
+                return (
+                  <li key={r.participant_id} className="flex items-center gap-3 px-3 py-2.5">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-slate-800 truncate">{r.name}</p>
+                      <p className="text-[11px] text-slate-400 truncate">
+                        {[r.airline, r.email].filter(Boolean).join(' · ') || '—'}
+                        {r.assigned_at && ` · assigned ${new Date(r.assigned_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}`}
+                      </p>
+                    </div>
+                    <span className={`flex-shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${badge.cls}`}>
+                      {badge.label}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      </DialogContent>
     </Dialog>
   );
 }
@@ -383,6 +547,19 @@ export default function ExamSystem() {
   const [exams, setExams] = useState([]);
   const [loading, setLoading] = useState(true);
   const [sendTarget, setSendTarget] = useState(null);
+  const [assignedTarget, setAssignedTarget] = useState(null);
+  const [feedbackTarget, setFeedbackTarget] = useState(null);
+  // Height of the sticky page header — the search / filter bars stick just
+  // below it (via --sticky-top), here and in the embedded question bank list.
+  const headerRef = useRef(null);
+  const [headerH, setHeaderH] = useState(0);
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return undefined;
+    const ro = new ResizeObserver(() => setHeaderH(el.offsetHeight));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   const [bankShowCreate, setBankShowCreate] = useState(false);
   const [examSearch, setExamSearch] = useHistoryState('examSearch', '');
   const [statusFilter, setStatusFilter] = useHistoryState('statusFilter', 'all');
@@ -463,6 +640,9 @@ export default function ExamSystem() {
     const canAssign = can('exams.assign') && (canManage || (isDepartment && airlineOwned));
     const showPublish = canAuthor && exam.status === 'draft';
     const showAssign  = canAssign && exam.status !== 'draft';
+    // Customer Training Feedback — IFOA (admin-owned) exams only, never airline-created ones.
+    const showFeedback = isAdmin && !airlineOwned && !exam.owner_department && exam.status !== 'draft'
+      && ['exams.assign', 'exams.grade', 'exams.author'].some(can);
     return (
       <Card
         key={exam.id}
@@ -529,10 +709,24 @@ export default function ExamSystem() {
               <HiOutlineClock className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
               <span className="truncate">Pass ≥ {exam.pass_percentage}%</span>
             </div>
-            <div className="flex items-center gap-2 p-2 rounded-xl bg-slate-50/80 border border-slate-200/60">
-              <HiOutlineUserGroup className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-              <span className="truncate">{exam.assignments?.length || 0} Assigned</span>
-            </div>
+            {exam.assignments?.length ? (
+              <SimpleTooltip label="See who is assigned">
+                <button
+                  type="button"
+                  onClick={() => setAssignedTarget(exam)}
+                  className="flex items-center gap-2 p-2 rounded-xl bg-slate-50/80 border border-slate-200/60 text-left hover:bg-blue-50/70 hover:border-blue-200 hover:text-blue-700 transition-colors"
+                >
+                  <HiOutlineUserGroup className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                  <span className="truncate flex-1">{exam.assignments.length} Assigned</span>
+                  <HiChevronRight className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                </button>
+              </SimpleTooltip>
+            ) : (
+              <div className="flex items-center gap-2 p-2 rounded-xl bg-slate-50/80 border border-slate-200/60">
+                <HiOutlineUserGroup className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                <span className="truncate">0 Assigned</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -573,6 +767,7 @@ export default function ExamSystem() {
           </div>
           )}
 
+          <div className={`grid gap-2 ${showFeedback ? 'grid-cols-2' : 'grid-cols-1'}`}>
           <Button
             variant="outline"
             size="sm"
@@ -581,15 +776,26 @@ export default function ExamSystem() {
           >
             <HiOutlineClipboardCheck className="w-3.5 h-3.5 text-slate-400" /> Results
           </Button>
+          {showFeedback && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setFeedbackTarget(exam)}
+              className="w-full rounded-xl border-emerald-200/80 bg-emerald-50/50 text-emerald-700 hover:bg-emerald-100/70 text-xs font-bold shadow-2xs h-8 flex items-center justify-center gap-1"
+            >
+              <HiOutlineChatAlt2 className="w-3.5 h-3.5 text-emerald-600" /> Feedback
+            </Button>
+          )}
+          </div>
         </div>
       </Card>
     );
   };
 
   return (
-    <div className="w-full min-h-full pb-20 flex flex-col">
+    <div className="w-full min-h-full pb-20 flex flex-col" style={{ '--sticky-top': `${headerH}px` }}>
       {/* Flush Full-Width Sticky Page Header */}
-      <div className="sticky top-0 z-20 w-full bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-3.5 sm:px-6 lg:px-8 py-2.5 shadow-2xs">
+      <div ref={headerRef} className="sticky top-0 z-20 w-full bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-3.5 sm:px-6 lg:px-8 py-2.5 shadow-2xs">
         <div className="w-full flex items-center justify-between gap-x-4 gap-y-2.5 flex-wrap lg:flex-nowrap">
           <div className="flex items-center gap-x-3 gap-y-2 min-w-0 max-w-full flex-wrap">
             <h1 className="text-base sm:text-lg font-black text-slate-900 tracking-tight flex-shrink-0">Exam System</h1>
@@ -665,7 +871,9 @@ export default function ExamSystem() {
       {/* Main Content Body */}
       <div className="w-full p-4 sm:p-6 lg:p-8 space-y-6 flex-1">
         {activeTab !== 'question-bank' && !loading && (
-          <div className="flex flex-col sm:flex-row sm:items-center gap-2.5">
+          // Sticky: search + filters stay at the top while the exam cards scroll
+          // underneath (same as the question bank search).
+          <div className="sticky top-[var(--sticky-top,0px)] z-10 -mt-2 py-2 bg-slate-50 flex flex-col sm:flex-row sm:items-center gap-2.5">
             <div className="relative flex-1 min-w-0">
               <HiOutlineSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
               <input
@@ -753,6 +961,12 @@ export default function ExamSystem() {
           );
         })()}
 
+      {feedbackTarget && (
+        <FeedbackDialog exam={feedbackTarget} onClose={() => setFeedbackTarget(null)} />
+      )}
+      {assignedTarget && (
+        <AssignedListModal exam={assignedTarget} onClose={() => setAssignedTarget(null)} />
+      )}
       {sendTarget && (
         <SendInviteModal exam={sendTarget} onClose={() => setSendTarget(null)} onSent={load} />
       )}

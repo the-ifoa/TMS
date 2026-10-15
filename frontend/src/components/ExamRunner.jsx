@@ -7,6 +7,7 @@ import {
 } from 'react-icons/hi';
 import QuestionPlayer from './examPlayers/QuestionPlayer';
 import { Button } from '@/components/ui/button';
+import { requestFullscreen, exitFullscreen, isFullscreen, fullscreenSupported } from '@/lib/fullscreen';
 import logoImg from '../assets/logo.png';
 
 // How often buffered answers are flushed to the server (VITE_EXAM_AUTOSAVE_SECONDS, default 10s).
@@ -21,7 +22,10 @@ const AUTOSAVE_SECONDS = Math.max(1, Number(import.meta.env.VITE_EXAM_AUTOSAVE_S
 // Props:
 //   attempt          — { id, questions_snapshot, answers, started_at, violation_count }
 //   exam             — { title, duration_minutes, lockdown_enabled, max_violations, instant_feedback }
-//   onSaveAnswer(qId, response)  — persist one answer; may return a promise (rejects → retried next autosave tick)
+//   onSaveAnswers({ answers: [{ question_id, response }], timers }, { keepalive }) — persist a batch of
+//                                  answers (+ per-question/section timer readings) in one request; rejects
+//                                  (network / 5xx) → retried next autosave tick. keepalive=true while the page
+//                                  is hiding/unloading: use a request that outlives the page.
 //   onCheckAnswer(qId, response) — instant-feedback exams only: grade + lock one answer →
 //                                  { feedback: { is_correct, points_awarded, max_points, correct_answer, explanation, … }, progress }
 //   onSubmit()                   — async: persist final submission server-side
@@ -29,20 +33,20 @@ const AUTOSAVE_SECONDS = Math.max(1, Number(import.meta.env.VITE_EXAM_AUTOSAVE_S
 //   onFinished()                 — called after a successful submit / auto-submit
 //   onBack                       — optional: back button handler (hidden if absent)
 
+// A cleared question (null, '', [] or only blanks left) counts as unanswered.
+function isAnswered(value) {
+  if (value === undefined || value === null || value === '') return false;
+  if (Array.isArray(value)) return value.some((v) => v !== undefined && v !== null && v !== '');
+  return true;
+}
+
+// Timer keys shared with the server (ExamAttempt.timer_elapsed).
+const questionTimerKey = (qid) => `q_${qid}`;
+const sectionTimerKey = (name) => `s_${Array.from(new TextEncoder().encode(name || '')).map((b) => b.toString(16).padStart(2, '0')).join('')}`;
+
 function formatTime(totalSeconds) {
   const s = Math.max(0, Math.floor(totalSeconds));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-}
-function requestFullscreen(el) {
-  const fn = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
-  return fn ? fn.call(el) : Promise.reject(new Error('Fullscreen not supported'));
-}
-function exitFullscreen() {
-  const fn = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
-  return fn ? fn.call(document) : Promise.resolve();
-}
-function isFullscreen() {
-  return !!(document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement);
 }
 const VIOLATION_LABEL = {
   fullscreen_exit: 'You exited fullscreen mode.',
@@ -50,7 +54,7 @@ const VIOLATION_LABEL = {
   devtools_suspected: 'Suspicious activity detected.',
 };
 
-export default function ExamRunner({ attempt, exam, onSaveAnswer, onCheckAnswer, onSubmit, onReportViolation, onFinished, onBack, previewMode = false }) {
+export default function ExamRunner({ attempt, exam, onSaveAnswers, onCheckAnswer, onSubmit, onReportViolation, onFinished, onBack, previewMode = false }) {
   const questions = attempt.questions_snapshot;
 
   const [answers, setAnswers] = useState(() => {
@@ -58,7 +62,14 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onCheckAnswer,
     (attempt.answers || []).forEach((a) => { init[a.question_id] = a.response; });
     return init;
   });
-  const [marked, setMarked] = useState(new Set());
+  // Where the candidate is (question + review marks) survives a refresh or a
+  // window close + return. Per attempt, so a reassigned exam starts at Q1.
+  const posKey = previewMode ? null : `exam-pos:${attempt.id || attempt._id}`;
+  const [savedPos] = useState(() => {
+    if (!posKey) return {};
+    try { return JSON.parse(localStorage.getItem(posKey)) || {}; } catch { return {}; }
+  });
+  const [marked, setMarked] = useState(() => new Set(Array.isArray(savedPos.marked) ? savedPos.marked : []));
   // Instant feedback: checked answers (id → feedback) are final — locked client
   // and server side. Restored from the attempt when the candidate resumes.
   const instantFeedback = !!exam.instant_feedback && typeof onCheckAnswer === 'function';
@@ -69,7 +80,11 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onCheckAnswer,
   });
   const [progress, setProgress] = useState(attempt.progress || null);
   const [checking, setChecking] = useState(false);
-  const [index, setIndex] = useState(0);
+  const [index, setIndex] = useState(() => (Number.isInteger(savedPos.index) && savedPos.index >= 0 && savedPos.index < questions.length ? savedPos.index : 0));
+  useEffect(() => {
+    if (!posKey) return;
+    try { localStorage.setItem(posKey, JSON.stringify({ index, marked: [...marked] })); } catch { /* storage unavailable */ }
+  }, [posKey, index, marked]);
   // No duration → no overall timer (null), instead of an instant auto-submit.
   // server_now (when the API sends it) corrects for a skewed device clock, which
   // would otherwise end the exam early.
@@ -87,14 +102,20 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onCheckAnswer,
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [saveState, setSaveState] = useState('idle'); // idle | saving | saved | error
   const [lastSavedAt, setLastSavedAt] = useState(null);
+  // The link stopped working mid-exam (exam reassigned → new token, or expired).
+  const [linkInvalid, setLinkInvalid] = useState(null);
   const finishedRef = useRef(false);
   // Answers changed since the last flush, keyed by question id (latest response wins).
   const pendingRef = useRef(new Map());
   const flushPromiseRef = useRef(null);
-  // Callers pass an inline onSaveAnswer; keep it in a ref so flushAnswers (and the
+  // Timer readings changed since the last flush (sent with the next autosave).
+  const timersDirtyRef = useRef(false);
+  // Callers pass an inline onSaveAnswers; keep it in a ref so flushAnswers (and the
   // autosave interval) stay stable across the per-second timer re-renders.
-  const onSaveAnswerRef = useRef(onSaveAnswer);
-  onSaveAnswerRef.current = onSaveAnswer;
+  const onSaveAnswersRef = useRef(onSaveAnswers);
+  onSaveAnswersRef.current = onSaveAnswers;
+  // Set further down (needs handleSubmit / onFinished); called on a save the server refuses for good.
+  const onSaveRefusedRef = useRef(null);
   const violationLockRef = useRef(false);
   // Entering fullscreen the first time is a required SETUP STEP, not a
   // violation. Until the candidate has been in fullscreen at least once, no
@@ -116,8 +137,19 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onCheckAnswer,
   const hasSectionTimers = Object.keys(sectionTimeLimits).length > 0;
   // ms accumulated while THIS section was the active one — only advances
   // while the candidate is actually on it, so navigating away pauses it.
-  const sectionElapsedRef = useRef({});
-  const [lockedSections, setLockedSections] = useState(() => new Set());
+  // Restored from the server on resume, so a refresh doesn't reset the clocks.
+  const sectionElapsedRef = useRef(null);
+  if (sectionElapsedRef.current === null) {
+    const saved = attempt.timer_elapsed || {};
+    sectionElapsedRef.current = {};
+    Object.keys(sectionTimeLimits).forEach((name) => {
+      const secs = Number(saved[sectionTimerKey(name)]) || 0;
+      if (secs > 0) sectionElapsedRef.current[name] = secs * 1000;
+    });
+  }
+  const [lockedSections, setLockedSections] = useState(() => new Set(
+    Object.entries(sectionTimeLimits).filter(([name, limit]) => (sectionElapsedRef.current[name] || 0) / 1000 >= limit).map(([name]) => name)
+  ));
   const [, forceSectionTick] = useState(0);
   const indexRef = useRef(index);
   useEffect(() => { indexRef.current = index; }, [index]);
@@ -134,8 +166,18 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onCheckAnswer,
   const hasQuestionTimers = Object.keys(questionTimeLimits).length > 0;
   // ms accumulated while THIS question was the active one — paused whenever
   // the candidate is looking at a different question.
-  const questionElapsedRef = useRef({});
-  const [lockedQuestionIds, setLockedQuestionIds] = useState(() => new Set());
+  const questionElapsedRef = useRef(null);
+  if (questionElapsedRef.current === null) {
+    const saved = attempt.timer_elapsed || {};
+    questionElapsedRef.current = {};
+    Object.keys(questionTimeLimits).forEach((qid) => {
+      const secs = Number(saved[questionTimerKey(qid)]) || 0;
+      if (secs > 0) questionElapsedRef.current[qid] = secs * 1000;
+    });
+  }
+  const [lockedQuestionIds, setLockedQuestionIds] = useState(() => new Set(
+    Object.entries(questionTimeLimits).filter(([qid, limit]) => (questionElapsedRef.current[qid] || 0) / 1000 >= limit).map(([qid]) => qid)
+  ));
   const lockedQuestionIdsRef = useRef(lockedQuestionIds);
   useEffect(() => { lockedQuestionIdsRef.current = lockedQuestionIds; }, [lockedQuestionIds]);
 
@@ -145,45 +187,79 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onCheckAnswer,
   const lockdownEnabled = exam.lockdown_enabled && !previewMode;
   const maxViolations = exam.max_violations || 4;
 
-  // Push every buffered answer to the server. Failed saves are re-queued so the
-  // next tick retries them. Resolves true when nothing is left pending.
-  const flushAnswers = useCallback(() => {
-    if (flushPromiseRef.current) return flushPromiseRef.current;
-    if (pendingRef.current.size === 0) return Promise.resolve(true);
+  // Current per-question / per-section clock readings (whole seconds) for the server.
+  const timerSnapshot = useCallback(() => {
+    const out = {};
+    Object.entries(questionElapsedRef.current).forEach(([qid, ms]) => { out[questionTimerKey(qid)] = Math.floor(ms / 1000); });
+    Object.entries(sectionElapsedRef.current).forEach(([name, ms]) => { out[sectionTimerKey(name)] = Math.floor(ms / 1000); });
+    return out;
+  }, []);
+
+  // Push every buffered answer (and changed timer readings) to the server in ONE
+  // request. A failed save (network / 5xx) is re-queued so the next tick retries
+  // it; a refusal that can never succeed (attempt already submitted, time up,
+  // link replaced) is handed to onSaveRefusedRef. Resolves true on success.
+  // keepalive: the page is being hidden/closed — send now (even if a flush is in
+  // flight) with a request the browser finishes after unload; Safari otherwise
+  // cancels it and the last few seconds of answers are lost.
+  const flushAnswers = useCallback(({ keepalive = false } = {}) => {
+    if (flushPromiseRef.current && !keepalive) return flushPromiseRef.current;
+    const timers = timersDirtyRef.current ? timerSnapshot() : null;
+    if (pendingRef.current.size === 0 && !timers) return flushPromiseRef.current || Promise.resolve(true);
     const batch = [...pendingRef.current.entries()];
     pendingRef.current.clear();
-    setSaveState('saving');
-    const p = Promise.allSettled(batch.map(([qId, response]) => Promise.resolve(onSaveAnswerRef.current(qId, response))))
-      .then((results) => {
-        let failed = false;
-        results.forEach((r, i) => {
-          if (r.status !== 'rejected') return;
-          // 4xx (attempt submitted, question missing…) won't succeed on retry — drop it.
-          const status = r.reason?.response?.status;
-          if (status && status < 500) return;
-          failed = true;
-          const [qId, response] = batch[i];
-          if (!pendingRef.current.has(qId)) pendingRef.current.set(qId, response);
-        });
-        setSaveState(failed ? 'error' : 'saved');
-        if (!failed) setLastSavedAt(Date.now());
-        return !failed;
+    timersDirtyRef.current = false;
+    if (batch.length) setSaveState('saving');
+    const payload = { answers: batch.map(([question_id, response]) => ({ question_id, response })) };
+    if (timers) payload.timers = timers;
+    const p = Promise.resolve()
+      .then(() => onSaveAnswersRef.current?.(payload, { keepalive }))
+      .then(() => true, (err) => {
+        const status = err?.response?.status;
+        if (status && status < 500) {
+          onSaveRefusedRef.current?.(err.response.data || {}, status);
+          return true; // retrying can't help
+        }
+        batch.forEach(([qId, response]) => { if (!pendingRef.current.has(qId)) pendingRef.current.set(qId, response); });
+        if (timers) timersDirtyRef.current = true;
+        return false;
       })
-      .finally(() => { flushPromiseRef.current = null; });
+      .then((ok) => {
+        if (batch.length || !ok) {
+          setSaveState(ok ? 'saved' : 'error');
+          if (ok) setLastSavedAt(Date.now());
+        }
+        return ok;
+      })
+      .finally(() => { if (flushPromiseRef.current === p) flushPromiseRef.current = null; });
     flushPromiseRef.current = p;
     return p;
-  }, []);
+  }, [timerSnapshot]);
+
+  // Flush until NOTHING is pending — including answers changed while an earlier
+  // autosave was still in flight (a single flush would only wait for that one
+  // and submit without them). Retries a failing connection a few times.
+  const flushEverything = useCallback(async () => {
+    for (let tries = 0; tries < 4; tries += 1) {
+      if (flushPromiseRef.current) await flushPromiseRef.current;
+      if (pendingRef.current.size === 0 && !timersDirtyRef.current) return true;
+      const ok = await flushAnswers();
+      if (!ok) await new Promise((r) => setTimeout(r, 700 * (tries + 1)));
+    }
+    return pendingRef.current.size === 0;
+  }, [flushAnswers]);
 
   useEffect(() => {
     const id = setInterval(() => { if (!finishedRef.current) flushAnswers(); }, AUTOSAVE_SECONDS * 1000);
-    const onHide = () => { if (document.visibilityState === 'hidden') flushAnswers(); };
+    const onHide = () => { if (document.visibilityState === 'hidden') flushAnswers({ keepalive: true }); };
+    const onPageHide = () => flushAnswers({ keepalive: true });
     document.addEventListener('visibilitychange', onHide);
-    window.addEventListener('pagehide', flushAnswers);
+    window.addEventListener('pagehide', onPageHide);
     return () => {
       clearInterval(id);
       flushAnswers(); // leaving the runner (e.g. Back) — push anything still buffered
       document.removeEventListener('visibilitychange', onHide);
-      window.removeEventListener('pagehide', flushAnswers);
+      window.removeEventListener('pagehide', onPageHide);
     };
   }, [flushAnswers]);
 
@@ -194,8 +270,7 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onCheckAnswer,
     finishedRef.current = true;
     setSubmitting(true);
     try {
-      let saved = await flushAnswers();
-      if (!saved) saved = await flushAnswers();
+      const saved = await flushEverything();
       if (!saved && manual) {
         toast.error('Some answers could not be saved. Check your connection and try again.');
         finishedRef.current = false;
@@ -204,14 +279,32 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onCheckAnswer,
       }
       setConfirmOpen(false);
       if (isFullscreen()) await exitFullscreen().catch(() => { });
+      // The server treats an already-submitted attempt as success, so a retry
+      // after a dropped response (or the timer firing too) lands on the result.
       await onSubmit();
+      if (posKey) try { localStorage.removeItem(posKey); } catch { /* ignore */ }
       onFinished();
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to submit exam.');
+      const data = err.response?.data || {};
+      if (data.invalid_link) { setConfirmOpen(false); setLinkInvalid(data.error); return; }
+      toast.error(data.error || 'Failed to submit exam. Check your connection and try again.');
       finishedRef.current = false;
       setSubmitting(false);
     }
-  }, [onSubmit, onFinished, flushAnswers]);
+  }, [onSubmit, onFinished, flushEverything]);
+
+  onSaveRefusedRef.current = (data) => {
+    if (finishedRef.current) return;
+    if (data.invalid_link) { finishedRef.current = true; setLinkInvalid(data.error); return; }
+    if (data.submitted) {
+      // Submitted elsewhere (another tab, auto-submit, an admin) — show the result.
+      finishedRef.current = true;
+      toast('Your exam has already been submitted.', { icon: 'ℹ️' });
+      onFinished();
+      return;
+    }
+    if (data.time_up) handleSubmit();
+  };
 
   const reportViolation = useCallback(async (type) => {
     if (finishedRef.current || violationLockRef.current) return;
@@ -238,6 +331,15 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onCheckAnswer,
   // ── Lockdown listeners ──────────────────────────────────────────────────────
   useEffect(() => {
     if (!lockdownEnabled) return;
+    // iPhone Safari has no fullscreen for pages: run the lockdown without it —
+    // leaving the exam (other app / tab) still counts as a violation.
+    const fsSupported = fullscreenSupported();
+    // Refreshing / closing the page hides it and drops fullscreen on the way
+    // out — that is not leaving the exam, so it must not count as a violation
+    // (it used to, and a few refreshes auto-submitted the attempt).
+    let unloading = false;
+    const onBeforeUnload = () => { unloading = true; };
+    const onPageShow = () => { unloading = false; }; // back from the bfcache
     let pendingReenter = false;
     const reenter = () => {
       pendingReenter = false;
@@ -253,7 +355,7 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onCheckAnswer,
       document.addEventListener('keydown', reenter, true);
     };
     const onFullscreenChange = () => {
-      if (finishedRef.current) return;
+      if (finishedRef.current || unloading) return;
       if (isFullscreen()) {
         hasEnteredFsRef.current = true;
         // Chrome/Edge: a stray Esc tap no longer drops fullscreen — the
@@ -269,7 +371,7 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onCheckAnswer,
       }
     };
     const onVisibilityChange = () => {
-      if (document.hidden && !finishedRef.current && hasEnteredFsRef.current && !exam.allow_tab_switch) reportViolation('tab_switch');
+      if (document.hidden && !unloading && !finishedRef.current && hasEnteredFsRef.current && !exam.allow_tab_switch) reportViolation('tab_switch');
     };
     const blockDefault = (e) => e.preventDefault();
     const blockKeys = (e) => {
@@ -284,6 +386,9 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onCheckAnswer,
         toast.error('Screenshots are not permitted during the exam.');
       }
     };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    window.addEventListener('pagehide', onBeforeUnload);
+    window.addEventListener('pageshow', onPageShow);
     document.addEventListener('fullscreenchange', onFullscreenChange);
     document.addEventListener('webkitfullscreenchange', onFullscreenChange);
     document.addEventListener('visibilitychange', onVisibilityChange);
@@ -292,8 +397,14 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onCheckAnswer,
     document.addEventListener('cut', blockDefault);
     document.addEventListener('keydown', blockKeys, true);
     document.addEventListener('keyup', onPrintScreen);
-    if (!isFullscreen()) armReenter();
+    // The Start click usually finishes entering fullscreen before the start API
+    // returns, i.e. before this listener exists, so that fullscreenchange is missed.
+    if (!fsSupported || isFullscreen()) hasEnteredFsRef.current = true;
+    else armReenter();
     return () => {
+      window.removeEventListener('beforeunload', onBeforeUnload);
+      window.removeEventListener('pagehide', onBeforeUnload);
+      window.removeEventListener('pageshow', onPageShow);
       document.removeEventListener('fullscreenchange', onFullscreenChange);
       document.removeEventListener('webkitfullscreenchange', onFullscreenChange);
       document.removeEventListener('visibilitychange', onVisibilityChange);
@@ -336,6 +447,7 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onCheckAnswer,
       const currentSection = questions[indexRef.current]?.section || '';
       if (sectionTimeLimits[currentSection] != null && !lockedSectionsRef.current.has(currentSection)) {
         sectionElapsedRef.current[currentSection] = (sectionElapsedRef.current[currentSection] || 0) + 1000;
+        timersDirtyRef.current = true;
       }
 
       let justLocked = null;
@@ -372,6 +484,7 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onCheckAnswer,
       const qid = currentQ?._id;
       if (qid && questionTimeLimits[qid] != null && !lockedQuestionIdsRef.current.has(qid)) {
         questionElapsedRef.current[qid] = (questionElapsedRef.current[qid] || 0) + 1000;
+        timersDirtyRef.current = true;
       }
 
       let justLockedQ = null;
@@ -436,7 +549,7 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onCheckAnswer,
   });
 
   const currentChecked = !!feedback[q._id];
-  const hasAnswer = (id) => answers[id] !== undefined && answers[id] !== null && answers[id] !== '';
+  const hasAnswer = (id) => isAnswered(answers[id]);
 
   const handleCheck = async () => {
     if (checking || currentChecked || !hasAnswer(q._id)) return;
@@ -462,9 +575,9 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onCheckAnswer,
     pendingRef.current.set(q._id, response);
   };
   const toggleMarked = (qId) => setMarked((prev) => { const n = new Set(prev); n.has(qId) ? n.delete(qId) : n.add(qId); return n; });
-  const answeredCount = questions.filter((qq) => answers[qq._id] !== undefined && answers[qq._id] !== null && answers[qq._id] !== '').length;
+  const answeredCount = questions.filter((qq) => isAnswered(answers[qq._id])).length;
 
-  const shellClass = `fixed inset-0 z-[9999] bg-gray-100 flex flex-col h-screen overflow-hidden ${lockdownEnabled ? 'select-none' : ''}`;
+  const shellClass = `fixed inset-0 z-[9999] bg-gray-100 flex flex-col h-[100dvh] overflow-hidden ${lockdownEnabled ? 'select-none' : ''}`;
 
   return (
     <div className={shellClass} style={lockdownEnabled ? { userSelect: 'none' } : undefined}>
@@ -577,7 +690,7 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onCheckAnswer,
             {hasSections && (
               <div className="flex items-center gap-1.5 overflow-x-auto pb-1.5 scrollbar-none border-b border-slate-100">
                 {sectionGroups.map((group, gi) => {
-                  const answeredInSec = group.items.filter((qq) => answers[qq._id] !== undefined && answers[qq._id] !== null && answers[qq._id] !== '').length;
+                  const answeredInSec = group.items.filter((qq) => isAnswered(answers[qq._id])).length;
                   const isCurrentSection = group.items.some((qq) => qq._index === index);
                   return (
                     <button key={gi} onClick={() => setIndex(group.items[0]._index)}
@@ -609,12 +722,12 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onCheckAnswer,
                 : questions.map((qq, i) => ({ ...qq, _index: i }))
               ).map((qq) => {
                 const i = qq._index;
-                const isAnswered = answers[qq._id] !== undefined && answers[qq._id] !== null && answers[qq._id] !== '';
+                const answeredHere = isAnswered(answers[qq._id]);
                 let btnCls = 'bg-slate-100 text-slate-600';
                 if (i === index) btnCls = 'bg-slate-900 text-white font-bold ring-2 ring-slate-900/20 shadow-2xs';
                 else if (marked.has(qq._id)) btnCls = 'bg-amber-500 text-white font-bold';
                 else if (feedback[qq._id]?.is_correct === false) btnCls = 'bg-rose-500 text-white font-bold';
-                else if (isAnswered) btnCls = 'bg-emerald-500 text-white font-bold';
+                else if (answeredHere) btnCls = 'bg-emerald-500 text-white font-bold';
                 return <button key={qq._id} onClick={() => setIndex(i)} className={`w-8 h-8 rounded-full text-xs font-bold transition-all flex items-center justify-center flex-shrink-0 ${btnCls}`}>{i + 1}</button>;
               })}
             </div>
@@ -632,7 +745,7 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onCheckAnswer,
                   <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">SECTIONS</span>
                   <div className="flex flex-wrap gap-2">
                     {sectionGroups.map((group, gi) => {
-                      const answeredInSec = group.items.filter((qq) => answers[qq._id] !== undefined && answers[qq._id] !== null && answers[qq._id] !== '').length;
+                      const answeredInSec = group.items.filter((qq) => isAnswered(answers[qq._id])).length;
                       const isCurrentSection = group.items.some((qq) => qq._index === index);
                       return (
                         <button key={gi} type="button" onClick={() => setIndex(group.items[0]._index)}
@@ -666,12 +779,12 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onCheckAnswer,
                     <div className="grid grid-cols-6 gap-2">
                       {group.items.map((qq) => {
                         const i = qq._index;
-                        const isAnswered = answers[qq._id] !== undefined && answers[qq._id] !== null && answers[qq._id] !== '';
+                        const answeredHere = isAnswered(answers[qq._id]);
                         let btnCls = 'bg-slate-100 text-slate-600 hover:bg-slate-200';
                         if (i === index) btnCls = 'bg-slate-900 text-white font-bold shadow-2xs ring-2 ring-slate-900/20';
                         else if (marked.has(qq._id)) btnCls = 'bg-amber-500 text-white font-bold shadow-2xs';
                         else if (feedback[qq._id]?.is_correct === false) btnCls = 'bg-rose-500 text-white font-bold shadow-2xs';
-                        else if (isAnswered) btnCls = 'bg-emerald-500 text-white font-bold shadow-2xs';
+                        else if (answeredHere) btnCls = 'bg-emerald-500 text-white font-bold shadow-2xs';
                         return <button key={qq._id} onClick={() => setIndex(i)} className={`w-9 h-9 rounded-full text-xs font-bold transition-all flex items-center justify-center ${btnCls}`}>{i + 1}</button>;
                       })}
                     </div>
@@ -790,6 +903,16 @@ export default function ExamRunner({ attempt, exam, onSaveAnswer, onCheckAnswer,
           </section>
         </div>
       </main>
+
+      {linkInvalid && (
+        <div className="absolute inset-0 z-[60] flex items-center justify-center bg-slate-900/70 p-4" role="alertdialog" aria-modal="true">
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-6 text-center space-y-3">
+            <HiOutlineExclamationCircle className="w-10 h-10 text-rose-500 mx-auto" />
+            <h2 className="text-base font-black text-slate-900">This exam link is no longer active</h2>
+            <p className="text-sm text-slate-500">{linkInvalid}</p>
+          </div>
+        </div>
+      )}
 
       {confirmOpen && (() => {
         const unanswered = questions.length - answeredCount;

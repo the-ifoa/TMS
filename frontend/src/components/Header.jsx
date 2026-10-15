@@ -261,8 +261,9 @@ export default function Header({ sidebarOpen, setSidebarOpen }) {
     debounceRef.current = setTimeout(async () => {
       try {
         setSearching(true);
-        const res = await getParticipants({ search: query.trim() });
-        setSearchResults(res.data.slice(0, 8));
+        // Only the first 8 matches are shown — ask the API for just those.
+        const res = await getParticipants({ search: query.trim(), limit: 8 });
+        setSearchResults(res.data.items || []);
         setSearchOpen(true);
       } catch {
         setSearchResults([]);

@@ -59,6 +59,9 @@ router.get('/participants/:participantId/performance', examsController.participa
 // ─── PUT /exams/attempts/:attemptId/answer — autosave one answer ────────────────
 router.put('/attempts/:attemptId/answer', examsController.saveAttemptAnswer);
 
+// ─── PUT /exams/attempts/:attemptId/answers — batched autosave ─────────────────
+router.put('/attempts/:attemptId/answers', examsController.saveAttemptAnswers);
+
 // ─── Airline-uploaded certificate for a passed attempt ──────────────────────────
 router.post('/attempts/:attemptId/certificate', canManageCerts, handleCertUpload, examsController.uploadAttemptCertificate);
 router.get('/attempts/:attemptId/certificate', examsController.getAttemptCertificate);
@@ -106,6 +109,9 @@ router.post('/:id/send-invites', requirePermission('exams.assign'), examsControl
 
 // ─── GET /exams/:id/invites — admin: invite + attempt status for an exam ────────
 router.get('/:id/invites', examsController.listInvites);
+
+// ─── GET /exams/:id/assignments — participants the exam is assigned to ─────────
+router.get('/:id/assignments', examsController.listAssignments);
 
 // ─── DELETE /exams/:id/candidates/:participantId — remove one candidate from an exam ──
 router.delete('/:id/candidates/:participantId', requirePermission('exams.assign'), examsController.removeCandidate);

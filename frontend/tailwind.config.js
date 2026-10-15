@@ -1,4 +1,5 @@
 import tailwindcssAnimate from 'tailwindcss-animate';
+import defaultTheme from 'tailwindcss/defaultTheme';
 
 /** @type {import('tailwindcss').Config} */
 export default {
@@ -7,6 +8,9 @@ export default {
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
+    // `xs:` is used across the app (e.g. the exam autosave status); it must come
+    // first, so it can't go in `extend` (that would sort it after 2xl).
+    screens: { xs: '480px', ...defaultTheme.screens },
     extend: {
       colors: {
         primary: {

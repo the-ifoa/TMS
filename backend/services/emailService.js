@@ -1,5 +1,5 @@
 const nodemailer = require('nodemailer');
-const fs = require('fs');
+const { readFileCached } = require('../utils/fileCache');
 const path = require('path');
 
 // ─── Transporter (fresh every call — never cache on cloud platforms) ──────────
@@ -101,7 +101,7 @@ function fmtDate(d) {
 function getLogoBase64() {
   try {
     const logoPath = path.join(__dirname, '..', 'assets', 'logo-email.png');
-    return fs.readFileSync(logoPath).toString('base64');
+    return readFileCached(logoPath).toString('base64');
   } catch (err) {
     console.warn('[email] Could not read logo file:', err.message);
     return null;
@@ -986,6 +986,121 @@ async function sendExamInviteEmail({ toEmail, participantName, examTitle, durati
   return info;
 }
 
+// ─── Customer Training Feedback request (IFOA admin → candidate) ──────────────
+const escapeHtml = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+async function sendTrainingFeedbackEmail({ toEmail, participantName, trainingTitle, link }) {
+  const transporter = getTransporter();
+  if (!transporter) throw new Error('SMTP not configured — cannot send feedback request.');
+
+  const name = escapeHtml(participantName || 'Participant');
+  const title = escapeHtml(trainingTitle);
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Customer Training Feedback – IFOA</title>
+</head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:'Segoe UI',Helvetica,Arial,sans-serif">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:40px 16px">
+  <tr><td align="center">
+    <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 32px rgba(0,0,0,0.10)">
+      <tr>
+        <td bgcolor="#0c1a2e" style="background:#0c1a2e;padding:28px 40px 24px;text-align:center">
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+              <td align="center" style="padding:16px 20px">
+                <img src="cid:ifoa_logo" width="460" alt="IFOA" style="display:block;border:0;width:460px;max-width:100%;height:auto"/>
+              </td>
+            </tr>
+          </table>
+          <div style="height:16px"></div>
+          <div style="width:40px;height:2px;background:#22c55e;margin:0 auto 14px"></div>
+          <p style="margin:0 0 4px;font-size:11px;font-weight:600;letter-spacing:2.5px;text-transform:uppercase;color:#94a3b8">International Flight Operations Academy</p>
+          <p style="margin:0;font-size:22px;font-weight:800;color:#ffffff">Customer Training Feedback</p>
+        </td>
+      </tr>
+      <tr><td style="background:linear-gradient(90deg,#16a34a,#22c55e);height:4px;font-size:0;line-height:0">&nbsp;</td></tr>
+      <tr>
+        <td style="padding:36px 40px 0">
+          <p style="margin:0 0 8px;font-size:16px;font-weight:700;color:#111827">Dear ${name},</p>
+          <p style="margin:0 0 16px;font-size:14px;color:#4b5563;line-height:1.7">
+            Thank you for attending your training with the International Flight Operations Academy. Your feedback is extremely valuable to us and helps ensure we continue to meet your educational and operational needs with the highest standards.
+          </p>
+          <p style="margin:0 0 24px;font-size:14px;color:#4b5563;line-height:1.7">
+            We would greatly appreciate it if you could take a few minutes (less than 3) to share your thoughts about:
+          </p>
+
+          <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;margin-bottom:24px">
+            <tr><td style="padding:18px 22px">
+              <p style="margin:0;font-size:17px;font-weight:800;color:#0f172a">${title}</p>
+            </td></tr>
+          </table>
+
+          <table cellpadding="0" cellspacing="0" style="margin:0 auto 28px">
+            <tr>
+              <td style="background:#000021;border-radius:10px;text-align:center">
+                <a href="${link}" style="display:inline-block;padding:14px 40px;font-size:15px;font-weight:700;color:#ffffff;text-decoration:none;letter-spacing:0.3px">
+                  Start Survey
+                </a>
+              </td>
+            </tr>
+          </table>
+
+          <p style="margin:0 0 6px;font-size:13px;color:#6b7280">If the button doesn't work, copy and paste this link:</p>
+          <p style="margin:0 0 24px;font-size:12px;color:#2563eb;word-break:break-all;line-height:1.6">${link}</p>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:8px 40px 32px">
+          <p style="margin:0;font-size:13px;color:#374151;line-height:1.7">
+            Thank you in advance for your time and support.<br/>
+            <strong style="color:#111827">The IFOA Team</strong><br/>
+            <span style="font-size:12px;color:#6b7280">International Flight Operations Academy</span>
+          </p>
+        </td>
+      </tr>
+      <tr>
+        <td bgcolor="#0c1a2e" style="background:#0c1a2e;padding:16px 40px">
+          <p style="margin:0;font-size:11px;color:#64748b;text-align:center">
+            This is an automated email. Please do not reply. &nbsp;|&nbsp;
+            &copy; ${new Date().getFullYear()} International Flight Operations Academy
+          </p>
+        </td>
+      </tr>
+    </table>
+  </td></tr>
+</table>
+</body>
+</html>`;
+
+  const text = [
+    `Dear ${participantName || 'Participant'},`,
+    '',
+    'Thank you for attending your training with the International Flight Operations Academy.',
+    `We would greatly appreciate a few minutes (less than 3) of your feedback on: ${trainingTitle}`,
+    '',
+    'Start the survey using this link:',
+    link,
+    '',
+    'Thank you in advance for your time and support.',
+    'The IFOA Team',
+  ].join('\n');
+
+  const info = await transporter.sendMail({
+    from:    `"IFOA – International Flight Operations Academy" <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER}>`,
+    to:      toEmail,
+    subject: `Your feedback on ${trainingTitle} – IFOA`,
+    text,
+    html,
+    attachments: logoAttachment(null),
+  });
+  console.log(`[email] Training feedback request sent to ${toEmail} — messageId: ${info.messageId}`);
+  return info;
+}
+
 // ─── Send the airline-uploaded exam certificate to the candidate ──────────────
 // `file`: { content: Buffer, filename, contentType } — the airline's own document.
 async function sendExamCertificateEmail({ toEmail, participantName, examTitle, scoreText, file, issuerName, branding }) {
@@ -1198,4 +1313,4 @@ async function sendCertExpiryReminderEmail({ toEmail, cc, airlineName, rows, mes
   return info;
 }
 
-module.exports = { sendSubmissionConfirmation, sendPasswordResetEmail, sendOtpEmail, sendContractEmail, sendExamInviteEmail, sendExamCertificateEmail, sendCertExpiryReminderEmail };
+module.exports = { sendSubmissionConfirmation, sendPasswordResetEmail, sendOtpEmail, sendContractEmail, sendExamInviteEmail, sendExamCertificateEmail, sendCertExpiryReminderEmail, sendTrainingFeedbackEmail };

@@ -19,7 +19,7 @@ const SCALE = [
   { value: 5, label: 'Excellent' },
 ];
 
-const PROMPT = 'Please indicate your level of agreement with the statements listed hereunder:';
+const PROMPT = 'Please indicate your level of agreement with the statements listed here under:';
 
 // One page per section, in order. `image` names a picture the frontend owns
 // (src/assets/feedback/<image>.jpg).

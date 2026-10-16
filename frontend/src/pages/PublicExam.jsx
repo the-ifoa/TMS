@@ -13,7 +13,7 @@ import {
 } from '../api';
 import ExamRunner from '../components/ExamRunner';
 import { requestFullscreen, fullscreenSupported } from '@/lib/fullscreen';
-import AnswerReviewList from '../components/AnswerReviewList';
+import AnswerReviewList, { QuestionMap, SectionBreakdown } from '../components/AnswerReviewList';
 import logoImg from '../assets/logo.png';
 
 // "This tab is taking attempt X" — kept in sessionStorage, which survives a
@@ -255,9 +255,24 @@ function TakeShell({ token, initial, onFinished, setResultAttempt }) {
 }
 
 // ─── Result summary shown to the candidate after submit ───────────────────────
+// Website colours: light grey page (primary-100), the score card in brand navy
+// (primary-800) with a brand-blue score ring; everything you read (review,
+// map) sits on white cards. Green / red only ever mean correct / incorrect.
+const DARK_CARD = 'relative overflow-hidden bg-primary-800 text-slate-200 rounded-3xl ring-1 ring-white/[0.08] shadow-[0_24px_50px_-20px_rgba(0,0,33,0.55)]';
+const LIGHT_CARD = 'bg-white rounded-3xl ring-1 ring-slate-200/80 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_12px_32px_-16px_rgba(15,23,42,0.18)]';
+
+function PageShell({ children }) {
+  return (
+    <div className="fixed inset-0 overflow-y-auto bg-primary-100 text-slate-800">
+      <div className="relative min-h-full">{children}</div>
+    </div>
+  );
+}
+
 function ResultSummary({ token, attemptId }) {
   const [attempt, setAttempt] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [focus, setFocus] = useState(null); // question picked in the map → review opens + scrolls to it
   useEffect(() => {
     if (!attemptId) { setLoading(false); return; }
     getPublicExamResult(token, attemptId)
@@ -266,7 +281,15 @@ function ResultSummary({ token, attemptId }) {
       .finally(() => setLoading(false));
   }, [token, attemptId]);
 
-  if (loading) return <Centered><div className="w-6 h-6 border-2 border-slate-300 border-t-slate-900 rounded-full animate-spin" /></Centered>;
+  if (loading) {
+    return (
+      <PageShell>
+        <div className="min-h-full flex items-center justify-center">
+          <div className="w-7 h-7 border-2 border-slate-300 border-t-slate-900 rounded-full animate-spin" />
+        </div>
+      </PageShell>
+    );
+  }
 
   const pending = attempt && attempt.status === 'pending_review';
   // Survey (likert) questions are never scored, so they don't count as questions here.
@@ -282,146 +305,137 @@ function ResultSummary({ token, attemptId }) {
   const displayPercentage = Number.isInteger(percentage) ? percentage : percentage.toFixed(1);
 
   const showReview = !!attempt?.review_enabled;
+  const R = 44;
+  const C = 2 * Math.PI * R;
 
-  // Summary card: logo, status / score, certificate. Stands alone when there is
-  // no answer review, and becomes the sticky left column when there is.
+  // Summary card: logo, status / score. Stands alone when there is no answer
+  // review, and becomes the sticky left column when there is.
   const summary = (
-    <div className="bg-white rounded-3xl border border-slate-200/80 shadow-[0_1px_2px_rgba(15,23,42,0.05),0_16px_40px_-18px_rgba(15,23,42,0.25)] p-6 sm:p-7 text-center space-y-6">
-      <img src={logoImg} alt="IFOA" className="h-9 w-auto mx-auto" />
+    <div className={`${DARK_CARD} p-5 sm:p-7 text-center`}>
+      <div className="relative space-y-6">
+      <img src={logoImg} alt="IFOA" className="h-7 sm:h-8 w-auto mx-auto [filter:brightness(0)_invert(1)] opacity-90" />
 
-          {attempt?.auto_submitted && (
-            <div className="rounded-2xl bg-rose-50 border border-rose-200/80 p-3 text-xs font-semibold text-rose-800 text-left flex items-start gap-2">
-              <HiOutlineExclamationCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-              <span>
-                {attempt.auto_submit_reason === 'window_closed'
-                  ? `Your exam was submitted automatically because the exam window was closed more times than allowed (${attempt.window_close_count || ''} times).`
-                  : `Your exam was submitted automatically because the lockdown limit was reached (leaving fullscreen or switching tabs ${attempt.violation_count || attempt.violations?.length || ''} times).`}
+      {attempt?.auto_submitted && (
+        <div className="rounded-2xl bg-rose-500/10 border border-rose-400/25 p-3 text-xs font-medium text-rose-200 text-left flex items-start gap-2">
+          <HiOutlineExclamationCircle className="w-4 h-4 flex-shrink-0 mt-0.5 text-rose-300" />
+          <span>
+            {attempt.auto_submit_reason === 'window_closed'
+              ? `Your exam was submitted automatically because the exam window was closed more times than allowed (${attempt.window_close_count || ''} times).`
+              : `Your exam was submitted automatically because the lockdown limit was reached (leaving fullscreen or switching tabs ${attempt.violation_count || attempt.violations?.length || ''} times).`}
+          </span>
+        </div>
+      )}
+
+      {!attempt ? (
+        <div className="space-y-3 py-4">
+          <div className="w-14 h-14 rounded-2xl bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-400/30 flex items-center justify-center mx-auto">
+            <HiOutlineCheckCircle className="w-7 h-7" />
+          </div>
+          <h1 className="text-xl font-bold text-white">Exam submitted</h1>
+          <p className="text-sm text-slate-400">Your responses have been recorded successfully. Thank you.</p>
+        </div>
+      ) : pending ? (
+        <div className="space-y-3 py-4">
+          <div className="w-14 h-14 rounded-2xl bg-amber-500/15 text-amber-300 ring-1 ring-amber-400/30 flex items-center justify-center mx-auto">
+            <HiOutlineClock className="w-7 h-7" />
+          </div>
+          <h1 className="text-xl font-bold text-white">Submitted for review</h1>
+          <p className="text-sm text-slate-400">Your exam contains questions that require instructor review. Your final score will be published once grading is complete.</p>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {/* Score ring */}
+          <div className="relative w-36 h-36 mx-auto select-none">
+            <svg className="relative w-36 h-36 -rotate-90" viewBox="0 0 100 100">
+              <defs>
+                <linearGradient id="scoreRing" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stopColor="#60a5fa" />
+                  <stop offset="100%" stopColor="#2563eb" />
+                </linearGradient>
+              </defs>
+              <circle cx="50" cy="50" r={R} stroke="rgba(255,255,255,0.08)" strokeWidth="6" fill="transparent" />
+              <circle cx="50" cy="50" r={R} stroke="url(#scoreRing)" strokeWidth="6" strokeLinecap="round" fill="transparent"
+                strokeDasharray={C} strokeDashoffset={C - (percentage / 100) * C}
+                className="transition-all duration-1000 ease-out" />
+            </svg>
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <span className={`${String(displayPercentage).length > 4 ? 'text-2xl' : 'text-3xl'} font-bold text-white tracking-tight tabular-nums`}>
+                {displayPercentage}<span className="text-lg text-slate-400">%</span>
               </span>
+              <span className="text-[10px] font-semibold uppercase text-slate-500 mt-0.5 tracking-[0.2em]">Score</span>
             </div>
-          )}
+          </div>
 
-          {!attempt ? (
-            <div className="space-y-3 py-4">
-              <div className="w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto">
-                <HiOutlineCheckCircle className="w-7 h-7" />
+          {/* Status + points */}
+          <div className="space-y-2">
+            <span className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider ring-1 ${
+              attempt.passed ? 'bg-emerald-500/15 text-emerald-300 ring-emerald-400/30' : 'bg-rose-500/15 text-rose-300 ring-rose-400/30'}`}>
+              {attempt.passed ? <HiOutlineCheck className="w-3.5 h-3.5 stroke-[3]" /> : <HiOutlineX className="w-3.5 h-3.5 stroke-[3]" />}
+              {attempt.passed ? 'Passed' : 'Not passed'}
+            </span>
+            <p className="text-xs text-slate-400">
+              {attempt.score != null && attempt.max_score != null
+                ? <><span className="font-semibold text-slate-200 tabular-nums">{attempt.score}</span> of {attempt.max_score} points</>
+                : `${correct} of ${total} questions correct`}
+            </p>
+          </div>
+
+          {/* Totals */}
+          <div className="grid grid-cols-3 divide-x divide-white/10 rounded-2xl bg-white/[0.04] ring-1 ring-white/10">
+            {[
+              ['Total', total, 'text-white'],
+              ['Correct', correct, 'text-emerald-300'],
+              ['Incorrect', incorrect, 'text-rose-300'],
+            ].map(([label, value, tone]) => (
+              <div key={label} className="py-3.5">
+                <p className={`text-xl font-bold tabular-nums ${tone}`}>{value}</p>
+                <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mt-0.5">{label}</p>
               </div>
-              <h1 className="text-xl font-black text-slate-900">Exam Submitted</h1>
-              <p className="text-xs text-slate-500 font-medium">Your responses have been recorded successfully. Thank you.</p>
-            </div>
-          ) : pending ? (
-            <div className="space-y-3 py-4">
-              <div className="w-14 h-14 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto">
-                <HiOutlineClock className="w-7 h-7" />
-              </div>
-              <h1 className="text-xl font-black text-slate-900">Submitted for Review</h1>
-              <p className="text-xs text-slate-500 font-medium">Your exam contains questions that require instructor review. Your final score will be published once grading is complete.</p>
-            </div>
-          ) : (
-            <div className="space-y-6">
-              {/* Score Circular Gauge */}
-              <div className="relative w-28 h-28 mx-auto flex items-center justify-center select-none">
-                <svg className="w-28 h-28 transform -rotate-90" viewBox="0 0 100 100">
-                  <circle
-                    cx="50"
-                    cy="50"
-                    r="42"
-                    stroke="#f1f5f9"
-                    strokeWidth="7"
-                    fill="transparent"
-                  />
-                  <circle
-                    cx="50"
-                    cy="50"
-                    r="42"
-                    stroke={attempt.passed ? '#10b981' : '#f43f5e'}
-                    strokeWidth="7"
-                    strokeDasharray={2 * Math.PI * 42}
-                    strokeDashoffset={2 * Math.PI * 42 - (percentage / 100) * (2 * Math.PI * 42)}
-                    strokeLinecap="round"
-                    fill="transparent"
-                    className="transition-all duration-1000 ease-out"
-                  />
-                </svg>
-                <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
-                  <span className={`${String(displayPercentage).length > 4 ? 'text-xl' : 'text-2xl'} font-black text-slate-900 leading-none tracking-tight`}>
-                    {displayPercentage}%
-                  </span>
-                  <span className="text-[9px] font-black uppercase text-slate-400 mt-1 tracking-wider">
-                    SCORE
-                  </span>
-                </div>
-              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
-              {/* Status and Points */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-center">
-                  <span className={`inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full text-xs font-black uppercase tracking-wider border shadow-2xs ${
-                    attempt.passed
-                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                      : 'bg-rose-50 text-rose-700 border-rose-200'
-                  }`}>
-                    {attempt.passed ? (
-                      <HiOutlineCheck className="w-3.5 h-3.5 stroke-[3]" />
-                    ) : (
-                      <HiOutlineX className="w-3.5 h-3.5 stroke-[3]" />
-                    )}
-                    {attempt.passed ? 'PASSED' : 'NOT PASSED'}
-                  </span>
-                </div>
-                <p className="text-xs text-slate-400 font-medium">
-                  {attempt.score != null && attempt.max_score != null
-                    ? `${attempt.score} of ${attempt.max_score} Total Points`
-                    : `${correct} of ${total} Questions Correct`}
-                </p>
-              </div>
-
-              {/* KPI Performance Tiles */}
-              <div className="grid grid-cols-3 gap-2.5 pt-1">
-                <div className="rounded-2xl bg-slate-50 border border-slate-200/80 p-3 text-center">
-                  <p className="text-lg font-black text-slate-900">{total}</p>
-                  <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mt-0.5">Total</p>
-                </div>
-                <div className="rounded-2xl bg-emerald-50/50 border border-emerald-200/70 p-3 text-center">
-                  <p className="text-lg font-black text-emerald-600">{correct}</p>
-                  <p className="text-[10px] font-extrabold text-emerald-600/80 uppercase tracking-wider mt-0.5">Correct</p>
-                </div>
-                <div className="rounded-2xl bg-rose-50/50 border border-rose-200/70 p-3 text-center">
-                  <p className="text-lg font-black text-rose-600">{incorrect}</p>
-                  <p className="text-[10px] font-extrabold text-rose-600/80 uppercase tracking-wider mt-0.5">Incorrect</p>
-                </div>
-              </div>
-            </div>
-          )}
-
-
-
-      <p className="pt-4 border-t border-slate-100 text-xs text-slate-400 font-medium">You may now close this window.</p>
+      <p className="pt-4 border-t border-white/10 text-xs text-slate-500">You may now close this window.</p>
+      </div>
     </div>
   );
 
   if (!showReview) {
     return (
-      <div className="fixed inset-0 bg-slate-100/90 overflow-y-auto">
+      <PageShell>
         <div className="min-h-full flex items-center justify-center p-4 sm:p-6">
           <div className="w-full max-w-md">{summary}</div>
         </div>
-      </div>
+      </PageShell>
     );
   }
 
   return (
-    <div className="fixed inset-0 bg-slate-100/90 overflow-y-auto">
-      <div className="w-full max-w-6xl mx-auto p-4 sm:p-6 lg:p-8">
-        <div className="grid grid-cols-1 lg:grid-cols-[340px_minmax(0,1fr)] gap-5 lg:gap-6 items-start">
-          {/* Left: result summary (stays in view while the review scrolls) */}
-          <aside className="lg:sticky lg:top-6">{summary}</aside>
+    <PageShell>
+      <div className="w-full max-w-7xl mx-auto px-3 py-4 sm:p-6 lg:p-8">
+        <div className="grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)] xl:grid-cols-[340px_minmax(0,1fr)] gap-4 sm:gap-5 lg:gap-6 items-start">
+          {/* Left: result summary + question map + section scores. Stays in
+              view (scrolling on its own if taller than the screen) while the
+              review scrolls. Phones: score → review → map/sections (the aside
+              "dissolves" into the grid so its cards sit either side of the review). */}
+          <aside className="contents lg:block lg:space-y-4 lg:sticky lg:top-2 lg:max-h-[calc(100vh-1rem)] lg:overflow-y-auto lg:-mx-5 lg:px-5 lg:-mt-4 lg:pt-4 lg:pb-10 [scrollbar-width:thin]">
+            <div className="order-1 lg:order-none">{summary}</div>
+            <div className={`${LIGHT_CARD} p-5 space-y-5 order-3 lg:order-none`}>
+              <div>
+                <h3 className="text-[11px] font-semibold uppercase tracking-[0.15em] text-slate-500 mb-3">Questions</h3>
+                <QuestionMap attempt={attempt} onPick={(qid) => setFocus({ qid, at: Date.now() })} />
+              </div>
+              <SectionBreakdown attempt={attempt} />
+            </div>
+          </aside>
 
           {/* Right: answer review */}
-          <main className="bg-white rounded-3xl border border-slate-200/80 shadow-[0_1px_2px_rgba(15,23,42,0.05),0_16px_40px_-18px_rgba(15,23,42,0.25)] p-5 sm:p-7">
-            <AnswerReviewList attempt={attempt} />
+          <main className={`${LIGHT_CARD} p-4 sm:p-6 lg:p-7 min-w-0 order-2 lg:order-none`}>
+            <AnswerReviewList attempt={attempt} focus={focus} />
           </main>
         </div>
       </div>
-    </div>
+    </PageShell>
   );
 }

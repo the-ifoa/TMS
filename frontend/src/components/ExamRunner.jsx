@@ -911,10 +911,18 @@ export default function ExamRunner({ attempt, exam, onSaveAnswers, onCheckAnswer
                   className="rounded-xl px-3 sm:px-5 border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold text-xs">
                   <HiOutlineChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-0.5 sm:mr-1" /> PREV
                 </Button>
-                <Button size="sm" onClick={() => setIndex((i) => Math.min(questions.length - 1, i + 1))} disabled={index >= questions.length - 1}
-                  className="rounded-xl px-4 sm:px-6 bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-2xs text-xs">
-                  NEXT <HiOutlineChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 ml-0.5 sm:ml-1" />
-                </Button>
+                {index >= questions.length - 1 ? (
+                  // Last question: Next becomes Submit (same confirmation as "Finish Exam").
+                  <Button size="sm" onClick={() => setConfirmOpen(true)} disabled={submitting}
+                    className="rounded-xl px-4 sm:px-6 bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-2xs text-xs">
+                    <HiOutlineCheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-0.5 sm:mr-1" /> {submitting ? 'SUBMITTING…' : 'SUBMIT EXAM'}
+                  </Button>
+                ) : (
+                  <Button size="sm" onClick={() => setIndex((i) => Math.min(questions.length - 1, i + 1))}
+                    className="rounded-xl px-4 sm:px-6 bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-2xs text-xs">
+                    NEXT <HiOutlineChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 ml-0.5 sm:ml-1" />
+                  </Button>
+                )}
               </div>
             </div>
           </section>

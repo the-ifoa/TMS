@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 
 // ─── Customer Training Feedback — admin dialog for one IFOA exam ──────────────
 // "Send" emails the feedback form to assigned participants; "Responses" shows
-// the per-statement averages, every submitted form, and a CSV export.
+// the per-statement averages, every submitted form, and a PDF review report.
 
 const fmtDate = (d) => (d ? new Date(d).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '');
 
@@ -28,7 +28,9 @@ function statusBadge(fb) {
 // the positive side, red for the negative side, grey for the neutral midpoint,
 // so "how good" reads from hue + depth without a legend lookup. Never used for
 // text — labels stay in ink with a swatch beside them.
-const SCALE_FILL = { 1: '#b91c1c', 2: '#f87171', 3: '#a8a29e', 4: '#60a5fa', 5: '#1d4ed8' };
+// Clear but calm: the site's blue for the good side, rose for the poor side,
+// grey in the middle. Bars are kept short so the statements stay the focus.
+const SCALE_FILL = { 1: '#e11d48', 2: '#fda4af', 3: '#cbd5e1', 4: '#93c5fd', 5: '#2563eb' };
 // Average → nearest scale point (4.5 and up reads as Excellent, and so on).
 const bandOf = (avg) => Math.min(5, Math.max(1, Math.round(avg)));
 const fmtAvg = (avg) => (avg == null ? '—' : avg.toFixed(1));
@@ -43,36 +45,11 @@ function ScoreBadge({ avg, scale, size = 'sm' }) {
   const band = bandOf(avg);
   return (
     <span className="inline-flex items-center gap-2 flex-shrink-0">
-      <span className={`font-bold text-slate-900 tabular-nums ${size === 'lg' ? 'text-base' : 'text-sm'}`}>{fmtAvg(avg)}</span>
-      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border border-slate-200 bg-slate-50 text-[10px] font-semibold text-slate-600 whitespace-nowrap">
+      <span className={`tabular-nums ${size === 'lg' ? 'text-base font-bold text-slate-900' : 'text-[13px] font-bold text-slate-700'}`}>{fmtAvg(avg)}</span>
+      <span className="inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded-md border border-slate-200 bg-white text-[10px] font-medium text-slate-500 whitespace-nowrap">
         <Swatch value={band} className="!w-2 !h-2" /> {scale.find((x) => x.value === band)?.label}
       </span>
     </span>
-  );
-}
-
-// How the answers to one statement split across the scale: one segment per
-// rating (Poor → Excellent, left to right), width = share of responses.
-function DistributionBar({ distribution, scale }) {
-  const total = distribution.reduce((a, b) => a + b, 0);
-  if (!total) return <div className="h-2.5 rounded bg-slate-100" />;
-  return (
-    <div className="flex h-2.5 gap-[2px]" role="img"
-      aria-label={scale.map((sc, i) => `${sc.label}: ${distribution[i]}`).join(', ')}>
-      {scale.map((sc, i) => {
-        const n = distribution[i];
-        if (!n) return null;
-        const pct = Math.round((n / total) * 100);
-        return (
-          <div key={sc.value} className="group relative h-full rounded-[4px] cursor-default transition-opacity hover:opacity-80"
-            style={{ width: `${(n / total) * 100}%`, background: SCALE_FILL[sc.value] }}>
-            <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:block whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white shadow-lg z-10">
-              {sc.label}: {n} response{n === 1 ? '' : 's'} ({pct}%)
-            </span>
-          </div>
-        );
-      })}
-    </div>
   );
 }
 
@@ -85,27 +62,16 @@ function weightedAverage(statements) {
 
 const sectionTitle = (t) => t.replace(/:$/, '').replace(/\.\.\.$/, '');
 
-function csvCell(v) {
-  const s = String(v ?? '');
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
-
-function downloadCsv(examTitle, form, responses) {
-  const statements = form.sections.flatMap((s) => s.statements);
-  const label = (v) => form.scale.find((x) => x.value === v)?.label || '';
-  const header = ['Participant', 'Email', 'Company', 'Training title', 'Instructor', 'Submitted', ...statements.map((s) => s.text), 'Comments'];
-  const rows = responses.map((r) => [
-    r.participant_name, r.participant_email, r.company, r.training_title, r.instructor_name, fmtDate(r.submitted_at),
-    ...statements.map((s) => { const v = r.ratings.find((x) => x.key === s.key)?.value; return v ? `${v} - ${label(v)}` : ''; }),
-    r.comments,
-  ]);
-  const csv = [header, ...rows].map((row) => row.map(csvCell).join(',')).join('\r\n');
-  const blob = new Blob([`﻿${csv}`], { type: 'text/csv;charset=utf-8' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `Training_Feedback_${examTitle.replace(/[^a-zA-Z0-9]+/g, '_')}.csv`;
-  a.click();
-  URL.revokeObjectURL(a.href);
+// The review report PDF (cover, summary, one page per review). Loaded on demand
+// so jsPDF stays out of the main bundle.
+async function downloadPdf(examTitle, form, responses, sentCount) {
+  try {
+    const { downloadFeedbackPdf } = await import('../utils/generateFeedbackPdf');
+    downloadFeedbackPdf({ examTitle, form, responses, sentCount });
+  } catch (err) {
+    console.error('Feedback PDF failed:', err);
+    toast.error('Could not create the PDF. Please try again.');
+  }
 }
 
 // Mean of one participant's own ratings.
@@ -189,7 +155,7 @@ function ResponseDetail({ r, form, onBack, onDelete, busy, canManage }) {
       {form.sections.map((section) => (
         <section key={section.key} className="rounded-xl border border-slate-200 overflow-hidden">
           <header className="px-4 py-2.5 bg-slate-50/70 border-b border-slate-200">
-            <h3 className="text-[11px] font-bold uppercase tracking-wide text-slate-600">{sectionTitle(section.title)}</h3>
+            <h3 className="text-[11px] font-bold uppercase tracking-wide text-slate-700">{sectionTitle(section.title)}</h3>
           </header>
           <ul className="divide-y divide-slate-100">
             {section.statements.map((st) => {
@@ -465,13 +431,13 @@ export default function FeedbackDialog({ exam, onClose }) {
                           </li>
                         ))}
                       </ul>
-                      <Button variant="outline" size="sm" onClick={() => downloadCsv(exam.title, data.form, data.responses)}
+                      <Button variant="outline" size="sm" onClick={() => downloadPdf(exam.title, data.form, data.responses, sentCount)}
                         className="rounded-lg text-xs font-bold h-7 px-2.5 flex items-center gap-1.5 bg-white">
-                        <HiOutlineDownload className="w-3.5 h-3.5" /> CSV
+                        <HiOutlineDownload className="w-3.5 h-3.5" /> PDF
                       </Button>
                     </div>
                     <p className="mt-1.5 text-[10px] text-slate-400">
-                      Each bar shows how participants answered (hover a segment for counts). The number is the average out of 5.
+                      Scores are the average rating out of 5. Hover a score to see how participants answered.
                     </p>
                   </div>
 
@@ -479,19 +445,21 @@ export default function FeedbackDialog({ exam, onClose }) {
                   {data.form.sections.map((section) => {
                     const stats = summary.statements.filter((s) => section.statements.some((st) => st.key === s.key));
                     return (
-                      <section key={section.key} className="rounded-xl border border-slate-200 overflow-hidden">
-                        <header className="flex items-center justify-between gap-3 px-4 py-2.5 bg-slate-50/70 border-b border-slate-200">
-                          <h3 className="text-[11px] font-bold uppercase tracking-wide text-slate-600">{sectionTitle(section.title)}</h3>
-                          <ScoreBadge avg={weightedAverage(stats)} scale={data.form.scale} />
+                      <section key={section.key}>
+                        <header className="flex items-center justify-between gap-3 mb-2 px-0.5">
+                          <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-500">{sectionTitle(section.title)}</h3>
+                          <span className="inline-flex items-center gap-2 text-[11px] font-medium text-slate-400 flex-shrink-0">
+                            <span className="hidden sm:inline">Section average</span> <ScoreBadge avg={weightedAverage(stats)} scale={data.form.scale} />
+                          </span>
                         </header>
-                        <ul className="divide-y divide-slate-100">
+                        <ul className="space-y-2">
                           {stats.map((s) => (
-                            <li key={s.key} className="px-4 py-3">
-                              <div className="flex items-start justify-between gap-4 mb-2">
-                                <p className="text-xs text-slate-700 leading-snug">{s.text}</p>
+                            <li key={s.key} className="rounded-xl border border-slate-200 bg-white px-4 py-3.5 hover:border-slate-300 transition-colors flex flex-col sm:flex-row sm:items-center gap-2.5 sm:gap-6">
+                              <p className="flex-1 min-w-0 text-[14px] font-medium text-slate-900 leading-snug">{s.text}</p>
+                              <div className="flex-shrink-0 cursor-default"
+                                title={data.form.scale.map((sc, i) => `${sc.label}: ${s.distribution[i]}`).filter((_, i) => s.distribution[i]).join('\n')}>
                                 <ScoreBadge avg={s.average} scale={data.form.scale} />
                               </div>
-                              <DistributionBar distribution={s.distribution} scale={data.form.scale} />
                             </li>
                           ))}
                         </ul>

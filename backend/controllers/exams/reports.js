@@ -337,100 +337,155 @@ exports.exportAttempts = async (req, res) => {
       return send('application/xml; charset=utf-8', 'xml', xml);
     }
 
-    // PDF — landscape, bordered table with banded rows, repeating header, page footer
+    // PDF — landscape. One block per candidate (per exam) with their attempts
+    // listed inside it, so a candidate who sat the exam three times reads as
+    // one person with three attempts, not three unrelated rows.
     const doc = new PDFDocument({ size: 'A4', layout: 'landscape', margin: 36, bufferPages: true });
     const chunks = [];
     doc.on('data', (c) => chunks.push(c));
     const done = new Promise((resolve) => doc.on('end', resolve));
 
-    const INK = '#0f172a', MUTED = '#64748b', LINE = '#e2e8f0', BAND = '#f8fafc';
-    const GOOD = '#15803d', BAD = '#b91c1c';
-    const X0 = 36, PAGE_W = doc.page.width, PAGE_H = doc.page.height;
+    const NAVY = '#000021', INK = '#0f172a', MUTED = '#64748b', SUBTLE = '#94a3b8';
+    const LINE = '#e2e8f0', GROUP_BG = '#f1f5f9', TILE_BG = '#f8fafc';
+    const GOOD = '#15803d', BAD = '#b91c1c', WAIT = '#b45309';
+    const X0 = 36, PAGE_W = doc.page.width, PAGE_H = doc.page.height, TABLE_W = PAGE_W - 72;
+    const BOTTOM = PAGE_H - 42; // footer rule sits at PAGE_H - 34
+    const pdfDate = (d) => (d ? new Date(d).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }) : '—');
+    const resultOf = (a) => (a.passed === true ? ['Passed', GOOD] : a.passed === false ? ['Not passed', BAD] : a.status === 'pending_review' ? ['Pending review', WAIT] : ['—', MUTED]);
+
+    // Group attempts: candidate × exam, attempts oldest → newest, candidates A → Z.
+    const groupMap = new Map();
+    attempts.forEach((a) => {
+      const key = `${a.participant_id}|${a.exam_id}`;
+      if (!groupMap.has(key)) {
+        groupMap.set(key, { name: a.participant_name || 'Unnamed participant', airline: airlineName[String(a.airline_id)] || '', exam: a.exam_title_snapshot || '', attempts: [] });
+      }
+      groupMap.get(key).attempts.push(a);
+    });
+    const groups = [...groupMap.values()].map((g) => {
+      g.attempts.sort((x, y) => (x.attempt_number || 0) - (y.attempt_number || 0) || new Date(x.submitted_at) - new Date(y.submitted_at));
+      const scoredA = g.attempts.filter((a) => a.percentage != null);
+      g.best = scoredA.length ? scoredA.reduce((b, a) => (a.percentage > b.percentage ? a : b)) : null;
+      g.passed = g.attempts.some((a) => a.passed === true);
+      g.pending = !g.passed && g.attempts.some((a) => a.status === 'pending_review');
+      return g;
+    }).sort((x, y) => x.name.localeCompare(y.name) || x.exam.localeCompare(y.exam));
+
+    const candidates = groups.length;
+    const passedCandidates = groups.filter((g) => g.passed).length;
+    const decided = groups.filter((g) => g.passed || g.attempts.some((a) => a.passed === false)).length;
+    const examTitles = [...new Set(groups.map((g) => g.exam))];
+
+    // Columns of an attempt row (the candidate header row spans them all).
     const cols = [
-      { key: 'Participant', label: 'Participant', w: 124 },
-      { key: 'Airline',     label: 'Airline',     w: 100 },
-      { key: 'Exam',        label: 'Exam',        w: 158 },
-      { key: 'Attempt',     label: 'Attempt',     w: 56, align: 'center' },
-      { key: 'Score',       label: 'Score',       w: 56, align: 'center' },
-      { key: 'Percentage',  label: 'Score %',     w: 52, align: 'center' },
-      { key: 'Result',      label: 'Result',      w: 62, align: 'center' },
-      { key: 'Submitted',   label: 'Submitted',   w: 90 },
-      { key: 'Violations',  label: 'Violations',  w: 68, align: 'center' },
+      { key: 'attempt', label: 'Attempt', w: 150 },
+      { key: 'score', label: 'Score', w: 100, align: 'center' },
+      { key: 'pct', label: 'Score %', w: 90, align: 'center' },
+      { key: 'result', label: 'Result', w: 110, align: 'center' },
+      { key: 'submitted', label: 'Submitted (UTC)', w: 150 },
+      { key: 'time', label: 'Time taken', w: 85, align: 'center' },
+      { key: 'violations', label: 'Violations', w: 85, align: 'center' },
     ];
-    const TABLE_W = cols.reduce((t, c) => t + c.w, 0);
-    const ROW_H = 22, HEAD_H = 26, PAD = 6, BOTTOM = PAGE_H - 54;
+    const HEAD_H = 24, GROUP_H = 34, ROW_H = 22, PAD = 10, GAP = 10;
 
-    const cellText = (r, c) => {
-      if (c.key === 'Score') return r.Score === '' ? '—' : `${r.Score} / ${r['Max score']}`;
-      if (c.key === 'Percentage') return r.Percentage === '' ? '—' : `${r.Percentage}%`;
-      const v = r[c.key];
-      return v === '' || v == null ? '—' : String(v);
-    };
+    // ── Page 1 header band + summary tiles ──
+    doc.rect(0, 0, PAGE_W, 70).fill(NAVY);
+    doc.font('Helvetica-Bold').fontSize(19).fillColor('#ffffff').text('Exam Results Report', X0, 20, { lineBreak: false });
+    doc.font('Helvetica').fontSize(9).fillColor('#c7d2fe')
+      .text(`${examTitles.length === 1 ? `${examTitles[0]}  ·  ` : ''}Generated ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`, X0, 46, { lineBreak: false });
+    doc.font('Helvetica-Bold').fontSize(12).fillColor('#ffffff').text('IFOA', X0, 26, { width: TABLE_W, align: 'right', lineBreak: false });
 
-    // Title band + summary
-    doc.rect(0, 0, PAGE_W, 74).fill(INK);
-    doc.font('Helvetica-Bold').fontSize(18).fillColor('#ffffff').text('Exam Results Report', X0, 22, { lineBreak: false });
-    doc.font('Helvetica').fontSize(9).fillColor('#cbd5e1')
-      .text(`Generated ${stamp}`, X0, 47, { lineBreak: false });
     const stats = [
+      ['Candidates', String(candidates)],
       ['Attempts', String(rows.length)],
-      ['Passed', String(passed)],
-      ['Not passed', String(graded.length - passed)],
-      ['Pass rate', graded.length ? `${Math.round((passed / graded.length) * 100)}%` : '—'],
-      ['Avg score', avg != null ? `${avg}%` : '—'],
+      ['Passed', `${passedCandidates} of ${candidates}`],
+      ['Pass rate', decided ? `${Math.round((passedCandidates / decided) * 100)}%` : '—'],
+      ['Average score', avg != null ? `${avg}%` : '—'],
     ];
-    const boxW = TABLE_W / stats.length;
+    const tileGap = 10;
+    const tileW = (TABLE_W - tileGap * (stats.length - 1)) / stats.length;
     stats.forEach(([label, value], i) => {
-      const bx = X0 + i * boxW;
-      doc.rect(bx, 90, boxW - 8, 48).lineWidth(0.75).strokeColor(LINE).fillAndStroke(BAND, LINE);
-      doc.font('Helvetica').fontSize(8).fillColor(MUTED).text(label.toUpperCase(), bx + 10, 99, { width: boxW - 28, lineBreak: false });
-      doc.font('Helvetica-Bold').fontSize(15).fillColor(INK).text(value, bx + 10, 114, { width: boxW - 28, lineBreak: false });
+      const bx = X0 + i * (tileW + tileGap);
+      doc.roundedRect(bx, 88, tileW, 52, 6).lineWidth(0.75).fillAndStroke(TILE_BG, LINE);
+      doc.font('Helvetica-Bold').fontSize(7.5).fillColor(MUTED).text(label.toUpperCase(), bx + 12, 98, { width: tileW - 24, lineBreak: false, characterSpacing: 0.4 });
+      doc.font('Helvetica-Bold').fontSize(17).fillColor(INK).text(value, bx + 12, 113, { width: tileW - 24, lineBreak: false });
     });
+    doc.font('Helvetica').fontSize(7.5).fillColor(SUBTLE)
+      .text('Passed and pass rate count each candidate once, by their best attempt. Average score is over all attempts.', X0, 147, { width: TABLE_W, lineBreak: false });
 
-    const drawHeader = (y) => {
-      doc.rect(X0, y, TABLE_W, HEAD_H).fill(INK);
+    const drawColumnHeader = (y) => {
+      doc.roundedRect(X0, y, TABLE_W, HEAD_H, 4).fill(NAVY);
       let x = X0;
-      doc.font('Helvetica-Bold').fontSize(8).fillColor('#ffffff');
-      cols.forEach((c) => {
-        doc.text(c.label.toUpperCase(), x + PAD, y + 9, { width: c.w - PAD * 2, align: c.align || 'left', lineBreak: false });
+      doc.font('Helvetica-Bold').fontSize(7.5).fillColor('#ffffff');
+      cols.forEach((c, i) => {
+        doc.text(c.label.toUpperCase(), x + (i === 0 ? PAD : 6), y + 8.5, { width: c.w - (i === 0 ? PAD : 12), align: c.align || 'left', lineBreak: false, characterSpacing: 0.3 });
         x += c.w;
       });
-      return y + HEAD_H;
+      return y + HEAD_H + 6;
     };
+    const newPage = () => { doc.addPage(); return drawColumnHeader(36); };
 
-    let y = drawHeader(158);
-    if (!rows.length) {
-      doc.font('Helvetica').fontSize(10).fillColor(MUTED)
-        .text('No finished exam attempts to report.', X0, y + 14, { width: TABLE_W, align: 'center' });
+    let y = drawColumnHeader(164);
+    if (!groups.length) {
+      doc.font('Helvetica').fontSize(10).fillColor(MUTED).text('No finished exam attempts to report.', X0, y + 14, { width: TABLE_W, align: 'center' });
     }
-    rows.forEach((r, i) => {
-      if (y + ROW_H > BOTTOM) { doc.addPage(); y = drawHeader(36); }
-      if (i % 2 === 1) doc.rect(X0, y, TABLE_W, ROW_H).fill(BAND);
-      let x = X0;
-      cols.forEach((c) => {
-        let color = INK, font = 'Helvetica';
-        if (c.key === 'Result') {
-          font = 'Helvetica-Bold';
-          color = r.Result === 'Passed' ? GOOD : r.Result === 'Not passed' ? BAD : MUTED;
-        } else if (c.key === 'Participant') font = 'Helvetica-Bold';
-        else if (['Attempt', 'Score', 'Percentage', 'Violations', 'Submitted'].includes(c.key)) color = '#334155';
-        doc.font(font).fontSize(8.5).fillColor(color)
-          .text(cellText(r, c), x + PAD, y + 7, { width: c.w - PAD * 2, height: 12, ellipsis: true, lineBreak: false, align: c.align || 'left' });
-        x += c.w;
+
+    groups.forEach((g) => {
+      const need = GROUP_H + g.attempts.length * ROW_H;
+      if (y + Math.min(need, GROUP_H + ROW_H * 2) > BOTTOM || (need <= BOTTOM - 70 && y + need > BOTTOM)) y = newPage();
+
+      // Candidate header row: name · airline · exam  |  best score + overall result
+      doc.roundedRect(X0, y, TABLE_W, GROUP_H, 4).fill(GROUP_BG);
+      doc.rect(X0, y, 3, GROUP_H).fill(g.passed ? GOOD : g.pending ? WAIT : BAD);
+      doc.font('Helvetica-Bold').fontSize(10.5).fillColor(INK).text(g.name, X0 + 14, y + 7, { width: 330, lineBreak: false, ellipsis: true });
+      doc.font('Helvetica').fontSize(8).fillColor(MUTED)
+        .text([g.airline, g.exam].filter(Boolean).join('  ·  ') || '—', X0 + 14, y + 20.5, { width: 400, lineBreak: false, ellipsis: true });
+      const [overall, overallColor] = g.passed ? ['Passed', GOOD] : g.pending ? ['Pending review', WAIT] : ['Not passed', BAD];
+      const bestTxt = g.best ? `Best ${pct1(g.best.percentage)}%` : 'Not scored';
+      const countTxt = `${g.attempts.length} attempt${g.attempts.length === 1 ? '' : 's'}`;
+      doc.font('Helvetica').fontSize(8).fillColor(MUTED).text(`${countTxt}  ·  ${bestTxt}`, X0, y + 8, { width: TABLE_W - 14, align: 'right', lineBreak: false });
+      doc.font('Helvetica-Bold').fontSize(9).fillColor(overallColor).text(overall, X0, y + 20, { width: TABLE_W - 14, align: 'right', lineBreak: false });
+      y += GROUP_H;
+
+      // Attempt rows
+      g.attempts.forEach((a, i) => {
+        if (y + ROW_H > BOTTOM) y = newPage();
+        const [res, resColor] = resultOf(a);
+        const isBest = g.best && a === g.best && g.attempts.length > 1;
+        const cells = {
+          attempt: `Attempt ${a.attempt_number || i + 1}${isBest ? '  (best)' : ''}`,
+          score: a.score != null && a.max_score != null ? `${a.score} / ${a.max_score}` : '—',
+          pct: a.percentage != null ? `${pct1(a.percentage)}%` : '—',
+          result: res,
+          submitted: pdfDate(a.submitted_at),
+          time: a.time_taken_seconds != null ? `${Math.round(a.time_taken_seconds / 60)} min` : '—',
+          violations: String(a.violation_count || 0),
+        };
+        let x = X0;
+        cols.forEach((c, ci) => {
+          let font = 'Helvetica', color = '#334155';
+          if (c.key === 'attempt') { color = INK; if (isBest) font = 'Helvetica-Bold'; }
+          if (c.key === 'result') { font = 'Helvetica-Bold'; color = resColor; }
+          if (c.key === 'violations' && a.violation_count) { font = 'Helvetica-Bold'; color = WAIT; }
+          doc.font(font).fontSize(8.5).fillColor(color)
+            .text(cells[c.key], x + (ci === 0 ? 24 : 6), y + 7, { width: c.w - (ci === 0 ? 30 : 12), align: c.align || 'left', lineBreak: false, ellipsis: true });
+          x += c.w;
+        });
+        doc.moveTo(X0 + 14, y + ROW_H).lineTo(X0 + TABLE_W, y + ROW_H).lineWidth(0.5).strokeColor(LINE).stroke();
+        y += ROW_H;
       });
-      doc.moveTo(X0, y + ROW_H).lineTo(X0 + TABLE_W, y + ROW_H).lineWidth(0.5).strokeColor(LINE).stroke();
-      y += ROW_H;
+      y += GAP;
     });
-    doc.moveTo(X0, y).lineTo(X0 + TABLE_W, y).lineWidth(1).strokeColor(INK).stroke();
 
     // Footer on every page
     const range = doc.bufferedPageRange();
     for (let p = 0; p < range.count; p += 1) {
       doc.switchToPage(range.start + p);
       doc.page.margins.bottom = 0; // allow drawing in the bottom margin without spawning pages
+      doc.moveTo(X0, PAGE_H - 34).lineTo(X0 + TABLE_W, PAGE_H - 34).lineWidth(0.5).strokeColor(LINE).stroke();
       doc.font('Helvetica').fontSize(8).fillColor(MUTED)
-        .text('Exam Results Report', X0, PAGE_H - 30, { width: TABLE_W / 2, align: 'left', lineBreak: false })
-        .text(`Page ${p + 1} of ${range.count}`, X0 + TABLE_W / 2, PAGE_H - 30, { width: TABLE_W / 2, align: 'right', lineBreak: false });
+        .text('IFOA  ·  Exam Results Report', X0, PAGE_H - 26, { width: TABLE_W / 2, align: 'left', lineBreak: false })
+        .text(`Page ${p + 1} of ${range.count}`, X0 + TABLE_W / 2, PAGE_H - 26, { width: TABLE_W / 2, align: 'right', lineBreak: false });
     }
     doc.end();
     await done;

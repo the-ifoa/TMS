@@ -6,7 +6,7 @@ import {
   HiOutlineArrowLeft, HiOutlinePlusCircle, HiOutlineSave, HiOutlineEye,
   HiOutlinePencilAlt, HiOutlineTrash, HiOutlineCheck, HiOutlineX,
   HiOutlineCollection, HiOutlineSearch, HiOutlineCalendar, HiOutlineClock,
-  HiOutlineDuplicate, HiOutlineChevronUp, HiOutlineChevronDown,
+  HiOutlineDuplicate, HiOutlineChevronUp, HiOutlineChevronDown, HiOutlineDocumentDuplicate,
 } from 'react-icons/hi';
 import { getExam, createExam, updateExam, previewExamRemark, listQuestionBankGroups, listQuestionBankItems, getQuestionBankTopics, createQuestionBankItem } from '../api';
 import { useAuth } from '../context/AuthContext';
@@ -14,6 +14,7 @@ import QuestionEditor, { QUESTION_TYPES, createEmptyQuestion } from '../componen
 import { TagBadges, DIFFICULTY_BADGE } from './QuestionBank';
 import QuestionPlayer from '../components/examPlayers/QuestionPlayer';
 import ExamRunner from '../components/ExamRunner';
+import ExamQuestionImporter from '../components/ExamQuestionImporter';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -569,6 +570,15 @@ export default function ExamBuilder() {
   const importFromBank = (newQuestions) => {
     setExam((prev) => ({ ...prev, questions: [...prev.questions, ...newQuestions] }));
   };
+  const [showExamImporter, setShowExamImporter] = useState(false);
+  // Questions copied from another exam, plus any of its section names this exam lacks.
+  const importFromExam = (newQuestions, sectionNames) => {
+    setExam((prev) => ({
+      ...prev,
+      sections: [...(prev.sections || []), ...sectionNames.filter((n) => !(prev.sections || []).includes(n))],
+      questions: [...prev.questions, ...newQuestions],
+    }));
+  };
   const [sendToBankQuestion, setSendToBankQuestion] = useState(null);
 
   const startPreview = () => {
@@ -951,6 +961,9 @@ export default function ExamBuilder() {
               <HiOutlineCollection className="w-4 h-4" /> <span className="hidden sm:inline">Import from Bank</span>
             </Button>
             )}
+            <Button variant="outline" size="sm" onClick={() => setShowExamImporter(true)} className="rounded-xl border-slate-200 text-xs font-bold">
+              <HiOutlineDocumentDuplicate className="w-4 h-4" /> <span className="hidden sm:inline">Import from Exam</span>
+            </Button>
             <Button variant="outline" size="sm" onClick={startPreview} className="rounded-xl border-slate-200 text-xs font-bold">
               <HiOutlineEye className="w-4 h-4" /> Preview
             </Button>
@@ -1606,6 +1619,13 @@ export default function ExamBuilder() {
         onImport={importFromBank}
       />
       <SendToBankModal question={sendToBankQuestion} onClose={() => setSendToBankQuestion(null)} />
+      <ExamQuestionImporter
+        open={showExamImporter}
+        onClose={() => setShowExamImporter(false)}
+        currentExamId={id}
+        sectionNames={orderedSectionNames}
+        onImport={importFromExam}
+      />
       {previewing && (
         <ExamRunner
           attempt={previewAttempt}

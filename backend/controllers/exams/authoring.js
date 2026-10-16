@@ -3,7 +3,7 @@ const ExamInvite = require('../../models/ExamInvite');
 const ExamAttempt = require('../../models/ExamAttempt');
 const Airline = require('../../models/Airline');
 const Participant = require('../../models/Participant');
-const { examImageUpload, deleteCloudinaryImage } = require('../../services/upload');
+const { examImageUpload, deleteImagesIfUnused } = require('../../services/upload');
 const { sanitizeQuestionForTaking, answerKeyProblems } = require('../../services/examGrading');
 const { remarkExam, changedKeyQuestionIds, changedContentQuestionIds, refreshInProgressContent } = require('../../services/examRemark');
 const { isAdmin, authoringAirline, ownsExam, canAssignExam, assignableOwnerIds, canManageExam, deleteExamImages } = require('./access');
@@ -37,7 +37,10 @@ exports.deleteQuestionImage = async (req, res) => {
     if (!isAdmin(req) && !(await authoringAirline(req))) {
       return res.status(403).json({ error: 'Admin access required.' });
     }
-    await deleteCloudinaryImage(req.params.publicId);
+    // Removing / replacing an image in the editor: only really delete it when no
+    // saved exam, bank question or attempt uses it (it may be a copy's image,
+    // or the saved version of this exam until it is saved again).
+    await deleteImagesIfUnused([req.params.publicId]);
     res.json({ deleted: true });
   } catch (err) {
     console.error('DELETE /exams/questions/image error:', err.message);
@@ -127,6 +130,7 @@ exports.listExams = async (req, res) => {
       const json = e.toJSON();
       json.assignments = (json.assignments || []).filter((a) => ownIds.has(String(a.airline_id)));
       json.question_count = counts[String(e._id)] || 0;
+      json.can_edit = !!ownsExam(req, e); // full questions (with answers) available — e.g. to copy from
       return json;
     })));
   } catch (err) {
@@ -386,8 +390,8 @@ exports.deleteExam = async (req, res) => {
     if (!exam) return res.status(404).json({ error: 'Exam not found.' });
     if (!canManageExam(req, exam)) return res.status(403).json({ error: 'Access denied.' });
 
-    await deleteExamImages(exam);
     await exam.deleteOne();
+    await deleteExamImages(exam); // after the delete, so its own references don't count
     res.json({ message: 'Exam deleted.' });
   } catch (err) {
     console.error('DELETE /exams/:id error:', err.message);

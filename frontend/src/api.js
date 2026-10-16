@@ -306,6 +306,7 @@ export const getPublicExamResult  = (token, attemptId)              => api.get(`
 // Admin (IFOA exams only): send status + responses, and email the form.
 export const getExamFeedback      = (examId)                 => api.get(`/feedback/exams/${examId}`);
 export const sendExamFeedback     = (examId, participantIds) => api.post(`/feedback/exams/${examId}/send`, { participant_ids: participantIds });
+export const deleteExamFeedback   = (examId, feedbackId, { resend = false } = {}) => api.delete(`/feedback/exams/${examId}/responses/${feedbackId}${resend ? '?resend=1' : ''}`);
 // Public, passwordless form opened from the emailed link.
 export const getPublicFeedback    = (token)                  => api.get(`/public-feedback/${token}`);
 export const submitPublicFeedback = (token, data)            => api.post(`/public-feedback/${token}/submit`, data);

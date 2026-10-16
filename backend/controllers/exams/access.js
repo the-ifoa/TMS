@@ -1,6 +1,6 @@
 const Exam = require('../../models/Exam');
 const Airline = require('../../models/Airline');
-const { deleteCloudinaryImage } = require('../../services/upload');
+const { deleteImagesIfUnused, questionImageIds } = require('../../services/upload');
 const { hasExamPower } = require('../../config/permissions');
 
 function isAdmin(req) {
@@ -58,14 +58,10 @@ function canManageExam(req, exam) {
   return isAdmin(req) && !exam.owner_airline;
 }
 
+// Call after the exam document is deleted: images still used elsewhere (a copy
+// of the question, the bank, a candidate's attempt) are kept.
 async function deleteExamImages(exam) {
-  const ids = [];
-  exam.questions.forEach((q) => {
-    if (q.image_public_id) ids.push(q.image_public_id);
-    (q.images || []).forEach((img) => img.public_id && ids.push(img.public_id));
-    (q.options || []).forEach((o) => o.image_public_id && ids.push(o.image_public_id));
-  });
-  await Promise.all(ids.map((id) => deleteCloudinaryImage(id)));
+  await deleteImagesIfUnused(exam.questions.flatMap(questionImageIds));
 }
 
 // ─── Shared attempt scoping ────────────────────────────────────────────────────

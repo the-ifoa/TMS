@@ -84,72 +84,97 @@ exports.getExamFeedback = async (req, res) => {
   }
 };
 
+// Emails the form to the given participants (each must be assigned to the
+// exam). Re-sending reuses the participant's existing link; anyone who already
+// submitted is skipped. Returns { sent, skipped }.
+async function sendForms(exam, requested, adminId) {
+  const assigned = new Set(exam.assignments.map((a) => String(a.participant_id)));
+  const ids = requested.filter((id) => assigned.has(id));
+  const participants = await Participant.find({ _id: { $in: ids } })
+    .select('participant_name first_name last_name email company airline_name');
+  const existing = await TrainingFeedback.find({ exam_id: exam._id, participant_id: { $in: ids } });
+  const fbByPid = Object.fromEntries(existing.map((f) => [String(f.participant_id), f]));
+
+  const sent = [];
+  const skipped = requested
+    .filter((id) => !assigned.has(id))
+    .map((id) => ({ id, reason: 'not assigned to this exam' }));
+
+  for (const p of participants) {
+    const name = personName(p);
+    if (!p.email) { skipped.push({ id: String(p._id), name, reason: 'no email' }); continue; }
+    let fb = fbByPid[String(p._id)];
+    if (fb?.status === 'submitted') { skipped.push({ id: String(p._id), name, reason: 'already submitted' }); continue; }
+
+    if (fb) {
+      fb.sent_at = new Date();
+      fb.sent_count += 1;
+      fb.participant_email = p.email;
+      fb.exam_title_snapshot = exam.title;
+    } else {
+      fb = new TrainingFeedback({
+        token: crypto.randomBytes(24).toString('hex'),
+        exam_id: exam._id,
+        exam_title_snapshot: exam.title,
+        participant_id: p._id,
+        participant_name: name,
+        participant_email: p.email,
+        airline_name: p.airline_name || p.company || '',
+        sent_by: adminId,
+      });
+    }
+
+    try {
+      await sendTrainingFeedbackEmail({
+        toEmail: p.email,
+        participantName: name,
+        trainingTitle: exam.title,
+        link: frontendLink(`/feedback/${fb.token}`),
+      });
+      await fb.save();
+      sent.push({ id: String(p._id), name, email: p.email });
+    } catch (err) {
+      console.error('Feedback email failed:', p.email, err.message);
+      skipped.push({ id: String(p._id), name, reason: `email failed: ${err.message}` });
+    }
+  }
+  return { sent, skipped };
+}
+
 // ─── POST /feedback/exams/:examId/send — email the form to chosen participants ──
-// Body: { participant_ids: [...] } — each must be assigned to the exam. Re-sending
-// reuses the participant's existing link; anyone who already submitted is skipped.
+// Body: { participant_ids: [...] }.
 exports.sendExamFeedback = async (req, res) => {
   try {
     const exam = await loadIfoaExam(req, res);
     if (!exam) return;
-
     const requested = Array.isArray(req.body?.participant_ids) ? req.body.participant_ids.map(String) : [];
     if (requested.length === 0) return res.status(400).json({ error: 'Select at least one participant.' });
-
-    const assigned = new Set(exam.assignments.map((a) => String(a.participant_id)));
-    const ids = requested.filter((id) => assigned.has(id));
-    const participants = await Participant.find({ _id: { $in: ids } })
-      .select('participant_name first_name last_name email company airline_name');
-    const existing = await TrainingFeedback.find({ exam_id: exam._id, participant_id: { $in: ids } });
-    const fbByPid = Object.fromEntries(existing.map((f) => [String(f.participant_id), f]));
-
-    const sent = [];
-    const skipped = requested
-      .filter((id) => !assigned.has(id))
-      .map((id) => ({ id, reason: 'not assigned to this exam' }));
-
-    for (const p of participants) {
-      const name = personName(p);
-      if (!p.email) { skipped.push({ id: String(p._id), name, reason: 'no email' }); continue; }
-      let fb = fbByPid[String(p._id)];
-      if (fb?.status === 'submitted') { skipped.push({ id: String(p._id), name, reason: 'already submitted' }); continue; }
-
-      if (fb) {
-        fb.sent_at = new Date();
-        fb.sent_count += 1;
-        fb.participant_email = p.email;
-        fb.exam_title_snapshot = exam.title;
-      } else {
-        fb = new TrainingFeedback({
-          token: crypto.randomBytes(24).toString('hex'),
-          exam_id: exam._id,
-          exam_title_snapshot: exam.title,
-          participant_id: p._id,
-          participant_name: name,
-          participant_email: p.email,
-          airline_name: p.airline_name || p.company || '',
-          sent_by: req.admin.id,
-        });
-      }
-
-      try {
-        await sendTrainingFeedbackEmail({
-          toEmail: p.email,
-          participantName: name,
-          trainingTitle: exam.title,
-          link: frontendLink(`/feedback/${fb.token}`),
-        });
-        await fb.save();
-        sent.push({ id: String(p._id), name, email: p.email });
-      } catch (err) {
-        console.error('Feedback email failed:', p.email, err.message);
-        skipped.push({ id: String(p._id), name, reason: `email failed: ${err.message}` });
-      }
-    }
-
-    res.json({ sent, skipped });
+    res.json(await sendForms(exam, requested, req.admin.id));
   } catch (err) {
     console.error('POST /feedback/exams/:examId/send error:', err.message);
     res.status(500).json({ error: 'Failed to send feedback forms.' });
+  }
+};
+
+// ─── DELETE /feedback/exams/:examId/responses/:feedbackId[?resend=1] ──────────
+// Removes a participant's feedback (answers included). Their old link stops
+// working — it carried the deleted record's token — so they show as "Not sent".
+// With ?resend=1 a fresh form link is emailed straight away.
+exports.deleteExamFeedback = async (req, res) => {
+  try {
+    const exam = await loadIfoaExam(req, res);
+    if (!exam) return;
+    if (!require('mongoose').isValidObjectId(req.params.feedbackId)) return res.status(404).json({ error: 'Feedback not found.' });
+    const fb = await TrainingFeedback.findOne({ _id: req.params.feedbackId, exam_id: exam._id });
+    if (!fb) return res.status(404).json({ error: 'Feedback not found.' });
+    await TrainingFeedback.deleteOne({ _id: fb._id });
+
+    const resend = ['1', 'true'].includes(String(req.query.resend));
+    const result = resend ? await sendForms(exam, [String(fb.participant_id)], req.admin.id) : null;
+    res.json({ deleted: true, ...(result ? { resent: result.sent.length > 0, ...result } : {}) });
+  } catch (err) {
+    console.error('DELETE /feedback/exams/:examId/responses/:feedbackId error:', err.message);
+    res.status(500).json({ error: 'Failed to delete the feedback.' });
   }
 };
 

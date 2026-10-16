@@ -93,4 +93,35 @@ async function deleteCloudinaryImage(publicId) {
   await cloudinary.uploader.destroy(publicId).catch(() => {});
 }
 
-module.exports = { upload, cloudinary, examImageUpload, deleteCloudinaryImage };
+// Question images can be shared — a question copied into another exam, imported
+// from the bank, or frozen in a candidate's attempt for result review all keep
+// the same Cloudinary image. Deletes only the ids nothing in the database still
+// uses. Call it AFTER removing the owning document.
+async function deleteImagesIfUnused(publicIds) {
+  const ids = [...new Set((publicIds || []).filter(Boolean))];
+  if (!ids.length) return;
+  const Exam = require('../models/Exam');
+  const ExamAttempt = require('../models/ExamAttempt');
+  const QuestionBankItem = require('../models/QuestionBankItem');
+  const paths = (prefix) => [`${prefix}image_public_id`, `${prefix}images.public_id`, `${prefix}options.image_public_id`];
+  const used = new Set();
+  const collect = async (Model, prefix) => {
+    const fields = paths(prefix);
+    for (const field of fields) {
+      (await Model.distinct(field, { [field]: { $in: ids } })).forEach((v) => used.add(v));
+    }
+  };
+  await Promise.all([collect(Exam, 'questions.'), collect(ExamAttempt, 'questions_snapshot.'), collect(QuestionBankItem, '')]);
+  await Promise.all(ids.filter((id) => !used.has(id)).map((id) => deleteCloudinaryImage(id)));
+}
+
+// Every image id a question (exam / bank item / snapshot shape) points at.
+function questionImageIds(q) {
+  const ids = [];
+  if (q.image_public_id) ids.push(q.image_public_id);
+  (q.images || []).forEach((img) => img.public_id && ids.push(img.public_id));
+  (q.options || []).forEach((o) => o.image_public_id && ids.push(o.image_public_id));
+  return ids;
+}
+
+module.exports = { upload, cloudinary, examImageUpload, deleteCloudinaryImage, deleteImagesIfUnused, questionImageIds };

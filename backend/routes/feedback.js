@@ -14,4 +14,7 @@ router.get('/exams/:examId', requirePermission('exams.assign', 'exams.grade', 'e
 // ─── POST /feedback/exams/:examId/send — email the form to participants ───────
 router.post('/exams/:examId/send', requirePermission('exams.assign'), validateBody(schemas.feedbackSend), feedbackController.sendExamFeedback);
 
+// ─── DELETE /feedback/exams/:examId/responses/:feedbackId[?resend=1] ──────────
+router.delete('/exams/:examId/responses/:feedbackId', requirePermission('exams.assign'), feedbackController.deleteExamFeedback);
+
 module.exports = router;

@@ -1,17 +1,14 @@
 const QuestionBankGroup = require('../models/QuestionBankGroup');
 const QuestionBankItem = require('../models/QuestionBankItem');
-const { deleteCloudinaryImage } = require('../services/upload');
+const { deleteImagesIfUnused, questionImageIds } = require('../services/upload');
 
 function isAdmin(req) {
   return req.admin?.role === 'admin' || req.admin?.role === 'Administrator';
 }
 
+// Call after the item is deleted: images an exam (or attempt) still uses stay.
 async function deleteItemImages(item) {
-  const ids = [];
-  if (item.image_public_id) ids.push(item.image_public_id);
-  (item.images || []).forEach((img) => img.public_id && ids.push(img.public_id));
-  (item.options || []).forEach((o) => o.image_public_id && ids.push(o.image_public_id));
-  await Promise.all(ids.map((id) => deleteCloudinaryImage(id)));
+  await deleteImagesIfUnused(questionImageIds(item));
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -80,9 +77,9 @@ exports.deleteGroup = async (req, res) => {
     if (!group) return res.status(404).json({ error: 'Question bank not found.' });
 
     const items = await QuestionBankItem.find({ bank_id: group._id });
-    await Promise.all(items.map((item) => deleteItemImages(item)));
     await QuestionBankItem.deleteMany({ bank_id: group._id });
     await group.deleteOne();
+    await deleteImagesIfUnused(items.flatMap(questionImageIds));
     res.json({ message: 'Question bank deleted.' });
   } catch (err) {
     console.error('DELETE /question-bank/groups/:id error:', err.message);
@@ -175,8 +172,8 @@ exports.deleteItem = async (req, res) => {
     const item = await QuestionBankItem.findById(req.params.id);
     if (!item) return res.status(404).json({ error: 'Question not found.' });
 
-    await deleteItemImages(item);
     await item.deleteOne();
+    await deleteItemImages(item);
     res.json({ message: 'Question deleted.' });
   } catch (err) {
     console.error('DELETE /question-bank/items/:id error:', err.message);

@@ -22,6 +22,7 @@ exports.listNotifications = async (req, res) => {
       filter.$or = airlineFilters;
     }
 
+    filter.temporary = { $ne: true };
     const participants = await Participant.find(filter)
       .sort({ updated_at: -1, created_at: -1 })
       .limit(100)

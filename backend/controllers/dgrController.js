@@ -14,7 +14,7 @@ exports.listAirlines = async (req, res) => {
     if (!isAdmin(req)) return res.status(403).json({ error: 'Admin access required.' });
 
     const airlines     = await Airline.find({}).sort({ airlineName: 1 });
-    const participants = await Participant.find({}).sort({ created_at: -1 });
+    const participants = await Participant.find({ temporary: { $ne: true } }).sort({ created_at: -1 });
 
     const result = airlines.map((a) => ({
       airline: a.toJSON(),

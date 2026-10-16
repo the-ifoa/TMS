@@ -13,6 +13,127 @@ const { frontendLink } = require('../../config/appUrls');
 const { hasPermission } = require('../../middleware/permissions');
 const { isAdmin, canAssignExam, assignableOwnerIds, canManageExam } = require('./access');
 
+// ─── POST /exams/:id/quick-participant — add candidates from the Assign dialog ──
+// Body: { people: [{ name, email }], airline_id, keep } (or a single { name,
+// email, ... }). Creates each participant under the chosen airline/department —
+// or, for the IFOA admin, with no airline (airline_id 'none') — or reuses the
+// one already there with that email, so they can be assigned straight away.
+// keep=false → temporary: hidden from participant lists, visible only in this
+// exam. Assigning + emailing stays the normal flow.
+const EMAIL_RX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const MAX_QUICK_ADD = 50;
+exports.addQuickParticipant = async (req, res) => {
+  try {
+    const exam = await Exam.findById(req.params.id).select('owner_airline owner_department status');
+    if (!exam) return res.status(404).json({ error: 'Exam not found.' });
+    if (!canAssignExam(req, exam)) return res.status(403).json({ error: 'Access denied.' });
+
+    const keep = req.body?.keep !== false;
+    const rawPeople = Array.isArray(req.body?.people) ? req.body.people : [{ name: req.body?.name, email: req.body?.email }];
+    if (!rawPeople.length) return res.status(400).json({ error: 'Add at least one participant.' });
+    if (rawPeople.length > MAX_QUICK_ADD) return res.status(400).json({ error: `Add at most ${MAX_QUICK_ADD} participants at a time.` });
+
+    // Whose roster they join: the admin picks any airline/department or none;
+    // an airline only within its own scope (default: itself).
+    const requested = String(req.body?.airline_id || '');
+    let owner = null;
+    let company = 'Individual';
+    let airlineLabel = null;
+    let department = 'Exam candidate';
+    if (isAdmin(req) && (requested === 'none' || requested === '')) {
+      if (requested === '') return res.status(400).json({ error: 'Choose an airline, or "No airline".' });
+    } else {
+      const ownerId = requested || String(req.admin.id);
+      if (!mongoose.isValidObjectId(ownerId)) return res.status(400).json({ error: 'Choose the airline these participants belong to.' });
+      if (!isAdmin(req) && !assignableOwnerIds(req).map(String).includes(ownerId)) {
+        return res.status(403).json({ error: 'You can only add participants to your own airline.' });
+      }
+      owner = await Airline.findById(ownerId).select('airlineName department_name name is_department parent_airline');
+      if (!owner) return res.status(404).json({ error: 'Airline not found.' });
+      const parent = owner.is_department && owner.parent_airline ? await Airline.findById(owner.parent_airline).select('airlineName') : null;
+      airlineLabel = (parent || owner).airlineName;
+      company = airlineLabel;
+      if (owner.is_department) department = owner.department_name || owner.name || 'Department';
+    }
+
+    const results = [];
+    const seen = new Set();
+    for (const raw of rawPeople) {
+      const name = String(raw?.name || '').trim().replace(/\s+/g, ' ');
+      const email = String(raw?.email || '').trim().toLowerCase();
+      if (!EMAIL_RX.test(email) || email.length > 200) { results.push({ email, name, error: 'invalid email' }); continue; }
+      if (!name) { results.push({ email, name, error: 'missing name' }); continue; }
+      if (name.length > 120) { results.push({ email, name, error: 'name too long' }); continue; }
+      if (seen.has(email)) { results.push({ email, name, error: 'listed twice' }); continue; }
+      seen.add(email);
+
+      const escaped = email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      let participant = await Participant.findOne({ submitted_by: owner ? owner._id : null, email: new RegExp(`^${escaped}$`, 'i') });
+      let reused = false;
+      if (participant) {
+        reused = true;
+        if (keep && participant.temporary) {
+          participant.temporary = false;
+          participant.temporary_exam_id = null;
+          await participant.save();
+        }
+      } else {
+        const [first, ...rest] = name.split(' ');
+        participant = await Participant.create({
+          participant_name: name,
+          first_name: first,
+          last_name: rest.join(' '),
+          email,
+          company,
+          airline_name: airlineLabel,
+          department,
+          submitted_by: owner ? owner._id : null,
+          temporary: !keep,
+          temporary_exam_id: keep ? null : exam._id,
+        });
+      }
+      results.push({
+        participant: {
+          _id: String(participant._id), participant_name: participant.participant_name, email: participant.email,
+          temporary: !!participant.temporary, airline_id: owner ? String(owner._id) : 'none',
+        },
+        reused,
+      });
+    }
+
+    const okRows = results.filter((r) => r.participant);
+    res.status(okRows.some((r) => !r.reused) ? 201 : 200).json({
+      results,
+      created: okRows.filter((r) => !r.reused).length,
+      reused: okRows.filter((r) => r.reused).length,
+      failed: results.filter((r) => r.error).length,
+      // Back-compat with a single add.
+      participant: okRows[0]?.participant || null,
+    });
+  } catch (err) {
+    console.error('POST /exams/:id/quick-participant error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// ─── PATCH /exams/:id/quick-participant/:participantId — keep permanently ──────
+exports.keepQuickParticipant = async (req, res) => {
+  try {
+    const exam = await Exam.findById(req.params.id).select('owner_airline owner_department');
+    if (!exam) return res.status(404).json({ error: 'Exam not found.' });
+    if (!canAssignExam(req, exam)) return res.status(403).json({ error: 'Access denied.' });
+    if (!mongoose.isValidObjectId(req.params.participantId)) return res.status(404).json({ error: 'Participant not found.' });
+    const filter = { _id: req.params.participantId, temporary: true };
+    if (!isAdmin(req)) filter.submitted_by = { $in: assignableOwnerIds(req) };
+    const p = await Participant.findOneAndUpdate(filter, { $set: { temporary: false, temporary_exam_id: null } }, { returnDocument: 'after' });
+    if (!p) return res.status(404).json({ error: 'Participant not found.' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('PATCH /exams/:id/quick-participant error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+};
+
 // ─── POST /exams/:id/send-invites — admin emails the take-link to participants ──
 // Ensures each participant is assigned, creates/refreshes their ExamInvite (one
 // per participant, stable token), and emails the passwordless take link.

@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Exam = require('../../models/Exam');
 const ExamAttempt = require('../../models/ExamAttempt');
 const ExamInvite = require('../../models/ExamInvite');
@@ -19,10 +20,18 @@ exports.listAirlines = async (req, res) => {
 
     const airlineFilter = isAdmin(req) ? {} : { _id: req.admin.id };
     const airlines     = await Airline.find(airlineFilter).sort({ airlineName: 1 });
+    // Temporary participants (added "only for this exam" from an Assign dialog)
+    // show only in that exam's dialog: ?exam_id= — the exam they were added for,
+    // or one they are assigned to.
+    const examId = mongoose.isValidObjectId(req.query.exam_id) ? String(req.query.exam_id) : null;
+    const assignedHere = examId
+      ? ((await Exam.findById(examId).select('assignments.participant_id').lean())?.assignments || []).map((a) => a.participant_id)
+      : [];
+    const tempVisible = examId ? [{ temporary_exam_id: examId }, { _id: { $in: assignedHere } }] : [];
     // Only the fields the picker shows — the full records are large and this
     // runs every time the assign dialog opens.
-    const participants = await Participant.find({})
-      .select('participant_name training_type email cert_sequence cert_released submitted_by company airline_name')
+    const participants = await Participant.find({ $or: [{ temporary: { $ne: true } }, ...tempVisible] })
+      .select('participant_name training_type email cert_sequence cert_released submitted_by company airline_name temporary')
       .sort({ created_at: -1 })
       .lean();
 
@@ -38,11 +47,28 @@ exports.listAirlines = async (req, res) => {
         )
         .map((p) => ({
           _id: String(p._id), participant_name: p.participant_name, training_type: p.training_type, email: p.email || '',
-          cert_sequence: p.cert_sequence ?? null, cert_released: !!p.cert_released,
+          cert_sequence: p.cert_sequence ?? null, cert_released: !!p.cert_released, temporary: !!p.temporary,
         })),
     }));
 
-    res.json(result.filter((r) => r.participants.length > 0));
+    // Admin: participants with no airline at all (added as individuals, or old
+    // records whose company matches no airline) under a "No airline" group.
+    if (isAdmin(req)) {
+      const shown = new Set(result.flatMap((r) => r.participants.map((p) => p._id)));
+      const loose = participants.filter((p) => !p.submitted_by && !shown.has(String(p._id)));
+      if (loose.length || req.query.include_empty) {
+        result.push({
+          airline: { _id: 'none', id: 'none', airlineName: 'No airline', is_none: true },
+          participants: loose.map((p) => ({
+            _id: String(p._id), participant_name: p.participant_name, training_type: p.training_type, email: p.email || '',
+            cert_sequence: p.cert_sequence ?? null, cert_released: !!p.cert_released, temporary: !!p.temporary,
+          })),
+        });
+      }
+    }
+
+    // ?include_empty=1 — also airlines with nobody yet (the "add participant" picker).
+    res.json(req.query.include_empty ? result : result.filter((r) => r.participants.length > 0));
   } catch (err) {
     console.error('GET /exams/airlines error:', err.message);
     res.status(500).json({ error: err.message });

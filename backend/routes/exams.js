@@ -107,6 +107,9 @@ router.post('/:id/assign', requirePermission('exams.assign'), examsController.as
 
 // ─── POST /exams/:id/send-invites — admin emails the take-link to participants ──
 router.post('/:id/send-invites', requirePermission('exams.assign'), examsController.sendInvites);
+// ─── POST /exams/:id/quick-participant — add a candidate on the go (Assign dialog) ──
+router.post('/:id/quick-participant', requirePermission('exams.assign'), examsController.addQuickParticipant);
+router.patch('/:id/quick-participant/:participantId', requirePermission('exams.assign'), examsController.keepQuickParticipant);
 
 // ─── GET /exams/:id/invites — admin: invite + attempt status for an exam ────────
 router.get('/:id/invites', examsController.listInvites);

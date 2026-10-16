@@ -13,7 +13,7 @@ import {
 import { FaPlaneDeparture } from 'react-icons/fa';
 import LogoAvatar from '../components/LogoAvatar';
 import FeedbackDialog from '../components/FeedbackDialog';
-import { listExams, deleteExam, publishExam, getExamAirlines, updateExam, sendExamInvites, reassignExamInvites, getExamInvites, removeExamCandidate, getExamAssignments } from '../api';
+import { listExams, deleteExam, publishExam, getExamAirlines, updateExam, sendExamInvites, reassignExamInvites, getExamInvites, removeExamCandidate, getExamAssignments, addQuickParticipant, keepQuickParticipant } from '../api';
 import { useAuth } from '../context/AuthContext';
 import QuestionBankList from './QuestionBank';
 import { DateTimeInputCard } from './ExamBuilder';
@@ -54,6 +54,17 @@ function SendInviteModal({ exam, onClose, onSent }) {
   const [needsReassign, setNeedsReassign] = useState([]);
   const [reassigningAll, setReassigningAll] = useState(false);
   const { confirm, ConfirmDialog } = useConfirm();
+  // "Add participant" — create someone on the go (kept permanently, or only
+  // for this exam) and pre-select them for Assign.
+  const { isAdmin } = useAuth();
+  const emptyRow = () => ({ name: '', email: '' });
+  const emptyAdd = { rows: [emptyRow()], airline_id: '', keep: true };
+  const [addOpen, setAddOpen] = useState(false);
+  const [addForm, setAddForm] = useState(emptyAdd);
+  const [adding, setAdding] = useState(false);
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [pasteText, setPasteText] = useState('');
+  const setRow = (i, patch) => setAddForm((f) => ({ ...f, rows: f.rows.map((r, j) => (j === i ? { ...r, ...patch } : r)) }));
 
   // Take one candidate off this exam: assignment, invite link and any result.
   const removeCandidate = async (pid, name, inv) => {
@@ -86,7 +97,7 @@ function SendInviteModal({ exam, onClose, onSent }) {
 
   const load = () => {
     setLoading(true);
-    Promise.all([getExamAirlines(), getExamInvites(exam.id)])
+    Promise.all([getExamAirlines({ exam_id: exam.id, include_empty: 1 }), getExamInvites(exam.id)])
       .then(([airRes, invRes]) => {
         setGroups(airRes.data);
         setInviteByPid(Object.fromEntries((invRes.data || []).map((i) => [String(i.participant_id), i])));
@@ -181,6 +192,65 @@ function SendInviteModal({ exam, onClose, onSent }) {
     }
   };
 
+  const EMAIL_OK = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  // "Name, email" / "Name <email>" / "Name<TAB>email" / just an email — one per line.
+  const parsePasted = (text) => text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).map((line) => {
+    const email = (line.match(/[^\s<>,;]+@[^\s<>,;]+\.[^\s<>,;]+/) || [''])[0];
+    let name = line.replace(email, '').replace(/[<>,;\t]+/g, ' ').trim().replace(/\s+/g, ' ');
+    if (!name && email) name = email.split('@')[0].replace(/[._-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+    return { name, email };
+  });
+  const applyPaste = () => {
+    const rows = parsePasted(pasteText);
+    if (!rows.length) { toast.error('Paste one person per line: Name, email'); return; }
+    setAddForm((f) => ({ ...f, rows: [...f.rows.filter((r) => r.name.trim() || r.email.trim()), ...rows] }));
+    setPasteText('');
+    setPasteOpen(false);
+  };
+
+  const submitAdd = async (e) => {
+    e?.preventDefault();
+    const rows = addForm.rows.filter((r) => r.name.trim() || r.email.trim());
+    const airlineId = addForm.airline_id || (!isAdmin && groups.length === 1 ? String(groups[0].airline._id) : '');
+    if (!rows.length) { toast.error('Add at least one participant.'); return; }
+    const bad = rows.findIndex((r) => !r.name.trim() || !EMAIL_OK.test(r.email.trim()));
+    if (bad >= 0) { toast.error(`Row ${bad + 1}: enter a name and a valid email.`); return; }
+    if (!airlineId) { toast.error(isAdmin ? 'Choose an airline, or "No airline".' : 'Choose the airline.'); return; }
+    setAdding(true);
+    try {
+      const res = await addQuickParticipant(exam.id, { people: rows.map((r) => ({ name: r.name.trim(), email: r.email.trim() })), airline_id: airlineId, keep: addForm.keep });
+      const { results = [], created = 0, reused = 0, failed = 0 } = res.data;
+      const added = results.filter((r) => r.participant);
+      const parts = [];
+      if (created) parts.push(`${created} added${addForm.keep ? '' : ' for this exam only'}`);
+      if (reused) parts.push(`${reused} already existed`);
+      if (added.length) toast.success(`${parts.join(', ')} — selected. Click Assign to email the exam link${added.length > 1 ? 's' : ''}.`, { duration: 6000 });
+      if (failed) toast.error(`${failed} not added: ${results.filter((r) => r.error).map((r) => `${r.email || r.name} (${r.error})`).join(', ')}`, { duration: 8000 });
+      setSelected((prev) => { const n = new Set(prev); added.forEach((r) => n.add(r.participant._id)); return n; });
+      setExpanded((prev) => { const n = new Set(prev); added.forEach((r) => n.add(r.participant.airline_id)); return n; });
+      // Keep the rows that failed so they can be fixed and re-sent.
+      const failedEmails = new Set(results.filter((r) => r.error).map((r) => r.email));
+      const leftover = rows.filter((r) => failedEmails.has(r.email.trim().toLowerCase()));
+      setAddForm({ ...emptyAdd, rows: leftover.length ? leftover : [emptyRow()], airline_id: airlineId, keep: addForm.keep });
+      if (!leftover.length) setAddOpen(false);
+      load();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Could not add the participants.');
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const keepPermanently = async (p) => {
+    try {
+      await keepQuickParticipant(exam.id, p._id);
+      toast.success(`${p.participant_name} is now a permanent participant.`);
+      load();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Could not update the participant.');
+    }
+  };
+
   const filteredGroups = groups
     .map((g) => {
       const matchAir = g.airline.airlineName.toLowerCase().includes(search.toLowerCase());
@@ -216,6 +286,10 @@ function SendInviteModal({ exam, onClose, onSent }) {
           </div>
 
           <div className="mt-4 flex flex-col sm:flex-row sm:items-center gap-2.5">
+            <button type="button" onClick={() => setAddOpen((o) => !o)}
+              className={`h-9 px-3 inline-flex items-center justify-center gap-1.5 rounded-xl text-xs font-bold border transition-colors flex-shrink-0 ${addOpen ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'}`}>
+              <HiOutlineUserAdd className="w-4 h-4" /> Add participants
+            </button>
             <div className="relative flex-1 min-w-0">
               <HiOutlineSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
               <input
@@ -261,6 +335,95 @@ function SendInviteModal({ exam, onClose, onSent }) {
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto min-h-0 px-6 py-4 space-y-2.5 bg-slate-50/60">
+          {addOpen && (
+            <form onSubmit={submitAdd} className="bg-white rounded-xl border border-slate-200 shadow-2xs p-4 space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-bold text-slate-900">Add participants</p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">They are selected straight away — click Assign to email their exam links.</p>
+                </div>
+                <button type="button" onClick={() => setPasteOpen((o) => !o)} className="text-[11px] font-bold text-blue-700 hover:text-blue-900 whitespace-nowrap">
+                  {pasteOpen ? 'Hide paste box' : 'Paste a list'}
+                </button>
+              </div>
+
+              {pasteOpen && (
+                <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50/70 p-3 space-y-2">
+                  <textarea value={pasteText} onChange={(e) => setPasteText(e.target.value)} rows={4} autoFocus
+                    placeholder={'One person per line, e.g.\nJohn Smith, john@airline.com\nJane Doe <jane@airline.com>\nalex@airline.com'}
+                    className="w-full px-3 py-2 bg-white border border-slate-200/90 rounded-lg text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10 resize-y" />
+                  <div className="flex justify-end">
+                    <Button type="button" onClick={applyPaste} className="rounded-lg text-[11px] font-bold h-7 px-3 bg-slate-900 hover:bg-slate-800 text-white">Add to list</Button>
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                {addForm.rows.map((r, i) => {
+                  const emailBad = r.email.trim() && !EMAIL_OK.test(r.email.trim());
+                  return (
+                    <div key={i} className="flex items-center gap-2">
+                      <span className="w-5 text-[11px] font-bold text-slate-400 tabular-nums text-right flex-shrink-0">{i + 1}</span>
+                      <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <input value={r.name} onChange={(e) => setRow(i, { name: e.target.value })} placeholder="Full name" maxLength={120} autoFocus={i === addForm.rows.length - 1 && !pasteOpen}
+                          className="h-9 px-3 bg-slate-50 border border-slate-200/90 rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10" />
+                        <input type="email" value={r.email} onChange={(e) => setRow(i, { email: e.target.value })} placeholder="Email address" maxLength={200}
+                          className={`h-9 px-3 bg-slate-50 border rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10 ${emailBad ? 'border-rose-300 bg-rose-50/50' : 'border-slate-200/90'}`} />
+                      </div>
+                      <button type="button" aria-label="Remove row" disabled={addForm.rows.length === 1}
+                        onClick={() => setAddForm((f) => ({ ...f, rows: f.rows.filter((_, j) => j !== i) }))}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-400 flex-shrink-0">
+                        <HiOutlineX className="w-4 h-4" />
+                      </button>
+                    </div>
+                  );
+                })}
+                <button type="button" onClick={() => setAddForm((f) => ({ ...f, rows: [...f.rows, emptyRow()] }))} disabled={addForm.rows.length >= 50}
+                  className="ml-7 inline-flex items-center gap-1 text-[11px] font-bold text-slate-600 hover:text-slate-900 disabled:opacity-40">
+                  <HiOutlinePlusCircle className="w-4 h-4" /> Add another
+                </button>
+              </div>
+
+              {(isAdmin || groups.length > 1) && (
+                <Select value={addForm.airline_id} onValueChange={(v) => setAddForm((f) => ({ ...f, airline_id: v }))}>
+                  <SelectTrigger className="h-9 px-3 text-xs font-medium text-slate-800 bg-slate-50 border border-slate-200/90 rounded-xl">
+                    <SelectValue placeholder="Airline / department (or no airline)" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-72">
+                    {isAdmin && <SelectItem value="none" className="text-xs font-semibold">No airline (individual)</SelectItem>}
+                    {[...groups].filter((g) => !g.airline.is_none).sort((a, b) => groupName(a.airline).localeCompare(groupName(b.airline))).map(({ airline }) => (
+                      <SelectItem key={airline._id} value={String(airline._id)} className="text-xs font-medium">
+                        {groupName(airline)}{airline.is_department ? ' · department' : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {[
+                  [true, 'Keep permanently', 'Saved to the participant list for future exams and certificates.'],
+                  [false, 'Only for this exam', 'Not added to the participant list — used for this exam only.'],
+                ].map(([keep, title, help]) => (
+                  <button key={title} type="button" onClick={() => setAddForm((f) => ({ ...f, keep }))}
+                    className={`text-left rounded-xl border px-3 py-2.5 transition-colors ${addForm.keep === keep ? 'border-slate-900 bg-slate-900/[0.03] ring-1 ring-slate-900' : 'border-slate-200 hover:bg-slate-50'}`}>
+                    <span className="flex items-center gap-2 text-xs font-bold text-slate-900">
+                      <span className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${addForm.keep === keep ? 'border-slate-900' : 'border-slate-300'}`}>
+                        {addForm.keep === keep && <span className="w-1.5 h-1.5 rounded-full bg-slate-900" />}
+                      </span>
+                      {title}
+                    </span>
+                    <span className="block mt-1 pl-[22px] text-[11px] leading-snug text-slate-500">{help}</span>
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center justify-end gap-2">
+                <Button type="button" variant="ghost" onClick={() => { setAddOpen(false); setAddForm(emptyAdd); setPasteOpen(false); }} className="rounded-xl text-xs font-bold h-8">Cancel</Button>
+                <Button type="submit" disabled={adding} className="rounded-xl text-xs font-bold h-8 bg-slate-900 hover:bg-slate-800 text-white">
+                  {adding ? 'Adding…' : (() => { const n = addForm.rows.filter((r) => r.name.trim() || r.email.trim()).length; return n > 1 ? `Add ${n} & select` : 'Add & select'; })()}
+                </Button>
+              </div>
+            </form>
+          )}
           {loading ? (
             <div className="flex flex-col items-center justify-center py-12 gap-2 text-slate-400">
               <div className="w-6 h-6 border-2 border-slate-300 border-t-slate-900 rounded-full animate-spin" />
@@ -325,6 +488,13 @@ function SendInviteModal({ exam, onClose, onSent }) {
                                   </div>
                                 </div>
                                 <div className="flex items-center justify-end gap-1.5 flex-wrap ml-auto">
+                                  {p.temporary && (
+                                    <span className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full text-[10px] font-bold border bg-violet-50 text-violet-700 border-violet-200" title="Added for this exam only — not in the participant list">
+                                      This exam only
+                                      <button type="button" onClick={(e) => { e.stopPropagation(); keepPermanently(p); }}
+                                        className="px-1.5 rounded-full bg-white border border-violet-200 hover:bg-violet-100">Keep</button>
+                                    </span>
+                                  )}
                                   {inv?.expires_at && (
                                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
                                       new Date(inv.expires_at) < new Date()

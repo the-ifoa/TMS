@@ -172,6 +172,9 @@ exports.listParticipants = async (req, res) => {
     if (training_type) filter.training_type = training_type;
     if (company) filter.company = company;
 
+    // People added "only for this exam" from an Assign dialog never show here.
+    filter.temporary = { $ne: true };
+
     const paging = parsePaging(req.query);
     let query = Participant.find(filter).sort({ created_at: -1 });
     if (paging) query = query.skip(paging.skip).limit(paging.limit);
@@ -253,7 +256,7 @@ exports.listByAirline = async (req, res) => {
       if (!deptNamesByParent.has(key)) deptNamesByParent.set(key, new Set());
       [d.department_name, d.name].filter(Boolean).forEach((n) => deptNamesByParent.get(key).add(normName(n)));
     });
-    const participantDocs = (await Participant.find({}).sort({ created_at: -1 }))
+    const participantDocs = (await Participant.find({ temporary: { $ne: true } }).sort({ created_at: -1 }))
       .filter((p) => !p.submitted_by || !deptIdSet.has(String(p.submitted_by)));
 
     // Attach DHL ST-001 extra-cert status — lives in its own collection, so

@@ -218,7 +218,7 @@ export const updateDgrForm  = (id, data)    => api.put(`/dgr/${id}`, data);
 export const deleteDgrForm  = (id)          => api.delete(`/dgr/${id}`);
 
 // ── Exam System ───────────────────────────────────────────────────────────────
-export const getExamAirlines  = ()         => api.get('/exams/airlines');        // admin: airlines + students
+export const getExamAirlines  = (params = {}) => api.get('/exams/airlines', { params }); // admin: airlines + students
 export const listExams        = (params = {}) => api.get('/exams', { params });
 export const getExam          = (id)       => api.get(`/exams/${id}`);
 export const getExamSummary   = (id)       => api.get(`/exams/${id}`, { params: { summary: 1 } });
@@ -275,6 +275,9 @@ export const updateParticipantEmail = (id, email) => api.patch(`/participants/${
 
 // ── Exam invites (email a passwordless take-link to participants) ─────────────
 export const sendExamInvites       = (examId, participantIds, opts = {}) => api.post(`/exams/${examId}/send-invites`, { participant_ids: participantIds, ...opts });
+// Add a candidate on the go from the Assign dialog ({ name, email, airline_id, keep }).
+export const addQuickParticipant   = (examId, body) => api.post(`/exams/${examId}/quick-participant`, body);
+export const keepQuickParticipant  = (examId, participantId) => api.patch(`/exams/${examId}/quick-participant/${participantId}`, { keep: true });
 // Reassign — grants one fresh attempt on top of max_attempts and re-emails the
 // same link, so a participant who already finished can take the exam again.
 export const reassignExamInvites   = (examId, participantIds, opts = {}) => api.post(`/exams/${examId}/send-invites`, { participant_ids: participantIds, reassign: true, ...opts });

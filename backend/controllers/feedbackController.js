@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const mongoose = require('mongoose');
 const Exam = require('../models/Exam');
 const Participant = require('../models/Participant');
 const TrainingFeedback = require('../models/TrainingFeedback');
@@ -40,18 +41,18 @@ function summarise(submitted) {
   return { submitted: submitted.length, statements };
 }
 
-// ─── GET /feedback/exams/:examId — status per assigned participant + responses ──
+// ─── GET /feedback/exams/:examId — status per participant + responses ───────────
 exports.getExamFeedback = async (req, res) => {
   try {
     const exam = await loadIfoaExam(req, res);
     if (!exam) return;
 
-    const ids = exam.assignments.map((a) => a.participant_id);
-    const [people, feedback] = await Promise.all([
-      Participant.find({ _id: { $in: ids } })
-        .select('participant_name first_name last_name email company airline_name').lean(),
-      TrainingFeedback.find({ exam_id: exam._id }).sort({ submitted_at: -1, sent_at: -1 }),
-    ]);
+    // Everyone assigned to the exam, plus anyone else the form was sent to.
+    const feedback = await TrainingFeedback.find({ exam_id: exam._id }).sort({ submitted_at: -1, sent_at: -1 });
+    const assigned = new Set(exam.assignments.map((a) => String(a.participant_id)));
+    const ids = [...new Set([...assigned, ...feedback.map((f) => String(f.participant_id))])];
+    const people = await Participant.find({ _id: { $in: ids } })
+      .select('participant_name first_name last_name email company airline_name').lean();
     const fbByPid = Object.fromEntries(feedback.map((f) => [String(f.participant_id), f]));
 
     const rows = people
@@ -62,6 +63,7 @@ exports.getExamFeedback = async (req, res) => {
           name: personName(p),
           email: p.email || '',
           airline: p.airline_name || p.company || '',
+          assigned: assigned.has(String(p._id)),
           feedback: f ? {
             id: String(f._id), status: f.status, sent_at: f.sent_at, sent_count: f.sent_count,
             opened_at: f.opened_at, submitted_at: f.submitted_at,
@@ -84,21 +86,22 @@ exports.getExamFeedback = async (req, res) => {
   }
 };
 
-// Emails the form to the given participants (each must be assigned to the
-// exam). Re-sending reuses the participant's existing link; anyone who already
-// submitted is skipped. Returns { sent, skipped }.
+// Emails the form to the given participants — anyone on the IFOA admin's list,
+// not only those assigned to the exam (the training may include people who
+// never sat it). Re-sending reuses the participant's existing link; anyone who
+// already submitted is skipped. Returns { sent, skipped }.
 async function sendForms(exam, requested, adminId) {
-  const assigned = new Set(exam.assignments.map((a) => String(a.participant_id)));
-  const ids = requested.filter((id) => assigned.has(id));
+  const ids = [...new Set(requested.filter((id) => mongoose.isValidObjectId(id)))];
   const participants = await Participant.find({ _id: { $in: ids } })
     .select('participant_name first_name last_name email company airline_name');
   const existing = await TrainingFeedback.find({ exam_id: exam._id, participant_id: { $in: ids } });
   const fbByPid = Object.fromEntries(existing.map((f) => [String(f.participant_id), f]));
 
   const sent = [];
+  const found = new Set(participants.map((p) => String(p._id)));
   const skipped = requested
-    .filter((id) => !assigned.has(id))
-    .map((id) => ({ id, reason: 'not assigned to this exam' }));
+    .filter((id) => !found.has(String(id)))
+    .map((id) => ({ id, reason: 'participant not found' }));
 
   for (const p of participants) {
     const name = personName(p);

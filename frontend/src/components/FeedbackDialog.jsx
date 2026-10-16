@@ -4,7 +4,7 @@ import {
   HiOutlinePaperAirplane, HiOutlineSearch, HiOutlineDownload, HiOutlineChevronRight, HiOutlineChatAlt2,
   HiOutlineArrowLeft, HiOutlineTrash, HiOutlineRefresh,
 } from 'react-icons/hi';
-import { getExamFeedback, sendExamFeedback, deleteExamFeedback } from '../api';
+import { getExamFeedback, sendExamFeedback, deleteExamFeedback, getExamAirlines } from '../api';
 import { useConfirm } from '@/hooks/use-confirm';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -183,6 +183,9 @@ function ResponseDetail({ r, form, onBack, onDelete, busy, canManage }) {
   );
 }
 
+// Airline / department display name in the grouped participant list.
+const groupName = (a) => (a.is_department ? (a.department_name || a.name || a.airlineName) : a.airlineName) || '';
+
 export default function FeedbackDialog({ exam, onClose }) {
   const { can } = useAuth();
   const canSend = can('exams.assign');
@@ -195,6 +198,10 @@ export default function FeedbackDialog({ exam, onClose }) {
   const [openId, setOpenId] = useState(null);  // response shown in detail
   const [busy, setBusy] = useState(false);
   const { confirm, ConfirmDialog } = useConfirm();
+  // Send tab: every participant, grouped by airline (same list as Assign).
+  const [groups, setGroups] = useState(null);
+  const [scope, setScope] = useState('all'); // all | assigned
+  const [expanded, setExpanded] = useState(() => new Set());
 
   // onClose is a new function on every parent render — keep it out of load's deps.
   const onCloseRef = useRef(onClose);
@@ -206,34 +213,66 @@ export default function FeedbackDialog({ exam, onClose }) {
   }, [exam.id]);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (!canSend) return;
+    getExamAirlines({ exam_id: exam.id })
+      .then((res) => setGroups(res.data))
+      .catch(() => setGroups([]));
+  }, [exam.id, canSend]);
 
   const eligible = (r) => !!r.email && r.feedback?.status !== 'submitted';
   const q = search.trim().toLowerCase();
-  const rows = useMemo(() => (data?.rows || []).filter((r) => !q
-    || r.name.toLowerCase().includes(q) || r.email.toLowerCase().includes(q) || r.airline.toLowerCase().includes(q)), [data, q]);
-  const selectable = rows.filter(eligible);
+
+  // Feedback status + "assigned" per participant, from the feedback endpoint.
+  const statusByPid = useMemo(() => Object.fromEntries((data?.rows || []).map((r) => [r.participant_id, r])), [data]);
+  const allGroups = useMemo(() => (groups || []).map((g) => ({
+    id: String(g.airline._id),
+    name: groupName(g.airline),
+    people: g.participants.map((p) => {
+      const st = statusByPid[String(p._id)];
+      return {
+        participant_id: String(p._id), name: p.participant_name || 'Unnamed', email: p.email || '',
+        airline: groupName(g.airline), feedback: st?.feedback || null, assigned: !!st?.assigned,
+      };
+    }),
+  })), [groups, statusByPid]);
+  const assignedCount = allGroups.reduce((t, g) => t + g.people.filter((p) => p.assigned).length, 0);
+  const totalCount = allGroups.reduce((t, g) => t + g.people.length, 0);
+  const shownGroups = useMemo(() => allGroups
+    .map((g) => ({
+      ...g,
+      people: g.people.filter((p) => (scope === 'all' || p.assigned)
+        && (!q || g.name.toLowerCase().includes(q) || p.name.toLowerCase().includes(q) || p.email.toLowerCase().includes(q))),
+    }))
+    .filter((g) => g.people.length > 0), [allGroups, scope, q]);
+  const selectable = shownGroups.flatMap((g) => g.people.filter(eligible));
   const allSelected = selectable.length > 0 && selectable.every((r) => selected.has(r.participant_id));
 
   const toggle = (id) => setSelected((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
-  const toggleAll = () => setSelected((s) => {
-    const n = new Set(s);
-    selectable.forEach((r) => (allSelected ? n.delete(r.participant_id) : n.add(r.participant_id)));
-    return n;
-  });
+  const setMany = (ids, on) => setSelected((s) => { const n = new Set(s); ids.forEach((id) => (on ? n.add(id) : n.delete(id))); return n; });
+  const toggleAll = () => setMany(selectable.map((r) => r.participant_id), !allSelected);
+  const toggleExpand = (id) => setExpanded((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
+  // Sent in batches so a big "select all" doesn't hit one long request.
   const send = async () => {
     setSending(true);
+    const ids = [...selected];
+    let sentTotal = 0;
+    const skippedAll = [];
     try {
-      const res = await sendExamFeedback(exam.id, [...selected]);
-      const { sent, skipped } = res.data;
-      if (sent.length) toast.success(`Feedback form sent to ${sent.length} participant${sent.length === 1 ? '' : 's'}.`);
-      if (skipped.length) toast.error(`${skipped.length} not sent: ${skipped.map((s) => `${s.name || 'participant'} (${s.reason})`).join(', ')}`, { duration: 8000 });
+      for (let i = 0; i < ids.length; i += 100) {
+        const res = await sendExamFeedback(exam.id, ids.slice(i, i + 100));
+        sentTotal += res.data.sent.length;
+        skippedAll.push(...res.data.skipped);
+      }
+      if (sentTotal) toast.success(`Feedback form sent to ${sentTotal} participant${sentTotal === 1 ? '' : 's'}.`);
+      if (skippedAll.length) toast.error(`${skippedAll.length} not sent: ${skippedAll.slice(0, 5).map((s) => `${s.name || 'participant'} (${s.reason})`).join(', ')}${skippedAll.length > 5 ? ', …' : ''}`, { duration: 8000 });
       setSelected(new Set());
-      load();
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to send feedback forms');
+      toast.error(err.response?.data?.error || `Failed to send feedback forms${sentTotal ? ` (${sentTotal} were sent before the error)` : ''}.`);
     } finally {
       setSending(false);
+      load();
     }
   };
 
@@ -308,53 +347,93 @@ export default function FeedbackDialog({ exam, onClose }) {
             </div>
           ) : tab === 'send' ? (
             <>
-              <div className="flex-shrink-0 px-6 py-3 border-b border-slate-100 flex items-center gap-3">
-                <Checkbox checked={allSelected} onCheckedChange={toggleAll} disabled={selectable.length === 0} aria-label="Select all" />
-                <div className="relative flex-1">
-                  <HiOutlineSearch className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, email or airline"
-                    className="w-full h-9 pl-9 pr-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-slate-200" />
+              <div className="flex-shrink-0 px-6 py-3 border-b border-slate-100 space-y-2.5">
+                <div className="flex items-center gap-3">
+                  <Checkbox checked={allSelected} onCheckedChange={toggleAll} disabled={selectable.length === 0} aria-label="Select everyone shown" />
+                  <div className="relative flex-1">
+                    <HiOutlineSearch className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, email or airline"
+                      className="w-full h-9 pl-9 pr-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-slate-200" />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div className="inline-flex p-0.5 rounded-lg bg-slate-100 border border-slate-200/70">
+                    {[['all', `All participants (${totalCount})`], ['assigned', `Assigned to this exam (${assignedCount})`]].map(([key, label]) => (
+                      <button key={key} type="button" onClick={() => setScope(key)}
+                        className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-colors ${scope === key ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-500 hover:text-slate-700'}`}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <span className="text-[11px] font-medium text-slate-400">
+                    {selectable.length ? `${selectable.length} can be sent the form` : ''}
+                  </span>
                 </div>
               </div>
-              <div className="flex-1 overflow-y-auto px-3 py-1">
-                {data.rows.length === 0 ? (
-                  <p className="py-12 text-center text-sm text-slate-400">Nobody is assigned to this exam yet. Assign participants first, then send them the feedback form.</p>
-                ) : rows.length === 0 ? (
-                  <p className="py-12 text-center text-sm text-slate-400">No matches.</p>
-                ) : (
-                  <ul className="divide-y divide-slate-100">
-                    {rows.map((r) => {
-                      const badge = statusBadge(r.feedback);
-                      const ok = eligible(r);
-                      return (
-                        <li key={r.participant_id}>
-                          <label className={`flex items-center gap-3 px-3 py-2.5 ${ok ? 'cursor-pointer hover:bg-slate-50' : ''}`}>
-                            <Checkbox checked={selected.has(r.participant_id)} onCheckedChange={() => toggle(r.participant_id)} disabled={!ok} />
-                            <div className="min-w-0 flex-1">
-                              <p className="text-sm font-semibold text-slate-800 truncate">{r.name}</p>
-                              <p className="text-[11px] text-slate-400 truncate">{[r.airline, r.email || 'no email on file'].filter(Boolean).join(' · ')}</p>
-                            </div>
-                            <span className={`flex-shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${badge.cls}`}>{badge.label}</span>
-                            {r.feedback && r.feedback.status !== 'submitted' && r.email && (
-                              <button type="button" disabled={busy}
-                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); resendOne(r); }}
-                                className="flex-shrink-0 inline-flex items-center gap-1 text-[11px] font-bold text-slate-500 hover:text-slate-900 disabled:opacity-50">
-                                <HiOutlineRefresh className="w-3.5 h-3.5" /> Resend
-                              </button>
-                            )}
-                            {r.feedback?.status === 'submitted' && (
-                              <button type="button"
-                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); setTab('responses'); setView('people'); setOpenId(r.feedback.id); }}
-                                className="flex-shrink-0 inline-flex items-center gap-0.5 text-[11px] font-bold text-slate-500 hover:text-slate-900">
-                                View <HiOutlineChevronRight className="w-3.5 h-3.5" />
-                              </button>
-                            )}
-                          </label>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
+              <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2 bg-slate-50/60">
+                {groups == null ? (
+                  <div className="py-12 flex justify-center"><div className="w-6 h-6 border-2 border-slate-200 border-t-slate-700 rounded-full animate-spin" /></div>
+                ) : shownGroups.length === 0 ? (
+                  <p className="py-12 text-center text-sm text-slate-400">
+                    {q ? 'No matches.' : scope === 'assigned' ? 'Nobody is assigned to this exam yet. Switch to "All participants" to send the form to anyone.' : 'No participants yet.'}
+                  </p>
+                ) : shownGroups.map((g) => {
+                  const sendable = g.people.filter(eligible);
+                  const groupAll = sendable.length > 0 && sendable.every((p) => selected.has(p.participant_id));
+                  const open = !!q || expanded.has(g.id);
+                  return (
+                    <div key={g.id} className="bg-white rounded-xl border border-slate-200/80 overflow-hidden">
+                      <div onClick={() => toggleExpand(g.id)} className="px-3.5 py-2.5 hover:bg-slate-50 cursor-pointer flex items-center gap-3 select-none">
+                        <HiOutlineChevronRight className={`w-4 h-4 text-slate-400 flex-shrink-0 transition-transform ${open ? 'rotate-90 text-slate-600' : ''}`} />
+                        <span className="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-bold flex items-center justify-center flex-shrink-0">
+                          {g.name.split(/\s+/).filter(Boolean).map((w) => w[0]).join('').slice(0, 2).toUpperCase() || '?'}
+                        </span>
+                        <span className="text-sm font-bold text-slate-800 truncate">{g.name}</span>
+                        <span className="px-2 py-0.5 rounded-full bg-slate-200/80 text-slate-700 text-[11px] font-bold">{g.people.length}</span>
+                        {sendable.length > 0 && (
+                          <button type="button" onClick={(e) => { e.stopPropagation(); setMany(sendable.map((p) => p.participant_id), !groupAll); }}
+                            className={`ml-auto px-2.5 py-1 rounded-lg text-xs font-semibold border ${groupAll ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'}`}>
+                            {groupAll ? 'Selected' : `Select ${sendable.length}`}
+                          </button>
+                        )}
+                      </div>
+                      {open && (
+                        <ul className="border-t border-slate-100 divide-y divide-slate-100">
+                          {g.people.map((r) => {
+                            const badge = statusBadge(r.feedback);
+                            const ok = eligible(r);
+                            return (
+                              <li key={r.participant_id}>
+                                <label className={`flex items-center gap-3 px-3.5 py-2.5 ${ok ? 'cursor-pointer hover:bg-slate-50' : ''}`}>
+                                  <Checkbox checked={selected.has(r.participant_id)} onCheckedChange={() => toggle(r.participant_id)} disabled={!ok} />
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-sm font-semibold text-slate-800 truncate">{r.name}</p>
+                                    <p className="text-[11px] text-slate-400 truncate">{r.email || 'no email on file'}{r.assigned ? ' · assigned to this exam' : ''}</p>
+                                  </div>
+                                  <span className={`flex-shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${badge.cls}`}>{badge.label}</span>
+                                  {r.feedback && r.feedback.status !== 'submitted' && r.email && (
+                                    <button type="button" disabled={busy}
+                                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); resendOne(r); }}
+                                      className="flex-shrink-0 inline-flex items-center gap-1 text-[11px] font-bold text-slate-500 hover:text-slate-900 disabled:opacity-50">
+                                      <HiOutlineRefresh className="w-3.5 h-3.5" /> Resend
+                                    </button>
+                                  )}
+                                  {r.feedback?.status === 'submitted' && (
+                                    <button type="button"
+                                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); setTab('responses'); setView('people'); setOpenId(r.feedback.id); }}
+                                      className="flex-shrink-0 inline-flex items-center gap-0.5 text-[11px] font-bold text-slate-500 hover:text-slate-900">
+                                      View <HiOutlineChevronRight className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                </label>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
               <DialogFooter className="flex-shrink-0 px-6 py-3.5 border-t border-slate-100 flex flex-row items-center justify-between sm:justify-between gap-3">
                 <span className="text-xs text-slate-500">{sentCount} sent · {summary.submitted} submitted</span>

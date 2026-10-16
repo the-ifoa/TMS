@@ -23,6 +23,11 @@ const participantSchema = new mongoose.Schema(
     },
     airline_name: { type: String, default: null },
     submitted_by: { type: mongoose.Schema.Types.ObjectId, ref: 'Airline', default: null },
+    // Added on the fly from an exam's Assign dialog "only for this exam": kept
+    // (their invite and results need the record) but hidden from participant
+    // lists, dashboards and certificates. "Keep permanently" clears it.
+    temporary:         { type: Boolean, default: false },
+    temporary_exam_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Exam', default: null },
     locked:       { type: Boolean, default: true },
     training_date: { type: String, default: null },
     end_date:      { type: String, default: null },

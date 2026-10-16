@@ -5,6 +5,17 @@ const { gradeAnswer, computeAttemptScore, buildFeedback, buildProgress } = requi
 // before an expired attempt is closed on the candidate's next visit).
 const LATE_SAVE_GRACE_MS = 2 * 60000;
 
+// Unbiased Fisher-Yates shuffle (sort(() => Math.random() - 0.5) favours
+// keeping questions near their original position). Returns a new array.
+function shuffle(list) {
+  const out = [...list];
+  for (let i = out.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
 // Returns an error message if the exam isn't open for new attempts right now,
 // or null if it's fine to start one. Only gates NEW attempts — an attempt
 // already in progress is unaffected by closes_at passing mid-way.
@@ -19,12 +30,32 @@ function schedulingError(exam, { ignoreClose = false } = {}) {
   return null;
 }
 
+// Keeps one answer per snapshot question. The old load-and-save autosave let
+// parallel requests push the same question twice; grading only the first copy
+// left the other ungraded (an extra "total" row) and scored the question 0.
+// Every later save updated the first copy, so it wins unless another is locked.
+// Returns true when entries were removed.
+function dedupeAnswers(attempt) {
+  const inSnapshot = new Set(attempt.questions_snapshot.map((q) => String(q._id)));
+  const keep = new Map();
+  attempt.answers.forEach((a) => {
+    const id = String(a.question_id);
+    if (!inSnapshot.has(id)) return;
+    const cur = keep.get(id);
+    if (!cur || (a.locked && !cur.locked)) keep.set(id, a);
+  });
+  if (keep.size === attempt.answers.length) return false;
+  attempt.answers = [...keep.values()];
+  return true;
+}
+
 // Grades every question in an in-progress attempt and mutates it into its
 // final submitted/pending_review state. Shared by the authed submit/violation
 // endpoints (routes/exams.js) and the public token flow (routes/publicExam.js).
 // Does not save() — the caller persists.
 async function finalizeAttempt(attempt) {
   let hasPending = false;
+  dedupeAnswers(attempt);
 
   attempt.questions_snapshot.forEach((question) => {
     const answerEntry = attempt.answers.find((a) => String(a.question_id) === String(question._id));
@@ -82,6 +113,35 @@ async function closeOpenAttempts(exam, participantId, { onlyExpired = false } = 
     }
     const res = await submitAttemptOnce(attempt._id);
     if (res && !res.alreadySubmitted) closed += 1;
+  }
+  return closed;
+}
+
+// Submits every attempt whose time ran out while nobody was on the page
+// (browser closed, candidate never came back). Otherwise it stays "in
+// progress" forever: never graded, invite never completed. Run periodically
+// from server.js. Returns how many were closed.
+async function closeExpiredAttempts() {
+  const ExamAttempt = require('../models/ExamAttempt');
+  const ExamInvite = require('../models/ExamInvite');
+  const open = await ExamAttempt.find({ status: 'in_progress' }).select('_id exam_id started_at').lean();
+  if (!open.length) return 0;
+  const exams = await Exam.find({ _id: { $in: [...new Set(open.map((a) => String(a.exam_id)))] } })
+    .select('duration_minutes').lean();
+  const minutes = new Map(exams.map((e) => [String(e._id), e.duration_minutes]));
+  const now = Date.now();
+  let closed = 0;
+  for (const a of open) {
+    const mins = minutes.get(String(a.exam_id));
+    if (!(mins > 0)) continue; // untimed exam: nothing expires
+    if (now < new Date(a.started_at).getTime() + mins * 60000 + LATE_SAVE_GRACE_MS) continue;
+    const res = await submitAttemptOnce(a._id);
+    if (!res || res.alreadySubmitted) continue;
+    await ExamInvite.updateMany(
+      { attempt_id: a._id, status: { $ne: 'completed' } },
+      { $set: { status: 'completed', completed_at: new Date() } }
+    );
+    closed += 1;
   }
   return closed;
 }
@@ -151,6 +211,10 @@ function attemptDeadlinePassed(attempt, exam) {
 // a crafted key can't write anywhere else in the document.
 const TIMER_KEY = /^(q_[a-f0-9]{24}|s_[a-f0-9]{0,400})$/;
 
+// Largest stored response (JSON characters) — far above any real answer, even
+// a long essay, but stops one request from bloating the attempt document.
+const MAX_RESPONSE_CHARS = 200000;
+
 // Saves a batch of answers ([{ question_id, response }], last one per question
 // wins) plus optional timer readings ({ key: seconds }) with ONE bulkWrite.
 // `attempt` is a lean doc loaded with SAVE_PROJECTION and known to be in progress.
@@ -161,24 +225,35 @@ async function saveAnswers(attempt, answers = [], timers = null) {
   const typeById = new Map((attempt.questions_snapshot || []).map((q) => [String(q._id), q.type]));
   const locked = new Set((attempt.answers || []).filter((a) => a.locked).map((a) => String(a.question_id)));
 
+  // Last one per question wins within the batch — by edit time when given.
   const latest = new Map();
   for (const a of Array.isArray(answers) ? answers : []) {
-    if (a && a.question_id != null) latest.set(String(a.question_id), a.response === undefined ? null : a.response);
+    if (!a || a.question_id == null) continue;
+    const at = Number.isFinite(Number(a.edited_at)) && a.edited_at != null ? Number(a.edited_at) : null;
+    const prev = latest.get(String(a.question_id));
+    if (prev && prev.at != null && at != null && at < prev.at) continue;
+    latest.set(String(a.question_id), { response: a.response === undefined ? null : a.response, at });
   }
 
   const ops = [];
   const skipped = [];
   let saved = 0;
   const open = { _id: attempt._id, status: 'in_progress' };
-  for (const [qid, response] of latest) {
+  for (const [qid, { response, at }] of latest) {
     const type = typeById.get(qid);
     if (!type) { skipped.push({ question_id: qid, reason: 'not_found' }); continue; }
     if (locked.has(qid)) { skipped.push({ question_id: qid, reason: 'locked' }); continue; }
+    if (JSON.stringify(response ?? null).length > MAX_RESPONSE_CHARS) { skipped.push({ question_id: qid, reason: 'too_large' }); continue; }
     const oid = new mongoose.Types.ObjectId(qid);
     // Create the entry if the question has none yet…
-    ops.push({ updateOne: { filter: { ...open, 'answers.question_id': { $ne: oid } }, update: { $push: { answers: { question_id: oid, type, response } } } } });
-    // …then set the response (no-op on an answer locked by "Check answer").
-    ops.push({ updateOne: { filter: { ...open, answers: { $elemMatch: { question_id: oid, locked: { $ne: true } } } }, update: { $set: { 'answers.$.response': response } } } });
+    ops.push({ updateOne: { filter: { ...open, 'answers.question_id': { $ne: oid } }, update: { $push: { answers: { question_id: oid, type, response, edited_at: at } } } } });
+    // …then set the response (no-op on an answer locked by "Check answer", or
+    // when the stored answer is a newer edit than this one).
+    const match = { question_id: oid, locked: { $ne: true } };
+    if (at != null) match.$or = [{ edited_at: null }, { edited_at: { $lt: at } }];
+    const set = { 'answers.$.response': response };
+    if (at != null) set['answers.$.edited_at'] = at;
+    ops.push({ updateOne: { filter: { ...open, answers: { $elemMatch: match } }, update: { $set: set } } });
     saved += 1;
   }
 
@@ -201,19 +276,24 @@ async function saveAnswers(attempt, answers = [], timers = null) {
 // winner. Returns { attempt, alreadySubmitted } — or null if it doesn't exist.
 async function submitAttemptOnce(attemptId, extra = {}) {
   const ExamAttempt = require('../models/ExamAttempt');
-  for (let tries = 0; tries < 4; tries += 1) {
+  for (let tries = 0; tries < 6; tries += 1) {
     const attempt = await ExamAttempt.findById(attemptId);
     if (!attempt) return null;
     if (attempt.status !== 'in_progress') return { attempt, alreadySubmitted: true };
     Object.assign(attempt, extra);
     await finalizeAttempt(attempt);
-    attempt.$where = { status: 'in_progress' }; // lose cleanly if another request finalized it meanwhile
+    // Lose cleanly if another request finalized it meanwhile — or if an
+    // autosave landed after the load (every write bumps updated_at): saving
+    // would grade the older response, or drop the new answer when the answers
+    // array is rewritten whole. Reload and grade what is stored now.
+    attempt.$where = { status: 'in_progress', updated_at: attempt.updated_at };
     try {
       await attempt.save();
       return { attempt, alreadySubmitted: false };
     } catch (err) {
       if (err.name !== 'VersionError' && err.name !== 'DocumentNotFoundError') throw err;
       // Someone else wrote first — reload and re-check.
+      await new Promise((r) => setTimeout(r, 50 * (tries + 1)));
     }
   }
   throw new Error('Could not submit the attempt, please try again.');
@@ -248,6 +328,7 @@ async function recordViolation(attemptId, type, maxViolations) {
 async function checkAnswerAtomic(attemptId, questionId, response) {
   const ExamAttempt = require('../models/ExamAttempt');
   const mongoose = require('mongoose');
+  if (!mongoose.isValidObjectId(String(questionId ?? ''))) return null;
   const attempt = await ExamAttempt.findById(attemptId);
   if (!attempt) return null;
   const question = attempt.questions_snapshot.id(questionId);
@@ -268,7 +349,7 @@ async function checkAnswerAtomic(attemptId, questionId, response) {
 }
 
 module.exports = {
-  finalizeAttempt, schedulingError, closeOpenAttempts, checkAnswer, lockedFeedback,
+  finalizeAttempt, dedupeAnswers, schedulingError, closeOpenAttempts, closeExpiredAttempts, checkAnswer, lockedFeedback,
   attemptCycleFilter, SAVE_PROJECTION, attemptDeadlinePassed, saveAnswers,
-  submitAttemptOnce, recordViolation, checkAnswerAtomic,
+  submitAttemptOnce, recordViolation, checkAnswerAtomic, shuffle,
 };

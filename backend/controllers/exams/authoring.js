@@ -4,7 +4,8 @@ const ExamAttempt = require('../../models/ExamAttempt');
 const Airline = require('../../models/Airline');
 const Participant = require('../../models/Participant');
 const { examImageUpload, deleteCloudinaryImage } = require('../../services/upload');
-const { sanitizeQuestionForTaking } = require('../../services/examGrading');
+const { sanitizeQuestionForTaking, answerKeyProblems } = require('../../services/examGrading');
+const { remarkExam, changedKeyQuestionIds, changedContentQuestionIds, refreshInProgressContent } = require('../../services/examRemark');
 const { isAdmin, authoringAirline, ownsExam, canAssignExam, assignableOwnerIds, canManageExam, deleteExamImages } = require('./access');
 
 // ─── POST /exams/questions/upload-image — admin uploads a question image ────────
@@ -207,11 +208,57 @@ exports.updateExam = async (req, res) => {
     if (!canManageExam(req, exam)) return res.status(403).json({ error: 'Access denied.' });
 
     const { created_by, owner_airline, _id, id, assignments, status, ...updatable } = req.body;
+    const questionsBefore = exam.questions.map((q) => q.toObject());
     Object.assign(exam, updatable);
+    // Every auto-graded question needs its answer key: without one every
+    // candidate is silently marked wrong on it.
+    const problems = answerKeyProblems(exam.questions);
+    if (problems.length) return res.status(400).json({ error: `Fix the answer key before saving: ${problems.join(' ')}`, problems });
     await exam.save();
-    res.json(exam.toJSON());
+
+    // Changes go live (see services/examRemark.js): a changed answer key or
+    // points re-marks every attempt; changed wording reaches candidates who are
+    // taking the exam now.
+    const json = exam.toJSON();
+    const changed = changedKeyQuestionIds(questionsBefore, exam.questions);
+    const reworded = changedContentQuestionIds(questionsBefore, exam.questions);
+    try {
+      if (changed.length) {
+        const { rows, ...summary } = await remarkExam(exam, { questionIds: changed, apply: true });
+        json.remark = summary;
+      }
+      if (reworded.length) await refreshInProgressContent(exam, reworded);
+    } catch (err) {
+      console.error('PUT /exams/:id re-mark error:', err.message);
+      json.remark = { error: 'The exam was saved, but updating existing results failed. Run backend/regrade-attempts.js for this exam.' };
+    }
+    res.json(json);
   } catch (err) {
     console.error('PUT /exams/:id error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// ─── POST /exams/:id/remark-preview — what saving these edits would re-mark ──
+// Body: the same payload as PUT /exams/:id. Nothing is saved.
+exports.remarkPreview = async (req, res) => {
+  try {
+    const exam = await Exam.findById(req.params.id);
+    if (!exam) return res.status(404).json({ error: 'Exam not found.' });
+    if (!canManageExam(req, exam)) return res.status(403).json({ error: 'Access denied.' });
+    const { created_by, owner_airline, _id, id, assignments, status, ...updatable } = req.body;
+    const questionsBefore = exam.questions.map((q) => q.toObject());
+    Object.assign(exam, updatable);
+    const problems = answerKeyProblems(exam.questions);
+    if (problems.length) return res.status(400).json({ error: `Fix the answer key before saving: ${problems.join(' ')}`, problems });
+    const changed = changedKeyQuestionIds(questionsBefore, exam.questions);
+    if (!changed.length) return res.json({ changed_questions: [] });
+    const { rows, ...summary } = await remarkExam(exam, { questionIds: changed, apply: false });
+    const numberOf = new Map(exam.questions.map((q, i) => [String(q._id), i + 1]));
+    summary.needs_hand_check = summary.needs_hand_check.map((h) => ({ ...h, question: h.question_id ? numberOf.get(h.question_id) : null }));
+    res.json({ changed_questions: changed.map((qid) => numberOf.get(qid)), ...summary });
+  } catch (err) {
+    console.error('POST /exams/:id/remark-preview error:', err.message);
     res.status(500).json({ error: err.message });
   }
 };
@@ -223,6 +270,8 @@ exports.publishExam = async (req, res) => {
     if (!exam) return res.status(404).json({ error: 'Exam not found.' });
     if (!canManageExam(req, exam)) return res.status(403).json({ error: 'Access denied.' });
     if (exam.questions.length === 0) return res.status(400).json({ error: 'Add at least one question before publishing.' });
+    const problems = answerKeyProblems(exam.questions);
+    if (problems.length) return res.status(400).json({ error: `Fix the answer key before publishing: ${problems.join(' ')}`, problems });
 
     exam.status = 'published';
     await exam.save();

@@ -8,7 +8,7 @@ import {
   HiOutlineCollection, HiOutlineSearch, HiOutlineCalendar, HiOutlineClock,
   HiOutlineDuplicate, HiOutlineChevronUp, HiOutlineChevronDown,
 } from 'react-icons/hi';
-import { getExam, createExam, updateExam, listQuestionBankGroups, listQuestionBankItems, getQuestionBankTopics, createQuestionBankItem } from '../api';
+import { getExam, createExam, updateExam, previewExamRemark, listQuestionBankGroups, listQuestionBankItems, getQuestionBankTopics, createQuestionBankItem } from '../api';
 import { useAuth } from '../context/AuthContext';
 import QuestionEditor, { QUESTION_TYPES, createEmptyQuestion } from '../components/examQuestions/QuestionEditor';
 import { TagBadges, DIFFICULTY_BADGE } from './QuestionBank';
@@ -60,6 +60,26 @@ function findQuestionProblem(questions) {
     }
   }
   return null;
+}
+
+// Confirmation text for saving answer-key changes on an exam that already has
+// results (see backend services/examRemark.js — saving re-marks them live).
+function remarkMessage(p) {
+  const qs = p.changed_questions.join(', ');
+  const lines = [`Changing the answer key or points of question${p.changed_questions.length > 1 ? 's' : ''} ${qs} re-marks existing results right away.`, ''];
+  lines.push(`• ${p.results_changed} finished result${p.results_changed === 1 ? '' : 's'} will change score.`);
+  if (p.pass_changes.length) {
+    lines.push(`• Pass/fail changes: ${p.pass_changes.map((c) => `${c.name} (${c.from ? 'passed' : 'not passed'} → ${c.to ? 'passed' : 'not passed'})`).join(', ')}.`);
+  } else {
+    lines.push('• Nobody\'s pass/fail changes.');
+  }
+  if (p.in_progress_updated) lines.push(`• ${p.in_progress_updated} candidate${p.in_progress_updated === 1 ? ' is' : 's are'} taking the exam now: their submit uses the new key.`);
+  if (p.needs_hand_check.length) {
+    lines.push('', 'Not re-marked automatically — check by hand:');
+    p.needs_hand_check.slice(0, 8).forEach((h) => lines.push(`• ${h.name}${h.question ? ` — question ${h.question}` : ''}: ${h.reason}`));
+    if (p.needs_hand_check.length > 8) lines.push(`• …and ${p.needs_hand_check.length - 8} more`);
+  }
+  return lines.join('\n');
 }
 
 const emptyExam = () => ({
@@ -849,9 +869,17 @@ export default function ExamBuilder() {
         toast.success('Exam created.');
         navigate(`${base}/${res.data.id}/edit`, { replace: true });
       } else {
+        // Answer key changed on an exam with results → show what gets re-marked first.
+        const { data: preview } = await previewExamRemark(id, payload);
+        const affects = preview.changed_questions?.length &&
+          (preview.results_changed || preview.in_progress_updated || preview.needs_hand_check?.length);
+        if (affects && !(await confirm(remarkMessage(preview), { title: 'Re-mark existing results?', confirmLabel: 'Save & re-mark' }))) return;
         const res = await updateExam(id, payload);
-        setExam(res.data);
-        toast.success('Exam saved.');
+        const { remark, ...saved } = res.data;
+        setExam(saved);
+        if (remark?.error) toast.error(remark.error, { duration: 10000 });
+        else if (remark?.results_changed) toast.success(`Exam saved. ${remark.results_changed} result${remark.results_changed === 1 ? '' : 's'} re-marked.`);
+        else toast.success('Exam saved.');
       }
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to save exam.');

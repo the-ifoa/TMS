@@ -269,9 +269,11 @@ function ResultSummary({ token, attemptId }) {
   if (loading) return <Centered><div className="w-6 h-6 border-2 border-slate-300 border-t-slate-900 rounded-full animate-spin" /></Centered>;
 
   const pending = attempt && attempt.status === 'pending_review';
-  const total = attempt?.answers?.length || 0;
-  const correct = attempt?.answers?.filter((a) => a.is_correct === true).length || 0;
-  const incorrect = attempt?.answers?.filter((a) => a.is_correct === false).length || 0;
+  // Survey (likert) questions are never scored, so they don't count as questions here.
+  const scoredAnswers = (attempt?.answers || []).filter((a) => a.type !== 'likert');
+  const total = scoredAnswers.length;
+  const correct = scoredAnswers.filter((a) => a.is_correct === true).length;
+  const incorrect = scoredAnswers.filter((a) => a.is_correct === false).length;
 
   const rawPct = attempt?.percentage != null
     ? Number(attempt.percentage)

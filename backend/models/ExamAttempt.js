@@ -12,6 +12,10 @@ const answerSchema = new mongoose.Schema(
     question_id:          { type: mongoose.Schema.Types.ObjectId, required: true },
     type:                  { type: String, required: true },
     response:              { type: mongoose.Schema.Types.Mixed, default: null },
+    // When the candidate made this answer (client ms, monotonic per attempt).
+    // A save carrying an older edit than the stored one is ignored, so a slow
+    // request arriving after a newer one can't revert the answer.
+    edited_at:             { type: Number, default: null },
     is_correct:            { type: Boolean, default: null },
     points_awarded:        { type: Number, default: null },
     needs_manual_grading:  { type: Boolean, default: false },

@@ -4,7 +4,7 @@ const Participant = require('../../models/Participant');
 const { sanitizeQuestionForTaking, computeAttemptScore } = require('../../services/examGrading');
 const {
   schedulingError, lockedFeedback, SAVE_PROJECTION, attemptDeadlinePassed, saveAnswers,
-  submitAttemptOnce, recordViolation, checkAnswerAtomic,
+  submitAttemptOnce, recordViolation, checkAnswerAtomic, dedupeAnswers, shuffle,
 } = require('../../services/examAttemptFlow');
 
 // Loads an attempt (optionally projected + lean) and checks the caller may write to it.
@@ -70,7 +70,7 @@ exports.getAttempt = async (req, res) => {
     const json = attempt.toJSON();
     if (attempt.status === 'in_progress') {
       json.questions_snapshot = attempt.questions_snapshot.map(sanitizeQuestionForTaking);
-      json.answers = json.answers.map((a) => ({ question_id: a.question_id, type: a.type, response: a.response }));
+      json.answers = json.answers.map((a) => ({ question_id: a.question_id, type: a.type, response: a.response, edited_at: a.edited_at ?? null }));
       json.server_now = new Date(); // lets the client correct for a skewed clock
       // Instant-feedback exams: restore the already-checked (locked) answers on resume.
       const examDoc = await Exam.findById(attempt.exam_id).select('instant_feedback');
@@ -228,15 +228,16 @@ exports.saveAttemptAnswers = async (req, res) => {
 // have instant feedback switched on.
 exports.checkAttemptAnswer = async (req, res) => {
   try {
-    const attempt = await loadWritableAttempt(req, res, 'status exam_id airline_id');
+    const attempt = await loadWritableAttempt(req, res, 'status exam_id airline_id started_at');
     if (!attempt) return;
     if (attempt.status !== 'in_progress') {
       return res.status(400).json({ error: 'This attempt has already been submitted.', submitted: true });
     }
-    const exam = await Exam.findById(attempt.exam_id).select('instant_feedback').lean();
+    const exam = await Exam.findById(attempt.exam_id).select('instant_feedback duration_minutes').lean();
     if (!exam || !exam.instant_feedback) {
       return res.status(400).json({ error: 'Instant feedback is not enabled for this exam.' });
     }
+    if (attemptDeadlinePassed(attempt, exam)) return res.status(400).json({ error: 'Time is up for this exam.', time_up: true });
     const { question_id, response } = req.body;
     const result = await checkAnswerAtomic(attempt._id, question_id, response);
     if (!result) return res.status(404).json({ error: 'Question not found in this attempt.' });
@@ -305,6 +306,7 @@ exports.gradeAttempt = async (req, res) => {
     }
 
     const { answers = [], total_override } = req.body; // [{ question_id, points_awarded, feedback }]
+    dedupeAnswers(attempt); // a leftover duplicate would stay "needs grading" forever
     answers.forEach(({ question_id, points_awarded, feedback }) => {
       const entry = attempt.answers.find((a) => String(a.question_id) === String(question_id));
       if (!entry) return;
@@ -380,7 +382,7 @@ exports.startAttempt = async (req, res) => {
     if (open) {
       const json = open.toJSON();
       json.questions_snapshot = open.questions_snapshot.map(sanitizeQuestionForTaking);
-      json.answers = json.answers.map((a) => ({ question_id: a.question_id, type: a.type, response: a.response }));
+      json.answers = json.answers.map((a) => ({ question_id: a.question_id, type: a.type, response: a.response, edited_at: a.edited_at ?? null }));
       json.server_now = new Date();
       return res.json(json);
     }
@@ -394,19 +396,27 @@ exports.startAttempt = async (req, res) => {
     if (!participant) return res.status(404).json({ error: 'Participant not found.' });
 
     let questions = exam.questions.map((q) => q.toObject());
-    if (exam.shuffle_questions) questions = questions.sort(() => Math.random() - 0.5);
+    if (exam.shuffle_questions) questions = shuffle(questions);
 
-    const attempt = await ExamAttempt.create({
-      exam_id: exam._id,
-      exam_title_snapshot: exam.title,
-      participant_id: participant._id,
-      participant_name: participant.participant_name,
-      airline_id: assignment.airline_id,
-      attempt_number: priorAttempts + 1,
-      questions_snapshot: questions,
-      status: 'in_progress',
-      started_at: new Date(),
-    });
+    let attempt;
+    try {
+      attempt = await ExamAttempt.create({
+        exam_id: exam._id,
+        exam_title_snapshot: exam.title,
+        participant_id: participant._id,
+        participant_name: participant.participant_name,
+        airline_id: assignment.airline_id,
+        attempt_number: priorAttempts + 1,
+        questions_snapshot: questions,
+        status: 'in_progress',
+        started_at: new Date(),
+      });
+    } catch (err) {
+      // Two Start clicks raced: the unique open-attempt index let one through.
+      if (err.code !== 11000) throw err;
+      attempt = await ExamAttempt.findOne({ exam_id: exam._id, participant_id, status: 'in_progress' });
+      if (!attempt) throw err;
+    }
 
     const json = attempt.toJSON();
     json.questions_snapshot = attempt.questions_snapshot.map(sanitizeQuestionForTaking);

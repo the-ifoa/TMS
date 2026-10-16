@@ -63,9 +63,11 @@ export default function ExamResultView() {
   const isPending = attempt.status === 'pending_review';
 
   // Stats calculations
-  const totalQuestions = attempt.answers?.length || 0;
-  const correctCount = attempt.answers?.filter((a) => a.is_correct === true).length || 0;
-  const incorrectCount = attempt.answers?.filter((a) => a.is_correct === false).length || 0;
+  // Survey (likert) questions are never scored, so they don't count as questions here.
+  const scoredAnswers = (attempt.answers || []).filter((a) => a.type !== 'likert');
+  const totalQuestions = scoredAnswers.length;
+  const correctCount = scoredAnswers.filter((a) => a.is_correct === true).length;
+  const incorrectCount = scoredAnswers.filter((a) => a.is_correct === false).length;
   const pendingCount = Math.max(0, totalQuestions - (correctCount + incorrectCount));
   const scoredCount = correctCount + incorrectCount;
   const accuracyPct = scoredCount > 0 ? Math.round((correctCount / scoredCount) * 1000) / 10 : 0;

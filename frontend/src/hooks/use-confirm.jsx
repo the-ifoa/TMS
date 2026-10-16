@@ -36,7 +36,7 @@ export function useConfirm() {
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>{state.title}</AlertDialogTitle>
-          <AlertDialogDescription>{state.message}</AlertDialogDescription>
+          <AlertDialogDescription className="whitespace-pre-line">{state.message}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel onClick={() => settle(false)}>{state.cancelLabel}</AlertDialogCancel>

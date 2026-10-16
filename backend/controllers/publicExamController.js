@@ -4,7 +4,7 @@ const ExamInvite = require('../models/ExamInvite');
 const { sanitizeQuestionForTaking } = require('../services/examGrading');
 const {
   schedulingError, closeOpenAttempts, lockedFeedback, attemptCycleFilter, SAVE_PROJECTION,
-  attemptDeadlinePassed, saveAnswers, submitAttemptOnce, recordViolation, checkAnswerAtomic,
+  attemptDeadlinePassed, saveAnswers, submitAttemptOnce, recordViolation, checkAnswerAtomic, shuffle,
 } = require('../services/examAttemptFlow');
 
 // Exam fields each kind of request needs. Autosaves arrive every few seconds
@@ -90,7 +90,15 @@ async function candidateSummary(exam, invite) {
   let all = await load();
   if (exam.duration_minutes > 0 && all.some((a) => a.status === 'in_progress')) {
     const closed = await closeOpenAttempts(exam, invite.participant_id, { onlyExpired: true });
-    if (closed) all = await load();
+    if (closed) {
+      all = await load();
+      // The attempt this invite was running is finished now; a new Start moves
+      // the invite back to in_progress.
+      await ExamInvite.updateOne(
+        { _id: invite._id, status: 'in_progress' },
+        { $set: { status: 'completed', completed_at: new Date() } }
+      );
+    }
   }
   const since = invite.cycle_started_at ? new Date(invite.cycle_started_at).getTime() : null;
   const cycle = since == null ? all : all.filter((a) => new Date(a.created_at).getTime() >= since);
@@ -220,7 +228,7 @@ exports.startAttempt = async (req, res) => {
         return res.status(400).json({ error: 'You have used all your attempts for this exam.' });
       }
       let questions = exam.questions.map((q) => q.toObject());
-      if (exam.shuffle_questions) questions = questions.sort(() => Math.random() - 0.5);
+      if (exam.shuffle_questions) questions = shuffle(questions);
 
       try {
         attempt = await ExamAttempt.create({
@@ -248,7 +256,7 @@ exports.startAttempt = async (req, res) => {
     const json = attempt.toJSON();
     json.questions_snapshot = attempt.questions_snapshot.map(sanitizeQuestionForTaking);
     json.server_now = new Date(); // lets the client correct for a skewed clock
-    json.answers = (json.answers || []).map((a) => ({ question_id: a.question_id, type: a.type, response: a.response }));
+    json.answers = (json.answers || []).map((a) => ({ question_id: a.question_id, type: a.type, response: a.response, edited_at: a.edited_at ?? null }));
     // Instant-feedback exams: restore the already-checked (locked) answers on resume.
     if (exam.instant_feedback) Object.assign(json, lockedFeedback(attempt));
     res.json({
@@ -260,6 +268,9 @@ exports.startAttempt = async (req, res) => {
         max_violations: exam.max_violations,
         allow_tab_switch: !!exam.allow_tab_switch,
         instant_feedback: !!exam.instant_feedback,
+        // Per-section time budgets (the runner enforces them; without this the
+        // emailed-link flow silently ignored them).
+        section_settings: (exam.section_settings || []).map((s) => ({ name: s.name, time_minutes: s.time_minutes })),
       },
       // How often the window has been closed on this attempt, and what is left.
       window_closes: {
@@ -321,10 +332,11 @@ exports.saveAnswers = async (req, res) => {
 // explanation and the running score. Only for exams with instant feedback on.
 exports.checkAnswer = async (req, res) => {
   try {
-    const attempt = await loadOwnAttempt(req, res, 'status exam_id participant_id');
+    const attempt = await loadOwnAttempt(req, res, 'status exam_id participant_id started_at');
     if (!attempt) return;
     if (attempt.status !== 'in_progress') return res.status(400).json({ error: 'This attempt is already submitted.', submitted: true });
     if (!req.exam.instant_feedback) return res.status(400).json({ error: 'Instant feedback is not enabled for this exam.' });
+    if (attemptDeadlinePassed(attempt, req.exam)) return res.status(400).json({ error: 'Time is up for this exam.', time_up: true });
 
     const { question_id, response } = req.body;
     const result = await checkAnswerAtomic(attempt._id, question_id, response);

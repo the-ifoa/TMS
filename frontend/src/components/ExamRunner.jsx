@@ -107,6 +107,12 @@ export default function ExamRunner({ attempt, exam, onSaveAnswers, onCheckAnswer
   const finishedRef = useRef(false);
   // Answers changed since the last flush, keyed by question id (latest response wins).
   const pendingRef = useRef(new Map());
+  // Edit time of each question's latest answer (ms, strictly increasing — also
+  // across reloads, seeded from the server). Sent with every save so the server
+  // ignores a slow request that arrives after a newer one, and a failed save is
+  // only retried if no newer answer has been queued or sent since.
+  const editAtRef = useRef(new Map());
+  const lastEditAtRef = useRef(Math.max(0, ...(attempt.answers || []).map((a) => Number(a.edited_at) || 0)));
   const flushPromiseRef = useRef(null);
   // Timer readings changed since the last flush (sent with the next autosave).
   const timersDirtyRef = useRef(false);
@@ -206,11 +212,11 @@ export default function ExamRunner({ attempt, exam, onSaveAnswers, onCheckAnswer
     if (flushPromiseRef.current && !keepalive) return flushPromiseRef.current;
     const timers = timersDirtyRef.current ? timerSnapshot() : null;
     if (pendingRef.current.size === 0 && !timers) return flushPromiseRef.current || Promise.resolve(true);
-    const batch = [...pendingRef.current.entries()];
+    const batch = [...pendingRef.current.entries()].map(([qId, response]) => [qId, response, editAtRef.current.get(qId)]);
     pendingRef.current.clear();
     timersDirtyRef.current = false;
     if (batch.length) setSaveState('saving');
-    const payload = { answers: batch.map(([question_id, response]) => ({ question_id, response })) };
+    const payload = { answers: batch.map(([question_id, response, edited_at]) => ({ question_id, response, edited_at })) };
     if (timers) payload.timers = timers;
     const p = Promise.resolve()
       .then(() => onSaveAnswersRef.current?.(payload, { keepalive }))
@@ -220,7 +226,9 @@ export default function ExamRunner({ attempt, exam, onSaveAnswers, onCheckAnswer
           onSaveRefusedRef.current?.(err.response.data || {}, status);
           return true; // retrying can't help
         }
-        batch.forEach(([qId, response]) => { if (!pendingRef.current.has(qId)) pendingRef.current.set(qId, response); });
+        batch.forEach(([qId, response, version]) => {
+          if (!pendingRef.current.has(qId) && editAtRef.current.get(qId) === version) pendingRef.current.set(qId, response);
+        });
         if (timers) timersDirtyRef.current = true;
         return false;
       })
@@ -436,7 +444,13 @@ export default function ExamRunner({ attempt, exam, onSaveAnswers, onCheckAnswer
 
   useEffect(() => {
     if (secondsLeft == null) return;
-    if (secondsLeft <= 0) { handleSubmit(); return; }
+    if (secondsLeft <= 0) {
+      // Time's up: submit, and keep retrying while the connection is down —
+      // a single failed attempt would otherwise leave the candidate at 0:00.
+      handleSubmit();
+      const retry = setInterval(() => { if (!finishedRef.current) handleSubmit(); }, 5000);
+      return () => clearInterval(retry);
+    }
     const t = setInterval(() => setSecondsLeft((s) => s - 1), 1000);
     return () => clearInterval(t);
   }, [secondsLeft, handleSubmit]);
@@ -572,6 +586,9 @@ export default function ExamRunner({ attempt, exam, onSaveAnswers, onCheckAnswer
     if (currentQuestionLocked) { toast.error("Time's up for this question — answer is locked."); return; }
     if (currentSectionLocked) { toast.error("Time's up for this section — answers are locked."); return; }
     setAnswers((prev) => ({ ...prev, [q._id]: response }));
+    const at = Math.max(Date.now(), lastEditAtRef.current + 1);
+    lastEditAtRef.current = at;
+    editAtRef.current.set(q._id, at);
     pendingRef.current.set(q._id, response);
   };
   const toggleMarked = (qId) => setMarked((prev) => { const n = new Set(prev); n.has(qId) ? n.delete(qId) : n.add(qId); return n; });

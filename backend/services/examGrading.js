@@ -18,7 +18,7 @@ function gradeChoice(question, response) {
 
 function gradeMultiResponse(question, response) {
   const correctIds = (question.options || []).filter((o) => o.is_correct).map((o) => String(o._id));
-  const chosen = Array.isArray(response) ? response.map(String) : [];
+  const chosen = Array.isArray(response) ? [...new Set(response.map(String))] : [];
   const isCorrect =
     correctIds.length > 0 &&
     correctIds.length === chosen.length &&
@@ -27,8 +27,10 @@ function gradeMultiResponse(question, response) {
 }
 
 function gradeNumeric(question, response) {
-  const num = Number(response);
-  if (Number.isNaN(num) || question.numeric_answer == null) {
+  // Number(null) and Number('') are 0 — a blank answer must not match a key of 0.
+  const blank = response == null || (typeof response === 'string' && response.trim() === '');
+  const num = blank ? NaN : Number(response);
+  if (!Number.isFinite(num) || question.numeric_answer == null) {
     return { is_correct: false, points_awarded: 0 };
   }
   const tolerance = question.numeric_tolerance || 0;
@@ -50,7 +52,7 @@ function gradeMatching(question, response) {
   const chosen = Array.isArray(response) ? response : [];
   const isCorrect =
     pairs.length > 0 &&
-    pairs.every((pair, idx) => normalize(chosen[idx]) === normalize(pair.right));
+    pairs.every((pair, idx) => normalize(chosen[idx]) !== '' && normalize(chosen[idx]) === normalize(pair.right));
   return { is_correct: isCorrect, points_awarded: isCorrect ? question.points : 0 };
 }
 
@@ -59,7 +61,8 @@ function gradeFillBlank(question, response) {
   const filled = Array.isArray(response) ? response : [];
   const allCorrect =
     answerSets.length > 0 &&
-    answerSets.every((accepted, idx) => (accepted || []).some((a) => normalize(a) === normalize(filled[idx])));
+    answerSets.every((accepted, idx) => normalize(filled[idx]) !== '' &&
+      (accepted || []).some((a) => normalize(a) === normalize(filled[idx])));
   return { is_correct: allCorrect, points_awarded: allCorrect ? question.points : 0 };
 }
 
@@ -67,7 +70,7 @@ function gradeDragWords(question, response) {
   const answers = question.drag_words_answers || [];
   const filled = Array.isArray(response) ? response : [];
   const allCorrect =
-    answers.length > 0 && answers.every((word, idx) => normalize(word) === normalize(filled[idx]));
+    answers.length > 0 && answers.every((word, idx) => normalize(filled[idx]) !== '' && normalize(word) === normalize(filled[idx]));
   return { is_correct: allCorrect, points_awarded: allCorrect ? question.points : 0 };
 }
 
@@ -291,7 +294,9 @@ function sanitizeQuestionForTaking(question) {
 // weighting isn't fully configured, so existing exams are unaffected.
 function computeAttemptScore(questionsSnapshot, answers, sectionSettings = []) {
   const bySection = {}; // section name -> { score, max }
-  const answerByQ = Object.fromEntries((answers || []).map((a) => [String(a.question_id), a]));
+  // First entry per question wins — the same one finalizeAttempt grades.
+  const answerByQ = {};
+  (answers || []).forEach((a) => { answerByQ[String(a.question_id)] ??= a; });
 
   questionsSnapshot.forEach((q) => {
     if (UNSCORED_TYPES.has(q.type)) return;
@@ -320,7 +325,8 @@ function computeAttemptScore(questionsSnapshot, answers, sectionSettings = []) {
   let totalWeight = 0;
   sectionNames.forEach((name) => {
     const { score: s, max: m } = bySection[name];
-    const pct = m > 0 ? (s / m) * 100 : 0;
+    if (!(m > 0)) return; // nothing to score in this section — don't count it as 0%
+    const pct = (s / m) * 100;
     const w = weightByName[name];
     weightedSum += pct * w;
     totalWeight += w;
@@ -329,7 +335,68 @@ function computeAttemptScore(questionsSnapshot, answers, sectionSettings = []) {
   return { score, maxScore, percentage };
 }
 
+// Auto-graded questions that can never be answered correctly because their
+// answer key is missing (e.g. an MCQ with no option ticked as correct) —
+// every candidate would silently be marked wrong. Returns human-readable
+// problems, one per broken question; empty when the exam is gradable.
+function answerKeyProblems(questions) {
+  const problems = [];
+  (questions || []).forEach((q, idx) => {
+    const label = `Question ${idx + 1}${q.section ? ` (${q.section})` : ''}`;
+    const filled = (s) => String(s ?? '').trim() !== '';
+    let issue = null;
+    switch (q.type) {
+      case 'mcq':
+      case 'true_false':
+      case 'select_list':
+      case 'multi_response':
+        if (!(q.options || []).some((o) => o.is_correct)) issue = 'no option is marked as correct';
+        break;
+      case 'numeric':
+        if (q.numeric_answer == null || Number.isNaN(Number(q.numeric_answer))) issue = 'no correct number is set';
+        break;
+      case 'sequence':
+        if ((q.sequence_items || []).length < 2) issue = 'needs at least two items to order';
+        break;
+      case 'matching': {
+        const pairs = q.matching_pairs || [];
+        if (!pairs.length) issue = 'has no matching pairs';
+        else if (pairs.some((p) => !filled(p.left) || !filled(p.right))) issue = 'a matching pair is missing a side';
+        break;
+      }
+      case 'fill_blank': {
+        const sets = q.blanks_answers || [];
+        if (!sets.length || sets.some((set) => !(set || []).some(filled))) issue = 'a blank has no accepted answer';
+        break;
+      }
+      case 'drag_words': {
+        const words = q.drag_words_answers || [];
+        if (!words.length || words.some((w) => !filled(w))) issue = 'a blank has no correct word';
+        break;
+      }
+      case 'hotspot':
+        if (!(q.hotspot_regions || []).some((r) => r.is_correct)) issue = 'no region is marked as correct';
+        break;
+      case 'drag_drop': {
+        const items = q.dragdrop_items || [];
+        const targets = (q.dragdrop_targets || []).length;
+        const labels = items.map((it) => it.label);
+        if (!items.length) issue = 'has no items to drag';
+        else if (items.some((it) => !(it.correct_target_index >= 0 && it.correct_target_index < targets))) issue = 'an item has no valid target';
+        else if (new Set(labels).size !== labels.length) issue = 'two items share the same label';
+        break;
+      }
+      default:
+        break; // essay / short_answer (manual) and likert (unscored) need no key
+    }
+    if (!issue && !UNSCORED_TYPES.has(q.type) && !(Number(q.points) >= 0)) issue = 'points must be 0 or more';
+    if (issue) problems.push(`${label}: ${issue}.`);
+  });
+  return problems;
+}
+
 module.exports = {
+  answerKeyProblems,
   gradeAnswer,
   sanitizeQuestionForTaking,
   computeAttemptScore,

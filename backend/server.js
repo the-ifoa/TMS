@@ -122,6 +122,15 @@ initDB()
     // in scripts/migrate-cert-counters.js.)
     const { syncHighWater } = require('./models/CertCounter');
     await syncHighWater();
+
+    // Grade + submit timed exam attempts abandoned after their deadline.
+    // Idempotent (submitAttemptOnce), so several instances running it is safe.
+    const { closeExpiredAttempts } = require('./services/examAttemptFlow');
+    const sweep = () => closeExpiredAttempts()
+      .then((n) => { if (n) console.log(`⏱️  Closed ${n} expired exam attempt(s)`); })
+      .catch((err) => console.error('closeExpiredAttempts error:', err.message));
+    sweep();
+    setInterval(sweep, 5 * 60 * 1000).unref();
   })
   .catch((err) => {
     dbConnected = false;

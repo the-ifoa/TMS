@@ -97,6 +97,7 @@ router.get('/:id', examsController.getExam);
 
 // ─── PUT /exams/:id — update meta + questions (admin) ─────────────────────────
 router.put('/:id', requirePermission('exams.author'), examsController.updateExam);
+router.post('/:id/remark-preview', requirePermission('exams.author'), examsController.remarkPreview);
 
 // ─── POST /exams/:id/publish — draft/archived -> published (admin) ───────────
 router.post('/:id/publish', requirePermission('exams.author'), examsController.publishExam);

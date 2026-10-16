@@ -224,6 +224,7 @@ export const getExam          = (id)       => api.get(`/exams/${id}`);
 export const getExamSummary   = (id)       => api.get(`/exams/${id}`, { params: { summary: 1 } });
 export const createExam       = (data)     => api.post('/exams', data);
 export const updateExam       = (id, data) => api.put(`/exams/${id}`, data);
+export const previewExamRemark = (id, data) => api.post(`/exams/${id}/remark-preview`, data);
 export const deleteExam       = (id)       => api.delete(`/exams/${id}`);
 export const publishExam      = (id)       => api.post(`/exams/${id}/publish`);
 export const assignExam       = (id, participantIds) => api.post(`/exams/${id}/assign`, { participant_ids: participantIds });

@@ -933,37 +933,6 @@ export default function ExamBuilder() {
             </Button>
           </div>
 
-          {/* Center: Section filter tabs inline */}
-          {(orderedSectionNames.length > 0 || ungroupedItems.length > 0) && (
-            <div className="flex items-center justify-center gap-1.5 overflow-x-auto scrollbar-none py-0.5 max-w-xs sm:max-w-md md:max-w-lg lg:max-w-xl mx-auto">
-              {orderedSectionNames.map((name) => (
-                <button
-                  key={name}
-                  type="button"
-                  onClick={() => setActiveSectionFilter(name)}
-                  className={`flex-shrink-0 px-3.5 py-1 rounded-full text-xs font-bold border transition-colors ${(activeSectionFilter === name || (activeSectionFilter === null && name === orderedSectionNames[0]))
-                    ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
-                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                    }`}
-                >
-                  {name} ({groupFor(name).length})
-                </button>
-              ))}
-              {ungroupedItems.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setActiveSectionFilter('')}
-                  className={`flex-shrink-0 px-3.5 py-1 rounded-full text-xs font-bold border transition-colors ${activeSectionFilter === ''
-                    ? 'bg-slate-800 text-white border-slate-800'
-                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                    }`}
-                >
-                  Ungrouped ({ungroupedItems.length})
-                </button>
-              )}
-            </div>
-          )}
-
           {/* Right: Question Count & Save Button */}
           <div className="flex items-center gap-3 flex-shrink-0">
             <span className="text-xs font-semibold text-slate-500 hidden md:inline">
@@ -989,6 +958,37 @@ export default function ExamBuilder() {
             </Button>
           </div>
         </div>
+        {/* Section filter: own row, full width, scrolls sideways (no scrollbar) */}
+          {(orderedSectionNames.length > 0 || ungroupedItems.length > 0) && (
+            <div className="w-full max-w-7xl mx-auto mt-2 flex items-center gap-1.5 overflow-x-auto py-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {orderedSectionNames.map((name) => (
+                <button
+                  key={name}
+                  type="button"
+                  ref={(el) => { if (el && (activeSectionFilter === name || (activeSectionFilter === null && name === orderedSectionNames[0]))) el.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }}
+                  onClick={() => setActiveSectionFilter(name)}
+                  className={`flex-shrink-0 px-3.5 py-1 rounded-full text-xs font-bold border transition-colors ${(activeSectionFilter === name || (activeSectionFilter === null && name === orderedSectionNames[0]))
+                    ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
+                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                    }`}
+                >
+                  {name} ({groupFor(name).length})
+                </button>
+              ))}
+              {ungroupedItems.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setActiveSectionFilter('')}
+                  className={`flex-shrink-0 px-3.5 py-1 rounded-full text-xs font-bold border transition-colors ${activeSectionFilter === ''
+                    ? 'bg-slate-800 text-white border-slate-800'
+                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                    }`}
+                >
+                  Ungrouped ({ungroupedItems.length})
+                </button>
+              )}
+            </div>
+          )}
       </div>
 
       {/* ── 2-Column Split Workspace Container ── */}

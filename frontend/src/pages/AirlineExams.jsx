@@ -8,6 +8,7 @@ import {
 } from 'react-icons/hi';
 import { getAirlineExamResults, deleteExamAttempt } from '../api';
 import { useConfirm } from '@/hooks/use-confirm';
+import ExamHelpButton from '../components/ExamHelpGuide';
 import { Card } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -132,9 +133,12 @@ export default function AirlineExams() {
               </p>
             </div>
           </div>
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100 text-[10px] sm:text-xs font-bold flex-shrink-0">
-            {totalCompleted} Completed
-          </span>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100 text-[10px] sm:text-xs font-bold">
+              {totalCompleted} Completed
+            </span>
+            <ExamHelpButton guide="airlineResults" />
+          </div>
         </div>
       </div>
 

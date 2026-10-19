@@ -50,3 +50,5 @@ __pycache__/
 *.pyd
 .Python
 .claude
+# Mailbox export from backend/scripts/fetch-inbox.js — private mail, never commit
+backend/inbox-export.json

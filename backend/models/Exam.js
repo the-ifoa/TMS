@@ -130,7 +130,19 @@ const examSchema = new mongoose.Schema(
     // owner_department names the department that manages it.
     owner_department: { type: mongoose.Schema.Types.ObjectId, ref: 'Airline', default: null },
 
+    // IFOA exams only: the airline this exam is being run for (a label for the
+    // admin — the exam list shows it and the Assign window opens on that
+    // airline). null = general, for any airline. Never set on airline-owned exams.
+    for_airline: { type: mongoose.Schema.Types.ObjectId, ref: 'Airline', default: null },
+
     status: { type: String, enum: ['draft', 'published', 'archived'], default: 'draft' },
+
+    // Soft delete. A deleted exam disappears from exam lists and can't be
+    // edited, assigned or taken, but the exam, its attempts, invites,
+    // certificates and question images all stay, so results, result views and
+    // dashboards keep working.
+    deleted_at: { type: Date, default: null },
+    deleted_by: { type: mongoose.Schema.Types.ObjectId, default: null },
 
     duration_minutes: { type: Number, default: 30 },
     pass_percentage:  { type: Number, default: 75 },

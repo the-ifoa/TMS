@@ -34,6 +34,7 @@ import { buildAttendanceMap, generateAttendancePdf } from '../utils/generateAtte
 import { useConfirm } from '@/hooks/use-confirm';
 import InternalCertificatesDialog, { useInternalCertCounts } from '../components/InternalCertificatesDialog';
 import ValidityBadge from '../components/ValidityBadge';
+import { RESULT_SORTS, useLatestExamResults, sortByLatestResult, LatestResultCell } from '../components/LatestExamResult';
 
 const TRAINING_TYPES = [
   { value: 'FDI', label: 'Flight Dispatch Initial',      color: 'bg-slate-100 text-slate-800 border-slate-300/80 font-bold' },
@@ -818,6 +819,8 @@ export default function Participants() {
   const [filterCompany, setFilterCompany] = useHistoryState('filterCompany', ''); // admin: filter table by airline/company
   const [filterOwner, setFilterOwner]     = useHistoryState('filterOwner', ''); // airline: filter by which account submitted (main vs a department)
   const [sortKey, setSortKey]       = useHistoryState('sortKey', 'submitted_desc');
+  // Admin table: sort by each participant's latest exam result (or name).
+  const [adminSort, setAdminSort]   = useHistoryState('adminSort', 'added');
   const [loading, setLoading]       = useState(true);
   const [openGroups, setOpenGroups] = useState({});
   const [openAttGroups, setOpenAttGroups] = useState({}); // admin attendance tab: airline accordion
@@ -953,9 +956,13 @@ export default function Participants() {
   }, [attendanceSheets]);
 
   // Admin: records shown in the table after the client-side airline filter
+  const latestResult = useLatestExamResults();
   const visibleRecords = useMemo(
-    () => (filterCompany ? records.filter(r => (r.company || '').trim() === filterCompany) : records),
-    [records, filterCompany],
+    () => sortByLatestResult(
+      filterCompany ? records.filter(r => (r.company || '').trim() === filterCompany) : records,
+      adminSort, latestResult,
+    ),
+    [records, filterCompany, adminSort, latestResult],
   );
 
   useEffect(() => {
@@ -1431,6 +1438,14 @@ export default function Participants() {
                   ...companyOptions.map(c => ({ value: c, label: c })),
                 ]}
               />
+              <SelectDropdown
+                icon={HiOutlineSelector}
+                value={adminSort}
+                onChange={setAdminSort}
+                align="right"
+                minWidth="200px"
+                options={RESULT_SORTS.map(([value, label]) => ({ value, label }))}
+              />
             </div>
             {(search || filterType || filterCompany) && (
               <div className="flex flex-wrap items-center justify-between gap-2 pt-1.5 border-t border-slate-100 text-xs">
@@ -1568,7 +1583,7 @@ export default function Participants() {
                 if (!(atTop && e.deltaY < 0) && !(atBottom && e.deltaY > 0)) e.stopPropagation();
               }}
             >
-              <table className="w-full min-w-[760px] border-collapse">
+              <table className="w-full min-w-[900px] border-collapse">
                 <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200/90 shadow-2xs">
                   <tr>
                     <th className="text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider px-5 py-3 bg-slate-50">Participant Name</th>
@@ -1576,6 +1591,7 @@ export default function Participants() {
                     <th className="text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider px-5 py-3 hidden md:table-cell bg-slate-50">Department</th>
                     <th className="text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider px-5 py-3 bg-slate-50">Training</th>
                     <th className="text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider px-5 py-3 hidden sm:table-cell bg-slate-50">Date</th>
+                    <th className="text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider px-5 py-3 bg-slate-50">Exam result</th>
                     <th className="text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider px-5 py-3 bg-slate-50">Email</th>
                     <th className="text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider px-5 py-3 bg-slate-50">Actions</th>
                   </tr>
@@ -1583,7 +1599,7 @@ export default function Participants() {
                 <tbody className="divide-y divide-slate-100">
                   {loading ? (
                     <tr>
-                      <td colSpan={7} className="px-6 py-12 text-center">
+                      <td colSpan={8} className="px-6 py-12 text-center">
                         <div className="flex items-center justify-center gap-2 text-slate-400">
                           <div className="w-5 h-5 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" />
                           <span className="text-sm font-medium">Loading records…</span>
@@ -1592,7 +1608,7 @@ export default function Participants() {
                     </tr>
                   ) : visibleRecords.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-6 py-12 text-center text-sm text-slate-400 font-medium">No records found.</td>
+                      <td colSpan={8} className="px-6 py-12 text-center text-sm text-slate-400 font-medium">No records found.</td>
                     </tr>
                   ) : (
                     visibleRecords.map(record => (
@@ -1610,6 +1626,7 @@ export default function Participants() {
                         <td className="px-5 py-2.5 text-sm text-slate-600 hidden md:table-cell">{record.department}</td>
                         <td className="px-5 py-2.5">{typeBadge(record.training_type)}</td>
                         <td className="px-5 py-2.5 text-sm text-slate-600 hidden sm:table-cell font-medium">{fmtDate(record.training_date)}</td>
+                        <td className="px-5 py-2.5"><LatestResultCell result={latestResult[String(record.id || record._id)]} /></td>
                         <td className="px-5 py-2.5" onClick={e => e.stopPropagation()}>
                           {bulkEmail ? (
                             <input

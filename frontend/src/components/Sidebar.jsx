@@ -16,6 +16,7 @@ import {
   HiOutlineLogout,
   HiOutlineCollection,
   HiOutlineUserGroup,
+  HiOutlineChatAlt2,
 } from 'react-icons/hi';
 import { FaPlaneDeparture } from 'react-icons/fa';
 import { useAuth } from '../context/AuthContext';
@@ -29,6 +30,7 @@ const adminNavigation = [
   { name: 'Attendance',   href: '/admin/attendance',       icon: HiOutlineClipboardCheck,      perm: 'attendance.view' },
   { name: 'Exam Results', href: '/admin/exam-results',     icon: HiOutlineClipboardList,       perm: ['examResults.view', 'examResults.manage'] },
   { name: 'Exam System',  href: '/admin/exams',            icon: HiOutlineAcademicCap,         perm: ['exams.author', 'exams.assign', 'exams.grade'] },
+  { name: 'Feedback',     href: '/admin/feedback',         icon: HiOutlineChatAlt2,            perm: ['exams.author', 'exams.assign', 'exams.grade'] },
   { name: 'DGR CBTA',     href: '/admin/dgr',              icon: HiOutlineShieldExclamation,   perm: ['dgr.view', 'dgr.manage'] },
   { name: 'Sub-users',    href: '/admin/team',             icon: HiOutlineUserGroup,           team: true },
   { name: 'Profile',      href: '/admin/profile',          icon: HiOutlineUserCircle },

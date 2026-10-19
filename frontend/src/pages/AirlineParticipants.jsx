@@ -5,9 +5,10 @@ import toast from 'react-hot-toast';
 import {
   HiOutlineUsers, HiOutlineSearch, HiOutlineMail, HiOutlineCheck, HiOutlineX,
   HiOutlineFilter, HiOutlinePresentationChartLine, HiOutlinePlus, HiOutlineCalendar,
-  HiOutlinePencil, HiOutlineTrash, HiOutlineDocumentText,
+  HiOutlinePencil, HiOutlineTrash, HiOutlineDocumentText, HiOutlineSortDescending,
 } from 'react-icons/hi';
 import { getParticipants, updateParticipantEmail, deleteParticipant } from '../api';
+import { RESULT_SORTS, useLatestExamResults, sortByLatestResult, LatestResultCell } from '../components/LatestExamResult';
 import { useAuth } from '../context/AuthContext';
 import { useConfirm } from '@/hooks/use-confirm';
 import InternalCertificatesDialog, { useInternalCertCounts } from '../components/InternalCertificatesDialog';
@@ -86,10 +87,10 @@ export default function AirlineParticipants() {
   const internalCertsOn = !!admin?.can_upload_internal_certs;
   const [certsFor, setCertsFor] = useState(null); // { participant, mode: 'upload' | 'view' }
   const [certCounts, , certExpiries, reloadCerts] = useInternalCertCounts(internalCertsOn);
-  // Row grid: participant · training · email · (certificates) · actions.
+  // Row grid: participant · training · exam result · email · (certificates) · actions.
   const COLS = internalCertsOn
-    ? 'lg:grid lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_14rem_8rem] lg:items-center lg:gap-4'
-    : 'lg:grid lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1.1fr)_minmax(0,1.1fr)_8rem] lg:items-center lg:gap-4';
+    ? 'lg:grid lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_14rem_8rem] lg:items-center lg:gap-4'
+    : 'lg:grid lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1.1fr)_8rem] lg:items-center lg:gap-4';
   // Row actions sit in one joined control: neutral icons, colour only on hover.
   const ACTION = 'h-8 w-8 inline-flex items-center justify-center text-slate-500 hover:bg-slate-50 hover:text-blue-600 transition-colors disabled:opacity-50';
   const [records, setRecords] = useState([]);
@@ -117,6 +118,8 @@ export default function AirlineParticipants() {
   const [search, setSearch] = useHistoryState('search', '');
   const [filterType, setFilterType] = useHistoryState('filterType', '');
   const [emailFilter, setEmailFilter] = useHistoryState('emailFilter', ''); // '' | 'with' | 'without'
+  const [sortKey, setSortKey] = useHistoryState('sortKey', 'added');
+  const latestResult = useLatestExamResults();
   const [bulkEmail, setBulkEmail] = useState(false);
   const [emailDrafts, setEmailDrafts] = useState({});
   const [savingEmails, setSavingEmails] = useState(false);
@@ -158,7 +161,7 @@ export default function AirlineParticipants() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return records.filter((r) => {
+    const list = records.filter((r) => {
       if (filterType && r.training_type !== filterType) return false;
       if (emailFilter === 'with' && !r.email) return false;
       if (emailFilter === 'without' && r.email) return false;
@@ -167,7 +170,8 @@ export default function AirlineParticipants() {
         || (r.email || '').toLowerCase().includes(q)
         || (r.department || '').toLowerCase().includes(q);
     });
-  }, [records, search, filterType, emailFilter]);
+    return sortByLatestResult(list, sortKey, latestResult);
+  }, [records, search, filterType, emailFilter, sortKey, latestResult]);
 
   const withEmail = records.filter((r) => r.email).length;
 
@@ -267,6 +271,18 @@ export default function AirlineParticipants() {
                 <SelectItem value="without">Missing Email</SelectItem>
               </SelectContent>
             </Select>
+
+            <Select value={sortKey} onValueChange={setSortKey}>
+              <SelectTrigger className="w-[170px] sm:w-44 h-9 text-xs bg-white rounded-lg flex-shrink-0">
+                <span className="flex items-center gap-1.5 min-w-0">
+                  <HiOutlineSortDescending className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                  <SelectValue />
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                {RESULT_SORTS.map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
             </div>
 
@@ -274,6 +290,7 @@ export default function AirlineParticipants() {
             <div className={`hidden ${COLS} px-4 sm:px-5 py-2 bg-slate-50/80 border-b border-slate-200/80 text-[10px] font-semibold uppercase tracking-wider text-slate-400`}>
               <span>Participant</span>
               <span>Training</span>
+              <span>Exam result</span>
               <span>Email</span>
               {internalCertsOn && <span>Certificates</span>}
               <span className="text-right">Actions</span>
@@ -308,6 +325,11 @@ export default function AirlineParticipants() {
                   <span className="text-[11px] text-slate-500 truncate">
                     {r.training_date ? `${fmtDate(r.training_date)}${r.end_date ? ` → ${fmtDate(r.end_date)}` : ''}` : 'No date'}
                   </span>
+                </div>
+
+                {/* Latest exam result */}
+                <div className="mt-2 lg:mt-0 pl-11 lg:pl-0 min-w-0">
+                  <LatestResultCell result={latestResult[id]} />
                 </div>
 
                 {/* Email */}

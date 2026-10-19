@@ -71,7 +71,7 @@ const examAttemptSchema = new mongoose.Schema(
     auto_submitted:  { type: Boolean, default: false },
     // Why it was force-submitted: too many lockdown violations, or the exam
     // window was closed and reopened more often than the exam allows.
-    auto_submit_reason: { type: String, enum: ['violations', 'window_closed', null], default: null },
+    auto_submit_reason: { type: String, enum: ['violations', 'window_closed', 'exam_deleted', null], default: null },
     // Each time the candidate came back to an attempt already in progress
     // (closed the window / refreshed, then resumed). Counted on the server.
     window_closes: [{ _id: false, at: { type: Date, default: Date.now } }],

@@ -45,6 +45,11 @@ const schemas = {
   feedbackSend: z.object({
     participant_ids: z.array(z.string().regex(/^[a-f0-9]{24}$/, 'invalid id')).min(1).max(500),
   }),
+  feedbackReportEmail: z.object({
+    to: z.array(z.string().trim().email('invalid email address')).min(1, 'Add at least one email address.').max(10, 'At most 10 recipients.'),
+    message: z.string().max(2000).optional().default(''),
+    pdf_base64: z.string().min(100).max(14_000_000), // ~10 MB PDF
+  }),
 };
 
 module.exports = { validateBody, schemas, z };

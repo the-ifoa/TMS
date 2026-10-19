@@ -30,6 +30,9 @@ router.use(authMiddleware, loadScope);
 // ─── GET /exams/airlines — admin only: airlines with participants, for assigning ──
 router.get('/airlines', examsController.listAirlines);
 
+// ─── GET /exams/airline-options — admin: airlines an exam can be "for" ─────────
+router.get('/airline-options', examsController.listAirlineOptions);
+
 // ─── GET /exams/airline-results — airline: their participants' invite + score status ──
 // Defined BEFORE `GET /exams/:id` so the literal path isn't captured as an :id.
 router.get('/airline-results', examsController.airlineResults);
@@ -44,6 +47,7 @@ router.get('/attempts', examsController.listAttempts);
 // Dashboard KPIs, downloadable report and result deletion — all BEFORE the
 // `/attempts/:attemptId` routes so the literal paths aren't captured as an id.
 router.get('/team-performance', examsController.teamPerformance);
+router.get('/latest-results', examsController.latestResults);
 router.get('/attempts/export', examsController.exportAttempts);
 router.post('/attempts/bulk-delete', requirePermission('exams.author'), examsController.bulkDeleteAttempts);
 router.delete('/attempts/:attemptId', requirePermission('exams.author'), examsController.deleteAttempt);

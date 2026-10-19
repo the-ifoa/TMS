@@ -13,6 +13,7 @@ import {
 import { FaPlaneDeparture } from 'react-icons/fa';
 import LogoAvatar from '../components/LogoAvatar';
 import FeedbackDialog from '../components/FeedbackDialog';
+import ExamHelpButton from '../components/ExamHelpGuide';
 import { listExams, deleteExam, publishExam, getExamAirlines, updateExam, sendExamInvites, reassignExamInvites, getExamInvites, removeExamCandidate, getExamAssignments, addQuickParticipant, keepQuickParticipant } from '../api';
 import { useAuth } from '../context/AuthContext';
 import QuestionBankList from './QuestionBank';
@@ -49,8 +50,8 @@ function SendInviteModal({ exam, onClose, onSent }) {
   const [sending, setSending] = useState(false);
   const [reassigningPid, setReassigningPid] = useState(null);
   const [removingPid, setRemovingPid] = useState(null);
-  // Candidates an Assign skipped because they have no attempts left — offered
-  // a Reassign in a popup ([{ id, name }]).
+  // Candidates an Assign skipped because they have no attempts left or already
+  // passed — offered a Reassign in a popup ([{ id, name, passed }]).
   const [needsReassign, setNeedsReassign] = useState([]);
   const [reassigningAll, setReassigningAll] = useState(false);
   const { confirm, ConfirmDialog } = useConfirm();
@@ -99,7 +100,10 @@ function SendInviteModal({ exam, onClose, onSent }) {
     setLoading(true);
     Promise.all([getExamAirlines({ exam_id: exam.id, include_empty: 1 }), getExamInvites(exam.id)])
       .then(([airRes, invRes]) => {
-        setGroups(airRes.data);
+        // The airline this exam is "for" goes first and starts open.
+        const forId = exam.for_airline ? String(exam.for_airline) : '';
+        setGroups(forId ? [...airRes.data].sort((a, b) => (String(b.airline._id) === forId) - (String(a.airline._id) === forId)) : airRes.data);
+        if (forId) setExpanded((prev) => new Set(prev).add(airRes.data.find((g) => String(g.airline._id) === forId)?.airline._id));
         setInviteByPid(Object.fromEntries((invRes.data || []).map((i) => [String(i.participant_id), i])));
       })
       .catch(() => toast.error('Failed to load participants.'))
@@ -176,12 +180,13 @@ function SendInviteModal({ exam, onClose, onSent }) {
     try {
       const res = await sendExamInvites(exam.id, [...selected], opts);
       const { sent = [], skipped = [] } = res.data || {};
-      // No attempts left → offer a Reassign in a popup instead of a toast.
-      const outOfAttempts = skipped.filter((x) => x.code === 'no_attempts_left');
-      const otherSkips = skipped.filter((x) => x.code !== 'no_attempts_left');
+      // No attempts left / already passed → offer a Reassign in a popup instead of a toast.
+      const REASSIGN_CODES = ['no_attempts_left', 'already_passed'];
+      const outOfAttempts = skipped.filter((x) => REASSIGN_CODES.includes(x.code));
+      const otherSkips = skipped.filter((x) => !REASSIGN_CODES.includes(x.code));
       if (sent.length) toast.success(`${sent.length} participant${sent.length > 1 ? 's' : ''} assigned, exam link${sent.length > 1 ? 's' : ''} emailed.`);
       if (otherSkips.length) toast(`${otherSkips.length} skipped (${otherSkips[0].reason}${otherSkips.length > 1 ? ', …' : ''}).`, { icon: 'ℹ️' });
-      if (outOfAttempts.length) setNeedsReassign(outOfAttempts.map((x) => ({ id: x.id, name: x.name })));
+      if (outOfAttempts.length) setNeedsReassign(outOfAttempts.map((x) => ({ id: x.id, name: x.name, passed: x.code === 'already_passed' })));
       setSelected(new Set());
       load();
       onSent?.();
@@ -277,7 +282,7 @@ function SendInviteModal({ exam, onClose, onSent }) {
               <DialogTitle className="text-base sm:text-lg font-bold text-slate-900 leading-snug line-clamp-2">
                 Assign &ldquo;{exam.title}&rdquo; to participants
               </DialogTitle>
-              <p className="mt-1 text-xs leading-relaxed text-slate-500">Each assigned participant gets a personal, passwordless exam link by email. Participants without an email can't be assigned. Use <span className="font-semibold text-slate-700">Reassign</span> on someone who already finished to grant a fresh attempt and re-send their link.</p>
+              <p className="mt-1 text-xs leading-relaxed text-slate-500">Each assigned participant gets a personal, passwordless exam link by email. Participants without an email can't be assigned. Use <span className="font-semibold text-slate-700">Reassign</span> on someone who already finished — passed or failed — to let them take the exam again with a fresh link.</p>
             </div>
             <button type="button" onClick={onClose} aria-label="Close"
               className="-mr-2 -mt-1 p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors flex-shrink-0">
@@ -520,11 +525,15 @@ function SendInviteModal({ exam, onClose, onSent }) {
                                       Attempts {inv.attempts_used}/{inv.attempts_allowed}
                                     </span>
                                   )}
-                                  {inv?.needs_reassign && (
+                                  {inv?.needs_reassign && (inv.passed_in_cycle ? (
+                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold border bg-emerald-50 text-emerald-800 border-emerald-300" title="Already passed — Assign won't send anything. Use Reassign to let them take the exam again.">
+                                      Passed · reassign to retake
+                                    </span>
+                                  ) : (
                                     <span className="px-2 py-0.5 rounded-full text-[10px] font-bold border bg-amber-50 text-amber-800 border-amber-300" title="All attempts used — Assign won't send anything. Use Reassign to give a new attempt.">
                                       No attempts left
                                     </span>
-                                  )}
+                                  ))}
                                   {email && inv && (inv.status === 'completed' || inv.attempt || inv.attempts_used > 0) && (
                                     <button
                                       type="button"
@@ -587,17 +596,24 @@ function SendInviteModal({ exam, onClose, onSent }) {
           <DialogHeader className="px-6 pt-6 pb-3 text-left">
             <DialogTitle className="flex items-center gap-2 text-base font-black text-slate-900">
               <HiOutlineRefresh className="w-5 h-5 text-amber-600" />
-              {needsReassign.length === 1 ? 'No attempts left' : `${needsReassign.length} candidates have no attempts left`}
+              {needsReassign.length === 1
+                ? (needsReassign[0].passed ? 'Already passed' : 'No attempts left')
+                : `${needsReassign.length} candidates need a reassign`}
             </DialogTitle>
             <p className="text-xs leading-relaxed text-slate-500">
-              {needsReassign.length === 1 ? 'This candidate has' : 'These candidates have'} used all {exam.max_attempts} attempt{exam.max_attempts === 1 ? '' : 's'}, so assigning again doesn't send anything.
-              {' '}<span className="font-semibold text-slate-700">Reassign</span> gives one new attempt and emails a fresh link (the old link stops working).
+              {needsReassign.length === 1 ? 'This candidate has' : 'These candidates have'} already passed or used all {exam.max_attempts} attempt{exam.max_attempts === 1 ? '' : 's'}, so assigning again doesn't send anything.
+              {' '}<span className="font-semibold text-slate-700">Reassign</span> lets them take the exam again — passed or not — and emails a fresh link (the old link stops working). Their earlier results are kept.
             </p>
           </DialogHeader>
           <div className="px-6 pb-2 max-h-64 overflow-y-auto space-y-2">
             {needsReassign.map((person) => (
               <div key={person.id} className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50/60">
-                <span className="text-sm font-bold text-slate-900 truncate">{person.name}</span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-bold text-slate-900 truncate">{person.name}</span>
+                  <span className={`block text-[11px] font-semibold ${person.passed ? 'text-emerald-700' : 'text-amber-700'}`}>
+                    {person.passed ? 'Already passed' : 'No attempts left'}
+                  </span>
+                </span>
                 <Button size="sm" variant="outline" onClick={() => reassignFromPopup(person)}
                   disabled={reassigningAll || reassigningPid === person.id}
                   className="rounded-xl text-xs font-bold border-amber-300 text-amber-700 hover:bg-amber-50 flex items-center gap-1.5 flex-shrink-0">
@@ -623,23 +639,49 @@ function SendInviteModal({ exam, onClose, onSent }) {
 }
 
 // ─── Assigned-participants list — opened from the card's "N Assigned" chip ────
-function attemptBadge(attempt) {
-  if (!attempt) return { label: 'Not started', cls: 'bg-slate-50 text-slate-500 border-slate-200' };
+function attemptBadge(attempt, reassigned) {
+  if (!attempt) return reassigned
+    ? { label: 'Reassigned · not started', cls: 'bg-blue-50 text-blue-700 border-blue-200' }
+    : { label: 'Not started', cls: 'bg-slate-50 text-slate-500 border-slate-200' };
   if (attempt.status === 'in_progress') return { label: 'In progress', cls: 'bg-violet-50 text-violet-700 border-violet-200' };
   if (attempt.passed === true) return { label: `Passed${attempt.percentage != null ? ` · ${Math.round(attempt.percentage)}%` : ''}`, cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
   if (attempt.passed === false) return { label: `Failed${attempt.percentage != null ? ` · ${Math.round(attempt.percentage)}%` : ''}`, cls: 'bg-rose-50 text-rose-700 border-rose-200' };
   return { label: 'Awaiting grading', cls: 'bg-amber-50 text-amber-700 border-amber-200' };
 }
 
-function AssignedListModal({ exam, onClose }) {
+function AssignedListModal({ exam, canReassign, onClose, onChanged }) {
   const [rows, setRows] = useState(null);
   const [search, setSearch] = useState('');
+  const [reassigningPid, setReassigningPid] = useState(null);
+  const { confirm, ConfirmDialog } = useConfirm();
 
-  useEffect(() => {
-    getExamAssignments(exam.id)
-      .then((res) => setRows(res.data || []))
-      .catch(() => { toast.error('Failed to load assigned participants'); setRows([]); });
-  }, [exam.id]);
+  const load = () => getExamAssignments(exam.id)
+    .then((res) => setRows(res.data || []))
+    .catch(() => { toast.error('Failed to load assigned participants'); setRows([]); });
+  useEffect(() => { load(); }, [exam.id]);
+
+  // Let someone who finished — passed or failed — take the exam again.
+  const reassign = async (r) => {
+    const passed = r.attempt?.passed === true;
+    const ok = await confirm(
+      `${passed ? `${r.name} has already passed.` : `Let ${r.name} take the exam again?`} Reassign emails them a fresh exam link (the old one stops working) and gives them a new attempt. Their earlier result is kept.`,
+      { title: 'Reassign exam', confirmLabel: 'Reassign' },
+    );
+    if (!ok) return;
+    setReassigningPid(r.participant_id);
+    try {
+      const res = await reassignExamInvites(exam.id, [r.participant_id]);
+      const { sent = [], skipped = [] } = res.data || {};
+      if (sent.length) toast.success(`${r.name} reassigned — a fresh exam link was emailed.`);
+      else toast.error(`Reassign failed (${skipped[0]?.reason || 'unknown'}).`);
+      load();
+      onChanged?.();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to reassign.');
+    } finally {
+      setReassigningPid(null);
+    }
+  };
 
   const q = search.trim().toLowerCase();
   const visible = (rows || []).filter((r) => !q
@@ -678,7 +720,8 @@ function AssignedListModal({ exam, onClose }) {
           ) : (
             <ul className="divide-y divide-slate-100">
               {visible.map((r) => {
-                const badge = attemptBadge(r.attempt);
+                const badge = attemptBadge(r.attempt, r.reassigned);
+                const finished = r.attempt && r.attempt.status !== 'in_progress';
                 return (
                   <li key={r.participant_id} className="flex items-center gap-3 px-3 py-2.5">
                     <div className="min-w-0 flex-1">
@@ -691,12 +734,26 @@ function AssignedListModal({ exam, onClose }) {
                     <span className={`flex-shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${badge.cls}`}>
                       {badge.label}
                     </span>
+                    {canReassign && finished && r.email && (
+                      <SimpleTooltip label="Email a fresh link so they can take the exam again">
+                        <button
+                          type="button"
+                          onClick={() => reassign(r)}
+                          disabled={reassigningPid === r.participant_id}
+                          className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 disabled:opacity-50 transition-colors"
+                        >
+                          <HiOutlineRefresh className={`w-3 h-3 ${reassigningPid === r.participant_id ? 'animate-spin' : ''}`} />
+                          {reassigningPid === r.participant_id ? 'Reassigning…' : 'Reassign'}
+                        </button>
+                      </SimpleTooltip>
+                    )}
                   </li>
                 );
               })}
             </ul>
           )}
         </div>
+        {ConfirmDialog}
       </DialogContent>
     </Dialog>
   );
@@ -743,7 +800,9 @@ export default function ExamSystem() {
 
   // Airlines manage only the exams they own here; exams merely assigned to them
   // live in the "Exam Results" view.
-  const load = () => listExams()
+  // Deleted exams come too: they're hidden unless the status filter is
+  // "Deleted", where their cards only open Results.
+  const load = () => listExams({ include_deleted: 1 })
     .then((res) => setExams(isAdmin ? res.data : res.data.filter((e) => e.owner_airline)))
     .catch(() => toast.error('Failed to load exams.'))
     .finally(() => setLoading(false));
@@ -760,11 +819,14 @@ export default function ExamSystem() {
   };
 
   const handleDelete = async (exam) => {
-    const ok = await confirm(`Delete "${exam.title}"? This cannot be undone.`, { title: 'Delete exam', confirmLabel: 'Delete' });
+    const ok = await confirm(
+      `Delete "${exam.title}"? It is removed from this list and can no longer be edited, assigned or taken, and any open exam links stop working. Its results are kept for reports and dashboards. Choose "Deleted" in the status filter to see it again.`,
+      { title: 'Delete exam', confirmLabel: 'Delete' },
+    );
     if (!ok) return;
     try {
       await deleteExam(exam.id);
-      toast.success('Exam deleted.');
+      toast.success('Exam deleted. Its results are kept.');
       load();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to delete exam.');
@@ -773,8 +835,14 @@ export default function ExamSystem() {
 
   // Admin view splits exams into airline-created vs IFOA-created; airline view
   // only ever has its own exams so it renders as one list.
-  const airlineExams = exams.filter((e) => e.owner_airline);
-  const ifoaExams = exams.filter((e) => !e.owner_airline);
+  // "Deleted" filter shows only deleted exams; every other view hides them.
+  const showDeleted = statusFilter === 'deleted';
+  const shown = exams.filter((e) => !!e.deleted_at === showDeleted);
+  const airlineExams = shown.filter((e) => e.owner_airline);
+  const ifoaExams = shown.filter((e) => !e.owner_airline);
+  // Tab counts never include deleted exams.
+  const liveExams = exams.filter((e) => !e.deleted_at);
+  const liveCount = { ifoa: liveExams.filter((e) => !e.owner_airline).length, airline: liveExams.filter((e) => e.owner_airline).length };
 
   // Readable owner label used by the airline-exams tab filter.
   const ownerLabel = (e) =>
@@ -784,13 +852,14 @@ export default function ExamSystem() {
   const applyExamFilters = (list) => {
     const q = examSearch.trim().toLowerCase();
     return list.filter((e) => {
-      if (statusFilter !== 'all' && e.status !== statusFilter) return false;
+      if (statusFilter !== 'all' && statusFilter !== 'deleted' && e.status !== statusFilter) return false;
       if (activeTab === 'airline-exams' && ownerFilter !== 'all' && ownerLabel(e) !== ownerFilter) return false;
       if (!q) return true;
       return (e.title || '').toLowerCase().includes(q)
         || (e.description || '').toLowerCase().includes(q)
         || (e.owner_airline_name || '').toLowerCase().includes(q)
-        || (e.owner_department_name || '').toLowerCase().includes(q);
+        || (e.owner_department_name || '').toLowerCase().includes(q)
+        || (e.for_airline_name || '').toLowerCase().includes(q);
     });
   };
   const anyExamFilterActive = examSearch.trim() || statusFilter !== 'all' || (activeTab === 'airline-exams' && ownerFilter !== 'all');
@@ -805,13 +874,14 @@ export default function ExamSystem() {
         ? String(exam.owner_department || '') === selfId
         : airlineOwned;
     // Each action also needs its own power — anything missing is not shown.
-    const canAuthor = canManage && can('exams.author');
+    const deleted = !!exam.deleted_at;
+    const canAuthor = canManage && can('exams.author') && !deleted;
     // A department may also assign its parent airline's exams to its own team.
-    const canAssign = can('exams.assign') && (canManage || (isDepartment && airlineOwned));
+    const canAssign = !deleted && can('exams.assign') && (canManage || (isDepartment && airlineOwned));
     const showPublish = canAuthor && exam.status === 'draft';
     const showAssign  = canAssign && exam.status !== 'draft';
     // Customer Training Feedback — IFOA (admin-owned) exams only, never airline-created ones.
-    const showFeedback = isAdmin && !airlineOwned && !exam.owner_department && exam.status !== 'draft'
+    const showFeedback = !deleted && isAdmin && !airlineOwned && !exam.owner_department && exam.status !== 'draft'
       && ['exams.assign', 'exams.grade', 'exams.author'].some(can);
     return (
       <Card
@@ -831,6 +901,12 @@ export default function ExamSystem() {
                 </h2>
                 <div className="text-[11px] font-medium text-slate-400 mt-1 flex items-center gap-1.5 flex-wrap">
                   <span>{exam.question_count ?? exam.questions?.length ?? 0} Questions · {exam.duration_minutes} Mins</span>
+                  {isAdmin && exam.for_airline_name && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-100 truncate max-w-full"
+                      title={`This exam is for ${exam.for_airline_name}`}>
+                      <FaPlaneDeparture className="w-2.5 h-2.5 flex-shrink-0" /> For {exam.for_airline_name}
+                    </span>
+                  )}
                   {isAdmin && airlineOwned && (
                     <span
                       className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200/80 truncate max-w-full"
@@ -845,12 +921,18 @@ export default function ExamSystem() {
             </div>
 
             <div className="flex items-center gap-1 flex-shrink-0">
-              <Badge
-                variant={STATUS_VARIANT[exam.status]}
-                className="capitalize font-bold text-[10px] px-2.5 py-0.5 rounded-full"
-              >
-                {exam.status}
-              </Badge>
+              {deleted ? (
+                <SimpleTooltip label={`Deleted ${new Date(exam.deleted_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} — results are kept`}>
+                  <span className="font-bold text-[10px] px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200">Deleted</span>
+                </SimpleTooltip>
+              ) : (
+                <Badge
+                  variant={STATUS_VARIANT[exam.status]}
+                  className="capitalize font-bold text-[10px] px-2.5 py-0.5 rounded-full"
+                >
+                  {exam.status}
+                </Badge>
+              )}
               {canAuthor && (
                 <SimpleTooltip label="Delete exam">
                   <Button
@@ -883,7 +965,7 @@ export default function ExamSystem() {
               <SimpleTooltip label="See who is assigned">
                 <button
                   type="button"
-                  onClick={() => setAssignedTarget(exam)}
+                  onClick={() => setAssignedTarget({ exam, canReassign: showAssign })}
                   className="flex items-center gap-2 p-2 rounded-xl bg-slate-50/80 border border-slate-200/60 text-left hover:bg-blue-50/70 hover:border-blue-200 hover:text-blue-700 transition-colors"
                 >
                   <HiOutlineUserGroup className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
@@ -984,7 +1066,7 @@ export default function ExamSystem() {
                 <HiOutlineAcademicCap className="w-4 h-4 text-blue-600" />
                 <span>{isAdmin ? 'IFOA Exams' : 'Exams'}</span>
                 <span className="ml-0.5 px-1.5 py-0.2 rounded-full bg-slate-200 text-slate-800 text-[10px]">
-                  {isAdmin ? ifoaExams.length : exams.length}
+                  {isAdmin ? liveCount.ifoa : liveExams.length}
                 </span>
               </button>
 
@@ -1018,7 +1100,7 @@ export default function ExamSystem() {
                   <FaPlaneDeparture className="w-4 h-4 text-slate-500" />
                   <span>Airline Exams</span>
                   <span className="ml-0.5 px-1.5 py-0.2 rounded-full bg-slate-200 text-slate-800 text-[10px]">
-                    {airlineExams.length}
+                    {liveCount.airline}
                   </span>
                 </button>
               </>
@@ -1026,6 +1108,8 @@ export default function ExamSystem() {
             </div>
           </div>
 
+          <div className="flex items-center gap-2 flex-shrink-0">
+          <ExamHelpButton guide="system" className="h-9 w-9" />
           {activeTab === 'exams' ? can('exams.author') && (
             <Button onClick={() => navigate(`${base}/new`)} className="bg-slate-900 hover:bg-slate-800 text-white text-xs sm:text-sm font-bold rounded-xl shadow-2xs flex items-center gap-1.5 px-4 py-2 flex-shrink-0">
               <HiOutlinePlusCircle className="w-4 h-4" /> New Exam
@@ -1035,6 +1119,7 @@ export default function ExamSystem() {
               <HiOutlinePlusCircle className="w-4 h-4" /> New Bank
             </Button>
           ) : null}
+          </div>
         </div>
       </div>
 
@@ -1069,6 +1154,7 @@ export default function ExamSystem() {
                 <SelectItem value="draft">Draft</SelectItem>
                 <SelectItem value="published">Published</SelectItem>
                 <SelectItem value="archived">Archived</SelectItem>
+                <SelectItem value="deleted">Deleted</SelectItem>
               </SelectContent>
             </Select>
 
@@ -1101,12 +1187,14 @@ export default function ExamSystem() {
             <span className="text-sm font-medium">Loading exams…</span>
           </div>
         ) : (() => {
-          const base = activeTab === 'airline-exams' ? airlineExams : (isAdmin ? ifoaExams : exams);
+          const base = activeTab === 'airline-exams' ? airlineExams : (isAdmin ? ifoaExams : shown);
           const list = applyExamFilters(base);
           if (base.length === 0) {
             return (
               <Card className="p-12 text-center text-sm font-medium text-slate-400">
-                {activeTab === 'airline-exams'
+                {showDeleted
+                  ? 'No deleted exams.'
+                  : activeTab === 'airline-exams'
                   ? 'No airline-created exams yet. Airlines with exam access build their own here.'
                   : 'No exams yet. Create your first exam to get started.'}
               </Card>
@@ -1135,7 +1223,7 @@ export default function ExamSystem() {
         <FeedbackDialog exam={feedbackTarget} onClose={() => setFeedbackTarget(null)} />
       )}
       {assignedTarget && (
-        <AssignedListModal exam={assignedTarget} onClose={() => setAssignedTarget(null)} />
+        <AssignedListModal exam={assignedTarget.exam} canReassign={assignedTarget.canReassign} onClose={() => setAssignedTarget(null)} onChanged={load} />
       )}
       {sendTarget && (
         <SendInviteModal exam={sendTarget} onClose={() => setSendTarget(null)} onSent={load} />

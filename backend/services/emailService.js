@@ -1101,6 +1101,103 @@ async function sendTrainingFeedbackEmail({ toEmail, participantName, trainingTit
   return info;
 }
 
+// ─── Training feedback report (PDF) to an airline contact ─────────────────────
+// `to`: array of addresses the admin typed; `pdfBuffer`: the review report the
+// admin generated in the browser; `message`: optional note from the admin.
+async function sendFeedbackReportEmail({ to, examTitle, message, pdfBuffer, filename, summary }) {
+  const transporter = getTransporter();
+  if (!transporter) throw new Error('SMTP not configured — cannot send the feedback report.');
+
+  const title = escapeHtml(examTitle);
+  const note = message ? escapeHtml(message).replace(/\r?\n/g, '<br/>') : '';
+  const facts = summary ? [
+    summary.average != null ? ['Overall rating', `${summary.average} / 5`] : null,
+    ['Responses', `${summary.submitted}${summary.sent ? ` of ${summary.sent} sent` : ''}`],
+  ].filter(Boolean) : [];
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Training Feedback Report – IFOA</title>
+</head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:'Segoe UI',Helvetica,Arial,sans-serif">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:40px 16px">
+  <tr><td align="center">
+    <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 32px rgba(0,0,0,0.10)">
+      <tr>
+        <td bgcolor="#0c1a2e" style="background:#0c1a2e;padding:28px 40px 24px;text-align:center">
+          <img src="cid:ifoa_logo" width="460" alt="IFOA" style="display:block;border:0;width:460px;max-width:100%;height:auto;margin:0 auto"/>
+          <div style="height:16px"></div>
+          <div style="width:40px;height:2px;background:#22c55e;margin:0 auto 14px"></div>
+          <p style="margin:0 0 4px;font-size:11px;font-weight:600;letter-spacing:2.5px;text-transform:uppercase;color:#94a3b8">International Flight Operations Academy</p>
+          <p style="margin:0;font-size:22px;font-weight:800;color:#ffffff">Training Feedback Report</p>
+        </td>
+      </tr>
+      <tr><td style="background:linear-gradient(90deg,#16a34a,#22c55e);height:4px;font-size:0;line-height:0">&nbsp;</td></tr>
+      <tr>
+        <td style="padding:36px 40px 0">
+          <p style="margin:0 0 16px;font-size:14px;color:#4b5563;line-height:1.7">
+            Please find attached the participant feedback report for the following training:
+          </p>
+          <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;margin-bottom:20px">
+            <tr><td style="padding:18px 22px">
+              <p style="margin:0;font-size:17px;font-weight:800;color:#0f172a">${title}</p>
+              ${facts.map(([k, v]) => `<p style="margin:6px 0 0;font-size:13px;color:#475569"><strong style="color:#0f172a">${escapeHtml(k)}:</strong> ${escapeHtml(v)}</p>`).join('')}
+            </td></tr>
+          </table>
+          ${note ? `<p style="margin:0 0 20px;font-size:14px;color:#374151;line-height:1.7;border-left:3px solid #e2e8f0;padding-left:14px">${note}</p>` : ''}
+          <p style="margin:0 0 24px;font-size:13px;color:#6b7280;line-height:1.7">The full report is attached as a PDF.</p>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:0 40px 32px">
+          <p style="margin:0;font-size:13px;color:#374151;line-height:1.7">
+            Kind regards,<br/>
+            <strong style="color:#111827">The IFOA Team</strong><br/>
+            <span style="font-size:12px;color:#6b7280">International Flight Operations Academy</span>
+          </p>
+        </td>
+      </tr>
+      <tr>
+        <td bgcolor="#0c1a2e" style="background:#0c1a2e;padding:16px 40px">
+          <p style="margin:0;font-size:11px;color:#64748b;text-align:center">
+            &copy; ${new Date().getFullYear()} International Flight Operations Academy
+          </p>
+        </td>
+      </tr>
+    </table>
+  </td></tr>
+</table>
+</body>
+</html>`;
+
+  const text = [
+    'Please find attached the participant feedback report for:',
+    examTitle,
+    ...facts.map(([k, v]) => `${k}: ${v}`),
+    '',
+    ...(message ? [message, ''] : []),
+    'Kind regards,',
+    'The IFOA Team',
+  ].join('\n');
+
+  const info = await transporter.sendMail({
+    from:    `"IFOA – International Flight Operations Academy" <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER}>`,
+    to,
+    subject: `Training feedback report – ${examTitle}`,
+    text,
+    html,
+    attachments: [
+      ...logoAttachment(null),
+      { filename, content: pdfBuffer, contentType: 'application/pdf' },
+    ],
+  });
+  console.log(`[email] Feedback report for "${examTitle}" sent to ${to.join(', ')} — messageId: ${info.messageId}`);
+  return info;
+}
+
 // ─── Send the airline-uploaded exam certificate to the candidate ──────────────
 // `file`: { content: Buffer, filename, contentType } — the airline's own document.
 async function sendExamCertificateEmail({ toEmail, participantName, examTitle, scoreText, file, issuerName, branding }) {
@@ -1313,4 +1410,4 @@ async function sendCertExpiryReminderEmail({ toEmail, cc, airlineName, rows, mes
   return info;
 }
 
-module.exports = { sendSubmissionConfirmation, sendPasswordResetEmail, sendOtpEmail, sendContractEmail, sendExamInviteEmail, sendExamCertificateEmail, sendCertExpiryReminderEmail, sendTrainingFeedbackEmail };
+module.exports = { sendSubmissionConfirmation, sendPasswordResetEmail, sendOtpEmail, sendContractEmail, sendExamInviteEmail, sendExamCertificateEmail, sendCertExpiryReminderEmail, sendTrainingFeedbackEmail, sendFeedbackReportEmail };

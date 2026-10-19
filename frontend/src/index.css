@@ -197,6 +197,18 @@ input[type='month']::-webkit-calendar-picker-indicator {
   cursor: pointer;
 }
 
+/* Date inputs sitting on a dark surface (e.g. the feedback dashboard hero):
+   transparent field, light text, white calendar icon. The popup calendar
+   itself stays light, same as everywhere else. */
+input.date-on-dark[type='date'] {
+  background-color: transparent;
+  color: #ffffff;
+}
+input.date-on-dark[type='date']::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  opacity: 0.7;
+}
+
 /* Ensure the entire page never triggers a dark color-scheme */
 :root {
   color-scheme: light only;

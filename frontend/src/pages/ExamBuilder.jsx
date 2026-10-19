@@ -6,15 +6,16 @@ import {
   HiOutlineArrowLeft, HiOutlinePlusCircle, HiOutlineSave, HiOutlineEye,
   HiOutlinePencilAlt, HiOutlineTrash, HiOutlineCheck, HiOutlineX,
   HiOutlineCollection, HiOutlineSearch, HiOutlineCalendar, HiOutlineClock,
-  HiOutlineDuplicate, HiOutlineChevronUp, HiOutlineChevronDown, HiOutlineDocumentDuplicate,
+  HiOutlineDuplicate, HiOutlineChevronUp, HiOutlineChevronDown, HiOutlineDocumentDuplicate, HiOutlineCode,
 } from 'react-icons/hi';
-import { getExam, createExam, updateExam, previewExamRemark, listQuestionBankGroups, listQuestionBankItems, getQuestionBankTopics, createQuestionBankItem } from '../api';
+import { getExamAirlineOptions, getExam, createExam, updateExam, previewExamRemark, listQuestionBankGroups, listQuestionBankItems, getQuestionBankTopics, createQuestionBankItem } from '../api';
 import { useAuth } from '../context/AuthContext';
 import QuestionEditor, { QUESTION_TYPES, createEmptyQuestion } from '../components/examQuestions/QuestionEditor';
 import { TagBadges, DIFFICULTY_BADGE } from './QuestionBank';
 import QuestionPlayer from '../components/examPlayers/QuestionPlayer';
 import ExamRunner from '../components/ExamRunner';
 import ExamQuestionImporter from '../components/ExamQuestionImporter';
+import ExamJsonImporter from '../components/ExamJsonImporter';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -25,6 +26,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { useConfirm } from '@/hooks/use-confirm';
 import { TimePicker } from '@/components/ui/time-picker';
+import ExamHelpButton from '../components/ExamHelpGuide';
 
 // Client-generated placeholder ids (see `uid()` in QuestionEditor.jsx) aren't
 // valid Mongo ObjectIds — strip them so Mongoose assigns real ones on save.
@@ -86,10 +88,11 @@ function remarkMessage(p) {
 const emptyExam = () => ({
   title: '', description: '', duration_minutes: 30, pass_percentage: 75,
   max_attempts: 1, shuffle_questions: false, shuffle_options: false,
-  lockdown_enabled: true, max_violations: 4, allow_tab_switch: false,
+  lockdown_enabled: true, max_violations: 4, allow_tab_switch: true,
   limit_window_closes: false, max_window_closes: 2, questions: [], sections: [],
   show_review: false, instant_feedback: false,
   opens_at: null, closes_at: null, section_settings: [],
+  for_airline: null,
 });
 
 // datetime-local inputs work in local time with no timezone suffix; Mongo
@@ -563,6 +566,12 @@ export default function ExamBuilder() {
 
   const [exam, setExam] = useState(emptyExam());
   const [loading, setLoading] = useState(!isNew);
+  // Admin: airlines this exam can be marked "for" (IFOA exams only).
+  const [airlineOptions, setAirlineOptions] = useState([]);
+  useEffect(() => {
+    if (!isAdmin) return;
+    getExamAirlineOptions().then((res) => setAirlineOptions(res.data || [])).catch(() => {});
+  }, [isAdmin]);
   const [saving, setSaving] = useState(false);
   const [newType, setNewType] = useState(QUESTION_TYPES[0].value);
   const [previewing, setPreviewing] = useState(false);
@@ -571,6 +580,7 @@ export default function ExamBuilder() {
     setExam((prev) => ({ ...prev, questions: [...prev.questions, ...newQuestions] }));
   };
   const [showExamImporter, setShowExamImporter] = useState(false);
+  const [showJsonImporter, setShowJsonImporter] = useState(false);
   // Questions copied from another exam, plus any of its section names this exam lacks.
   const importFromExam = (newQuestions, sectionNames) => {
     setExam((prev) => ({
@@ -956,11 +966,15 @@ export default function ExamBuilder() {
             <span className="text-xs font-semibold text-slate-500 hidden md:inline">
               {exam.questions.length} Question{exam.questions.length !== 1 ? 's' : ''}
             </span>
+            <ExamHelpButton guide="builder" />
             {isAdmin && (
             <Button variant="outline" size="sm" onClick={() => setShowBankPicker(true)} className="rounded-xl border-slate-200 text-xs font-bold">
               <HiOutlineCollection className="w-4 h-4" /> <span className="hidden sm:inline">Import from Bank</span>
             </Button>
             )}
+            <Button variant="outline" size="sm" onClick={() => setShowJsonImporter(true)} className="rounded-xl border-slate-200 text-xs font-bold" title="Import questions from a JSON file">
+              <HiOutlineCode className="w-4 h-4" /> <span className="hidden sm:inline">Import JSON</span>
+            </Button>
             <Button variant="outline" size="sm" onClick={() => setShowExamImporter(true)} className="rounded-xl border-slate-200 text-xs font-bold">
               <HiOutlineDocumentDuplicate className="w-4 h-4" /> <span className="hidden sm:inline">Import from Exam</span>
             </Button>
@@ -1109,6 +1123,20 @@ export default function ExamBuilder() {
                   />
                 </div>
 
+                {isAdmin && !exam.owner_airline && (
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">For airline</label>
+                    <Select value={exam.for_airline ? String(exam.for_airline) : 'none'} onValueChange={(v) => set('for_airline', v === 'none' ? null : v)}>
+                      <SelectTrigger className="w-full bg-white rounded-xl text-xs font-semibold"><SelectValue /></SelectTrigger>
+                      <SelectContent className="max-h-72">
+                        <SelectItem value="none" className="text-xs">General — any airline</SelectItem>
+                        {airlineOptions.map((a) => <SelectItem key={a.id} value={a.id} className="text-xs">{a.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <span className="block text-[10px] text-slate-400 mt-1 font-semibold">Shown on the exam card; Assign opens on this airline&apos;s participants.</span>
+                  </div>
+                )}
+
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">Description</label>
                   <textarea
@@ -1176,7 +1204,11 @@ export default function ExamBuilder() {
                   <label className="flex items-start gap-2.5 cursor-pointer select-none">
                     <Checkbox
                       checked={exam.lockdown_enabled}
-                      onCheckedChange={(checked) => set('lockdown_enabled', !!checked)}
+                      onCheckedChange={(checked) => {
+                        set('lockdown_enabled', !!checked);
+                        // Turning lockdown on starts with tab switching allowed; untick to count it.
+                        if (checked) set('allow_tab_switch', true);
+                      }}
                       className="mt-0.5"
                     />
                     <div className="space-y-0.5 min-w-0">
@@ -1619,6 +1651,12 @@ export default function ExamBuilder() {
         onImport={importFromBank}
       />
       <SendToBankModal question={sendToBankQuestion} onClose={() => setSendToBankQuestion(null)} />
+      <ExamJsonImporter
+        open={showJsonImporter}
+        onClose={() => setShowJsonImporter(false)}
+        sectionNames={orderedSectionNames}
+        onImport={importFromExam}
+      />
       <ExamQuestionImporter
         open={showExamImporter}
         onClose={() => setShowExamImporter(false)}

@@ -219,6 +219,7 @@ export const deleteDgrForm  = (id)          => api.delete(`/dgr/${id}`);
 
 // ── Exam System ───────────────────────────────────────────────────────────────
 export const getExamAirlines  = (params = {}) => api.get('/exams/airlines', { params }); // admin: airlines + students
+export const getExamAirlineOptions = ()      => api.get('/exams/airline-options'); // admin: airlines an exam can be "for"
 export const listExams        = (params = {}) => api.get('/exams', { params });
 export const getExam          = (id)       => api.get(`/exams/${id}`);
 export const getExamSummary   = (id)       => api.get(`/exams/${id}`, { params: { summary: 1 } });
@@ -286,6 +287,7 @@ export const getExamAssignments    = (examId)                 => api.get(`/exams
 // Take one candidate off an exam: their assignment, invite link and any result.
 export const removeExamCandidate   = (examId, participantId)  => api.delete(`/exams/${examId}/candidates/${participantId}`);
 export const getAirlineExamResults = ()                       => api.get('/exams/airline-results');
+export const getLatestExamResults  = ()                       => api.get('/exams/latest-results');
 
 // ── Team / sub-user management ──────────────────────────────────────────────
 export const getTeamCatalog  = ()         => api.get('/team/catalog');
@@ -310,6 +312,8 @@ export const getPublicExamResult  = (token, attemptId)              => api.get(`
 export const getExamFeedback      = (examId)                 => api.get(`/feedback/exams/${examId}`);
 export const sendExamFeedback     = (examId, participantIds) => api.post(`/feedback/exams/${examId}/send`, { participant_ids: participantIds });
 export const deleteExamFeedback   = (examId, feedbackId, { resend = false } = {}) => api.delete(`/feedback/exams/${examId}/responses/${feedbackId}${resend ? '?resend=1' : ''}`);
+export const getFeedbackDashboard = (params = {})             => api.get('/feedback/dashboard', { params });
+export const emailFeedbackReport  = (examId, body)           => api.post(`/feedback/exams/${examId}/email-report`, body);
 // Public, passwordless form opened from the emailed link.
 export const getPublicFeedback    = (token)                  => api.get(`/public-feedback/${token}`);
 export const submitPublicFeedback = (token, data)            => api.post(`/public-feedback/${token}/submit`, data);

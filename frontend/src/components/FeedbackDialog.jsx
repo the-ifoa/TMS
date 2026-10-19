@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
-  HiOutlinePaperAirplane, HiOutlineSearch, HiOutlineDownload, HiOutlineChevronRight, HiOutlineChatAlt2,
+  HiOutlinePaperAirplane, HiOutlineSearch, HiOutlineChevronRight, HiOutlineChatAlt2,
   HiOutlineArrowLeft, HiOutlineTrash, HiOutlineRefresh,
 } from 'react-icons/hi';
 import { getExamFeedback, sendExamFeedback, deleteExamFeedback, getExamAirlines } from '../api';
@@ -10,6 +10,11 @@ import { useAuth } from '../context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import {
+  ScoreBadge, BandChip, DistBar, ScaleLegend, RatingRow, RATING_ROW, fmtAvg,
+  weightedAverage, sumDistributions, sectionTitle,
+} from './feedback/RatingUi';
+import FeedbackReportActions from './feedback/FeedbackReportActions';
 
 // ─── Customer Training Feedback — admin dialog for one IFOA exam ──────────────
 // "Send" emails the feedback form to assigned participants; "Responses" shows
@@ -22,56 +27,6 @@ function statusBadge(fb) {
   if (fb.status === 'submitted') return { label: `Submitted ${fmtDate(fb.submitted_at)}`, cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
   if (fb.status === 'opened') return { label: 'Opened', cls: 'bg-amber-50 text-amber-700 border-amber-200' };
   return { label: fb.sent_count > 1 ? `Sent ×${fb.sent_count}` : 'Sent', cls: 'bg-blue-50 text-blue-700 border-blue-200' };
-}
-
-// Rating colours, one per answer on the form's 1–5 scale. Diverging: blue for
-// the positive side, red for the negative side, grey for the neutral midpoint,
-// so "how good" reads from hue + depth without a legend lookup. Never used for
-// text — labels stay in ink with a swatch beside them.
-// Clear but calm: the site's blue for the good side, rose for the poor side,
-// grey in the middle. Bars are kept short so the statements stay the focus.
-const SCALE_FILL = { 1: '#e11d48', 2: '#fda4af', 3: '#cbd5e1', 4: '#93c5fd', 5: '#2563eb' };
-// Average → nearest scale point (4.5 and up reads as Excellent, and so on).
-const bandOf = (avg) => Math.min(5, Math.max(1, Math.round(avg)));
-const fmtAvg = (avg) => (avg == null ? '—' : avg.toFixed(1));
-
-function Swatch({ value, className = '' }) {
-  return <span className={`inline-block w-2.5 h-2.5 rounded-[3px] flex-shrink-0 ${className}`} style={{ background: SCALE_FILL[value] }} />;
-}
-
-// Average score + its scale label, e.g. "4.6  ■ Excellent".
-function ScoreBadge({ avg, scale, size = 'sm' }) {
-  if (avg == null) return <span className="text-xs text-slate-400">No ratings</span>;
-  const band = bandOf(avg);
-  return (
-    <span className="inline-flex items-center gap-2 flex-shrink-0">
-      <span className={`tabular-nums ${size === 'lg' ? 'text-base font-bold text-slate-900' : 'text-[13px] font-bold text-slate-700'}`}>{fmtAvg(avg)}</span>
-      <span className="inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded-md border border-slate-200 bg-white text-[10px] font-medium text-slate-500 whitespace-nowrap">
-        <Swatch value={band} className="!w-2 !h-2" /> {scale.find((x) => x.value === band)?.label}
-      </span>
-    </span>
-  );
-}
-
-// Mean over every individual rating (not a mean of means), so each answer counts once.
-function weightedAverage(statements) {
-  let sum = 0; let n = 0;
-  statements.forEach((s) => { s.distribution.forEach((c, i) => { sum += c * (i + 1); n += c; }); });
-  return n ? Math.round((sum / n) * 100) / 100 : null;
-}
-
-const sectionTitle = (t) => t.replace(/:$/, '').replace(/\.\.\.$/, '');
-
-// The review report PDF (cover, summary, one page per review). Loaded on demand
-// so jsPDF stays out of the main bundle.
-async function downloadPdf(examTitle, form, responses, sentCount) {
-  try {
-    const { downloadFeedbackPdf } = await import('../utils/generateFeedbackPdf');
-    downloadFeedbackPdf({ examTitle, form, responses, sentCount });
-  } catch (err) {
-    console.error('Feedback PDF failed:', err);
-    toast.error('Could not create the PDF. Please try again.');
-  }
 }
 
 // Mean of one participant's own ratings.
@@ -104,7 +59,6 @@ function ResponseRow({ r, form, onOpen }) {
 
 // One participant's full answers, with delete / delete-and-resend.
 function ResponseDetail({ r, form, onBack, onDelete, busy, canManage }) {
-  const scaleLabel = (v) => form.scale.find((x) => x.value === v)?.label || '—';
   const facts = [
     ['Email', r.participant_email],
     ['Company', r.company || r.airline_name],
@@ -152,26 +106,29 @@ function ResponseDetail({ r, form, onBack, onDelete, busy, canManage }) {
         </div>
       </div>
 
-      {form.sections.map((section) => (
-        <section key={section.key} className="rounded-xl border border-slate-200 overflow-hidden">
-          <header className="px-4 py-2.5 bg-slate-50/70 border-b border-slate-200">
-            <h3 className="text-[11px] font-bold uppercase tracking-wide text-slate-700">{sectionTitle(section.title)}</h3>
-          </header>
-          <ul className="divide-y divide-slate-100">
-            {section.statements.map((st) => {
-              const v = r.ratings.find((x) => x.key === st.key)?.value;
-              return (
-                <li key={st.key} className="flex items-start gap-4 px-4 py-2.5 text-xs">
-                  <span className="flex-1 text-slate-700 leading-snug">{st.text}</span>
-                  <span className="flex-shrink-0 w-36 inline-flex items-center justify-end gap-1.5 font-semibold text-slate-800">
-                    {v ? <><Swatch value={v} /> <span className="tabular-nums">{v}</span> · {scaleLabel(v)}</> : '—'}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      ))}
+      <div className="rounded-xl border border-slate-200 overflow-hidden divide-y divide-slate-200">
+        {form.sections.map((section) => (
+          <section key={section.key}>
+            <header className="px-4 py-2 bg-slate-50/80">
+              <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-500">{sectionTitle(section.title)}</h3>
+            </header>
+            <ul className="divide-y divide-slate-100">
+              {section.statements.map((st) => {
+                const v = r.ratings.find((x) => x.key === st.key)?.value;
+                return (
+                  <li key={st.key} className="sm:grid sm:grid-cols-[minmax(0,1fr)_2.25rem_7rem] sm:items-center sm:gap-4 px-4 py-2.5">
+                    <p className="text-[13px] text-slate-700 leading-snug">{st.text}</p>
+                    <div className="mt-1.5 sm:mt-0 flex items-center gap-3 sm:contents">
+                      <span className="text-[13px] font-bold text-slate-900 tabular-nums sm:text-right">{v ?? '—'}</span>
+                      {v ? <BandChip avg={v} scale={form.scale} /> : <span />}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        ))}
+      </div>
 
       <section className="rounded-xl border border-slate-200 overflow-hidden">
         <header className="px-4 py-2.5 bg-slate-50/70 border-b border-slate-200">
@@ -320,7 +277,7 @@ export default function FeedbackDialog({ exam, onClose }) {
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-2xl w-[94vw] h-[85vh] max-h-[760px] flex flex-col p-0 overflow-hidden rounded-2xl border border-slate-200/80 shadow-2xl bg-white">
+      <DialogContent className="max-w-3xl w-[94vw] h-[85vh] max-h-[780px] flex flex-col p-0 overflow-hidden rounded-2xl border border-slate-200/80 shadow-2xl bg-white">
         <DialogHeader className="flex-shrink-0 px-6 pt-5 pb-0 border-b border-slate-100 space-y-0 text-left">
           <DialogTitle className="text-base font-bold text-slate-900 leading-snug pr-6 flex items-center gap-2">
             <HiOutlineChatAlt2 className="w-5 h-5 text-slate-400" /> Training feedback
@@ -445,7 +402,7 @@ export default function FeedbackDialog({ exam, onClose }) {
               </DialogFooter>
             </>
           ) : (
-            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
+            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
               {summary.submitted === 0 ? (
                 <p className="py-12 text-center text-sm text-slate-400">No feedback submitted yet.</p>
               ) : (
@@ -471,80 +428,66 @@ export default function FeedbackDialog({ exam, onClose }) {
                     </ul>
                   ) : (
                   <>
-                  {/* Headline numbers */}
+                  {/* Headline numbers — one slim strip */}
                   {(() => {
                     const overall = weightedAverage(summary.statements);
                     const rate = sentCount ? Math.round((summary.submitted / sentCount) * 100) : null;
                     return (
-                      <div className="grid grid-cols-3 gap-2.5">
-                        <div className="rounded-xl border border-slate-200 p-3">
+                      <div className="rounded-xl border border-slate-200 grid grid-cols-3 divide-x divide-slate-200">
+                        <div className="px-4 py-3">
                           <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Overall rating</p>
-                          <p className="mt-1 text-2xl font-black text-slate-900 tabular-nums leading-none">{fmtAvg(overall)}<span className="text-xs font-semibold text-slate-400"> / 5</span></p>
-                          {overall != null && (
-                            <p className="mt-1.5 inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-600">
-                              <Swatch value={bandOf(overall)} /> {data.form.scale.find((x) => x.value === bandOf(overall))?.label}
-                            </p>
-                          )}
+                          <div className="mt-1 flex items-baseline gap-2">
+                            <span className="text-xl font-black text-slate-900 tabular-nums leading-none">{fmtAvg(overall)}</span>
+                            <span className="text-[11px] font-semibold text-slate-400">/ 5</span>
+                          </div>
+                          {overall != null && <BandChip avg={overall} scale={data.form.scale} className="mt-1.5" />}
                         </div>
-                        <div className="rounded-xl border border-slate-200 p-3">
+                        <div className="px-4 py-3">
                           <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Responses</p>
-                          <p className="mt-1 text-2xl font-black text-slate-900 tabular-nums leading-none">{summary.submitted}</p>
+                          <p className="mt-1 text-xl font-black text-slate-900 tabular-nums leading-none">{summary.submitted}</p>
                           <p className="mt-1.5 text-[11px] text-slate-500">of {sentCount} form{sentCount === 1 ? '' : 's'} sent</p>
                         </div>
-                        <div className="rounded-xl border border-slate-200 p-3">
+                        <div className="px-4 py-3">
                           <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Response rate</p>
-                          <p className="mt-1 text-2xl font-black text-slate-900 tabular-nums leading-none">{rate != null ? `${rate}%` : '—'}</p>
+                          <p className="mt-1 text-xl font-black text-slate-900 tabular-nums leading-none">{rate != null ? `${rate}%` : '—'}</p>
                           <p className="mt-1.5 text-[11px] text-slate-500">completed the survey</p>
                         </div>
                       </div>
                     );
                   })()}
 
-                  {/* Legend: what each colour means */}
-                  <div className="rounded-xl bg-slate-50 border border-slate-200/70 px-3.5 py-2.5">
-                    <div className="flex items-center justify-between gap-3 flex-wrap">
-                      <ul className="flex items-center gap-x-4 gap-y-1.5 flex-wrap">
-                        {data.form.scale.map((sc) => (
-                          <li key={sc.value} className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-700">
-                            <Swatch value={sc.value} /> <span className="text-slate-400 tabular-nums">{sc.value}</span> {sc.label}
-                          </li>
-                        ))}
-                      </ul>
-                      <Button variant="outline" size="sm" onClick={() => downloadPdf(exam.title, data.form, data.responses, sentCount)}
-                        className="rounded-lg text-xs font-bold h-7 px-2.5 flex items-center gap-1.5 bg-white">
-                        <HiOutlineDownload className="w-3.5 h-3.5" /> PDF
-                      </Button>
-                    </div>
-                    <p className="mt-1.5 text-[10px] text-slate-400">
-                      Scores are the average rating out of 5. Hover a score to see how participants answered.
-                    </p>
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <ScaleLegend scale={data.form.scale} />
+                    <FeedbackReportActions exam={exam} form={data.form} responses={data.responses} sentCount={sentCount} />
                   </div>
 
-                  {/* One card per form section */}
-                  {data.form.sections.map((section) => {
-                    const stats = summary.statements.filter((s) => section.statements.some((st) => st.key === s.key));
-                    return (
-                      <section key={section.key}>
-                        <header className="flex items-center justify-between gap-3 mb-2 px-0.5">
-                          <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-500">{sectionTitle(section.title)}</h3>
-                          <span className="inline-flex items-center gap-2 text-[11px] font-medium text-slate-400 flex-shrink-0">
-                            <span className="hidden sm:inline">Section average</span> <ScoreBadge avg={weightedAverage(stats)} scale={data.form.scale} />
-                          </span>
-                        </header>
-                        <ul className="space-y-2">
-                          {stats.map((s) => (
-                            <li key={s.key} className="rounded-xl border border-slate-200 bg-white px-4 py-3.5 hover:border-slate-300 transition-colors flex flex-col sm:flex-row sm:items-center gap-2.5 sm:gap-6">
-                              <p className="flex-1 min-w-0 text-[14px] font-medium text-slate-900 leading-snug">{s.text}</p>
-                              <div className="flex-shrink-0 cursor-default"
-                                title={data.form.scale.map((sc, i) => `${sc.label}: ${s.distribution[i]}`).filter((_, i) => s.distribution[i]).join('\n')}>
-                                <ScoreBadge avg={s.average} scale={data.form.scale} />
-                              </div>
-                            </li>
-                          ))}
-                        </ul>
-                      </section>
-                    );
-                  })}
+                  {/* Every statement in one table: same columns for every row */}
+                  <div className="rounded-xl border border-slate-200 overflow-hidden">
+                    <div className={`hidden ${RATING_ROW} px-4 py-2 bg-slate-50 border-b border-slate-200 text-[10px] font-bold uppercase tracking-wider text-slate-400`}>
+                      <span>Statement</span><span>Answers</span><span className="text-right">Avg</span><span>Rating</span>
+                    </div>
+                    {data.form.sections.map((section) => {
+                      const stats = summary.statements.filter((s) => section.statements.some((st) => st.key === s.key));
+                      return (
+                        <section key={section.key} className="border-b border-slate-200 last:border-b-0">
+                          <header className={`${RATING_ROW} px-4 py-2 bg-slate-50/60 border-b border-slate-100`}>
+                            <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-600">{sectionTitle(section.title)}</h3>
+                            <div className="hidden sm:contents">
+                              <DistBar distribution={sumDistributions(stats.map((x) => x.distribution))} scale={data.form.scale} className="w-full" />
+                              <span className="text-[13px] font-black text-slate-900 tabular-nums text-right">{fmtAvg(weightedAverage(stats))}</span>
+                              <BandChip avg={weightedAverage(stats)} scale={data.form.scale} className="justify-self-start" />
+                            </div>
+                          </header>
+                          <div className="divide-y divide-slate-100">
+                            {stats.map((st) => (
+                              <RatingRow key={st.key} text={st.text} average={st.average} distribution={st.distribution} scale={data.form.scale} />
+                            ))}
+                          </div>
+                        </section>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[11px] text-slate-400">Avg is the mean of every answer out of 5. Hover the answers bar to see how many people chose each rating.</p>
 
                   </>
                   )}

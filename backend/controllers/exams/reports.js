@@ -135,6 +135,7 @@ exports.listAssigned = async (req, res) => {
 
     const exams = await Exam.find({
       status: 'published',
+      deleted_at: null,
       'assignments.airline_id': req.admin.id,
     }).select('-questions').sort({ created_at: -1 });
 
@@ -167,6 +168,38 @@ exports.listAssigned = async (req, res) => {
   } catch (err) {
     console.error('GET /exams/assigned error:', err.message);
     res.status(500).json({ error: err.message });
+  }
+};
+
+// ─── GET /exams/latest-results — newest finished exam result per participant ──
+// Powers the participant list's "Exam result" column and its "newest result"
+// sort. Same scope as the other attempt reports (an airline: its own
+// candidates' attempts, as attemptScopeFilter). One row per participant: their most recently
+// submitted attempt across every exam.
+exports.latestResults = async (req, res) => {
+  try {
+    // aggregate() doesn't cast like find() does — the airline id must be an ObjectId.
+    const scope = isAdmin(req) ? {} : { airline_id: new mongoose.Types.ObjectId(String(req.admin.id)) };
+    const rows = await ExamAttempt.aggregate([
+      { $match: { ...scope, status: { $ne: 'in_progress' }, submitted_at: { $ne: null } } },
+      { $sort: { submitted_at: -1 } },
+      {
+        $group: {
+          _id: '$participant_id',
+          attempt_id: { $first: '$_id' },
+          exam_id: { $first: '$exam_id' },
+          exam_title: { $first: '$exam_title_snapshot' },
+          percentage: { $first: '$percentage' },
+          passed: { $first: '$passed' },
+          status: { $first: '$status' },
+          submitted_at: { $first: '$submitted_at' },
+        },
+      },
+    ]);
+    res.json(rows.map(({ _id, ...r }) => ({ participant_id: String(_id), ...r, attempt_id: String(r.attempt_id), exam_id: String(r.exam_id), percentage: pct1(r.percentage) })));
+  } catch (err) {
+    console.error('GET /exams/latest-results error:', err.message);
+    res.status(500).json({ error: 'Failed to load exam results.' });
   }
 };
 

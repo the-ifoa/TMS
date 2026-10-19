@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Exam = require('../../models/Exam');
 const ExamInvite = require('../../models/ExamInvite');
 const ExamAttempt = require('../../models/ExamAttempt');
@@ -5,8 +6,9 @@ const Airline = require('../../models/Airline');
 const Participant = require('../../models/Participant');
 const { examImageUpload, deleteImagesIfUnused } = require('../../services/upload');
 const { sanitizeQuestionForTaking, answerKeyProblems } = require('../../services/examGrading');
+const { submitAttemptOnce } = require('../../services/examAttemptFlow');
 const { remarkExam, changedKeyQuestionIds, changedContentQuestionIds, refreshInProgressContent } = require('../../services/examRemark');
-const { isAdmin, authoringAirline, ownsExam, canAssignExam, assignableOwnerIds, canManageExam, deleteExamImages } = require('./access');
+const { isAdmin, authoringAirline, ownsExam, canAssignExam, assignableOwnerIds, canManageExam, rejectDeleted } = require('./access');
 
 // ─── POST /exams/questions/upload-image — admin uploads a question image ────────
 // examImageUpload runs the actual Cloudinary upload as multer middleware, so a
@@ -71,16 +73,35 @@ async function dropDeletedAssignments(list) {
   return list;
 }
 
+// "" / null / anything that isn't an id → null (general exam).
+const cleanForAirline = (v) => (v && mongoose.isValidObjectId(v) ? v : null);
+
+// ─── GET /exams/airline-options — admin: airlines an exam can be "for" ─────────
+exports.listAirlineOptions = async (req, res) => {
+  try {
+    if (!isAdmin(req)) return res.status(403).json({ error: 'Admin access required.' });
+    const airlines = await Airline.find({ is_department: { $ne: true } }).select('airlineName logo_url').sort({ airlineName: 1 }).lean();
+    res.json(airlines.map((a) => ({ id: String(a._id), name: a.airlineName, logo_url: a.logo_url || '' })));
+  } catch (err) {
+    console.error('GET /exams/airline-options error:', err.message);
+    res.status(500).json({ error: 'Failed to load airlines.' });
+  }
+};
+
 exports.listExams = async (req, res) => {
   try {
     let exams;
+    // Deleted exams are left out unless asked for (?include_deleted=1 — the
+    // exam page, which can show them to reach their results).
+    const live = req.query.include_deleted ? {} : { deleted_at: null };
     if (isAdmin(req)) {
-      exams = await Exam.find({}).select(LIST_EXCLUDE).sort({ created_at: -1 });
+      exams = await Exam.find(live).select(LIST_EXCLUDE).sort({ created_at: -1 });
       const counts = await withQuestionCounts(exams);
       // Tag airline/department-created exams with readable owner names for the admin UI.
       const airlineIds = [...new Set([
         ...exams.filter((e) => e.owner_airline).map((e) => String(e.owner_airline)),
         ...exams.filter((e) => e.owner_department).map((e) => String(e.owner_department)),
+        ...exams.filter((e) => e.for_airline).map((e) => String(e.for_airline)),
       ])];
       if (airlineIds.length) {
         const owners = await Airline.find({ _id: { $in: airlineIds } })
@@ -90,6 +111,7 @@ exports.listExams = async (req, res) => {
           const json = e.toJSON();
           json.question_count = counts[String(e._id)] || 0;
           if (json.owner_airline) json.owner_airline_name = byId[String(json.owner_airline)]?.airlineName || 'Airline';
+          if (json.for_airline) json.for_airline_name = byId[String(json.for_airline)]?.airlineName || '';
           if (json.owner_department) {
             const d = byId[String(json.owner_department)];
             json.owner_department_name = d?.department_name || d?.name || 'Department';
@@ -105,6 +127,7 @@ exports.listExams = async (req, res) => {
       // assigned to its own team so it can monitor / assign them.
       const selfId = String(req.admin.id);
       exams = await Exam.find({
+        ...live,
         $or: [
           { owner_department: selfId },
           { status: 'published', 'assignments.airline_id': selfId },
@@ -115,6 +138,7 @@ exports.listExams = async (req, res) => {
       // departments authored) + published exams assigned anywhere in its tree.
       const visibleIds = (req.scope && req.scope.visibleAirlineIds) || [req.admin.id];
       exams = await Exam.find({
+        ...live,
         $or: [
           { owner_airline: { $in: visibleIds } },
           { owner_department: { $in: visibleIds } },
@@ -146,7 +170,7 @@ exports.createExam = async (req, res) => {
     if (!isAdmin(req) && !airline) return res.status(403).json({ error: 'Admin access required.' });
     if (!req.body.title) return res.status(400).json({ error: 'title is required.' });
 
-    const { owner_airline, owner_department, created_by, ...body } = req.body;
+    const { owner_airline, owner_department, created_by, for_airline, ...body } = req.body;
     // A department's exams are owned by the top-level airline (so the main
     // account still sees them) and tagged with the department that manages them.
     const isDept = !isAdmin(req) && req.scope && req.scope.isDepartment;
@@ -155,6 +179,7 @@ exports.createExam = async (req, res) => {
       created_by: isAdmin(req) ? req.admin.id : undefined,
       owner_airline: airline ? (isDept ? req.scope.topAirlineId : req.admin.id) : null,
       owner_department: isDept ? req.admin.id : null,
+      for_airline: isAdmin(req) ? cleanForAirline(for_airline) : null,
       status: 'draft',
     });
     res.status(201).json(exam.toJSON());
@@ -171,18 +196,18 @@ exports.getExam = async (req, res) => {
     // question list. Same access rules as the full fetch below.
     if (req.query.summary) {
       const exam = await Exam.findById(req.params.id)
-        .select('title status pass_percentage max_attempts owner_airline owner_department assignments.airline_id');
+        .select('title status pass_percentage max_attempts owner_airline owner_department assignments.airline_id deleted_at');
       if (!exam) return res.status(404).json({ error: 'Exam not found.' });
       if (!isAdmin(req) && !ownsExam(req, exam)) {
         const assigned = exam.assignments.some((a) => String(a.airline_id) === String(req.admin.id));
         if (exam.status !== 'published' || !assigned) return res.status(403).json({ error: 'Access denied.' });
       }
-      const { _id, title, status, pass_percentage, max_attempts, owner_airline, owner_department } = exam;
+      const { _id, title, status, pass_percentage, max_attempts, owner_airline, owner_department, deleted_at } = exam;
       // Extra attempts granted by reassigns, per candidate — the results page
       // shows "attempts used / allowed" (allowed = max_attempts + extra).
       const extras = await ExamInvite.find({ exam_id: _id, bonus_attempts: { $gt: 0 } }).select('participant_id bonus_attempts').lean();
       const extra_attempts = Object.fromEntries(extras.map((i) => [String(i.participant_id), i.bonus_attempts]));
-      return res.json({ id: String(_id), _id, title, status, pass_percentage, max_attempts, extra_attempts, owner_airline, owner_department });
+      return res.json({ id: String(_id), _id, title, status, pass_percentage, max_attempts, extra_attempts, owner_airline, owner_department, deleted_at });
     }
 
     const exam = await Exam.findById(req.params.id);
@@ -210,8 +235,11 @@ exports.updateExam = async (req, res) => {
     const exam = await Exam.findById(req.params.id);
     if (!exam) return res.status(404).json({ error: 'Exam not found.' });
     if (!canManageExam(req, exam)) return res.status(403).json({ error: 'Access denied.' });
+    if (rejectDeleted(res, exam)) return;
 
-    const { created_by, owner_airline, _id, id, assignments, status, ...updatable } = req.body;
+    const { created_by, owner_airline, _id, id, assignments, status, for_airline, ...updatable } = req.body;
+    // Only IFOA admins tag an exam with the airline it's for.
+    if (isAdmin(req) && for_airline !== undefined) updatable.for_airline = cleanForAirline(for_airline);
     const questionsBefore = exam.questions.map((q) => q.toObject());
     Object.assign(exam, updatable);
     // Every auto-graded question needs its answer key: without one every
@@ -250,7 +278,10 @@ exports.remarkPreview = async (req, res) => {
     const exam = await Exam.findById(req.params.id);
     if (!exam) return res.status(404).json({ error: 'Exam not found.' });
     if (!canManageExam(req, exam)) return res.status(403).json({ error: 'Access denied.' });
-    const { created_by, owner_airline, _id, id, assignments, status, ...updatable } = req.body;
+    if (rejectDeleted(res, exam)) return;
+    const { created_by, owner_airline, _id, id, assignments, status, for_airline, ...updatable } = req.body;
+    // Only IFOA admins tag an exam with the airline it's for.
+    if (isAdmin(req) && for_airline !== undefined) updatable.for_airline = cleanForAirline(for_airline);
     const questionsBefore = exam.questions.map((q) => q.toObject());
     Object.assign(exam, updatable);
     const problems = answerKeyProblems(exam.questions);
@@ -273,6 +304,7 @@ exports.publishExam = async (req, res) => {
     const exam = await Exam.findById(req.params.id);
     if (!exam) return res.status(404).json({ error: 'Exam not found.' });
     if (!canManageExam(req, exam)) return res.status(403).json({ error: 'Access denied.' });
+    if (rejectDeleted(res, exam)) return;
     if (exam.questions.length === 0) return res.status(400).json({ error: 'Add at least one question before publishing.' });
     const problems = answerKeyProblems(exam.questions);
     if (problems.length) return res.status(400).json({ error: `Fix the answer key before publishing: ${problems.join(' ')}`, problems });
@@ -292,6 +324,7 @@ exports.assignExam = async (req, res) => {
     const exam = await Exam.findById(req.params.id);
     if (!exam) return res.status(404).json({ error: 'Exam not found.' });
     if (!canAssignExam(req, exam)) return res.status(403).json({ error: 'Access denied.' });
+    if (rejectDeleted(res, exam)) return;
 
     const { participant_ids = [] } = req.body;
     const query = { _id: { $in: participant_ids } };
@@ -387,12 +420,23 @@ exports.getAnalytics = async (req, res) => {
 exports.deleteExam = async (req, res) => {
   try {
     const exam = await Exam.findById(req.params.id);
-    if (!exam) return res.status(404).json({ error: 'Exam not found.' });
+    if (!exam || exam.deleted_at) return res.status(404).json({ error: 'Exam not found.' });
     if (!canManageExam(req, exam)) return res.status(403).json({ error: 'Access denied.' });
 
-    await exam.deleteOne();
-    await deleteExamImages(exam); // after the delete, so its own references don't count
-    res.json({ message: 'Exam deleted.' });
+    // Soft delete: results, invites, certificates and question images all stay
+    // so reports and dashboards keep working. Links stop working (expired now)
+    // and anyone mid-exam is submitted with the answers they have so far.
+    const now = new Date();
+    exam.deleted_at = now;
+    exam.deleted_by = req.admin.id || null;
+    await exam.save({ validateBeforeSave: false });
+    await ExamInvite.updateMany(
+      { exam_id: exam._id, $or: [{ expires_at: null }, { expires_at: { $gt: now } }] },
+      { $set: { expires_at: now } }
+    );
+    const open = await ExamAttempt.find({ exam_id: exam._id, status: 'in_progress' }).select('_id').lean();
+    for (const a of open) await submitAttemptOnce(a._id, { auto_submitted: true, auto_submit_reason: 'exam_deleted' });
+    res.json({ message: 'Exam deleted. Its results are kept.' });
   } catch (err) {
     console.error('DELETE /exams/:id error:', err.message);
     res.status(500).json({ error: err.message });

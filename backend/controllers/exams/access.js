@@ -95,6 +95,14 @@ async function canReadAttempt(req, attempt) {
   return !!(exam && ownsExam(req, exam));
 }
 
+// Written-to endpoints refuse a soft-deleted exam (see Exam.deleted_at).
+const EXAM_DELETED = 'This exam was deleted. Its results are kept, but it can no longer be changed or assigned.';
+function rejectDeleted(res, exam) {
+  if (!exam || !exam.deleted_at) return false;
+  res.status(410).json({ error: EXAM_DELETED, deleted: true });
+  return true;
+}
+
 const pct1 = (n) => (n == null ? null : Math.round(Number(n) * 10) / 10);
 
-Object.assign(exports, { isAdmin, authoringAirline, ownsExam, canAssignExam, assignableOwnerIds, canManageExam, deleteExamImages, attemptScopeFilter, canReadAttempt, pct1 });
+Object.assign(exports, { isAdmin, authoringAirline, ownsExam, canAssignExam, assignableOwnerIds, canManageExam, deleteExamImages, attemptScopeFilter, canReadAttempt, pct1, rejectDeleted });

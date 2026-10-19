@@ -13,8 +13,8 @@ import {
   HiOutlineDownload,
   HiOutlineUpload,
 } from 'react-icons/hi';
-import { ChartSpline, CalendarDays, Clock, ShieldAlert, ChevronDown, ChevronUp, PenLine, Trash2, MonitorX, FileText, Mail, Upload, Hourglass, CircleX, ListChecks, Trophy, Minimize2, ArrowLeftRight, CodeXml, CircleCheck, Gauge, ChartBarDecreasing, ClipboardCheck, CircleHelp, ChartPie } from 'lucide-react';
-import { listExamAttempts, getExamSummary, getExamAttemptResult, gradeExamAttempt, getExamAnalytics, exportExamAttempts, deleteExamAttempt, bulkDeleteExamAttempts, uploadAttemptCertificate, getAttemptCertificate, deleteAttemptCertificate, sendAttemptCertificate } from '../api';
+import { ChartSpline, CalendarDays, Clock, ShieldAlert, ChevronDown, ChevronUp, PenLine, Trash2, MonitorX, FileText, Mail, Upload, Hourglass, CircleX, ListChecks, Trophy, RotateCcw, Minimize2, ArrowLeftRight, CodeXml, CircleCheck, Gauge, ChartBarDecreasing, ClipboardCheck, CircleHelp, ChartPie } from 'lucide-react';
+import { listExamAttempts, getExamSummary, getExamAttemptResult, gradeExamAttempt, getExamAnalytics, exportExamAttempts, deleteExamAttempt, bulkDeleteExamAttempts, uploadAttemptCertificate, getAttemptCertificate, deleteAttemptCertificate, sendAttemptCertificate, reassignExamInvites } from '../api';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useConfirm } from '@/hooks/use-confirm';
 import { useAuth } from '../context/AuthContext';
@@ -1071,6 +1071,31 @@ export default function ExamAttempts() {
   const canDeleteResults = canDelete && can('exams.author');
   const canManageCerts   = canDelete && (canGrade || can('exams.author'));
   const canSelect        = canDeleteResults || canManageCerts;
+  const canReassign      = canDelete && can('exams.assign') && !exam?.deleted_at;
+  const [reassigningPid, setReassigningPid] = useState(null);
+
+  // Give a candidate who finished — passed or failed — a fresh attempt and email
+  // them a new link. Earlier attempts stay in the results.
+  const handleReassign = async (attempt) => {
+    const name = attempt.participant_name || 'this candidate';
+    const ok = await confirm(
+      `${attempt.passed === true ? `${name} has already passed.` : `Let ${name} take the exam again?`} Reassign emails them a fresh exam link (the old one stops working) and gives them a new attempt. Their earlier results are kept.`,
+      { title: 'Reassign exam', confirmLabel: 'Reassign' },
+    );
+    if (!ok) return;
+    setReassigningPid(String(attempt.participant_id));
+    try {
+      const res = await reassignExamInvites(id, [attempt.participant_id]);
+      const { sent = [], skipped = [] } = res.data || {};
+      if (sent.length) toast.success(`${name} reassigned — a fresh exam link was emailed.`);
+      else toast.error(`Reassign failed (${skipped[0]?.reason || 'unknown'}).`);
+      load();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to reassign.');
+    } finally {
+      setReassigningPid(null);
+    }
+  };
 
   const toggleSelected = (attemptId) => setSelectedIds((prev) => {
     const next = new Set(prev);
@@ -1349,6 +1374,7 @@ export default function ExamAttempts() {
                   {exam?.title || 'Exam'}
                 </h1>
                 <p className="text-[11px] sm:text-xs text-slate-500 truncate">
+                  {exam?.deleted_at && <span className="font-semibold text-rose-600">Deleted exam · </span>}
                   Results · {attempts.length} attempt{attempts.length === 1 ? '' : 's'}
                 </p>
               </div>
@@ -1534,7 +1560,7 @@ export default function ExamAttempts() {
                     <span className="w-[5.5rem]">Attempts</span>
                     <span className="w-[7.5rem]">Status</span>
                     <span className="w-[6.5rem] text-right">Flags</span>
-                    <span className="w-[9.5rem] text-right">Actions</span>
+                    <span className="w-[12rem] text-right">Actions</span>
                   </div>
                 </div>
               </div>
@@ -1693,7 +1719,19 @@ export default function ExamAttempts() {
                           </span>
                         )}
                       </div>
-                      <div className="flex items-center justify-end ml-auto md:ml-0 md:w-[9.5rem]">
+                      <div className="flex items-center justify-end gap-2 ml-auto md:ml-0 md:w-[12rem]">
+                        {canReassign && first.participant_id && first.participant_email && first.status !== 'in_progress' && (
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); handleReassign(first); }}
+                            disabled={reassigningPid === String(first.participant_id)}
+                            title={everPassed ? 'Passed — email a fresh link so they can take the exam again' : 'Email a fresh link and give a new attempt'}
+                            className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-lg text-xs font-semibold text-blue-700 ring-1 ring-inset ring-blue-200 bg-blue-50 hover:bg-blue-100 disabled:opacity-50 transition cursor-pointer"
+                          >
+                            <RotateCcw className={`w-3.5 h-3.5 ${reassigningPid === String(first.participant_id) ? 'animate-spin' : ''}`} strokeWidth={2} />
+                            Reassign
+                          </button>
+                        )}
                         <span className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-semibold text-slate-600 ring-1 ring-inset ring-slate-200 bg-white">
                           {isOpen ? 'Hide' : 'View'} attempts
                           <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} strokeWidth={2} />
@@ -1815,7 +1853,7 @@ export default function ExamAttempts() {
                       )}
                       </div>
 
-                      <div className="flex items-center justify-end gap-2 ml-auto md:ml-0 md:w-[9.5rem]">
+                      <div className="flex items-center justify-end gap-2 ml-auto md:ml-0 md:w-[12rem]">
                       {canGrade && !isInProgress && (
                         <button
                           type="button"

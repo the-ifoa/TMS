@@ -26,6 +26,7 @@ const ExamResults = lazy(() => import('./pages/ExamResults'));
 const AttendanceSheets = lazy(() => import('./pages/AttendanceSheets'));
 const DgrForms = lazy(() => import('./pages/DgrForms'));
 const ExamSystem = lazy(() => import('./pages/ExamSystem'));
+const FeedbackDashboard = lazy(() => import('./pages/FeedbackDashboard'));
 const ExamBuilder = lazy(() => import('./pages/ExamBuilder'));
 const ExamAttempts = lazy(() => import('./pages/ExamAttempts'));
 const AirlineExams = lazy(() => import('./pages/AirlineExams'));
@@ -140,6 +141,7 @@ function App() {
           <Route path="exam-results" element={<AdminRoute><PermRoute perms={['examResults.view', 'examResults.manage']}><ExamResults /></PermRoute></AdminRoute>} />
           <Route path="dgr"          element={<AdminRoute><PermRoute perms={['dgr.view', 'dgr.manage']}><DgrForms /></PermRoute></AdminRoute>} />
           <Route path="exams"           element={<AdminRoute><PermRoute perms={['exams.author', 'exams.assign', 'exams.grade']}><ExamSystem /></PermRoute></AdminRoute>} />
+          <Route path="feedback"        element={<AdminRoute><PermRoute perms={['exams.author', 'exams.assign', 'exams.grade']}><FeedbackDashboard /></PermRoute></AdminRoute>} />
           <Route path="exams/new"       element={<AdminRoute><ExamBuilder /></AdminRoute>} />
           <Route path="exams/:id/edit"  element={<AdminRoute><ExamBuilder /></AdminRoute>} />
           <Route path="exams/:id/attempts" element={<AdminRoute><ExamAttempts /></AdminRoute>} />

@@ -11,7 +11,7 @@ const { brandingResolver } = require('../../services/emailBranding');
 const r2 = require('../../services/r2');
 const { frontendLink } = require('../../config/appUrls');
 const { hasPermission } = require('../../middleware/permissions');
-const { isAdmin, canAssignExam, assignableOwnerIds, canManageExam } = require('./access');
+const { isAdmin, canAssignExam, assignableOwnerIds, canManageExam, rejectDeleted } = require('./access');
 
 // ─── POST /exams/:id/quick-participant — add candidates from the Assign dialog ──
 // Body: { people: [{ name, email }], airline_id, keep } (or a single { name,
@@ -24,9 +24,10 @@ const EMAIL_RX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MAX_QUICK_ADD = 50;
 exports.addQuickParticipant = async (req, res) => {
   try {
-    const exam = await Exam.findById(req.params.id).select('owner_airline owner_department status');
+    const exam = await Exam.findById(req.params.id).select('owner_airline owner_department status deleted_at');
     if (!exam) return res.status(404).json({ error: 'Exam not found.' });
     if (!canAssignExam(req, exam)) return res.status(403).json({ error: 'Access denied.' });
+    if (rejectDeleted(res, exam)) return;
 
     const keep = req.body?.keep !== false;
     const rawPeople = Array.isArray(req.body?.people) ? req.body.people : [{ name: req.body?.name, email: req.body?.email }];
@@ -142,6 +143,7 @@ exports.sendInvites = async (req, res) => {
     const exam = await Exam.findById(req.params.id);
     if (!exam) return res.status(404).json({ error: 'Exam not found.' });
     if (!canAssignExam(req, exam)) return res.status(403).json({ error: 'Access denied.' });
+    if (rejectDeleted(res, exam)) return;
     if (exam.status !== 'published') return res.status(400).json({ error: 'Publish the exam before sending invites.' });
 
     const { participant_ids = [], valid_days, expires_at, reassign = false } = req.body;
@@ -211,9 +213,10 @@ exports.sendInvites = async (req, res) => {
       }
 
       const cycle = attemptCycleFilter(exam._id, p._id, invite);
-      const [used, active] = await Promise.all([
+      const [used, active, passed] = await Promise.all([
         ExamAttempt.countDocuments({ exam_id: exam._id, participant_id: p._id }), // every attempt counts
         ExamAttempt.exists({ ...cycle, status: 'in_progress' }),
+        ExamAttempt.exists({ ...cycle, passed: true }),
       ]);
       // Plain Assign never grants attempts or changes the link — only Reassign
       // does. Re-sending to someone with no attempts left would just email a
@@ -221,6 +224,12 @@ exports.sendInvites = async (req, res) => {
       const exhausted = !active && used >= exam.max_attempts + (invite.bonus_attempts || 0);
       if (!reassign && exhausted) {
         skipped.push({ id: String(p._id), name: p.participant_name, reason: 'all attempts used — use Reassign to give a new attempt', code: 'no_attempts_left' });
+        continue;
+      }
+      // Same for someone who already passed: their link only says "You have
+      // already passed". Reassign starts a new cycle so they can sit it again.
+      if (!reassign && !active && passed) {
+        skipped.push({ id: String(p._id), name: p.participant_name, reason: 'already passed — use Reassign to let them take it again', code: 'already_passed' });
         continue;
       }
 
@@ -304,6 +313,7 @@ exports.removeCandidate = async (req, res) => {
     if (!exam) return res.status(404).json({ error: 'Exam not found.' });
     const allowed = isAdmin(req) ? canManageExam(req, exam) : canAssignExam(req, exam);
     if (!allowed) return res.status(403).json({ error: 'Access denied.' });
+    if (rejectDeleted(res, exam)) return;
 
     const pid = req.params.participantId;
     const scope = { exam_id: exam._id, participant_id: pid };
@@ -354,13 +364,16 @@ exports.listAssignments = async (req, res) => {
     }
 
     const ids = assignments.map((a) => a.participant_id);
-    const [people, attempts] = await Promise.all([
+    const [people, attempts, invites] = await Promise.all([
       Participant.find({ _id: { $in: ids } })
         .select('participant_name first_name last_name email company airline_name').lean(),
       ExamAttempt.find({ exam_id: exam._id, participant_id: { $in: ids } })
-        .select('participant_id status passed percentage started_at').sort({ started_at: -1 }).lean(),
+        .select('participant_id status passed percentage started_at created_at').sort({ started_at: -1 }).lean(),
+      ExamInvite.find({ exam_id: exam._id, participant_id: { $in: ids } })
+        .select('participant_id cycle_started_at').lean(),
     ]);
     const personById = Object.fromEntries(people.map((p) => [String(p._id), p]));
+    const cycleStart = Object.fromEntries(invites.map((i) => [String(i.participant_id), i.cycle_started_at]));
     const latestAttempt = {};
     for (const a of attempts) latestAttempt[String(a.participant_id)] ??= a;  // sorted newest first
 
@@ -368,7 +381,12 @@ exports.listAssignments = async (req, res) => {
       .map((a) => {
         const p = personById[String(a.participant_id)];
         if (!p) return null;   // participant deleted since assignment
-        const att = latestAttempt[String(a.participant_id)];
+        let att = latestAttempt[String(a.participant_id)];
+        // Reassigned and not started again yet: the old result belongs to the
+        // previous cycle, so show them as waiting to start.
+        const since = cycleStart[String(a.participant_id)];
+        const reassigned = !!since;
+        if (att && since && new Date(att.created_at) < new Date(since)) att = null;
         return {
           participant_id: String(p._id),
           name: p.participant_name || `${p.first_name || ''} ${p.last_name || ''}`.trim() || p.email,
@@ -376,6 +394,7 @@ exports.listAssignments = async (req, res) => {
           airline: p.airline_name || p.company || '',
           assigned_at: a.assigned_at,
           attempt: att ? { status: att.status, passed: att.passed, percentage: att.percentage } : null,
+          reassigned,
         };
       })
       .filter(Boolean)
@@ -425,7 +444,10 @@ exports.listInvites = async (req, res) => {
       json.attempts_used = u.used;
       json.attempts_allowed = maxAttempts + (i.bonus_attempts || 0);
       json.attempts_left = Math.max(0, json.attempts_allowed - u.used);
-      json.needs_reassign = u.open === 0 && json.attempts_left === 0;
+      // The invite's attempt is the latest one of the current cycle (a reassign
+      // clears it), so a pass here means the link only says "already passed".
+      json.passed_in_cycle = u.open === 0 && att?.passed === true;
+      json.needs_reassign = u.open === 0 && (json.attempts_left === 0 || json.passed_in_cycle);
       return json;
     }));
   } catch (err) {

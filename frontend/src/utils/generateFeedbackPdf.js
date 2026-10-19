@@ -32,7 +32,8 @@ const noStop = (t) => String(t || '').replace(/\.\s*$/, '');
 const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : '—');
 const pad2 = (n) => String(n).padStart(2, '0');
 
-export function downloadFeedbackPdf({ examTitle, form, responses, sentCount }) {
+// Builds the review report and returns the jsPDF document.
+function buildFeedbackPdf({ examTitle, form, responses, sentCount }) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const scale = [...form.scale].sort((a, b) => b.value - a.value); // Excellent first
   const ratingLabel = (v) => {
@@ -257,5 +258,21 @@ export function downloadFeedbackPdf({ examTitle, form, responses, sentCount }) {
     text(`IFOA Training Feedback  |  Page ${p}`, W - M, H - 9, { size: 8, color: MUTED, align: 'right' });
   }
 
-  doc.save(`Training_Feedback_${String(examTitle).replace(/[^a-zA-Z0-9]+/g, '_')}.pdf`);
+  return doc;
+}
+
+export const feedbackPdfFilename = (examTitle) => `Training_Feedback_${String(examTitle).replace(/[^a-zA-Z0-9]+/g, '_')}.pdf`;
+
+export function downloadFeedbackPdf(opts) {
+  buildFeedbackPdf(opts).save(feedbackPdfFilename(opts.examTitle));
+}
+
+// Object URL for previewing in the browser. Revoke it when done.
+export function feedbackPdfUrl(opts) {
+  return URL.createObjectURL(buildFeedbackPdf(opts).output('blob'));
+}
+
+// Base64 (no data: prefix) for sending to the server as an email attachment.
+export function feedbackPdfBase64(opts) {
+  return buildFeedbackPdf(opts).output('datauristring').split(',')[1];
 }

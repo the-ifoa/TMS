@@ -83,7 +83,7 @@ function buildDefaultBlocks(f = DEFAULT_FIELDS) {
     { id: 'h3',        type: 'heading', text: '3.  SERVICES PROVIDED' },
     { id: 's3a',       type: 'para',   text: 'Beginning upon Agreement with this contract, the International Flight Operational Academy GmbH will provide the Client with the service (collectively, the "Services") described in Annex 1:' },
     { id: 's3bullet',  type: 'bullet', text:
-        `**Duration:** {{${f.numberOfDays}}} day(s) — **Training Type:** {{${f.trainingType}}}\n` +
+        `**Duration:** {{${f.numberOfDays}}} day(s), **Training Type:** {{${f.trainingType}}}\n` +
         `**Dates:** {{${f.trainingDates}}}\n` +
         `**Delivery:** {{${f.deliveryMode}}}\n` +
         `**Additional Notes:** {{${f.servicesNotes}}}`

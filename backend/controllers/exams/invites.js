@@ -223,13 +223,13 @@ exports.sendInvites = async (req, res) => {
       // link to "You have completed this exam", so tell the admin instead.
       const exhausted = !active && used >= exam.max_attempts + (invite.bonus_attempts || 0);
       if (!reassign && exhausted) {
-        skipped.push({ id: String(p._id), name: p.participant_name, reason: 'all attempts used — use Reassign to give a new attempt', code: 'no_attempts_left' });
+        skipped.push({ id: String(p._id), name: p.participant_name, reason: 'all attempts used. Use Reassign to give a new attempt', code: 'no_attempts_left' });
         continue;
       }
       // Same for someone who already passed: their link only says "You have
       // already passed". Reassign starts a new cycle so they can sit it again.
       if (!reassign && !active && passed) {
-        skipped.push({ id: String(p._id), name: p.participant_name, reason: 'already passed — use Reassign to let them take it again', code: 'already_passed' });
+        skipped.push({ id: String(p._id), name: p.participant_name, reason: 'already passed. Use Reassign to let them take it again', code: 'already_passed' });
         continue;
       }
 
@@ -275,7 +275,7 @@ exports.sendInvites = async (req, res) => {
         try {
           await emailLink();
         } catch (mailErr) {
-          skipped.push({ id: String(p._id), name: p.participant_name, reason: `${mailErr.message} — nothing was changed, the current link still works` });
+          skipped.push({ id: String(p._id), name: p.participant_name, reason: `${mailErr.message}. Nothing was changed and the current link still works` });
           continue;
         }
         await closeOpenAttempts(exam, p._id);

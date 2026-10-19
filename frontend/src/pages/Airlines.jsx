@@ -571,7 +571,7 @@ export default function Airlines() {
     }
     setRevoking(false);
     fetchData({ silent: true });
-    if (fail === 0) toast.success(`${ok} certificate${ok > 1 ? 's' : ''} revoked — now Pending`);
+    if (fail === 0) toast.success(`${ok} certificate${ok > 1 ? 's' : ''} revoked, now Pending`);
     else toast.error(`${ok} revoked, ${fail} failed`);
   };
 
@@ -636,7 +636,7 @@ export default function Airlines() {
     if (!file.type.startsWith('image/')) { toast.error('Please select an image file'); return; }
     try {
       const compressed = await compressImageFile(file);
-      if (compressed.size > 2 * 1024 * 1024) { toast.error('Logo still too large after compression — try a smaller image.'); return; }
+      if (compressed.size > 2 * 1024 * 1024) { toast.error('Logo still too large after compression. Try a smaller image.'); return; }
       setCreateLogoFile(compressed);
       setCreateLogoPreview(URL.createObjectURL(compressed));
     } catch { toast.error('Could not process that image'); }
@@ -656,7 +656,7 @@ export default function Airlines() {
         try {
           const up = await uploadAirlineLogo(createLogoFile);
           logo_url = up.data.logo_url;
-        } catch { toast.error('Logo upload failed — creating airline without logo'); }
+        } catch { toast.error('Logo upload failed. Creating the airline without a logo.'); }
       }
       await adminCreateAirline({
         name, airlineName, email, password, logo_url,
@@ -715,7 +715,7 @@ export default function Airlines() {
 
     const lines = [];
     if (withData.length)  lines.push(`• remove all submissions for ${withData.length} airline(s) (account kept)`);
-    if (emptyOnes.length) lines.push(`• permanently delete ${emptyOnes.length} empty airline account(s) — login included`);
+    if (emptyOnes.length) lines.push(`• permanently delete ${emptyOnes.length} empty airline account(s), login included`);
     const confirmed = await confirm(
       `This will:\n${lines.join('\n')}\n\nCannot be undone.`,
       { title: 'Delete airlines', confirmLabel: 'Delete' }
@@ -760,12 +760,12 @@ export default function Airlines() {
     try {
       const res    = await bulkEnsureAttendanceSheets(ids);
       const sheets = (res.data.sheets || []).map(s => s.sheet);
-      if (!sheets.length) { toast.error('Could not build attendance — participants need a training start date'); return; }
+      if (!sheets.length) { toast.error('Could not build attendance. Participants need a training start date'); return; }
       const newCount = (res.data.sheets || []).filter(s => s.created).length;
       toast.success(
         sheets.length === 1
-          ? (newCount ? 'Attendance sheet created' : 'Attendance sheet already existed — opening it')
-          : `${sheets.length} attendance sheets ready (${newCount} new) — opening the first`
+          ? (newCount ? 'Attendance sheet created' : 'Attendance sheet already existed. Opening it.')
+          : `${sheets.length} attendance sheets ready (${newCount} new). Opening the first.`
       );
       setAttendanceModal(sheets[0]);
       setChecked(new Set());
@@ -880,7 +880,7 @@ export default function Airlines() {
     setGeneratingDhl(false);
     fetchData({ silent: true });
     if (alreadyHas.length > 0) {
-      toast(`${alreadyHas.length} selected participant${alreadyHas.length > 1 ? 's' : ''} skipped — already has a DHL certificate.`, { icon: 'ℹ️' });
+      toast(`${alreadyHas.length} selected participant${alreadyHas.length > 1 ? 's' : ''} skipped: already has a DHL certificate.`, { icon: 'ℹ️' });
     }
     if (skipped > 0) toast(`${skipped} selected participant${skipped > 1 ? 's' : ''} skipped (not eligible).`, { icon: 'ℹ️' });
     if (results.length) setCertResults(results);
@@ -1199,7 +1199,7 @@ export default function Airlines() {
                         iconColor="text-amber-600"
                         iconBg="bg-amber-50 border-amber-200/80"
                         title="Allow this airline to add extra logins for the same account"
-                        description="Adds an 'Additional logins' section to the airline's Profile where it can create more email + password pairs that sign in to this same account (same data and exams — not a separate department)."
+                        description="Adds an 'Additional logins' section to the airline's Profile where it can create more email + password pairs that sign in to this same account (same data and exams, not a separate department)."
                         checked={editAirline.can_have_secondary_logins}
                         onChange={val => setEditAirline(prev => ({ ...prev, can_have_secondary_logins: val }))}
                       />
@@ -1268,7 +1268,7 @@ export default function Airlines() {
                     </div>
                     <div>
                       <h2 className="text-base font-bold text-slate-900 tracking-tight">Create Airline Account</h2>
-                      <p className="text-xs text-slate-500 mt-0.5">Registers the account directly — no email verification required.</p>
+                      <p className="text-xs text-slate-500 mt-0.5">Registers the account directly. No email verification required.</p>
                     </div>
                   </div>
                   <button onClick={closeCreateAirline} className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all">
@@ -1405,7 +1405,7 @@ export default function Airlines() {
                         iconColor="text-amber-600"
                         iconBg="bg-amber-50 border-amber-200/80"
                         title="Allow this airline to add extra logins for the same account"
-                        description="Adds an 'Additional logins' section to the airline's Profile where it can create more email + password pairs that sign in to this same account (same data and exams — not a separate department)."
+                        description="Adds an 'Additional logins' section to the airline's Profile where it can create more email + password pairs that sign in to this same account (same data and exams, not a separate department)."
                         checked={createAirline.can_have_secondary_logins}
                         onChange={val => setCreateAirline(prev => ({ ...prev, can_have_secondary_logins: val }))}
                       />
@@ -1462,7 +1462,7 @@ export default function Airlines() {
                 >
                 <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-primary-200">
                   <div className="min-w-0 mr-3">
-                    <p className="text-sm sm:text-base font-bold text-primary-800 truncate">Certificate — {rowPreview.participant_name}</p>
+                    <p className="text-sm sm:text-base font-bold text-primary-800 truncate">Certificate: {rowPreview.participant_name}</p>
                     <p className="text-xs text-primary-400 mt-0.5 truncate">{TRAINING_LABELS[rowPreview.training_type] || rowPreview.training_type}</p>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
@@ -1517,7 +1517,7 @@ export default function Airlines() {
                 >
                 <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-primary-200">
                   <div className="min-w-0 mr-3">
-                    <p className="text-sm sm:text-base font-bold text-primary-800 truncate">DHL Certificate — {dhlRowPreview.participant_name}</p>
+                    <p className="text-sm sm:text-base font-bold text-primary-800 truncate">DHL Certificate: {dhlRowPreview.participant_name}</p>
                     <p className="text-xs text-primary-400 mt-0.5 truncate">DHL FORM ST-{String(dhlRowPreview.dhl_cert_sequence).padStart(3, '0')}</p>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">

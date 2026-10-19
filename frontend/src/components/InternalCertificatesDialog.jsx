@@ -184,7 +184,7 @@ export default function InternalCertificatesDialog({ participant, mode = 'view',
                 {isUpload ? 'Upload Certificate' : 'Uploaded Certificates'}
               </DialogTitle>
               <DialogDescription className="text-xs text-slate-500 mt-0.5 truncate">
-                <strong className="text-slate-700 font-semibold">{participant?.participant_name || 'Candidate'}</strong> — {isUpload
+                <strong className="text-slate-700 font-semibold">{participant?.participant_name || 'Candidate'}</strong>: {isUpload
                   ? "add one of your airline's own certificate PDFs."
                   : "your airline's own certificate PDFs."}
               </DialogDescription>

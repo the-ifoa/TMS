@@ -107,7 +107,7 @@ export function ImportExcelModal({ onClose, onImported }) {
               <h2 className="text-base font-bold text-slate-900">Import Exam Results from Excel</h2>
               <p className="text-xs text-slate-500 mt-0.5">
                 {step === 'upload'    && 'Upload your IFOA exam results workbook'}
-                {step === 'preview'   && `${students.length} student${students.length !== 1 ? 's' : ''} found — review before importing`}
+                {step === 'preview'   && `${students.length} student${students.length !== 1 ? 's' : ''} found. Review before importing`}
                 {step === 'importing' && 'Saving records to database…'}
                 {step === 'done'      && 'Import complete'}
               </p>
@@ -159,8 +159,8 @@ export function ImportExcelModal({ onClose, onImported }) {
               <div className="bg-slate-50 rounded-xl p-4 border border-slate-200/80">
                 <p className="text-xs font-bold text-slate-800 mb-2">Expected workbook format</p>
                 <ul className="text-xs text-slate-600 space-y-1 list-disc list-inside">
-                  <li><strong>Sheet 1</strong> — Summary sheet with course metadata and a student score table</li>
-                  <li><strong>Sheets 2+</strong> — Individual student result sheets</li>
+                  <li><strong>Sheet 1</strong>: Summary sheet with course metadata and a student score table</li>
+                  <li><strong>Sheets 2+</strong>: Individual student result sheets</li>
                   <li>Matches the standard IFOA Exam Results Report workbook</li>
                   <li>Leave any subject column blank or enter <strong>NA</strong> to mark it as N/A on the result sheet</li>
                 </ul>
@@ -276,7 +276,7 @@ export function ImportExcelModal({ onClose, onImported }) {
                     {importResult.successCount} of {importResult.successCount + importResult.failCount} records imported successfully
                   </p>
                   <p className={`text-xs mt-0.5 ${importResult.failCount === 0 ? 'text-emerald-700' : 'text-amber-700'}`}>
-                    {importResult.failCount === 0 ? 'All student exam results have been added to the database.' : `${importResult.failCount} record(s) failed — see details below.`}
+                    {importResult.failCount === 0 ? 'All student exam results have been added to the database.' : `${importResult.failCount} record(s) failed. See details below.`}
                   </p>
                 </div>
               </div>

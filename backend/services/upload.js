@@ -103,6 +103,8 @@ async function deleteImagesIfUnused(publicIds) {
   const Exam = require('../models/Exam');
   const ExamAttempt = require('../models/ExamAttempt');
   const QuestionBankItem = require('../models/QuestionBankItem');
+  const LiveGame = require('../models/LiveGame');
+  const LiveSession = require('../models/LiveSession');
   const paths = (prefix) => [`${prefix}image_public_id`, `${prefix}images.public_id`, `${prefix}options.image_public_id`];
   const used = new Set();
   const collect = async (Model, prefix) => {
@@ -111,7 +113,10 @@ async function deleteImagesIfUnused(publicIds) {
       (await Model.distinct(field, { [field]: { $in: ids } })).forEach((v) => used.add(v));
     }
   };
-  await Promise.all([collect(Exam, 'questions.'), collect(ExamAttempt, 'questions_snapshot.'), collect(QuestionBankItem, '')]);
+  await Promise.all([
+    collect(Exam, 'questions.'), collect(ExamAttempt, 'questions_snapshot.'), collect(QuestionBankItem, ''),
+    collect(LiveGame, 'questions.'), collect(LiveSession, 'questions.'), // live quiz games and running/past sessions
+  ]);
   await Promise.all(ids.filter((id) => !used.has(id)).map((id) => deleteCloudinaryImage(id)));
 }
 

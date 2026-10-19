@@ -121,6 +121,38 @@ function MockExamCard({ isAdmin }) {
   );
 }
 
+function MockLiveCard() {
+  return (
+    <MockFrame caption="A Quiz Arena game card. The numbers match the list below.">
+      <div className="max-w-xs mx-auto bg-white border border-slate-200 rounded-2xl shadow-sm p-4 space-y-3">
+        <div className="flex items-start gap-2.5">
+          <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center flex-shrink-0">
+            <FaPlaneDeparture className="w-3.5 h-3.5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[13px] font-extrabold text-slate-900 leading-tight">Dispatch Basics</p>
+            <p className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1">10 Questions · ~5 Mins <Marker n={2} /></p>
+          </div>
+          <span className="flex items-center gap-1">
+            <Marker n={1} />
+            <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">Ready</span>
+            <HiOutlineTrash className="w-3.5 h-3.5 text-slate-400" />
+          </span>
+        </div>
+        <div className="grid grid-cols-2 gap-1.5 text-[10px] font-semibold text-slate-600">
+          <div className="flex items-center gap-1 p-1.5 rounded-lg bg-slate-50 border border-slate-200/70"><HiOutlineUserGroup className="w-3 h-3 text-slate-400" />3 Plays <Marker n={3} className="ml-auto" /></div>
+          <div className="flex items-center gap-1 p-1.5 rounded-lg bg-slate-50 border border-slate-200/70"><HiOutlineClock className="w-3 h-3 text-slate-400" />Last 19 Oct <Marker n={4} className="ml-auto" /></div>
+        </div>
+        <div className="pt-2.5 border-t border-slate-100 grid grid-cols-3 gap-1.5 text-[10px] font-bold">
+          <span className="flex items-center justify-center gap-1 h-6 rounded-lg border border-slate-200 text-slate-700"><HiOutlinePencil className="w-3 h-3" />Edit</span>
+          <span className="flex items-center justify-center gap-1 h-6 rounded-lg border border-slate-200 text-slate-700"><HiOutlineChartBar className="w-3 h-3" />Results</span>
+          <span className="flex items-center justify-center gap-1 h-6 rounded-lg border border-blue-200 bg-blue-50 text-blue-700"><HiOutlinePlay className="w-3 h-3" />Host<Marker n={5} /></span>
+        </div>
+      </div>
+    </MockFrame>
+  );
+}
+
 function MockLifecycle() {
   return (
     <MockFrame caption="The status badge on the card shows which stage an exam is at.">
@@ -223,6 +255,7 @@ function MockStudentRow() {
 }
 
 const MOCKS = {
+  liveCard: MockLiveCard,
   examCard: MockExamCard,
   lifecycle: MockLifecycle,
   participantRow: MockParticipantRow,
@@ -699,7 +732,7 @@ const BUILDER_TOPICS = [
       {
         list: [
           { term: 'Exam Title', icon: HiOutlinePencil, desc: 'Required. Shown to candidates, in emails and on reports.' },
-          { term: 'For airline', icon: HiOutlineUsers, desc: 'IFOA exams only: which airline this exam is being run for, or General for any airline. The exam card shows it, and the Assign window opens on that airline\'s participants first.', admin: true },
+          { term: 'For airline', icon: HiOutlineUsers, desc: 'Required for IFOA exams: which airline this exam is being run for. The exam card shows it, the Assign window opens on that airline\'s participants first, and every feedback form submitted for the exam counts towards this airline on the Feedback dashboard.', admin: true },
           { term: 'Description', icon: HiOutlineBookOpen, desc: 'Instructions shown to candidates before they start.' },
           { term: 'Duration (min)', icon: HiOutlineClock, desc: 'The total time allowed. The exam submits itself when it runs out.' },
           { term: 'Pass %', icon: HiOutlineCheckCircle, desc: 'The percentage needed to pass.' },
@@ -895,7 +928,257 @@ const AIRLINE_RESULTS_TOPICS = [
   },
 ];
 
+const LIVE_TOPICS = [
+  {
+    id: 'overview',
+    title: 'How it works',
+    icon: HiOutlineBookOpen,
+    blocks: [
+      { lead: 'Quiz Arena is a live quiz played together, like Kahoot. You show the questions on a big screen, and everyone answers on their phone against the clock.' },
+      {
+        flow: [
+          { icon: HiOutlinePlusCircle, label: 'Build', note: 'Questions & timers' },
+          { icon: HiOutlinePlay, label: 'Host', note: 'PIN, link & QR' },
+          { icon: HiOutlineUsers, label: 'Join', note: 'Players on phones' },
+          { icon: HiOutlineClock, label: 'Play', note: 'Answer fast' },
+          { icon: HiOutlineChartBar, label: 'Rank', note: 'Leaderboard' },
+          { icon: HiOutlineFlag, label: 'Podium', note: 'Winner & results' },
+        ],
+      },
+      {
+        steps: [
+          'Click **New game**, add your questions, set a timer for each and save.',
+          'Click **Host** on the game\'s card. A full-screen lobby opens with a **6-digit PIN**, an invite link and a **QR code**. Put it on the projector.',
+          'Players open the link, scan the code, or go to **/play** and type the PIN. They pick a nickname and an avatar. No account is needed.',
+          'When everyone is in, click **Start game**. Each question shows on the big screen and on every phone at the same moment.',
+          'After each question you see the right answer and how the room voted, then the **Leaderboard**.',
+          'After the last question the **podium** shows the top three, with full standings for everyone.',
+        ],
+      },
+      {
+        example: {
+          title: 'Ice-breaker for a recurrent class',
+          lines: [
+            'You build "Dispatch Basics" with 10 questions of 20 seconds each, then host it at the start of the class.',
+            '18 trainees scan the QR code and join in under a minute. The game takes about 6 minutes.',
+            'Priya wins with 8 of 10 right, and the final standings show how everyone did.',
+          ],
+        },
+      },
+      { tip: 'Nobody needs to log in. Anyone with the PIN or link can join while the game is open, so only share it with your group.' },
+    ],
+  },
+  {
+    id: 'page',
+    title: 'This page',
+    icon: HiOutlineViewGrid,
+    blocks: [
+      { lead: 'Every game you have built, ready to host again as often as you like.' },
+      { h: 'The top panel' },
+      {
+        list: [
+          { term: 'Games', desc: 'How many games you have, and how many questions they hold in total.' },
+          { term: 'Times played', desc: 'How many times all your games have been hosted.' },
+          { term: 'Last played', desc: 'When any game was last hosted.' },
+          { term: 'New game', icon: HiOutlinePlusCircle, chip: 'outline', desc: 'Opens the editor to build a new game.' },
+        ],
+      },
+      { h: 'Reading a game card' },
+      { mock: 'liveCard' },
+      {
+        list: [
+          { n: 1, term: 'Ready / Draft', desc: '**Ready** means it has questions and can be hosted. **Draft** means it has no questions yet.' },
+          { n: 2, term: 'Questions · Mins', desc: 'How many questions, and roughly how long a game takes, including the reveal and leaderboard after each question.' },
+          { n: 3, term: 'N Plays', desc: 'How many times it has been hosted. Click it to open **Past games**.' },
+          { n: 4, term: 'Last played', desc: 'When it was last hosted, or **Never played**.' },
+          { n: 5, term: 'Host', icon: HiOutlinePlay, chip: 'blue', desc: 'Starts a new game with a fresh PIN and opens the host screen.' },
+        ],
+      },
+      {
+        list: [
+          { term: 'Edit', icon: HiOutlinePencil, chip: 'outline', desc: 'Change the questions, timers and icon. A game that is already running is not affected.' },
+          { term: 'Results', icon: HiOutlineChartBar, chip: 'outline', desc: 'Opens **Past games**: every time this game was hosted, with the winner.' },
+          { term: 'Bin icon', icon: HiOutlineTrash, desc: 'Deletes the game. It cannot be hosted again.' },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'build',
+    title: 'Building a game',
+    icon: HiOutlinePencilAlt,
+    blocks: [
+      { lead: 'The editor has three parts: the question list on the left, the question in the middle, and its settings on the right.' },
+      {
+        steps: [
+          'Type the game\'s **title** in the top bar.',
+          'Click **Add question** and choose a type.',
+          'Type the question, fill in the answers and tick the correct one(s) with the **check** button.',
+          'On the right, pick the **Time limit** and **Points**.',
+          'Click **Save**. If a question is unfinished, the editor jumps to it and tells you what is missing.',
+        ],
+      },
+      { h: 'Question types' },
+      {
+        list: [
+          { term: 'Quiz', chip: 'blue', desc: '2 to 6 answers, exactly **one** right.' },
+          { term: 'True or false', chip: 'blue', desc: 'Two fixed answers. Mark which one is right.' },
+          { term: 'Pick all that apply', chip: 'violet', desc: 'Several right answers. A player scores only if they pick **all** the right ones and **none** of the wrong ones.' },
+          { term: 'Poll', chip: 'slate', desc: 'No right answer and no points. Shows how the room voted. Good for opinions and warm-ups.' },
+        ],
+      },
+      { h: 'Settings' },
+      {
+        list: [
+          { term: 'Time limit', icon: HiOutlineClock, desc: 'From **5 to 120 seconds** per question. Shorter timers make the game faster and more exciting.' },
+          { term: 'Points', desc: '**Standard** (up to 1000), **Double** (up to 2000) for a key question, or **None** for practice.' },
+          { term: 'Arrange', icon: HiOutlineSelector, desc: 'Move a question up or down, duplicate it, or delete it.' },
+          { term: 'Game tab', icon: HiOutlineCog, desc: 'Title, description and the cover icon shown on the card, the host screen and the players\' phones.' },
+          { term: 'Import', icon: HiOutlineDocumentDuplicate, chip: 'outline', desc: '**From an exam** copies the multiple-choice, true/false and multiple-response questions of an IFOA exam. **From question bank** lets you pick questions from a bank, filtered by topic, difficulty or search. Other question types are greyed out with the reason. Each imported question gets 20 seconds.' },
+        ],
+      },
+      { tip: 'The number of issues in the top bar shows how many questions still need fixing. When it says **Ready to save**, everything is filled in.' },
+    ],
+  },
+  {
+    id: 'host',
+    title: 'Hosting a game',
+    icon: HiOutlineDesktopComputer,
+    blocks: [
+      { lead: 'The host screen is made for a projector. You drive the game from it, one step at a time.' },
+      { h: 'In the lobby' },
+      {
+        list: [
+          { term: 'PIN & QR code', icon: HiOutlineHashtag, desc: 'Players type the PIN at **/play** or scan the code. Names appear as they join.' },
+          { term: 'Copy invite link', icon: HiOutlineLink, chip: 'outline', desc: 'Copies the direct join link, to paste into a chat or a Teams meeting.' },
+          { term: 'Remove a player', icon: HiOutlineXCircle, desc: 'Click a player\'s name to remove them, for example for a rude nickname.' },
+          { term: 'Lock', icon: HiOutlineLockClosed, desc: 'Stops new players joining. Click again to unlock.' },
+          { term: 'Full screen', icon: HiOutlineArrowsExpand, desc: 'Hides the browser bars for the projector.' },
+          { term: 'Start game', icon: HiOutlinePlay, chip: 'dark', desc: 'Begins the first question. At least one player must have joined.' },
+        ],
+      },
+      { h: 'Each question' },
+      {
+        flow: [
+          { icon: HiOutlineClock, label: 'Get ready', note: '4 seconds' },
+          { icon: HiOutlineCursorClick, label: 'Answer', note: 'Timer runs' },
+          { icon: HiOutlineCheckCircle, label: 'Reveal', note: 'Right answer' },
+          { icon: HiOutlineChartBar, label: 'Leaderboard', note: 'Top 5' },
+        ],
+      },
+      {
+        list: [
+          { term: 'Answer counter', desc: 'Shows how many players have answered. The question ends by itself as soon as **everyone** has answered, or when the timer runs out.' },
+          { term: 'Show answer early', chip: 'outline', desc: 'Ends the question now, without waiting for the timer.' },
+          { term: 'Leaderboard', icon: HiOutlineChartBar, chip: 'outline', desc: 'After the reveal, shows the top five and the points each just earned.' },
+          { term: 'Next Question', chip: 'dark', desc: 'Moves on. On the leaderboard you can also press **Space** or **Enter**.' },
+          { term: 'End game', icon: HiOutlineFlag, desc: 'The flag button finishes the game now and goes to the podium.' },
+        ],
+      },
+      { h: 'Leaving the host screen' },
+      {
+        p: 'If you click **Exit Game** before the end, you are asked to choose. **End game** finishes it for everyone. **Keep it running** leaves it open, and you can pick it up again from **Past games**.',
+      },
+      { warn: 'Players can join up to 12 hours after a game is opened, and a game holds at most 500 players.' },
+    ],
+  },
+  {
+    id: 'players',
+    title: 'On players\' phones',
+    icon: HiOutlineUsers,
+    blocks: [
+      { lead: 'Players need only a phone or laptop with a browser. Nothing to install and no login.' },
+      {
+        steps: [
+          'Open the invite link, scan the QR code, or go to **/play** and type the 6-digit PIN.',
+          'Choose an avatar and type a nickname of 2 to 24 characters. Each nickname can be used only once per game.',
+          'Wait in the lobby. Players can send reactions that float up on the big screen.',
+          'When a question opens, tap an answer. For **Pick all that apply**, tap every right answer, then **Submit Answer**.',
+          'After each question the phone shows whether they were right, the points won, and their current place.',
+          'At the end each player sees their final place, score, average speed and best streak.',
+        ],
+      },
+      {
+        list: [
+          { term: 'One answer per question', desc: 'The first tap counts. It can\'t be changed, even after reloading the page.' },
+          { term: 'Joining late', desc: 'A player can join mid-game (unless the lobby is locked) and starts from the current question.' },
+          { term: 'Reload or lost signal', desc: 'The phone remembers the player. Reloading, or losing signal for a moment, puts them straight back in.' },
+          { term: 'Removed', desc: 'A player removed by the host sees a message and can\'t answer any more.' },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'scoring',
+    title: 'Scoring',
+    icon: HiOutlineLightningBolt,
+    blocks: [
+      { lead: 'Right and fast wins. Wrong answers and no answer score nothing, but never lose points.' },
+      {
+        list: [
+          { term: 'Speed', desc: 'A right answer is worth **1000** straight away, falling smoothly to **500** at the buzzer.' },
+          { term: 'Double points', desc: 'Everything on that question counts **×2**.' },
+          { term: 'Streak bonus', desc: '**+100** for each right answer in a row after the first, up to **+500**. A wrong or missed answer resets the streak. Polls don\'t affect it.' },
+          { term: 'Ties', desc: 'With equal scores, the player who answered faster overall ranks higher.' },
+        ],
+      },
+      {
+        example: {
+          title: '20-second question',
+          lines: [
+            'Anna answers right after **5 s**: 1000 × (1 − 5/20 ÷ 2) = **875 points**.',
+            'It was her third right answer in a row, so she gets **+200** streak bonus: **1075** in total.',
+            'Ben answers right after **18 s** with no streak: **550 points**. Cara answers wrong: **0**, and her streak resets.',
+          ],
+        },
+      },
+    ],
+  },
+  {
+    id: 'results',
+    title: 'Results & past games',
+    icon: HiOutlineChartBar,
+    blocks: [
+      { lead: 'Every time a game is hosted it is saved, with every player\'s answers and score.' },
+      {
+        list: [
+          { term: 'Podium', desc: 'The top three, with how many they got right, average time and best streak.' },
+          { term: 'Final standings', desc: 'Every player\'s rank, score, correct answers, accuracy, average time and streak.' },
+          { term: 'Play again', icon: HiOutlineRefresh, chip: 'dark', desc: 'Hosts the same game again with a new PIN.' },
+        ],
+      },
+      { h: 'Past games' },
+      {
+        list: [
+          { term: 'Live', chip: 'green', desc: 'Still running. Click it, or **Resume**, to go back to the host screen.' },
+          { term: 'Not finished', chip: 'amber', desc: 'The host left before the end and nothing has happened for 30 minutes. You can still resume or delete it.' },
+          { term: 'Finished', chip: 'slate', desc: 'Reached the podium. Click it to see the results again.' },
+          { term: 'Bin icon', icon: HiOutlineTrash, desc: 'Deletes that game with its players and scores. If it is still live, it ends for everyone.' },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'faq',
+    title: 'FAQ',
+    icon: HiOutlineQuestionMarkCircle,
+    blocks: [
+      {
+        list: [
+          { term: 'A player can\'t join', desc: 'Check the PIN, and that the lobby isn\'t **locked** and the game hasn\'t finished. Or send them the invite link.' },
+          { term: '"Nickname is taken"', desc: 'Someone in this game already has that name (capital letters don\'t count). Pick another.' },
+          { term: 'The timer is still running', desc: 'Someone hasn\'t answered yet. Wait, or click **Show answer early**.' },
+          { term: 'I closed the host tab', desc: 'Open **Results** on the game\'s card and click the **Live** game to resume it.' },
+          { term: 'I edited the game mid-play', desc: 'The running game keeps the questions it started with. Your changes apply the next time you host it.' },
+          { term: 'Is it the same as an exam?', desc: 'No. Quiz Arena scores are for fun and engagement. They don\'t create exam results or certificates.' },
+        ],
+      },
+    ],
+  },
+];
+
 const GUIDES = {
+  live: { title: 'How Quiz Arena works', topics: LIVE_TOPICS },
   system:  { title: 'How the exam system works', topics: SYSTEM_TOPICS },
   builder: { title: 'Building an exam', topics: BUILDER_TOPICS },
   airlineResults: { title: 'Exam results guide', topics: AIRLINE_RESULTS_TOPICS },
@@ -927,17 +1210,17 @@ function Block({ block, isAdmin }) {
   }
   if (block.flow) {
     return (
-      <div className="flex flex-wrap items-start gap-y-3 rounded-2xl bg-slate-50/80 border border-slate-200/70 px-3 py-4">
+      <div className="grid grid-cols-3 sm:flex sm:flex-wrap items-start gap-y-3 rounded-2xl bg-slate-50/80 border border-slate-200/70 px-3 py-4">
         {block.flow.map(({ icon: Icon, label, note }, i) => (
           <div key={label} className="flex items-start">
-            <div className="w-[5.25rem] text-center">
+            <div className="w-full sm:w-[5.25rem] text-center">
               <div className="w-10 h-10 mx-auto rounded-xl bg-white border border-blue-100 text-blue-600 flex items-center justify-center shadow-2xs">
                 <Icon className="w-5 h-5" />
               </div>
               <p className="mt-1.5 text-xs font-bold text-slate-900">{label}</p>
               <p className="text-[10px] leading-tight text-slate-500">{note}</p>
             </div>
-            {i < block.flow.length - 1 && <HiOutlineArrowRight className="w-4 h-4 mt-3 text-slate-300 flex-shrink-0" />}
+            {i < block.flow.length - 1 && <HiOutlineArrowRight className="hidden sm:block w-4 h-4 mt-3 text-slate-300 flex-shrink-0" />}
           </div>
         ))}
       </div>

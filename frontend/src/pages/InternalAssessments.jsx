@@ -77,13 +77,13 @@ function AssessmentFormDialog({ open, initial, onClose, onSaved }) {
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>{initial ? 'Edit assessment' : 'New internal assessment'}</DialogTitle>
-          <DialogDescription>Your own assessment — add candidates and their certificates afterwards.</DialogDescription>
+          <DialogDescription>Your own assessment. Add candidates and their certificates afterwards.</DialogDescription>
         </DialogHeader>
         <div className="px-5 py-4 space-y-3 overflow-y-auto">
           <label className="block">
             <span className="text-[11px] font-semibold text-slate-600">Title</span>
             <input autoFocus value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-              placeholder="e.g. Ramp Safety Assessment — Q4" className={`${INPUT} mt-1`} />
+              placeholder="e.g. Ramp Safety Assessment Q4" className={`${INPUT} mt-1`} />
           </label>
           <label className="block">
             <span className="text-[11px] font-semibold text-slate-600">Assessment date</span>
@@ -218,7 +218,7 @@ function AddCandidatesDialog({ open, assessment, onClose, onSaved }) {
                 </div>
               ) : available.length === 0 ? (
                 <div className="h-full flex items-center justify-center text-xs text-slate-400 font-medium px-6 text-center">
-                  {people.length === 0 ? 'No participants yet — add candidates manually.' : 'No participants left to add.'}
+                  {people.length === 0 ? 'No participants yet. Add candidates manually.' : 'No participants left to add.'}
                 </div>
               ) : (
                 <div className="divide-y divide-slate-100">

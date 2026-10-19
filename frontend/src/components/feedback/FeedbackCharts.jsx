@@ -8,17 +8,18 @@ import { SCALE_FILL, bandOf, fmtAvg, scaleLabel } from './RatingUi';
 const inkOn = (band) => (band === 1 || band === 5 ? '#ffffff' : '#0f172a');
 
 // Rows × sections, each cell filled with its rating band and the score printed in it.
+// Scrolls inside its card past ~9 rows; the header row stays pinned.
 export function Heatmap({ rows, columns, scale, onSelect, selectedKey }) {
   return (
-    <div className="overflow-x-auto">
+    <div className="max-h-[440px] overflow-auto overscroll-contain -mr-2 pr-2">
       <table className="w-full min-w-[560px] table-fixed border-separate" style={{ borderSpacing: 4 }}>
         <thead>
           <tr>
-            <th className="w-44 text-left text-[10px] font-bold uppercase tracking-wider text-slate-400 px-2 pb-1">Airline</th>
+            <th className="w-44 text-left sticky top-0 z-10 bg-white shadow-[0_0_0_4px_#fff] text-[10px] font-bold uppercase tracking-wider text-slate-400 px-2 pb-1">Airline</th>
             {columns.map((c) => (
-              <th key={c.key} className="text-center text-[10px] font-bold uppercase tracking-wider text-slate-400 px-1 pb-1" title={c.title}>{c.short}</th>
+              <th key={c.key} className="text-center sticky top-0 z-10 bg-white shadow-[0_0_0_4px_#fff] text-[10px] font-bold uppercase tracking-wider text-slate-400 px-1 pb-1" title={c.title}>{c.short}</th>
             ))}
-            <th className="text-center text-[10px] font-bold uppercase tracking-wider text-slate-400 px-1 pb-1">All</th>
+            <th className="text-center sticky top-0 z-10 bg-white shadow-[0_0_0_4px_#fff] text-[10px] font-bold uppercase tracking-wider text-slate-400 px-1 pb-1">All</th>
           </tr>
         </thead>
         <tbody>

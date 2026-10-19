@@ -241,7 +241,7 @@ export default function QuestionBankList({ embedded = false, showCreateState, se
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && createGroup()}
-                placeholder="Bank name — e.g. Initial Ground School"
+                placeholder="Bank name, e.g. Initial Ground School"
                 className="px-3 py-2 text-sm font-semibold border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500 bg-white"
               />
               <input
@@ -650,7 +650,7 @@ export function QuestionBankDetail() {
             ) : items.length === 0 ? (
               <Card className="p-12 text-center text-sm font-medium text-slate-400 rounded-2xl flex flex-col items-center gap-2">
                 <HiOutlineCollection className="w-8 h-8 text-slate-300" />
-                {activeFilterCount > 0 ? 'No questions match these filters.' : 'No questions in this bank yet — add one above.'}
+                {activeFilterCount > 0 ? 'No questions match these filters.' : 'No questions in this bank yet. Add one above.'}
               </Card>
             ) : (
               <div className="space-y-3">

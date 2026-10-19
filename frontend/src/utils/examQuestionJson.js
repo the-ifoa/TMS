@@ -184,7 +184,7 @@ function markCorrect(options, refs, errors) {
   const list = Array.isArray(refs) ? refs : [refs];
   list.forEach((ref) => {
     const i = resolveChoice(ref, options);
-    if (i === -2) errors.push(`"correct" ${ref} is a number — use the option letter (A, B…) or the option text.`);
+    if (i === -2) errors.push(`"correct" ${ref} is a number. Use the option letter (A, B…) or the option text.`);
     else if (i < 0) errors.push(`"correct" value "${ref}" doesn't match any option.`);
     else options[i].is_correct = true;
   });
@@ -220,7 +220,7 @@ function convert(raw, index, defaults) {
       if (options.some((o) => !o.text)) errors.push('an option is empty');
       if (raw.correct != null) markCorrect(options, raw.correct, errors);
       const n = options.filter((o) => o.is_correct).length;
-      if (!n) errors.push('no correct option — set "correct"');
+      if (!n) errors.push('no correct option. Set "correct"');
       else if (type !== 'multi_response' && n > 1) errors.push('only one option can be correct for this type');
       q.options = options.map((o) => ({ _id: uid(), ...o }));
       break;
@@ -235,7 +235,7 @@ function convert(raw, index, defaults) {
     case 'short_answer': {
       const acc = (Array.isArray(raw.accepted_answers) ? raw.accepted_answers : raw.accepted_answers != null ? [raw.accepted_answers] : raw.correct != null ? [].concat(raw.correct) : []).map(str).filter(Boolean);
       q.correct_text = acc.length ? acc : [''];
-      if (!acc.length) warnings.push('no accepted_answers — it will be marked by hand only');
+      if (!acc.length) warnings.push('no accepted_answers, so it will be marked by hand only');
       break;
     }
     case 'numeric': {

@@ -27,6 +27,10 @@ const AttendanceSheets = lazy(() => import('./pages/AttendanceSheets'));
 const DgrForms = lazy(() => import('./pages/DgrForms'));
 const ExamSystem = lazy(() => import('./pages/ExamSystem'));
 const FeedbackDashboard = lazy(() => import('./pages/FeedbackDashboard'));
+const LiveQuizzes = lazy(() => import('./pages/live/LiveQuizzes'));
+const LiveQuizEditor = lazy(() => import('./pages/live/LiveQuizEditor'));
+const LiveHost = lazy(() => import('./pages/live/LiveHost'));
+const PlayLive = lazy(() => import('./pages/live/PlayLive'));
 const ExamBuilder = lazy(() => import('./pages/ExamBuilder'));
 const ExamAttempts = lazy(() => import('./pages/ExamAttempts'));
 const AirlineExams = lazy(() => import('./pages/AirlineExams'));
@@ -124,6 +128,11 @@ function App() {
 
         {/* Public Customer Training Feedback form — emailed link, no login */}
         <Route path="/feedback/:token" element={<PublicFeedback />} />
+        {/* Live quiz: players join here (no login) */}
+        <Route path="/play" element={<PlayLive />} />
+        <Route path="/play/:code" element={<PlayLive />} />
+        {/* Live quiz host screen — full screen, outside the admin layout */}
+        <Route path="/admin/live/host/:sessionId" element={<ProtectedRoute><AdminRoute><PermRoute perms={['exams.author', 'exams.assign']}><LiveHost /></PermRoute></AdminRoute></ProtectedRoute>} />
 
         <Route path="/admin" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
           {/* Available to all authenticated users */}
@@ -141,6 +150,9 @@ function App() {
           <Route path="exam-results" element={<AdminRoute><PermRoute perms={['examResults.view', 'examResults.manage']}><ExamResults /></PermRoute></AdminRoute>} />
           <Route path="dgr"          element={<AdminRoute><PermRoute perms={['dgr.view', 'dgr.manage']}><DgrForms /></PermRoute></AdminRoute>} />
           <Route path="exams"           element={<AdminRoute><PermRoute perms={['exams.author', 'exams.assign', 'exams.grade']}><ExamSystem /></PermRoute></AdminRoute>} />
+          <Route path="live"            element={<AdminRoute><PermRoute perms={['exams.author', 'exams.assign']}><LiveQuizzes /></PermRoute></AdminRoute>} />
+          <Route path="live/new"        element={<AdminRoute><PermRoute perms={['exams.author']}><LiveQuizEditor /></PermRoute></AdminRoute>} />
+          <Route path="live/:id/edit"   element={<AdminRoute><PermRoute perms={['exams.author']}><LiveQuizEditor /></PermRoute></AdminRoute>} />
           <Route path="feedback"        element={<AdminRoute><PermRoute perms={['exams.author', 'exams.assign', 'exams.grade']}><FeedbackDashboard /></PermRoute></AdminRoute>} />
           <Route path="exams/new"       element={<AdminRoute><ExamBuilder /></AdminRoute>} />
           <Route path="exams/:id/edit"  element={<AdminRoute><ExamBuilder /></AdminRoute>} />

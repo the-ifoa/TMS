@@ -162,7 +162,7 @@ export function BatchEditModal({ group, onSave, onClose }) {
 
           <div className="p-5 space-y-6">
             <div>
-              <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-1">Batch details <span className="normal-case font-medium text-slate-400">— applied to every student</span></h3>
+              <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-1">Batch details <span className="normal-case font-medium text-slate-400">(applied to every student)</span></h3>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
                 <div><label className="block text-xs font-semibold text-slate-700 mb-1">Batch Name *</label>
                   <input className={inp} value={shared.batch_name} onChange={e => setSh('batch_name', e.target.value)} /></div>

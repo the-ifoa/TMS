@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const mongoose = require('mongoose');
 const Exam = require('../models/Exam');
 const Participant = require('../models/Participant');
+const Airline = require('../models/Airline');
 const TrainingFeedback = require('../models/TrainingFeedback');
 const { sendTrainingFeedbackEmail, sendFeedbackReportEmail } = require('../services/emailService');
 const { frontendLink } = require('../config/appUrls');
@@ -86,6 +87,16 @@ exports.getExamFeedback = async (req, res) => {
   }
 };
 
+// The airline feedback for this exam belongs to: the airline picked (or typed)
+// under "For airline", else the airline that created the exam. null = none set.
+async function examAirline(exam) {
+  if (!exam.for_airline && exam.for_airline_name) return { id: null, name: exam.for_airline_name };
+  const id = exam.for_airline || exam.owner_airline;
+  if (!id) return null;
+  const a = await Airline.findById(id).select('airlineName').lean();
+  return a ? { id: a._id, name: a.airlineName || '' } : null;
+}
+
 // Emails the form to the given participants — anyone on the IFOA admin's list,
 // not only those assigned to the exam (the training may include people who
 // never sat it). Re-sending reuses the participant's existing link; anyone who
@@ -96,6 +107,7 @@ async function sendForms(exam, requested, adminId) {
     .select('participant_name first_name last_name email company airline_name');
   const existing = await TrainingFeedback.find({ exam_id: exam._id, participant_id: { $in: ids } });
   const fbByPid = Object.fromEntries(existing.map((f) => [String(f.participant_id), f]));
+  const airline = await examAirline(exam);
 
   const sent = [];
   const found = new Set(participants.map((p) => String(p._id)));
@@ -114,6 +126,7 @@ async function sendForms(exam, requested, adminId) {
       fb.sent_count += 1;
       fb.participant_email = p.email;
       fb.exam_title_snapshot = exam.title;
+      if (airline) { fb.airline_id = airline.id; fb.airline_name = airline.name; }
     } else {
       fb = new TrainingFeedback({
         token: crypto.randomBytes(24).toString('hex'),
@@ -122,7 +135,8 @@ async function sendForms(exam, requested, adminId) {
         participant_id: p._id,
         participant_name: name,
         participant_email: p.email,
-        airline_name: p.airline_name || p.company || '',
+        airline_id: airline ? airline.id : null,
+        airline_name: airline ? airline.name : (p.airline_name || p.company || ''),
         sent_by: adminId,
       });
     }
@@ -229,6 +243,10 @@ exports.submitPublicFeedback = async (req, res) => {
     fb.ratings = STATEMENT_KEYS.map((key) => ({ key, value: ratings[key] }));
     fb.comments = comments || '';
     fb.form_version = FEEDBACK_VERSION;
+    // Submitted feedback is credited to the exam's airline as it is now.
+    const exam = await Exam.findById(fb.exam_id).select('for_airline for_airline_name owner_airline').lean();
+    const airline = exam ? await examAirline(exam) : null;
+    if (airline) { fb.airline_id = airline.id; fb.airline_name = airline.name; }
     fb.status = 'submitted';
     fb.submitted_at = new Date();
     await fb.save();
@@ -247,6 +265,9 @@ exports.submitPublicFeedback = async (req, res) => {
 // sent, falling back to the company they typed on the form.
 const round2 = (n) => Math.round(n * 100) / 100;
 const airlineOf = (f) => (f.airline_name || f.company || '').trim() || 'No airline';
+// Imported iSpring answers have no exam — they group by the training they named.
+const examKeyOf = (f) => (f.exam_id ? String(f.exam_id) : `ispring:${(f.exam_title_snapshot || '').trim().toLowerCase()}`);
+const examTitleOf = (f) => f.exam_title_snapshot || 'Untitled exam';
 
 // { sum, n, dist[5] } accumulator for a set of ratings.
 function tally() { return { sum: 0, n: 0, dist: [0, 0, 0, 0, 0] }; }
@@ -264,7 +285,7 @@ exports.getFeedbackDashboard = async (req, res) => {
     // Filter choices come from everything, before filtering.
     const options = {
       airlines: [...new Set(all.map(airlineOf))].sort((a, b) => a.localeCompare(b)),
-      exams: Object.values(Object.fromEntries(all.map((f) => [String(f.exam_id), { id: String(f.exam_id), title: f.exam_title_snapshot || 'Untitled exam' }])))
+      exams: Object.values(Object.fromEntries(all.map((f) => [examKeyOf(f), { id: examKeyOf(f), title: examTitleOf(f) }])))
         .sort((a, b) => a.title.localeCompare(b.title)),
     };
 
@@ -272,7 +293,7 @@ exports.getFeedbackDashboard = async (req, res) => {
     const toD = to ? new Date(to) : null;
     if (toD && !Number.isNaN(toD.getTime())) toD.setHours(23, 59, 59, 999);
     const inRange = (d) => d && (!fromD || d >= fromD) && (!toD || d <= toD);
-    const scoped = all.filter((f) => (!airline || airlineOf(f) === airline) && (!exam_id || String(f.exam_id) === String(exam_id)));
+    const scoped = all.filter((f) => (!airline || airlineOf(f) === airline) && (!exam_id || examKeyOf(f) === String(exam_id)));
     const sentDocs = scoped.filter((f) => (fromD || toD ? inRange(f.sent_at) : true));
     const submitted = scoped.filter((f) => f.status === 'submitted' && (fromD || toD ? inRange(f.submitted_at) : true));
 
@@ -289,11 +310,11 @@ exports.getFeedbackDashboard = async (req, res) => {
 
     sentDocs.forEach((f) => {
       group(airlines, airlineOf(f), { name: airlineOf(f) }).sent += 1;
-      group(exams, String(f.exam_id), { exam_id: String(f.exam_id), title: f.exam_title_snapshot || 'Untitled exam' }).sent += 1;
+      group(exams, examKeyOf(f), { exam_id: examKeyOf(f), title: examTitleOf(f) }).sent += 1;
     });
     submitted.forEach((f) => {
       const a = group(airlines, airlineOf(f), { name: airlineOf(f) });
-      const e = group(exams, String(f.exam_id), { exam_id: String(f.exam_id), title: f.exam_title_snapshot || 'Untitled exam' });
+      const e = group(exams, examKeyOf(f), { exam_id: examKeyOf(f), title: examTitleOf(f) });
       const mKey = f.submitted_at ? new Date(f.submitted_at).toISOString().slice(0, 7) : null;
       const m = mKey ? (months[mKey] = months[mKey] || { month: mKey, responses: 0, all: tally() }) : null;
       [a, e].forEach((g) => { g.responses += 1; if (!g.last_at || f.submitted_at > g.last_at) g.last_at = f.submitted_at; });

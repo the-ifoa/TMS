@@ -341,7 +341,7 @@ function ShortAnswerEditor({ q, set }) {
   const setAnswers = (next) => set('correct_text', next);
   return (
     <div className="space-y-2">
-      <p className="text-xs font-medium text-slate-500">Accepted answers are shown to the administrator as reference — Short Answer requires manual review.</p>
+      <p className="text-xs font-medium text-slate-500">Accepted answers are shown to the administrator as reference. Short Answer requires manual review.</p>
       {answers.map((a, idx) => (
         <div key={idx} className="flex items-center gap-2">
           <input value={a} onChange={(e) => setAnswers(answers.map((v, i) => (i === idx ? e.target.value : v)))}
@@ -380,7 +380,7 @@ function SequenceEditor({ q, set }) {
   const setItems = (next) => set('sequence_items', next);
   return (
     <div className="space-y-2">
-      <p className="text-xs font-medium text-slate-500">List items in the CORRECT order — they will be shuffled for the candidate.</p>
+      <p className="text-xs font-medium text-slate-500">List items in the CORRECT order. They will be shuffled for the candidate.</p>
       {items.map((it, idx) => (
         <div key={idx} className="flex items-center gap-2">
           <span className="text-xs font-extrabold text-slate-500 w-5">{idx + 1}.</span>
@@ -663,7 +663,7 @@ function LikertEditor({ q, set }) {
   const labels = q.likert_scale_labels || [];
   return (
     <div className="space-y-2">
-      <p className="text-xs font-medium text-slate-500">Survey type — not auto-scored.</p>
+      <p className="text-xs font-medium text-slate-500">Survey type, not auto-scored.</p>
       <p className="text-xs font-bold text-slate-700">Statements</p>
       {statements.map((s, idx) => (
         <div key={idx} className="flex items-center gap-2">
@@ -739,7 +739,7 @@ export default function QuestionEditor({
             onValueChange={(val) => onChange(convertQuestionType(q, val))}
           >
             <SelectTrigger
-              title="Change question type — the prompt and compatible options are kept"
+              title="Change question type. The prompt and compatible options are kept."
               className="h-8 w-auto min-w-[140px] text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200/80 border border-slate-200/80 px-2.5 py-1 rounded-lg gap-2 focus:ring-2 focus:ring-slate-900/10"
             >
               <SelectValue />
@@ -763,7 +763,7 @@ export default function QuestionEditor({
             />
           </div>
 
-          <div className="flex items-center gap-1.5 ml-1 bg-slate-50 border border-slate-200/80 px-2.5 py-1 rounded-lg" title="Per-question time limit in seconds — blank means no separate limit">
+          <div className="flex items-center gap-1.5 ml-1 bg-slate-50 border border-slate-200/80 px-2.5 py-1 rounded-lg" title="Per-question time limit in seconds. Leave blank for no separate limit">
             <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Time (sec)</span>
             <input
               type="number"
@@ -877,7 +877,7 @@ export default function QuestionEditor({
           <div className="flex items-center gap-2.5 min-w-0 text-xs">
             <span className="font-bold text-slate-400 uppercase tracking-wider text-[10px] flex-shrink-0">Prompt:</span>
             <span className="truncate text-slate-700 font-medium group-hover:text-slate-900">
-              {q.prompt?.trim() ? q.prompt : <span className="italic text-slate-400">Empty question text — click to edit</span>}
+              {q.prompt?.trim() ? q.prompt : <span className="italic text-slate-400">Empty question text. Click to edit.</span>}
             </span>
           </div>
           <span className="text-[11px] font-bold text-blue-600 group-hover:underline flex-shrink-0">

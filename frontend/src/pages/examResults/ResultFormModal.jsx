@@ -259,7 +259,7 @@ export function ResultFormModal({ initial, prefill = null, onSave, onClose, batc
                       <SelectValue placeholder={
                         !form.company ? 'Select an airline first'
                           : loadingParticipants ? 'Loading…'
-                          : airlineParticipants.length ? 'Select participant' : 'No participants — enter below'
+                          : airlineParticipants.length ? 'Select participant' : 'No participants. Enter below.'
                       } />
                     </SelectTrigger>
                     <SelectContent>
@@ -326,7 +326,7 @@ export function ResultFormModal({ initial, prefill = null, onSave, onClose, batc
                       </button>
                     )}
                     {batchSuggestions.length === 0 && !form.batch_name.trim() && (
-                      <p className="px-3 py-2 text-xs text-slate-400">No batches yet — type a name to create one.</p>
+                      <p className="px-3 py-2 text-xs text-slate-400">No batches yet. Type a name to create one.</p>
                     )}
                   </div>
                 )}
@@ -433,7 +433,7 @@ export function ResultFormModal({ initial, prefill = null, onSave, onClose, batc
               })}
             </div>
             {form.subjects.length === 0 && (
-              <p className="text-xs text-slate-400 font-medium py-3">No courses on this sheet — add one below.</p>
+              <p className="text-xs text-slate-400 font-medium py-3">No courses on this sheet. Add one below.</p>
             )}
             {manageCourses && (
               <div className="mt-4 p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2">

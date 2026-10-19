@@ -75,6 +75,19 @@ async function dropDeletedAssignments(list) {
 
 // "" / null / anything that isn't an id → null (general exam).
 const cleanForAirline = (v) => (v && mongoose.isValidObjectId(v) ? v : null);
+const NEEDS_AIRLINE = 'Choose the airline this exam is for, or type its name.';
+
+// "For airline" is a listed airline (id) or a name typed in by hand. Returns
+// the fields to store, or null when neither was given.
+async function resolveForAirline(id, name) {
+  const cleanId = cleanForAirline(id);
+  if (cleanId) {
+    const a = await Airline.findById(cleanId).select('airlineName').lean();
+    if (a) return { for_airline: a._id, for_airline_name: a.airlineName || '' };
+  }
+  const typed = String(name || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+  return typed ? { for_airline: null, for_airline_name: typed } : null;
+}
 
 // ─── GET /exams/airline-options — admin: airlines an exam can be "for" ─────────
 exports.listAirlineOptions = async (req, res) => {
@@ -169,8 +182,10 @@ exports.createExam = async (req, res) => {
     const airline = isAdmin(req) ? null : await authoringAirline(req);
     if (!isAdmin(req) && !airline) return res.status(403).json({ error: 'Admin access required.' });
     if (!req.body.title) return res.status(400).json({ error: 'title is required.' });
+    const { owner_airline, owner_department, created_by, for_airline, for_airline_name, ...body } = req.body;
+    const forAirline = isAdmin(req) ? await resolveForAirline(for_airline, for_airline_name) : null;
+    if (isAdmin(req) && !forAirline) return res.status(400).json({ error: NEEDS_AIRLINE });
 
-    const { owner_airline, owner_department, created_by, for_airline, ...body } = req.body;
     // A department's exams are owned by the top-level airline (so the main
     // account still sees them) and tagged with the department that manages them.
     const isDept = !isAdmin(req) && req.scope && req.scope.isDepartment;
@@ -179,7 +194,8 @@ exports.createExam = async (req, res) => {
       created_by: isAdmin(req) ? req.admin.id : undefined,
       owner_airline: airline ? (isDept ? req.scope.topAirlineId : req.admin.id) : null,
       owner_department: isDept ? req.admin.id : null,
-      for_airline: isAdmin(req) ? cleanForAirline(for_airline) : null,
+      for_airline: forAirline ? forAirline.for_airline : null,
+      for_airline_name: forAirline ? forAirline.for_airline_name : '',
       status: 'draft',
     });
     res.status(201).json(exam.toJSON());
@@ -237,9 +253,13 @@ exports.updateExam = async (req, res) => {
     if (!canManageExam(req, exam)) return res.status(403).json({ error: 'Access denied.' });
     if (rejectDeleted(res, exam)) return;
 
-    const { created_by, owner_airline, _id, id, assignments, status, for_airline, ...updatable } = req.body;
+    const { created_by, owner_airline, _id, id, assignments, status, for_airline, for_airline_name, ...updatable } = req.body;
     // Only IFOA admins tag an exam with the airline it's for.
-    if (isAdmin(req) && for_airline !== undefined) updatable.for_airline = cleanForAirline(for_airline);
+    if (isAdmin(req) && (for_airline !== undefined || for_airline_name !== undefined)) {
+      const forAirline = await resolveForAirline(for_airline, for_airline_name);
+      if (!forAirline && !exam.owner_airline) return res.status(400).json({ error: NEEDS_AIRLINE });
+      Object.assign(updatable, forAirline || { for_airline: null, for_airline_name: '' });
+    }
     const questionsBefore = exam.questions.map((q) => q.toObject());
     Object.assign(exam, updatable);
     // Every auto-graded question needs its answer key: without one every
@@ -279,9 +299,13 @@ exports.remarkPreview = async (req, res) => {
     if (!exam) return res.status(404).json({ error: 'Exam not found.' });
     if (!canManageExam(req, exam)) return res.status(403).json({ error: 'Access denied.' });
     if (rejectDeleted(res, exam)) return;
-    const { created_by, owner_airline, _id, id, assignments, status, for_airline, ...updatable } = req.body;
+    const { created_by, owner_airline, _id, id, assignments, status, for_airline, for_airline_name, ...updatable } = req.body;
     // Only IFOA admins tag an exam with the airline it's for.
-    if (isAdmin(req) && for_airline !== undefined) updatable.for_airline = cleanForAirline(for_airline);
+    if (isAdmin(req) && (for_airline !== undefined || for_airline_name !== undefined)) {
+      const forAirline = await resolveForAirline(for_airline, for_airline_name);
+      if (!forAirline && !exam.owner_airline) return res.status(400).json({ error: NEEDS_AIRLINE });
+      Object.assign(updatable, forAirline || { for_airline: null, for_airline_name: '' });
+    }
     const questionsBefore = exam.questions.map((q) => q.toObject());
     Object.assign(exam, updatable);
     const problems = answerKeyProblems(exam.questions);
@@ -306,6 +330,7 @@ exports.publishExam = async (req, res) => {
     if (!canManageExam(req, exam)) return res.status(403).json({ error: 'Access denied.' });
     if (rejectDeleted(res, exam)) return;
     if (exam.questions.length === 0) return res.status(400).json({ error: 'Add at least one question before publishing.' });
+    if (!exam.owner_airline && !exam.for_airline && !exam.for_airline_name) return res.status(400).json({ error: `${NEEDS_AIRLINE} Edit the exam and pick one under "For airline".` });
     const problems = answerKeyProblems(exam.questions);
     if (problems.length) return res.status(400).json({ error: `Fix the answer key before publishing: ${problems.join(' ')}`, problems });
 

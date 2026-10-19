@@ -72,7 +72,7 @@ export default function ExpiryReminderDialog({ participants, onClose }) {
                     <p className="text-[11px] text-slate-400 truncate">{p.training_type}{(p.airline_name || p.company) ? ` · ${p.airline_name || p.company}` : ''}</p>
                   </div>
                   <ValidityBadge participant={p} showDate={false}
-                    fallback={<span className="text-[11px] text-slate-400 whitespace-nowrap">Not issued — skipped</span>} />
+                    fallback={<span className="text-[11px] text-slate-400 whitespace-nowrap">Not issued, skipped</span>} />
                 </div>
               );
             })}

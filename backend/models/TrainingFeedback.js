@@ -7,6 +7,11 @@ const mongoose = require('mongoose');
 // (exam, participant): re-sending reuses it, and the answers are stored on it
 // once submitted. The questions themselves live in config/feedbackForm.js —
 // `form_version` records which version was answered.
+//
+// `source: 'ispring'` rows are historical answers imported from IFOA's iSpring
+// survey emails (scripts/seedIspringFeedback.js). They have no exam or
+// participant in the TMS; `exam_title_snapshot` holds the training they named
+// and `source_ref` makes the import repeatable without duplicates.
 const ratingSchema = new mongoose.Schema(
   {
     key:   { type: String, required: true },        // statement key from feedbackForm.js
@@ -19,12 +24,18 @@ const trainingFeedbackSchema = new mongoose.Schema(
   {
     token: { type: String, required: true, unique: true },
 
-    exam_id:             { type: mongoose.Schema.Types.ObjectId, ref: 'Exam', required: true },
+    source:     { type: String, enum: ['form', 'ispring'], default: 'form' },
+    source_ref: { type: String, default: undefined },
+
+    exam_id:             { type: mongoose.Schema.Types.ObjectId, ref: 'Exam', required: function () { return this.source !== 'ispring'; } },
     exam_title_snapshot: { type: String, default: '' },
 
-    participant_id:    { type: mongoose.Schema.Types.ObjectId, ref: 'Participant', required: true },
+    participant_id:    { type: mongoose.Schema.Types.ObjectId, ref: 'Participant', required: function () { return this.source !== 'ispring'; } },
     participant_name:  { type: String, default: '' },
     participant_email: { type: String, default: '' },
+    // The exam's airline ("For airline", else the airline that owns the exam);
+    // the participant's own airline only when the exam has none.
+    airline_id:        { type: mongoose.Schema.Types.ObjectId, ref: 'Airline', default: null },
     airline_name:      { type: String, default: '' },
 
     // sent → opened (link loaded) → submitted (answers saved; link then read-only)
@@ -48,7 +59,12 @@ const trainingFeedbackSchema = new mongoose.Schema(
 );
 
 // One feedback request per participant per exam — re-sending updates it.
-trainingFeedbackSchema.index({ exam_id: 1, participant_id: 1 }, { unique: true });
+// Partial, so imported rows (no exam / participant) never collide.
+trainingFeedbackSchema.index(
+  { exam_id: 1, participant_id: 1 },
+  { unique: true, partialFilterExpression: { participant_id: { $type: 'objectId' } } },
+);
+trainingFeedbackSchema.index({ source_ref: 1 }, { unique: true, partialFilterExpression: { source_ref: { $type: 'string' } } });
 trainingFeedbackSchema.index({ exam_id: 1, status: 1 });
 
 trainingFeedbackSchema.methods.toJSON = function () {

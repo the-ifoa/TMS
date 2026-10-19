@@ -168,7 +168,7 @@ async function remarkExam(exam, { questionIds = null, apply = false } = {}) {
       .map((r) => ({ name: r.participant_name, from: r.before.passed, to: r.after.passed })),
     in_progress_updated: rows.filter((r) => r.status === 'in_progress' && r.key_updated > 0).length,
     needs_hand_check: [
-      ...rows.filter((r) => r.overridden).map((r) => ({ name: r.participant_name, reason: 'total was changed by hand — score not recomputed' })),
+      ...rows.filter((r) => r.overridden).map((r) => ({ name: r.participant_name, reason: 'total was changed by hand, so the score was not recomputed' })),
       ...rows.flatMap((r) => r.skipped.map((s) => ({ name: r.participant_name, question_id: s.question_id, reason: s.reason }))),
     ],
     rows,

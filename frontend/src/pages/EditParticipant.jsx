@@ -208,7 +208,7 @@ export default function EditParticipant() {
           <div>
             <label className="label">NDG Training Type *</label>
             <div className="flex gap-3">
-              {[{ val: 'I', label: 'I — Initial' }, { val: 'R', label: 'R — Recurrent' }].map(opt => (
+              {[{ val: 'I', label: 'I (Initial)' }, { val: 'R', label: 'R (Recurrent)' }].map(opt => (
                 <button key={opt.val} type="button"
                   onClick={() => setForm(f => ({ ...f, ndg_subtype: opt.val }))}
                   className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 text-sm font-semibold transition-all ${

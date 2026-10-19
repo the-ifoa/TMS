@@ -199,7 +199,7 @@ export default function MyTeam() {
             )}
             </div>
           </div>
-          <p className="text-[11px] text-slate-400 mt-1">Add the people in your department — name and email. Used to invite them to exams.</p>
+          <p className="text-[11px] text-slate-400 mt-1">Add the people in your department: name and email. Used to invite them to exams.</p>
         </div>
       </div>
 

@@ -325,7 +325,7 @@ export default function ExamRunner({ attempt, exam, onSaveAnswers, onCheckAnswer
       setViolationCount(count);
       if (res?.auto_submitted_now) {
         finishedRef.current = true;
-        toast.error('Exam auto-submitted — too many violations.');
+        toast.error('Exam auto-submitted: too many violations.');
         onFinished();
         return;
       }
@@ -484,7 +484,7 @@ export default function ExamRunner({ attempt, exam, onSaveAnswers, onCheckAnswer
           }
           return next;
         });
-        toast.error(`Time's up for section "${lockedName || 'Ungrouped'}" — answers locked, moving on.`);
+        toast.error(`Time's up for section "${lockedName || 'Ungrouped'}". Answers locked, moving on.`);
       }
       forceSectionTick((n) => n + 1);
     }, 1000);
@@ -524,7 +524,7 @@ export default function ExamRunner({ attempt, exam, onSaveAnswers, onCheckAnswer
           }
           return next;
         });
-        toast.error("Time's up for this question — locked, moving on.");
+        toast.error("Time's up for this question. Locked, moving on.");
       }
       forceSectionTick((n) => n + 1);
     }, 1000);
@@ -583,8 +583,8 @@ export default function ExamRunner({ attempt, exam, onSaveAnswers, onCheckAnswer
 
   const setResponse = (response) => {
     if (currentChecked) return; // checked answers are final
-    if (currentQuestionLocked) { toast.error("Time's up for this question — answer is locked."); return; }
-    if (currentSectionLocked) { toast.error("Time's up for this section — answers are locked."); return; }
+    if (currentQuestionLocked) { toast.error("Time's up for this question. The answer is locked."); return; }
+    if (currentSectionLocked) { toast.error("Time's up for this section. Answers are locked."); return; }
     setAnswers((prev) => ({ ...prev, [q._id]: response }));
     const at = Math.max(Date.now(), lastEditAtRef.current + 1);
     lastEditAtRef.current = at;
@@ -681,13 +681,13 @@ export default function ExamRunner({ attempt, exam, onSaveAnswers, onCheckAnswer
       {currentQuestionLocked && (
         <div className="bg-rose-50 border-b border-rose-200 text-rose-900 px-4 sm:px-6 py-2 text-xs font-medium flex items-center justify-center gap-2 flex-shrink-0">
           <HiOutlineClock className="w-4 h-4 text-rose-600 flex-shrink-0" />
-          <span>Time's up for this question — you can still review it, but the answer is locked.</span>
+          <span>Time's up for this question. You can still review it, but the answer is locked.</span>
         </div>
       )}
       {!currentQuestionLocked && currentSectionLocked && (
         <div className="bg-rose-50 border-b border-rose-200 text-rose-900 px-4 sm:px-6 py-2 text-xs font-medium flex items-center justify-center gap-2 flex-shrink-0">
           <HiOutlineClock className="w-4 h-4 text-rose-600 flex-shrink-0" />
-          <span>Time's up for this section — you can still review it, but answers are locked.</span>
+          <span>Time's up for this section. You can still review it, but answers are locked.</span>
         </div>
       )}
 
@@ -871,7 +871,7 @@ export default function ExamRunner({ attempt, exam, onSaveAnswers, onCheckAnswer
                     <div className="flex items-center justify-between gap-3">
                       <p className={`flex items-center gap-2 text-sm font-bold ${tone.head}`}>
                         <tone.Icon className={`w-5 h-5 ${tone.icon}`} />
-                        {f.preview ? 'Answer locked (preview)' : good ? 'Correct' : bad ? 'Incorrect' : manual ? 'Answer locked — reviewed manually' : 'Answer locked'}
+                        {f.preview ? 'Answer locked (preview)' : good ? 'Correct' : bad ? 'Incorrect' : manual ? 'Answer locked, reviewed manually' : 'Answer locked'}
                       </p>
                       {f.max_points > 0 && f.points_awarded != null && (
                         <span className={`text-xs font-bold ${tone.head}`}>{f.points_awarded} / {f.max_points} pt{f.max_points === 1 ? '' : 's'}</span>
@@ -898,7 +898,7 @@ export default function ExamRunner({ attempt, exam, onSaveAnswers, onCheckAnswer
             <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-slate-100 flex items-center justify-between gap-2 flex-shrink-0 bg-white rounded-b-2xl z-10">
               <div className="flex items-center gap-1.5 text-[11px] sm:text-xs font-medium text-slate-400">
                 {saveState === 'error' ? (
-                  <><HiOutlineExclamationCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-rose-500" /><span className="hidden xs:inline text-rose-500">Save failed — retrying</span></>
+                  <><HiOutlineExclamationCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-rose-500" /><span className="hidden xs:inline text-rose-500">Save failed, retrying</span></>
                 ) : (
                   <><HiOutlineCheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-500" />
                     <span className="hidden xs:inline">

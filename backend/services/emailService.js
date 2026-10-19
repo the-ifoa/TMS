@@ -230,7 +230,7 @@ function buildConfirmationHtml({ airlineName, contactName, participants, trainin
                 <table width="100%" cellpadding="0" cellspacing="0">
                   <tr>
                     <td style="padding:7px 0;font-size:13px;color:#6b7280;width:42%;font-weight:500">Training Type</td>
-                    <td style="padding:7px 0;font-size:13px;color:#111827;font-weight:700">${trainingType} &nbsp;—&nbsp; ${typeLabel}</td>
+                    <td style="padding:7px 0;font-size:13px;color:#111827;font-weight:700">${trainingType} (${typeLabel})</td>
                   </tr>
                   <tr>
                     <td style="padding:7px 0;font-size:13px;color:#6b7280;font-weight:500;border-top:1px solid #f1f5f9">Start Date</td>
@@ -288,7 +288,7 @@ function buildConfirmationHtml({ airlineName, contactName, participants, trainin
                 <p style="margin:0 0 5px;font-size:13px;font-weight:700;color:#1d4ed8">What Happens Next?</p>
                 <p style="margin:0;font-size:13px;color:#1e40af;line-height:1.7">
                   Your records are now under review by the IFOA team. Certificates will be issued once
-                  the training has been verified. All submitted records are locked — only IFOA
+                  the training has been verified. All submitted records are locked. Only IFOA
                   administrators can make changes.
                 </p>
               </td>
@@ -317,7 +317,7 @@ function buildConfirmationHtml({ airlineName, contactName, participants, trainin
       <tr>
         <td bgcolor="#0c1a2e" style="background:#0c1a2e;padding:16px 40px">
           <p style="margin:0;font-size:11px;color:#64748b;text-align:center">
-            This is an automated email — please do not reply directly. &nbsp;|&nbsp;
+            This is an automated email. Please do not reply directly. &nbsp;|&nbsp;
             &copy; ${new Date().getFullYear()} International Flight Operations Academy
           </p>
         </td>
@@ -480,7 +480,7 @@ async function sendPasswordResetEmail({ toEmail, airlineName, resetUrl }) {
       <tr>
         <td bgcolor="#0c1a2e" style="background:#0c1a2e;padding:16px 40px">
           <p style="margin:0;font-size:11px;color:#64748b;text-align:center">
-            This is an automated security email — do not reply. &nbsp;|&nbsp;
+            This is an automated security email. Do not reply. &nbsp;|&nbsp;
             &copy; ${new Date().getFullYear()} International Flight Operations Academy
           </p>
         </td>
@@ -581,7 +581,7 @@ async function sendOtpEmail({ toEmail, airlineName, otp }) {
       <tr>
         <td bgcolor="#0c1a2e" style="background:#0c1a2e;padding:16px 40px">
           <p style="margin:0;font-size:11px;color:#64748b;text-align:center">
-            This is an automated email — please do not reply. &nbsp;|&nbsp;
+            This is an automated email. Please do not reply. &nbsp;|&nbsp;
             &copy; ${new Date().getFullYear()} International Flight Operations Academy
           </p>
         </td>
@@ -596,7 +596,7 @@ async function sendOtpEmail({ toEmail, airlineName, otp }) {
     const info = await transporter.sendMail({
       from:    `"IFOA – International Flight Operations Academy" <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER}>`,
       to:      toEmail,
-      subject: `${otp} — Your IFOA Email Verification Code`,
+      subject: `${otp} is your IFOA email verification code`,
       text:    `Your IFOA verification code is: ${otp}\nValid for 10 minutes. Do not share this code.`,
       html,
       attachments: logoAttachment(),
@@ -611,7 +611,7 @@ async function sendOtpEmail({ toEmail, airlineName, otp }) {
 // ─── Send contract email (with PDF attachment) ───────────────────────────────
 async function sendContractEmail({ toEmail, clientName, pdfBuffer, message }) {
   const transporter = getTransporter();
-  if (!transporter) throw new Error('SMTP not configured — cannot send contract.');
+  if (!transporter) throw new Error('SMTP not configured, so the contract cannot be sent.');
 
   const safeName   = (clientName || 'Client').replace(/[^a-zA-Z0-9 _-]/g, '').trim() || 'Client';
   const customNote = (message && message.trim()) ? message.trim().replace(/\n/g, '<br/>') : null;
@@ -810,9 +810,9 @@ async function sendContractEmail({ toEmail, clientName, pdfBuffer, message }) {
     `Please find attached the Services Agreement between ${safeName} and International Flight Operations Academy GmbH (IFOA).`,
     '',
     'REQUIRED ACTIONS:',
-    '  1. Review — Read through all terms and conditions in the attached PDF carefully.',
-    '  2. Sign   — Sign the agreement on the designated signature page.',
-    `  3. Return — Reply to this email with the signed copy, or send to ${contactEmail}.`,
+    '  1. Review: Read through all terms and conditions in the attached PDF carefully.',
+    '  2. Sign: Sign the agreement on the designated signature page.',
+    `  3. Return: Reply to this email with the signed copy, or send to ${contactEmail}.`,
     '',
     customNote ? `Note from IFOA: ${customNote.replace(/<br\/>/g, '\n')}\n` : '',
     `Attachment: Services_Agreement_${safeName.replace(/\s+/g, '_')}.pdf`,
@@ -847,7 +847,7 @@ async function sendContractEmail({ toEmail, clientName, pdfBuffer, message }) {
 // ─── Send exam invitation email (passwordless take link) ──────────────────────
 async function sendExamInviteEmail({ toEmail, participantName, examTitle, durationMinutes, maxAttempts, link, expiresAt, branding }) {
   const transporter = getTransporter();
-  if (!transporter) throw new Error('SMTP not configured — cannot send exam invite.');
+  if (!transporter) throw new Error('SMTP not configured, so the exam invite cannot be sent.');
 
   const name = participantName || 'Candidate';
   const durationLine = durationMinutes ? `${durationMinutes} minutes` : 'No time limit';
@@ -991,7 +991,7 @@ const escapeHtml = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&a
 
 async function sendTrainingFeedbackEmail({ toEmail, participantName, trainingTitle, link }) {
   const transporter = getTransporter();
-  if (!transporter) throw new Error('SMTP not configured — cannot send feedback request.');
+  if (!transporter) throw new Error('SMTP not configured, so the feedback request cannot be sent.');
 
   const name = escapeHtml(participantName || 'Participant');
   const title = escapeHtml(trainingTitle);
@@ -1106,7 +1106,7 @@ async function sendTrainingFeedbackEmail({ toEmail, participantName, trainingTit
 // admin generated in the browser; `message`: optional note from the admin.
 async function sendFeedbackReportEmail({ to, examTitle, message, pdfBuffer, filename, summary }) {
   const transporter = getTransporter();
-  if (!transporter) throw new Error('SMTP not configured — cannot send the feedback report.');
+  if (!transporter) throw new Error('SMTP not configured, so the feedback report cannot be sent.');
 
   const title = escapeHtml(examTitle);
   const note = message ? escapeHtml(message).replace(/\r?\n/g, '<br/>') : '';
@@ -1202,7 +1202,7 @@ async function sendFeedbackReportEmail({ to, examTitle, message, pdfBuffer, file
 // `file`: { content: Buffer, filename, contentType } — the airline's own document.
 async function sendExamCertificateEmail({ toEmail, participantName, examTitle, scoreText, file, issuerName, branding }) {
   const transporter = getTransporter();
-  if (!transporter) throw new Error('SMTP not configured — cannot send the certificate.');
+  if (!transporter) throw new Error('SMTP not configured, so the certificate cannot be sent.');
 
   const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const name = participantName || 'Candidate';
@@ -1304,7 +1304,7 @@ async function sendExamCertificateEmail({ toEmail, participantName, examTitle, s
 // `rows`: [{ name, trainingType, certNo, expiresOn: 'YYYY-MM-DD', daysLeft }]
 async function sendCertExpiryReminderEmail({ toEmail, cc, airlineName, rows, message, branding }) {
   const transporter = getTransporter();
-  if (!transporter) throw new Error('SMTP not configured — cannot send reminder.');
+  if (!transporter) throw new Error('SMTP not configured, so the reminder cannot be sent.');
 
   const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const leftText = (d) => (d < 0 ? `Expired ${-d} day${d === -1 ? '' : 's'} ago` : d === 0 ? 'Expires today' : `${d} day${d === 1 ? '' : 's'} left`);
@@ -1387,7 +1387,7 @@ async function sendCertExpiryReminderEmail({ toEmail, cc, airlineName, rows, mes
     'The following IFOA certificates are due to expire or have expired:',
     ...(message ? ['', message] : []),
     '',
-    ...rows.map((r) => `- ${r.name} — ${TRAINING_LABELS[r.trainingType] || r.trainingType}${r.certNo ? ` (${r.certNo})` : ''} — expires ${fmtDate(r.expiresOn)} (${leftText(r.daysLeft)})`),
+    ...rows.map((r) => `- ${r.name}: ${TRAINING_LABELS[r.trainingType] || r.trainingType}${r.certNo ? ` (${r.certNo})` : ''}, expires ${fmtDate(r.expiresOn)} (${leftText(r.daysLeft)})`),
     '',
     'Please arrange recurrent training so your personnel remain certified.',
     '',

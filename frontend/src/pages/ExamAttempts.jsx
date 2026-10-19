@@ -1087,7 +1087,7 @@ export default function ExamAttempts() {
     try {
       const res = await reassignExamInvites(id, [attempt.participant_id]);
       const { sent = [], skipped = [] } = res.data || {};
-      if (sent.length) toast.success(`${name} reassigned — a fresh exam link was emailed.`);
+      if (sent.length) toast.success(`${name} reassigned. A fresh exam link was emailed.`);
       else toast.error(`Reassign failed (${skipped[0]?.reason || 'unknown'}).`);
       load();
     } catch (err) {
@@ -1560,7 +1560,7 @@ export default function ExamAttempts() {
                     <span className="w-[5.5rem]">Attempts</span>
                     <span className="w-[7.5rem]">Status</span>
                     <span className="w-[6.5rem] text-right">Flags</span>
-                    <span className="w-[12rem] text-right">Actions</span>
+                    <span className="w-[14rem] text-right">Actions</span>
                   </div>
                 </div>
               </div>
@@ -1698,7 +1698,7 @@ export default function ExamAttempts() {
                           const none = used >= allowed && !g.attempts.some((x) => x.status === 'in_progress');
                           return (
                             <span
-                              title={none ? 'All attempts used — Reassign to give a new attempt' : `${allowed - used} attempt${allowed - used === 1 ? '' : 's'} left`}
+                              title={none ? 'All attempts used. Reassign to give a new attempt.' : `${allowed - used} attempt${allowed - used === 1 ? '' : 's'} left`}
                               className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-semibold tabular-nums ring-1 ring-inset ${none ? 'bg-rose-50 text-rose-700 ring-rose-600/20' : 'bg-white text-slate-700 ring-slate-200'}`}
                             >
                               <ListChecks className="w-3.5 h-3.5" strokeWidth={2} />
@@ -1719,20 +1719,20 @@ export default function ExamAttempts() {
                           </span>
                         )}
                       </div>
-                      <div className="flex items-center justify-end gap-2 ml-auto md:ml-0 md:w-[12rem]">
+                      <div className="flex items-center justify-end gap-2 ml-auto md:ml-0 md:w-[14rem]">
                         {canReassign && first.participant_id && first.participant_email && first.status !== 'in_progress' && (
                           <button
                             type="button"
                             onClick={(e) => { e.stopPropagation(); handleReassign(first); }}
                             disabled={reassigningPid === String(first.participant_id)}
-                            title={everPassed ? 'Passed — email a fresh link so they can take the exam again' : 'Email a fresh link and give a new attempt'}
-                            className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-lg text-xs font-semibold text-blue-700 ring-1 ring-inset ring-blue-200 bg-blue-50 hover:bg-blue-100 disabled:opacity-50 transition cursor-pointer"
+                            title={everPassed ? 'Passed. Email a fresh link so they can take the exam again.' : 'Email a fresh link and give a new attempt'}
+                            className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-lg text-xs font-semibold text-blue-700 ring-1 ring-inset ring-blue-200 bg-blue-50 hover:bg-blue-100 disabled:opacity-50 transition cursor-pointer whitespace-nowrap flex-shrink-0"
                           >
                             <RotateCcw className={`w-3.5 h-3.5 ${reassigningPid === String(first.participant_id) ? 'animate-spin' : ''}`} strokeWidth={2} />
                             Reassign
                           </button>
                         )}
-                        <span className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-semibold text-slate-600 ring-1 ring-inset ring-slate-200 bg-white">
+                        <span className="inline-flex items-center justify-between gap-1.5 w-[7.5rem] h-8 px-3 rounded-lg text-xs font-semibold text-slate-600 ring-1 ring-inset ring-slate-200 bg-white whitespace-nowrap flex-shrink-0">
                           {isOpen ? 'Hide' : 'View'} attempts
                           <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} strokeWidth={2} />
                         </span>
@@ -1853,7 +1853,7 @@ export default function ExamAttempts() {
                       )}
                       </div>
 
-                      <div className="flex items-center justify-end gap-2 ml-auto md:ml-0 md:w-[12rem]">
+                      <div className="flex items-center justify-end gap-2 ml-auto md:ml-0 md:w-[14rem]">
                       {canGrade && !isInProgress && (
                         <button
                           type="button"

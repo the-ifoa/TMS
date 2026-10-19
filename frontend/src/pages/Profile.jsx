@@ -56,7 +56,7 @@ export default function Profile() {
     if (!file) return;
     if (!file.type.startsWith('image/')) { toast.error('Please select an image file'); return; }
     const compressed = await compressImageFile(file);
-    if (compressed.size > 2 * 1024 * 1024) { toast.error('Logo is still too large after compression — try a smaller image.'); return; }
+    if (compressed.size > 2 * 1024 * 1024) { toast.error('Logo is still too large after compression. Try a smaller image.'); return; }
     setLogoFile(compressed);
     setLogoPreview(URL.createObjectURL(compressed));
   };
@@ -393,7 +393,7 @@ export default function Profile() {
                   </p>
                   <p className="text-xs font-medium text-slate-400 mt-0.5">
                     {admin?.logo_inherited
-                      ? 'Inherited from your parent airline by default — upload your own to override it.'
+                      ? 'Inherited from your parent airline by default. Upload your own to override it.'
                       : 'Shown in your profile and admin airline list'}
                   </p>
                 </div>

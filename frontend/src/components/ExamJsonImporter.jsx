@@ -49,7 +49,7 @@ export default function ExamJsonImporter({ open, onClose, sectionNames, onImport
       await navigator.clipboard.writeText(templateJsonText());
       toast.success('Template copied.');
     } catch {
-      toast.error('Could not copy — use Download instead.');
+      toast.error('Could not copy. Use Download instead.');
     }
   };
   const downloadTemplate = () => {
@@ -93,7 +93,7 @@ export default function ExamJsonImporter({ open, onClose, sectionNames, onImport
             <span className="p-2 rounded-xl bg-slate-900 text-white flex-shrink-0"><HiOutlineCode className="w-5 h-5" /></span>
             <div className="min-w-0 flex-1">
               <DialogTitle className="text-base font-bold text-slate-900">Import questions from JSON</DialogTitle>
-              <p className="text-xs text-slate-500 mt-0.5">Write many questions in one file — text, options, correct answers, explanations, points and sections. Images are added in the editor afterwards.</p>
+              <p className="text-xs text-slate-500 mt-0.5">Write many questions in one file: text, options, correct answers, explanations, points and sections. Images are added in the editor afterwards.</p>
             </div>
             <button type="button" onClick={onClose} aria-label="Close" className="-mr-2 -mt-1 p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700">
               <HiOutlineX className="w-5 h-5" />

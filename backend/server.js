@@ -64,7 +64,7 @@ app.use(cors({
   origin: true,               // reflect the request origin — allows any domain
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Player-Token'],
 }));
 
 // Handle preflight OPTIONS requests for every route
@@ -156,6 +156,8 @@ const internalCertsRouter   = require('./routes/internalCertificates');
 const internalAssessmentsRouter = require('./routes/internalAssessments');
 const feedbackRouter        = require('./routes/feedback');
 const publicFeedbackRouter  = require('./routes/publicFeedback');
+const liveRouter            = require('./routes/live');
+const publicLiveRouter      = require('./routes/publicLive');
 
 app.use('/api/auth', authRouter);
 app.use('/api/participants', participantsRouter);
@@ -174,6 +176,8 @@ app.use('/api/internal-certificates', internalCertsRouter);
 app.use('/api/internal-assessments', internalAssessmentsRouter);
 app.use('/api/feedback', feedbackRouter);
 app.use('/api/public-feedback', publicFeedbackRouter);
+app.use('/api/live', liveRouter);
+app.use('/api/public-live', publicLiveRouter);
 
 // Frontend is served separately (localhost in dev, or its own host in prod).
 // The backend is API-only — do NOT serve static files from here.

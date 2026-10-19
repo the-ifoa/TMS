@@ -20,7 +20,7 @@ const api = axios.create({
 // and identical requests fired at once share one call. Any write
 // (POST/PUT/PATCH/DELETE) clears the whole cache so edits always show up.
 const GET_CACHE_MS = 30_000;
-const NEVER_CACHE = [/\/notifications/, /\/auth\/me/, /\/public-feedback\//];
+const NEVER_CACHE = [/\/notifications/, /\/auth\/me/, /\/public-feedback\//, /\/live\//, /\/public-live\//];
 const getCache = new Map();     // key -> { at, res }
 const inFlight = new Map();     // key -> Promise<res>
 const networkAdapter = axios.getAdapter(axios.defaults.adapter);
@@ -368,5 +368,26 @@ export const importExamResultsExcel = (file, meta) => {
   if (meta.result_header_text) fd.append('result_header_text', meta.result_header_text);
   return api.post('/exam-results/import-excel', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
 };
+
+// ── Live quiz (Kahoot-style) ────────────────────────────────────────────────
+export const listLiveGames        = ()                 => api.get('/live/games');
+export const getLiveGame          = (id)               => api.get(`/live/games/${id}`);
+export const createLiveGame       = (data)             => api.post('/live/games', data);
+export const updateLiveGame       = (id, data)         => api.put(`/live/games/${id}`, data);
+export const deleteLiveGame       = (id)               => api.delete(`/live/games/${id}`);
+export const listLiveSessions     = (id)               => api.get(`/live/games/${id}/sessions`);
+export const startLiveSession     = (id)               => api.post(`/live/games/${id}/sessions`);
+export const getLiveExamQuestions = (examId)           => api.get(`/live/exam-questions/${examId}`);
+export const getLiveHostState     = (sessionId)        => api.get(`/live/sessions/${sessionId}`);
+export const deleteLiveSession    = (sessionId)        => api.delete(`/live/sessions/${sessionId}`);
+export const liveHostAction       = (sessionId, action, extra = {}) => api.post(`/live/sessions/${sessionId}/action`, { action, ...extra });
+// Players (no login) — the player token goes in the X-Player-Token header.
+const playerHdr = (token) => ({ headers: { 'X-Player-Token': token } });
+export const resolveLivePin       = (pin)              => api.get(`/public-live/pin/${pin}`);
+export const getLivePublic        = (code)             => api.get(`/public-live/${code}`);
+export const joinLiveGame         = (code, data)       => api.post(`/public-live/${code}/join`, data);
+export const getLivePlayerState   = (code, token)      => api.get(`/public-live/${code}/state`, playerHdr(token));
+export const answerLive           = (code, token, data) => api.post(`/public-live/${code}/answer`, data, playerHdr(token));
+export const reactLive            = (code, token, sticker) => api.post(`/public-live/${code}/react`, { sticker }, playerHdr(token));
 
 export default api;

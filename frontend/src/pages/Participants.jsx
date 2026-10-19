@@ -320,7 +320,7 @@ function SubmissionGroup({ groupKey, records, open, onToggle, focusId, attendanc
                 <HiOutlineAcademicCap className="w-4 h-4" />
               </div>
               <span className="text-xs sm:text-sm font-bold text-slate-800 group-hover:text-slate-900 transition-colors truncate">
-                {first.training_type} — {typeInfo.label || first.training_type}
+                {first.training_type}: {typeInfo.label || first.training_type}
               </span>
             </div>
           </div>
@@ -618,7 +618,7 @@ function SubmissionGroup({ groupKey, records, open, onToggle, focusId, attendanc
                 >
                 <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
                   <div className="min-w-0">
-                    <p className="text-base font-bold text-slate-800 truncate">Certificate — {preview.participant_name}</p>
+                    <p className="text-base font-bold text-slate-800 truncate">Certificate: {preview.participant_name}</p>
                     <p className="text-xs text-slate-400 mt-0.5">{preview.training_type}</p>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
@@ -681,7 +681,7 @@ function SubmissionGroup({ groupKey, records, open, onToggle, focusId, attendanc
                 >
                 <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
                   <div className="min-w-0">
-                    <p className="text-base font-bold text-slate-800 truncate">DHL Certificate — {dhlPreview.participant_name}</p>
+                    <p className="text-base font-bold text-slate-800 truncate">DHL Certificate: {dhlPreview.participant_name}</p>
                     <p className="text-xs text-slate-400 mt-0.5">DHL FORM ST-{String(dhlPreview.dhl_cert_sequence).padStart(3, '0')}</p>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">

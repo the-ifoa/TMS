@@ -36,7 +36,7 @@ export function StudentDetailModal({ student, onClose, onIssueSheet, onRevokeShe
     setRevoking(true);
     try {
       await onRevokeSheet(id);
-      toast.success('Result sheet revoked — status is now Pending.');
+      toast.success('Result sheet revoked. Status is now Pending.');
       onRefresh();
       onClose();
     } catch {
@@ -134,7 +134,7 @@ export function StudentDetailModal({ student, onClose, onIssueSheet, onRevokeShe
                 </p>
                 <p className="text-xs font-medium text-slate-500 mt-0.5">
                   {student.sheet_issued
-                    ? `Issued on ${student.sheet_date || 'recorded date'} — PDF report is available`
+                    ? `Issued on ${student.sheet_date || 'recorded date'}. PDF report is available.`
                     : 'Issue this sheet to generate student PDF record.'}
                 </p>
                 <div className="flex flex-wrap items-center gap-2 mt-3">

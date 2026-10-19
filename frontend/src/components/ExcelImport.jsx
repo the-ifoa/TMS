@@ -121,9 +121,9 @@ function validateRow(row) {
   if (!row.first_name?.trim())  errors.push('First name missing');
   if (!row.last_name?.trim())   errors.push('Last name missing');
   if (!row.department?.trim())  errors.push('Department missing');
-  if (!row.training_type)       errors.push('Training type missing — select from dropdown');
+  if (!row.training_type)       errors.push('Training type missing. Select from the dropdown.');
   else if (!TRAINING_TYPES.includes(row.training_type))
-    errors.push(`"${row.training_type}" is not valid — select from dropdown`);
+    errors.push(`"${row.training_type}" is not valid. Select from the dropdown.`);
   if (!row.training_date)       errors.push('Start date missing');
   return errors;
 }
@@ -346,7 +346,7 @@ export default function ExcelImport({ isAdmin, airlineName, company, onSuccess }
     setStatuses(newStatuses);
 
     if (validRows.length === 0) {
-      toast.error('All rows have errors — use the Training Type dropdown to fix the red rows');
+      toast.error('All rows have errors. Use the Training Type dropdown to fix the red rows');
       return;
     }
 
@@ -382,11 +382,11 @@ export default function ExcelImport({ isAdmin, airlineName, company, onSuccess }
     if (fail === 0 && invalidCount === 0)
       toast.success(`${ok} participant${ok !== 1 ? 's' : ''} imported successfully!`);
     else if (ok > 0 && invalidCount > 0)
-      toast.error(`${ok} saved — select the correct Training Type for the ${invalidCount} red row${invalidCount !== 1 ? 's' : ''} and resubmit`);
+      toast.error(`${ok} saved. Select the correct Training Type for the ${invalidCount} red row${invalidCount !== 1 ? 's' : ''} and resubmit`);
     else if (ok > 0 && fail > 0)
-      toast.error(`${ok} saved, ${fail} failed — fix errors and resubmit`);
+      toast.error(`${ok} saved, ${fail} failed. Fix the errors and resubmit.`);
     else
-      toast.error('All submissions failed — please check the errors');
+      toast.error('All submissions failed. Please check the errors.');
   };
 
   // ── Reset ────────────────────────────────────────────────────────────────────
@@ -474,7 +474,7 @@ export default function ExcelImport({ isAdmin, airlineName, company, onSuccess }
                   </div>
                   <div className="text-center">
                     <p className="text-sm font-semibold text-primary-700">{dragging ? 'Drop to import' : 'Drag & drop your Excel file here'}</p>
-                    <p className="text-xs text-primary-400 mt-1">or click to browse — .xlsx, .xls, .csv accepted</p>
+                    <p className="text-xs text-primary-400 mt-1">or click to browse (.xlsx, .xls, .csv)</p>
                   </div>
                 </>
               )}
@@ -491,7 +491,7 @@ export default function ExcelImport({ isAdmin, airlineName, company, onSuccess }
               <div className="flex items-center gap-2">
                 <HiOutlineDocumentText className="w-4 h-4 text-accent-500" />
                 <span className="text-sm font-medium text-primary-700">{fileName}</span>
-                <span className="text-xs text-primary-400">— {totalRows} row{totalRows !== 1 ? 's' : ''} found</span>
+                <span className="text-xs text-primary-400">· {totalRows} row{totalRows !== 1 ? 's' : ''} found</span>
               </div>
               <button type="button" onClick={reset} className="flex items-center gap-1 text-xs text-primary-400 hover:text-primary-700 transition-colors">
                 <HiOutlineRefresh className="w-3.5 h-3.5" /> Change file

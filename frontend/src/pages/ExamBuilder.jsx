@@ -78,8 +78,8 @@ function remarkMessage(p) {
   }
   if (p.in_progress_updated) lines.push(`• ${p.in_progress_updated} candidate${p.in_progress_updated === 1 ? ' is' : 's are'} taking the exam now: their submit uses the new key.`);
   if (p.needs_hand_check.length) {
-    lines.push('', 'Not re-marked automatically — check by hand:');
-    p.needs_hand_check.slice(0, 8).forEach((h) => lines.push(`• ${h.name}${h.question ? ` — question ${h.question}` : ''}: ${h.reason}`));
+    lines.push('', 'Not re-marked automatically. Check by hand:');
+    p.needs_hand_check.slice(0, 8).forEach((h) => lines.push(`• ${h.name}${h.question ? ` (question ${h.question})` : ''}: ${h.reason}`));
     if (p.needs_hand_check.length > 8) lines.push(`• …and ${p.needs_hand_check.length - 8} more`);
   }
   return lines.join('\n');
@@ -93,6 +93,7 @@ const emptyExam = () => ({
   show_review: false, instant_feedback: false,
   opens_at: null, closes_at: null, section_settings: [],
   for_airline: null,
+  for_airline_name: '',
 });
 
 // datetime-local inputs work in local time with no timezone suffix; Mongo
@@ -324,13 +325,13 @@ function QuestionBankPicker({ open, onClose, sectionNames, onImport }) {
   const autoSelect = () => {
     const pool = items.filter((it) => !rejectedIds.has(it.id) && !importedIds.has(it.id));
     if (pool.length === 0) {
-      toast.error('No unique questions left in this bank matching your filters — you\'ve already added or removed them all.');
+      toast.error('No unique questions left in this bank matching your filters. You\'ve already added or removed them all.');
       return;
     }
     const picks = shuffled(pool).slice(0, Math.max(1, autoCount));
     setSelected(new Set(picks.map((p) => p.id)));
     if (picks.length < autoCount) {
-      toast.error(`Only ${picks.length} unique question${picks.length !== 1 ? 's' : ''} left matching your filters — the rest were already added or removed.`);
+      toast.error(`Only ${picks.length} unique question${picks.length !== 1 ? 's' : ''} left matching your filters. The rest were already added or removed.`);
     } else {
       toast.success(`Auto-selected ${picks.length} question${picks.length !== 1 ? 's' : ''}.`);
     }
@@ -436,7 +437,7 @@ function QuestionBankPicker({ open, onClose, sectionNames, onImport }) {
                 </span>
                 <span className="flex-1 min-w-0 text-xs font-semibold text-slate-800 truncate">{item.prompt || '(no prompt)'}</span>
                 {importedIds.has(item.id) && (
-                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-lg flex-shrink-0" title="Already imported into this exam this session — skipped by Auto Select">
+                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-lg flex-shrink-0" title="Already imported into this exam this session, so Auto Select skips it">
                     Added
                   </span>
                 )}
@@ -568,6 +569,7 @@ export default function ExamBuilder() {
   const [loading, setLoading] = useState(!isNew);
   // Admin: airlines this exam can be marked "for" (IFOA exams only).
   const [airlineOptions, setAirlineOptions] = useState([]);
+  const [typingAirline, setTypingAirline] = useState(false); // "For airline" typed in by hand
   useEffect(() => {
     if (!isAdmin) return;
     getExamAirlineOptions().then((res) => setAirlineOptions(res.data || [])).catch(() => {});
@@ -877,6 +879,7 @@ export default function ExamBuilder() {
 
   const save = async () => {
     if (!exam.title.trim()) return toast.error('Exam title is required.');
+    if (isAdmin && !exam.owner_airline && !exam.for_airline && !(exam.for_airline_name || '').trim()) return toast.error('Choose the airline this exam is for, or type its name.');
     // Never save a half-finished question: candidates would see a blank
     // question with empty options (and it could never be answered correctly).
     const problem = findQuestionProblem(exam.questions || []);
@@ -1125,15 +1128,52 @@ export default function ExamBuilder() {
 
                 {isAdmin && !exam.owner_airline && (
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">For airline</label>
-                    <Select value={exam.for_airline ? String(exam.for_airline) : 'none'} onValueChange={(v) => set('for_airline', v === 'none' ? null : v)}>
-                      <SelectTrigger className="w-full bg-white rounded-xl text-xs font-semibold"><SelectValue /></SelectTrigger>
-                      <SelectContent className="max-h-72">
-                        <SelectItem value="none" className="text-xs">General — any airline</SelectItem>
-                        {airlineOptions.map((a) => <SelectItem key={a.id} value={a.id} className="text-xs">{a.name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                    <span className="block text-[10px] text-slate-400 mt-1 font-semibold">Shown on the exam card; Assign opens on this airline&apos;s participants.</span>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">For airline <span className="text-red-500">*</span></label>
+                    {typingAirline || (!exam.for_airline && exam.for_airline_name) ? (() => {
+                      const typed = (exam.for_airline_name || '').trim();
+                      const listed = typed && airlineOptions.find((a) => a.name.trim().toLowerCase() === typed.toLowerCase());
+                      return (
+                        <>
+                          <div className="flex gap-2">
+                            <input
+                              autoFocus={typingAirline}
+                              value={exam.for_airline_name || ''}
+                              onChange={(e) => set('for_airline_name', e.target.value)}
+                              maxLength={120}
+                              placeholder="Type the airline name"
+                              className={`flex-1 min-w-0 px-3 py-2 text-xs font-semibold text-slate-900 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500 bg-white ${typed ? 'border-slate-200' : 'border-amber-300'}`}
+                            />
+                            <button type="button"
+                              onClick={() => { setTypingAirline(false); setExam((prev) => ({ ...prev, for_airline: null, for_airline_name: '' })); }}
+                              className="px-3 text-[11px] font-bold text-blue-600 border border-slate-200 rounded-xl hover:bg-blue-50 whitespace-nowrap">
+                              Pick from list
+                            </button>
+                          </div>
+                          {listed && (
+                            <button type="button"
+                              onClick={() => { setTypingAirline(false); setExam((prev) => ({ ...prev, for_airline: listed.id, for_airline_name: listed.name })); }}
+                              className="mt-1 text-[10px] font-bold text-blue-600 hover:underline">
+                              {listed.name} is already in the list. Use it instead
+                            </button>
+                          )}
+                        </>
+                      );
+                    })() : (
+                      <Select
+                        value={exam.for_airline ? String(exam.for_airline) : undefined}
+                        onValueChange={(v) => {
+                          if (v === '__manual') { setTypingAirline(true); setExam((prev) => ({ ...prev, for_airline: null, for_airline_name: '' })); return; }
+                          const a = airlineOptions.find((o) => o.id === v);
+                          setExam((prev) => ({ ...prev, for_airline: v, for_airline_name: a ? a.name : '' }));
+                        }}>
+                        <SelectTrigger className={`w-full bg-white rounded-xl text-xs font-semibold ${exam.for_airline ? '' : 'border-amber-300 text-slate-400'}`}><SelectValue placeholder="Select an airline" /></SelectTrigger>
+                        <SelectContent className="max-h-72">
+                          {airlineOptions.map((a) => <SelectItem key={a.id} value={a.id} className="text-xs">{a.name}</SelectItem>)}
+                          <SelectItem value="__manual" className="text-xs font-bold text-blue-600 border-t border-slate-100 mt-1">Not listed? Enter manually…</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
+                    <span className="block text-[10px] text-slate-400 mt-1 font-semibold">Required. Shown on the exam card, Assign opens on this airline&apos;s participants, and feedback for this exam counts towards this airline.</span>
                   </div>
                 )}
 
@@ -1368,7 +1408,7 @@ export default function ExamBuilder() {
                             <input
                               type="number" min="0"
                               placeholder="Time (min)"
-                              title="Section time limit in minutes — blank means no separate limit"
+                              title="Section time limit in minutes. Leave blank for no separate limit"
                               value={setting.time_minutes ?? ''}
                               onChange={(e) => setSectionSetting(name, { time_minutes: e.target.value === '' ? null : Number(e.target.value) })}
                               className="w-0 flex-1 px-2 py-1 text-[11px] font-semibold text-slate-700 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white"
@@ -1376,7 +1416,7 @@ export default function ExamBuilder() {
                             <input
                               type="number" min="0"
                               placeholder="Weight %"
-                              title="Score weight — relative, doesn't need to sum to 100. Blank means flat point-scoring"
+                              title="Score weight: relative, doesn't need to sum to 100. Blank means flat point-scoring"
                               value={setting.weight ?? ''}
                               onChange={(e) => setSectionSetting(name, { weight: e.target.value === '' ? null : Number(e.target.value) })}
                               className="w-0 flex-1 px-2 py-1 text-[11px] font-semibold text-slate-700 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white"
@@ -1468,7 +1508,7 @@ export default function ExamBuilder() {
               </div>
 
               <p className="text-[10px] text-slate-400 font-semibold leading-relaxed">
-                Leave blank for no restriction. Gates starting a new attempt — existing attempts are not cut off.
+                Leave blank for no restriction. Gates starting a new attempt. Existing attempts are not cut off.
               </p>
             </Card>
           </div>
@@ -1676,7 +1716,7 @@ export default function ExamBuilder() {
             const qq = (exam.questions || []).find((x) => String(x._id || x.id) === String(qId));
             return { feedback: { preview: true, question_id: qId, is_correct: null, explanation: qq?.explanation || '', correct_answer: '', correct_regions: (qq?.hotspot_regions || []).filter((r) => r.is_correct) }, progress: null };
           }}
-          onSubmit={async () => { toast.success('Preview finished — nothing was saved.'); }}
+          onSubmit={async () => { toast.success('Preview finished. Nothing was saved.'); }}
           onReportViolation={async () => ({ violation_count: 0, auto_submitted_now: false })}
           onFinished={exitPreview}
           previewMode

@@ -62,7 +62,7 @@ async function sendExpiryReminders(participants, { message = '' } = {}) {
   for (const { airline, parent, rows, ids } of groups.values()) {
     rows.sort((a, b) => a.daysLeft - b.daysLeft);
     const label = airline.is_department
-      ? `${parent?.airlineName || airline.airlineName} — ${airline.department_name || 'Department'}`
+      ? `${parent?.airlineName || airline.airlineName} · ${airline.department_name || 'Department'}`
       : airline.airlineName;
     try {
       await sendCertExpiryReminderEmail({

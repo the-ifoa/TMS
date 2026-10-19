@@ -258,7 +258,7 @@ function ServicesBulletEditor({ block, onChange }) {
 
   const rebuild = (d, t, dt, dv, n) =>
     onChange(
-      `**Duration:** {{${d}}} day(s) — **Training Type:** {{${t}}}\n` +
+      `**Duration:** {{${d}}} day(s), **Training Type:** {{${t}}}\n` +
       `**Dates:** {{${dt}}}\n` +
       `**Delivery:** {{${dv}}}\n` +
       `**Additional Notes:** {{${n}}}`
@@ -873,7 +873,7 @@ function ContractEditor({ airline, onBack, onSent }) {
         <div className="flex items-start gap-2 p-3 rounded-xl bg-blue-50 border border-blue-100">
           <HiOutlineLightBulb className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
           <p className="text-xs text-blue-700 leading-relaxed">
-            <strong className="px-1 rounded hl-mark">Highlighted</strong> boxes are dynamic values — type directly into them.
+            <strong className="px-1 rounded hl-mark">Highlighted</strong> boxes are dynamic values. Type directly into them.
             To mark more text as dynamic, select it in any text block and click <strong>Bold</strong>.
           </p>
         </div>

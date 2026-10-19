@@ -69,7 +69,7 @@ function SheetCard({ sheet, onEdit, onPreview, previewing, forceOpen }) {
         {/* Badge + meta stacked */}
         <div className="flex-1 min-w-0">
           <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${typeInfo.color || 'bg-slate-100 text-slate-700 border-slate-200'}`}>
-            {sheet.training_type} — {typeInfo.label || sheet.training_type}
+            {sheet.training_type}: {typeInfo.label || sheet.training_type}
           </span>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1">
             <span className="flex items-center gap-1 text-[11px] text-slate-500 font-medium">

@@ -135,7 +135,7 @@ function SendInviteModal({ exam, onClose, onSent }) {
     try {
       const res = await reassignExamInvites(exam.id, [pid], opts);
       const { sent = [], skipped = [] } = res.data || {};
-      if (sent.length) toast.success(`${name} reassigned — a fresh exam link was emailed.`);
+      if (sent.length) toast.success(`${name} reassigned. A fresh exam link was emailed.`);
       else toast.error(`Reassign failed (${skipped[0]?.reason || 'unknown'}).`);
       load();
       onSent?.();
@@ -159,7 +159,7 @@ function SendInviteModal({ exam, onClose, onSent }) {
     try {
       const res = await reassignExamInvites(exam.id, needsReassign.map((x) => x.id), opts);
       const { sent = [], skipped = [] } = res.data || {};
-      if (sent.length) toast.success(`${sent.length} reassigned — fresh exam link${sent.length > 1 ? 's' : ''} emailed.`);
+      if (sent.length) toast.success(`${sent.length} reassigned. Fresh exam link${sent.length > 1 ? 's' : ''} emailed.`);
       if (skipped.length) toast.error(`${skipped.length} not reassigned (${skipped[0].reason}).`);
       const done = new Set(sent.map((x) => String(x.id)));
       setNeedsReassign((list) => list.filter((x) => !done.has(String(x.id))));
@@ -229,7 +229,7 @@ function SendInviteModal({ exam, onClose, onSent }) {
       const parts = [];
       if (created) parts.push(`${created} added${addForm.keep ? '' : ' for this exam only'}`);
       if (reused) parts.push(`${reused} already existed`);
-      if (added.length) toast.success(`${parts.join(', ')} — selected. Click Assign to email the exam link${added.length > 1 ? 's' : ''}.`, { duration: 6000 });
+      if (added.length) toast.success(`${parts.join(', ')} selected. Click Assign to email the exam link${added.length > 1 ? 's' : ''}.`, { duration: 6000 });
       if (failed) toast.error(`${failed} not added: ${results.filter((r) => r.error).map((r) => `${r.email || r.name} (${r.error})`).join(', ')}`, { duration: 8000 });
       setSelected((prev) => { const n = new Set(prev); added.forEach((r) => n.add(r.participant._id)); return n; });
       setExpanded((prev) => { const n = new Set(prev); added.forEach((r) => n.add(r.participant.airline_id)); return n; });
@@ -282,7 +282,7 @@ function SendInviteModal({ exam, onClose, onSent }) {
               <DialogTitle className="text-base sm:text-lg font-bold text-slate-900 leading-snug line-clamp-2">
                 Assign &ldquo;{exam.title}&rdquo; to participants
               </DialogTitle>
-              <p className="mt-1 text-xs leading-relaxed text-slate-500">Each assigned participant gets a personal, passwordless exam link by email. Participants without an email can't be assigned. Use <span className="font-semibold text-slate-700">Reassign</span> on someone who already finished — passed or failed — to let them take the exam again with a fresh link.</p>
+              <p className="mt-1 text-xs leading-relaxed text-slate-500">Each assigned participant gets a personal, passwordless exam link by email. Participants without an email can't be assigned. Use <span className="font-semibold text-slate-700">Reassign</span> on someone who already finished (passed or failed) to let them take the exam again with a fresh link.</p>
             </div>
             <button type="button" onClick={onClose} aria-label="Close"
               className="-mr-2 -mt-1 p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors flex-shrink-0">
@@ -345,7 +345,7 @@ function SendInviteModal({ exam, onClose, onSent }) {
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-sm font-bold text-slate-900">Add participants</p>
-                  <p className="text-[11px] text-slate-500 mt-0.5">They are selected straight away — click Assign to email their exam links.</p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">They are selected straight away. Click Assign to email their exam links.</p>
                 </div>
                 <button type="button" onClick={() => setPasteOpen((o) => !o)} className="text-[11px] font-bold text-blue-700 hover:text-blue-900 whitespace-nowrap">
                   {pasteOpen ? 'Hide paste box' : 'Paste a list'}
@@ -407,7 +407,7 @@ function SendInviteModal({ exam, onClose, onSent }) {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {[
                   [true, 'Keep permanently', 'Saved to the participant list for future exams and certificates.'],
-                  [false, 'Only for this exam', 'Not added to the participant list — used for this exam only.'],
+                  [false, 'Only for this exam', 'Not added to the participant list. Used for this exam only.'],
                 ].map(([keep, title, help]) => (
                   <button key={title} type="button" onClick={() => setAddForm((f) => ({ ...f, keep }))}
                     className={`text-left rounded-xl border px-3 py-2.5 transition-colors ${addForm.keep === keep ? 'border-slate-900 bg-slate-900/[0.03] ring-1 ring-slate-900' : 'border-slate-200 hover:bg-slate-50'}`}>
@@ -494,7 +494,7 @@ function SendInviteModal({ exam, onClose, onSent }) {
                                 </div>
                                 <div className="flex items-center justify-end gap-1.5 flex-wrap ml-auto">
                                   {p.temporary && (
-                                    <span className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full text-[10px] font-bold border bg-violet-50 text-violet-700 border-violet-200" title="Added for this exam only — not in the participant list">
+                                    <span className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full text-[10px] font-bold border bg-violet-50 text-violet-700 border-violet-200" title="Added for this exam only, not in the participant list">
                                       This exam only
                                       <button type="button" onClick={(e) => { e.stopPropagation(); keepPermanently(p); }}
                                         className="px-1.5 rounded-full bg-white border border-violet-200 hover:bg-violet-100">Keep</button>
@@ -526,11 +526,11 @@ function SendInviteModal({ exam, onClose, onSent }) {
                                     </span>
                                   )}
                                   {inv?.needs_reassign && (inv.passed_in_cycle ? (
-                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold border bg-emerald-50 text-emerald-800 border-emerald-300" title="Already passed — Assign won't send anything. Use Reassign to let them take the exam again.">
+                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold border bg-emerald-50 text-emerald-800 border-emerald-300" title="Already passed, so Assign won't send anything. Use Reassign to let them take the exam again.">
                                       Passed · reassign to retake
                                     </span>
                                   ) : (
-                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold border bg-amber-50 text-amber-800 border-amber-300" title="All attempts used — Assign won't send anything. Use Reassign to give a new attempt.">
+                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold border bg-amber-50 text-amber-800 border-amber-300" title="All attempts used, so Assign won't send anything. Use Reassign to give a new attempt.">
                                       No attempts left
                                     </span>
                                   ))}
@@ -602,7 +602,7 @@ function SendInviteModal({ exam, onClose, onSent }) {
             </DialogTitle>
             <p className="text-xs leading-relaxed text-slate-500">
               {needsReassign.length === 1 ? 'This candidate has' : 'These candidates have'} already passed or used all {exam.max_attempts} attempt{exam.max_attempts === 1 ? '' : 's'}, so assigning again doesn't send anything.
-              {' '}<span className="font-semibold text-slate-700">Reassign</span> lets them take the exam again — passed or not — and emails a fresh link (the old link stops working). Their earlier results are kept.
+              {' '}<span className="font-semibold text-slate-700">Reassign</span> lets them take the exam again (passed or not) and emails a fresh link (the old link stops working). Their earlier results are kept.
             </p>
           </DialogHeader>
           <div className="px-6 pb-2 max-h-64 overflow-y-auto space-y-2">
@@ -672,7 +672,7 @@ function AssignedListModal({ exam, canReassign, onClose, onChanged }) {
     try {
       const res = await reassignExamInvites(exam.id, [r.participant_id]);
       const { sent = [], skipped = [] } = res.data || {};
-      if (sent.length) toast.success(`${r.name} reassigned — a fresh exam link was emailed.`);
+      if (sent.length) toast.success(`${r.name} reassigned. A fresh exam link was emailed.`);
       else toast.error(`Reassign failed (${skipped[0]?.reason || 'unknown'}).`);
       load();
       onChanged?.();
@@ -922,7 +922,7 @@ export default function ExamSystem() {
 
             <div className="flex items-center gap-1 flex-shrink-0">
               {deleted ? (
-                <SimpleTooltip label={`Deleted ${new Date(exam.deleted_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} — results are kept`}>
+                <SimpleTooltip label={`Deleted ${new Date(exam.deleted_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}. Results are kept.`}>
                   <span className="font-bold text-[10px] px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200">Deleted</span>
                 </SimpleTooltip>
               ) : (

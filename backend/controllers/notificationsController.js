@@ -75,7 +75,7 @@ exports.listNotifications = async (req, res) => {
           id:       `ndg-${p._id}`,
           type:     'score',
           title:    'NDG Score Recorded',
-          message:  `${name} (${airline}) achieved ${p.ndg_score}% on ${type} — ${p.ndg_subtype === 'R' ? 'Recurrent' : 'Initial'}`,
+          message:  `${name} (${airline}) achieved ${p.ndg_score}% on ${type} (${p.ndg_subtype === 'R' ? 'Recurrent' : 'Initial'})`,
           time:     updated,
           priority: 'normal',
           link:     `/admin/airlines?focus=${p._id}`,
@@ -171,7 +171,7 @@ exports.listNotifications = async (req, res) => {
         type:     'exam',
         title:    isAdmin ? 'Exam Submitted' : 'Candidate Finished Exam',
         message:  isAdmin
-          ? `${a.participant_name || 'A candidate'} submitted "${examTitle}"${a.percentage != null ? ` — scored ${Math.round(a.percentage)}%` : ' — awaiting grading'}`
+          ? `${a.participant_name || 'A candidate'} submitted "${examTitle}"${a.percentage != null ? ` and scored ${Math.round(a.percentage)}%` : ', awaiting grading'}`
           : `${a.participant_name || 'Your candidate'} finished "${examTitle}"${a.percentage != null ? ` and scored ${Math.round(a.percentage)}%` : ' and it is being graded'}`,
         time:     submitted,
         priority: 'normal',

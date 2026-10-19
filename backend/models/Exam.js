@@ -130,10 +130,13 @@ const examSchema = new mongoose.Schema(
     // owner_department names the department that manages it.
     owner_department: { type: mongoose.Schema.Types.ObjectId, ref: 'Airline', default: null },
 
-    // IFOA exams only: the airline this exam is being run for (a label for the
-    // admin — the exam list shows it and the Assign window opens on that
-    // airline). null = general, for any airline. Never set on airline-owned exams.
-    for_airline: { type: mongoose.Schema.Types.ObjectId, ref: 'Airline', default: null },
+    // IFOA exams only (required for them): the airline this exam is being run
+    // for — the exam list shows it, the Assign window opens on that airline and
+    // its feedback counts towards it. Either a listed airline (for_airline, with
+    // its name copied into for_airline_name) or a name typed in by hand
+    // (for_airline null). Never set on airline-owned exams.
+    for_airline:      { type: mongoose.Schema.Types.ObjectId, ref: 'Airline', default: null },
+    for_airline_name: { type: String, default: '', trim: true, maxlength: 120 },
 
     status: { type: String, enum: ['draft', 'published', 'archived'], default: 'draft' },
 

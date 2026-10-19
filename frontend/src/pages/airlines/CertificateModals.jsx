@@ -90,7 +90,7 @@ export function VariantModal({ open, variant, setVariant, validity, setValidity,
                 <Checkbox checked={includeDhl} onCheckedChange={c => setIncludeDhl(!!c)} className="mt-0.5" />
                 <span>
                   <span className="block text-sm font-bold text-blue-700">Also generate DHL Extra Certificate</span>
-                  <span className="block text-xs text-blue-500 mt-0.5">{dhlEligibleCount} of the selected candidate{dhlEligibleCount > 1 ? 's are' : ' is'} eligible (DHL Bahrain, FDR) — generates a DHL FORM ST-XXX certificate for {dhlEligibleCount > 1 ? 'each' : 'it'}, alongside the normal certificate.</span>
+                  <span className="block text-xs text-blue-500 mt-0.5">{dhlEligibleCount} of the selected candidate{dhlEligibleCount > 1 ? 's are' : ' is'} eligible (DHL Bahrain, FDR). Generates a DHL FORM ST-XXX certificate for {dhlEligibleCount > 1 ? 'each' : 'it'}, alongside the normal certificate.</span>
                 </span>
               </label>
             )}
@@ -218,7 +218,7 @@ export function CounterResetModal({ open, onClose, counters, ALL_TYPES, resettin
           <div className="flex items-center justify-between px-4 sm:px-5 py-4 border-b border-primary-100 flex-shrink-0">
             <div>
               <h2 className="text-sm sm:text-base font-bold text-primary-800">Reset Certificate Counters</h2>
-              <p className="text-xs text-primary-400 mt-0.5">Reset to 0 — admin must regenerate all certificates</p>
+              <p className="text-xs text-primary-400 mt-0.5">Reset to 0. Admin must regenerate all certificates</p>
             </div>
             <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-primary-100 text-primary-400 flex-shrink-0"><HiOutlineX className="w-5 h-5" /></button>
           </div>
@@ -230,7 +230,7 @@ export function CounterResetModal({ open, onClose, counters, ALL_TYPES, resettin
             </svg>
             <p className="text-xs text-red-700">
               <strong>Reset to 0</strong> clears ALL certificate numbers for that type.
-              Certificates become invalid — admin must regenerate each one.
+              Certificates become invalid. Admin must regenerate each one.
             </p>
           </div>
 

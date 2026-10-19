@@ -119,7 +119,7 @@ export default function Signup() {
     if (!file) return;
     if (!file.type.startsWith('image/')) { toast.error('Please select an image file'); return; }
     const compressed = await compressImageFile(file);
-    if (compressed.size > 2 * 1024 * 1024) { toast.error('Logo is still too large after compression — try a smaller image.'); return; }
+    if (compressed.size > 2 * 1024 * 1024) { toast.error('Logo is still too large after compression. Try a smaller image.'); return; }
     setLogoFile(compressed);
     setLogoPreview(URL.createObjectURL(compressed));
   };
@@ -151,7 +151,7 @@ export default function Signup() {
           setSavedLogoUrl(logo_url);
           toast.success('Logo uploaded!', { id: 'logo-upload' });
         } catch {
-          toast.error('Logo upload failed — continuing without logo', { id: 'logo-upload' });
+          toast.error('Logo upload failed. Continuing without a logo.', { id: 'logo-upload' });
         }
         setUploading(false);
       }
@@ -393,7 +393,7 @@ export default function Signup() {
                 expired ? 'bg-red-50 text-red-600 border border-red-200' : remaining < 60 ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-blue-50 text-blue-700 border border-blue-200'
               }`}>
                 <span className="font-mono text-lg">{fmt(remaining)}</span>
-                <span className="text-xs font-medium opacity-70">{expired ? '— Code expired' : 'remaining'}</span>
+                <span className="text-xs font-medium opacity-70">{expired ? 'Code expired' : 'remaining'}</span>
               </div>
 
               <form onSubmit={handleVerify} className="space-y-5">

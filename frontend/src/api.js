@@ -207,6 +207,7 @@ export const listAttendanceSheets  = (params = {}) => api.get('/attendance', { p
 export const getAttendanceSheet    = (id)           => api.get(`/attendance/${id}`);
 export const saveAttendanceSheet   = (data)         => api.post('/attendance', data);
 export const updateAttendanceSheet = (id, data)     => api.put(`/attendance/${id}`, data);
+export const deleteAttendanceSheet = (id)           => api.delete(`/attendance/${id}`);
 export const bulkEnsureAttendanceSheets = (participantIds) => api.post('/attendance/bulk', { participantIds });
 
 // ── DGR CBTA Forms ────────────────────────────────────────────────────────────

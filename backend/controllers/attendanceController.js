@@ -2,6 +2,37 @@ const AttendanceSheet = require('../models/AttendanceSheet');
 const Participant     = require('../models/Participant');
 const Airline         = require('../models/Airline');
 
+// ── Cleaning the new attendance-record fields ────────────────────────────────
+const CODES = new Set(['P', 'A', 'L', 'E']);
+const str = (v, max = 200) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
+const num = (v, min, max) => {
+  if (v === '' || v == null) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.min(max, Math.max(min, Math.round(n * 100) / 100)) : null;
+};
+const cleanParticipants = (list) => (Array.isArray(list) ? list : []).slice(0, 1000).map((p) => ({
+  first_name: str(p?.first_name, 120),
+  last_name:  str(p?.last_name, 120),
+  hours:      num(p?.hours, 0, 10000),
+  remarks:    str(p?.remarks, 300),
+}));
+const cleanStatuses = (list) => (Array.isArray(list) ? list : []).slice(0, 400)
+  .filter((s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s?.date || '')))
+  .map((s) => ({ date: s.date, codes: (Array.isArray(s.codes) ? s.codes : []).slice(0, 1000).map((c) => (CODES.has(c) ? c : 'P')) }));
+const cleanDetails = (d = {}) => ({
+  course_title:     str(d.course_title, 160),
+  client:           str(d.client, 160),
+  delivery_mode:    str(d.delivery_mode, 60),
+  venue:            str(d.venue, 160),
+  scheduled_hours:  num(d.scheduled_hours, 0, 10000),
+  min_attendance:   num(d.min_attendance, 0, 100) ?? 80,
+  instructor_name:  str(d.instructor_name, 120),
+  instructor_title: str(d.instructor_title, 160),
+  certified_on:     /^\d{4}-\d{2}-\d{2}$/.test(String(d.certified_on || '')) ? d.certified_on : '',
+  tagline:          str(d.tagline, 200),
+  form_ref:         str(d.form_ref, 80),
+});
+
 // ─── GET /api/attendance — list sheets ───────────────────────────────────────
 exports.listSheets = async (req, res) => {
   try {
@@ -54,7 +85,7 @@ exports.getSheet = async (req, res) => {
 // ─── POST /api/attendance — create new sheet ──────────────────────────────────
 exports.createSheet = async (req, res) => {
   try {
-    const { company, training_type, start_date, end_date, participants, records } = req.body;
+    const { company, training_type, start_date, end_date, participants, records, statuses, details } = req.body;
     if (!company || !start_date) return res.status(400).json({ error: 'company and start_date required' });
 
     const sheet = await AttendanceSheet.create({
@@ -62,8 +93,10 @@ exports.createSheet = async (req, res) => {
       training_type: training_type || null,
       start_date,
       end_date: end_date || null,
-      participants: participants || [],
+      participants: cleanParticipants(participants),
       records: records || [],
+      statuses: cleanStatuses(statuses),
+      ...(details ? { details: cleanDetails(details) } : {}),
       // Airlines always own their own sheets. Admins may attribute the sheet to
       // an airline account by passing submitted_by (used by the bulk builder).
       submitted_by: req.admin.role === 'airline'
@@ -159,16 +192,30 @@ exports.updateSheet = async (req, res) => {
       return res.status(403).json({ error: 'Forbidden' });
     }
 
-    const { company, training_type, start_date, end_date, participants, records } = req.body;
+    const { company, training_type, start_date, end_date, participants, records, statuses, details } = req.body;
     if (company) sheet.company = company;
     if (training_type) sheet.training_type = training_type;
     if (start_date) sheet.start_date = start_date;
     sheet.end_date = end_date || null;
-    if (participants) sheet.participants = participants;
+    if (participants) sheet.participants = cleanParticipants(participants);
     if (records) sheet.records = records;
+    if (statuses) sheet.statuses = cleanStatuses(statuses);
+    if (details) sheet.details = cleanDetails(details);
 
     await sheet.save();
     res.json(sheet);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// ─── DELETE /api/attendance/:id — IFOA admin removes a sheet ─────────────────
+// Only the sheet goes: participants, certificates and exam results are kept.
+exports.deleteSheet = async (req, res) => {
+  try {
+    const sheet = await AttendanceSheet.findByIdAndDelete(req.params.id).select('_id').lean().catch(() => null);
+    if (!sheet) return res.status(404).json({ error: 'Attendance record not found.' });
+    res.json({ deleted: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

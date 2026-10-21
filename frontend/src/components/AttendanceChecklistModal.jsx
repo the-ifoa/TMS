@@ -1,8 +1,43 @@
-import { useState, useEffect } from 'react';
-import { HiOutlineClipboardList, HiOutlineCheckCircle } from 'react-icons/hi';
+import { useEffect, useMemo, useState } from 'react';
+import { HiOutlineClipboardList, HiOutlineCheckCircle, HiOutlineX, HiOutlineDocumentDownload, HiOutlineEye, HiOutlineRefresh } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import { getAttendanceSheet, saveAttendanceSheet, updateAttendanceSheet } from '../api';
 import { generateAttendancePdf } from '../utils/generateAttendancePdf';
+import {
+  STATUS, STATUS_ORDER, DELIVERY_MODES, courseDays, statusMatrix, summarise, defaultDetails, mergeDetails, toStorage, nameKey,
+} from '../utils/attendanceRecord';
+import { TRAINING_LABELS } from '../pages/airlines/helpers';
+
+// ─── Attendance editor ────────────────────────────────────────────────────────
+// Three tabs for one training batch:
+//   Daily register  — a status per trainee per day (P / L / E / A); everyone
+//                     starts as Present.
+//   Hours & remarks — hours attended (typed, or worked out from the days
+//                     present), attendance % (automatic) and remarks.
+//   Record details  — what the printed Training Attendance Record needs and
+//                     the system doesn't hold (course title, venue, instructor…).
+// Export / Preview build the PDF from what is on screen, saved or not.
+
+const STATUS_STYLE = {
+  P: { on: 'bg-emerald-600 text-white border-emerald-600', off: 'text-emerald-700 hover:bg-emerald-50' },
+  L: { on: 'bg-amber-500 text-white border-amber-500', off: 'text-amber-700 hover:bg-amber-50' },
+  E: { on: 'bg-orange-600 text-white border-orange-600', off: 'text-orange-700 hover:bg-orange-50' },
+  A: { on: 'bg-rose-600 text-white border-rose-600', off: 'text-rose-700 hover:bg-rose-50' },
+};
+const CODE_TEXT = { P: 'text-emerald-700', L: 'text-amber-700', E: 'text-orange-700', A: 'text-rose-700' };
+
+const inputCls = 'w-full h-9 px-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-800 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 disabled:bg-slate-50';
+const fmtDay = (d) => new Date(`${d}T12:00:00`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+
+function Field({ label, hint, children }) {
+  return (
+    <label className="block">
+      <span className="block text-xs font-semibold text-slate-700 mb-1">{label}</span>
+      {children}
+      {hint && <span className="block text-[11px] text-slate-400 mt-1">{hint}</span>}
+    </label>
+  );
+}
 
 export default function AttendanceChecklistModal({
   participants,
@@ -15,102 +50,97 @@ export default function AttendanceChecklistModal({
   onClose,
   readOnly = false,
 }) {
-  const valid = participants.filter(p => (p.first_name || '').trim() || (p.last_name || '').trim());
-
-  const allDates = [];
-  if (startDate) {
-    const start = new Date(startDate + 'T12:00:00');
-    const end   = endDate ? new Date(endDate + 'T12:00:00') : new Date(start);
-    const cur   = new Date(start);
-    while (cur <= end && allDates.length < 366) {
-      allDates.push(cur.toISOString().split('T')[0]);
-      cur.setDate(cur.getDate() + 1);
-    }
-  }
-  const dateSet = new Set(allDates);
-
-  const [attendance, setAttendance]     = useState({});
-  const [selectedDate, setSelectedDate] = useState(allDates[0] || null);
-  const [currentMonth, setCurrentMonth] = useState(() =>
-    allDates.length ? new Date(allDates[0] + 'T12:00:00') : new Date()
+  const valid = useMemo(
+    () => participants.filter((p) => (p.first_name || '').trim() || (p.last_name || '').trim()),
+    [participants],
   );
+  const days = useMemo(() => courseDays(startDate, endDate), [startDate, endDate]);
+  const trainingLabel = TRAINING_LABELS[trainingType] || trainingType || '';
+  const baseDetails = useMemo(() => defaultDetails({ company, trainingLabel, endDate: endDate || startDate }), [company, trainingLabel, endDate, startDate]);
+
+  const [tab, setTab] = useState('register');
+  const [matrix, setMatrix] = useState(() => statusMatrix(null, valid.length, days));
+  const [extras, setExtras] = useState(() => valid.map(() => ({ hours: null, remarks: '' }))); // per trainee
+  const [details, setDetails] = useState(baseDetails);
+  const [sheetMeta, setSheetMeta] = useState(null); // _id / created_at, for the record number
+  const [selectedDate, setSelectedDate] = useState(days[0] || null);
   const [attendanceId, setAttendanceId] = useState(initialId || null);
-  const [saving, setSaving]   = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(!!initialId);
 
   useEffect(() => {
     if (!initialId) return;
     setLoading(true);
     getAttendanceSheet(initialId)
-      .then(res => {
-        const loaded = {};
-        (res.data.records || []).forEach(r => {
-          const arr = new Array(valid.length).fill(false);
-          (r.present || []).forEach(i => { if (i < arr.length) arr[i] = true; });
-          loaded[r.date] = arr;
+      .then((res) => {
+        const sheet = res.data;
+        // The sheet's participants may be in another order than the ones passed
+        // in: carry statuses / hours / remarks over by name.
+        const sheetIdx = new Map((sheet.participants || []).map((p, i) => [nameKey(p), i]));
+        const stored = statusMatrix(sheet, (sheet.participants || []).length, days);
+        const next = {};
+        days.forEach((d) => {
+          next[d] = valid.map((p) => { const i = sheetIdx.get(nameKey(p)); return i == null ? 'P' : (stored[d] || [])[i] || 'P'; });
         });
-        setAttendance(loaded);
+        setMatrix(next);
+        setExtras(valid.map((p) => {
+          const sp = (sheet.participants || [])[sheetIdx.get(nameKey(p))];
+          return { hours: sp?.hours ?? null, remarks: sp?.remarks || '' };
+        }));
+        setDetails(mergeDetails(sheet.details, baseDetails));
+        setSheetMeta({ _id: sheet._id, created_at: sheet.created_at });
       })
-      .catch(() => {})
+      .catch(() => toast.error('Could not load the saved attendance.'))
       .finally(() => setLoading(false));
   }, [initialId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const toggle = (date, idx) => {
+  const people = valid.map((p, i) => ({ ...p, ...extras[i] }));
+  const sum = summarise({ participants: people, matrix, days, details });
+
+  const setCode = (date, idx, code) => {
     if (readOnly) return;
-    setAttendance(prev => {
-      const arr = Array.from(prev[date] || new Array(valid.length).fill(false));
-      while (arr.length < valid.length) arr.push(false);
-      arr[idx] = !arr[idx];
+    setMatrix((prev) => {
+      const arr = [...(prev[date] || valid.map(() => 'P'))];
+      arr[idx] = code;
       return { ...prev, [date]: arr };
     });
   };
-
-  const markAll = (date, present) => {
+  const setDay = (date, code) => !readOnly && setMatrix((prev) => ({ ...prev, [date]: valid.map(() => code) }));
+  const resetAll = () => {
     if (readOnly) return;
-    setAttendance(prev => ({ ...prev, [date]: new Array(valid.length).fill(present) }));
+    setMatrix(statusMatrix(null, valid.length, days));
+    toast.success('Everyone set back to Present on every day.');
   };
+  const setExtra = (i, patch) => setExtras((prev) => prev.map((e, j) => (j === i ? { ...e, ...patch } : e)));
+  const setDetail = (k, v) => setDetails((prev) => ({ ...prev, [k]: v }));
 
-  // True when every student is present on every day of the course
-  const allDaysAllPresent = valid.length > 0 && allDates.length > 0 &&
-    allDates.every(d => {
-      const arr = attendance[d] || [];
-      return valid.every((_, i) => arr[i]);
-    });
-
-  // Toggle: mark every student present on every day, or clear all if already full
-  const toggleAllDaysPresent = () => {
-    if (readOnly || !valid.length || !allDates.length) return;
-    const fill = !allDaysAllPresent;
-    const next = {};
-    allDates.forEach(d => { next[d] = new Array(valid.length).fill(fill); });
-    setAttendance(next);
-    toast.success(fill
-      ? `All ${valid.length} marked present for ${allDates.length} day${allDates.length !== 1 ? 's' : ''}`
-      : 'Cleared all attendance marks');
-  };
+  const sheetForPdf = () => ({
+    ...(sheetMeta || {}), company, airline_name: company, training_type: trainingType, start_date: startDate, end_date: endDate,
+  });
+  const exportPdf = (mode) => generateAttendancePdf({ sheet: sheetForPdf(), participants: people, matrix, details, trainingLabel, mode });
 
   const handleSave = async () => {
     if (readOnly) return;
     if (!startDate) { toast.error('No start date set'); return; }
     setSaving(true);
     try {
-      const records = allDates
-        .map(date => ({
-          date,
-          present: (attendance[date] || []).reduce((acc, p, i) => { if (p) acc.push(i); return acc; }, []),
-        }))
-        .filter(r => r.present.length > 0);
-
-      const payload = { company: company || 'Unknown', training_type: trainingType || '', start_date: startDate, end_date: endDate || null, participants: valid, records };
-
+      const payload = {
+        company: company || 'Unknown',
+        training_type: trainingType || '',
+        start_date: startDate,
+        end_date: endDate || null,
+        participants: people.map(({ first_name, last_name, hours, remarks }) => ({ first_name, last_name, hours: hours === '' ? null : hours, remarks })),
+        details,
+        ...toStorage(matrix, days),
+      };
       if (attendanceId) {
         await updateAttendanceSheet(attendanceId, payload);
         toast.success('Attendance updated');
       } else {
         const res = await saveAttendanceSheet(payload);
-        const newId = res.data._id;
-        setAttendanceId(newId);
-        onIdSaved && onIdSaved(newId);
+        setAttendanceId(res.data._id);
+        setSheetMeta({ _id: res.data._id, created_at: res.data.created_at });
+        onIdSaved && onIdSaved(res.data._id);
         toast.success('Attendance saved');
       }
     } catch (err) {
@@ -120,229 +150,220 @@ export default function AttendanceChecklistModal({
     }
   };
 
-  const yr = currentMonth.getFullYear();
-  const mo = currentMonth.getMonth();
-
-  const calendarCells = () => {
-    const first       = new Date(yr, mo, 1);
-    const daysInMonth = new Date(yr, mo + 1, 0).getDate();
-    const offset      = (first.getDay() + 6) % 7;
-    const cells       = Array(offset).fill(null);
-    for (let d = 1; d <= daysInMonth; d++) cells.push(d);
-    return cells;
+  const dayCounts = (date) => {
+    const arr = matrix[date] || [];
+    return STATUS_ORDER.reduce((m, c) => ({ ...m, [c]: arr.filter((x) => (x || 'P') === c).length }), {});
   };
+  const notPresentTotal = days.reduce((t, d) => t + (matrix[d] || []).filter((c) => c && c !== 'P').length, 0);
 
-  const toDateStr = d =>
-    d ? `${yr}-${String(mo + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}` : null;
-
-  const getSummary = d => {
-    const ds = toDateStr(d);
-    if (!ds || !dateSet.has(ds)) return null;
-    const arr     = attendance[ds] || [];
-    const present = arr.filter(Boolean).length;
-    return { present, total: valid.length };
-  };
-
-  const firstMonth = allDates.length ? new Date(allDates[0] + 'T12:00:00') : null;
-  const lastMonth  = allDates.length ? new Date(allDates[allDates.length - 1] + 'T12:00:00') : null;
-  const canPrev = firstMonth && (yr > firstMonth.getFullYear() || (yr === firstMonth.getFullYear() && mo > firstMonth.getMonth()));
-  const canNext = lastMonth  && (yr < lastMonth.getFullYear()  || (yr === lastMonth.getFullYear()  && mo < lastMonth.getMonth()));
-
-  const cells       = calendarCells();
-  const totalMarked = Object.values(attendance).reduce((acc, arr) => acc + arr.filter(Boolean).length, 0);
-  const selectedArr = selectedDate ? (attendance[selectedDate] || new Array(valid.length).fill(false)) : [];
-
-  const generatePDF = (mode = 'download') =>
-    generateAttendancePdf({ participants: valid, startDate, endDate, company, trainingType, attendance, mode });
+  const tabBtn = (key, label) => (
+    <button type="button" onClick={() => setTab(key)} aria-pressed={tab === key}
+      className={`h-8 px-3 rounded-md text-xs font-semibold transition-colors cursor-pointer ${tab === key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>
+      {label}
+    </button>
+  );
 
   return (
     <>
       <div className="fixed -inset-20 z-50 bg-black/50 backdrop-blur-sm pointer-events-none" />
-      <div
-        className="fixed inset-0 z-50 flex items-center justify-center p-4"
-        onClick={e => { if (e.target === e.currentTarget) onClose(); }}
-      >
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[92vh] flex flex-col">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl h-[90vh] flex flex-col overflow-hidden">
 
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-primary-200">
-          <div>
-            <h2 className="text-base font-bold text-primary-800 flex items-center gap-2">
-              <HiOutlineClipboardList className="w-5 h-5 text-accent-500" />
-              Attendance Checklist
-              {readOnly && <span className="text-[10px] font-normal text-primary-400 bg-primary-100 px-2 py-0.5 rounded-full">View Only</span>}
-            </h2>
-            <p className="text-xs text-primary-400 mt-0.5">
-              {startDate}{endDate && endDate !== startDate ? ` – ${endDate}` : ''}
-              {' · '}{valid.length} participant{valid.length !== 1 ? 's' : ''}
-              {' · '}{allDates.length} day{allDates.length !== 1 ? 's' : ''}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            {!readOnly && startDate && valid.length > 0 && allDates.length > 0 && (
-              <button type="button" onClick={toggleAllDaysPresent}
-                className={`inline-flex items-center gap-1.5 text-xs font-semibold border rounded-lg px-2.5 py-1.5 transition-colors ${
-                  allDaysAllPresent
-                    ? 'text-primary-600 bg-primary-50 hover:bg-primary-100 border-primary-200'
-                    : 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border-emerald-200'
-                }`}>
-                <HiOutlineCheckCircle className="w-4 h-4" />
-                {allDaysAllPresent ? 'Unmark all · all days' : 'Mark all present · all days'}
-              </button>
-            )}
-            <button type="button" onClick={onClose} className="text-primary-400 hover:text-primary-600 text-2xl leading-none w-8 h-8 flex items-center justify-center rounded-lg hover:bg-primary-100 transition-colors">×</button>
-          </div>
-        </div>
-
-        {/* Body */}
-        {loading ? (
-          <div className="flex-1 flex items-center justify-center py-16">
-            <div className="w-6 h-6 border-2 border-accent-500/30 border-t-accent-500 rounded-full animate-spin" />
-          </div>
-        ) : (
-          <div className="overflow-y-auto flex-1 p-5 space-y-4">
-            {!startDate ? (
-              <p className="text-sm text-primary-400 text-center py-10">Set training start date to generate checklist.</p>
-            ) : (
-              <>
-                <div className="select-none">
-                  <div className="flex items-center justify-between mb-3">
-                    <button type="button" onClick={() => setCurrentMonth(new Date(yr, mo - 1, 1))} disabled={!canPrev}
-                      className="w-7 h-7 flex items-center justify-center rounded-lg text-primary-500 hover:bg-primary-100 disabled:opacity-25 disabled:cursor-not-allowed transition-colors text-sm">◀</button>
-                    <span className="text-sm font-semibold text-primary-700">
-                      {currentMonth.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}
-                    </span>
-                    <button type="button" onClick={() => setCurrentMonth(new Date(yr, mo + 1, 1))} disabled={!canNext}
-                      className="w-7 h-7 flex items-center justify-center rounded-lg text-primary-500 hover:bg-primary-100 disabled:opacity-25 disabled:cursor-not-allowed transition-colors text-sm">▶</button>
-                  </div>
-
-                  <div className="grid grid-cols-7 mb-1">
-                    {['Mo','Tu','We','Th','Fr','Sa','Su'].map(d => (
-                      <div key={d} className="text-center text-[10px] font-semibold text-primary-400 uppercase py-1">{d}</div>
-                    ))}
-                  </div>
-
-                  <div className="grid grid-cols-7 gap-0.5">
-                    {cells.map((d, i) => {
-                      if (!d) return <div key={`e${i}`} />;
-                      const ds         = toDateStr(d);
-                      const inRange    = dateSet.has(ds);
-                      const isSel      = selectedDate === ds;
-                      const sum        = getSummary(d);
-                      const hasAny     = sum && sum.present > 0;
-                      const allPresent = sum && sum.total > 0 && sum.present === sum.total;
-                      return (
-                        <button key={ds} type="button" disabled={!inRange} onClick={() => setSelectedDate(ds)}
-                          className={['flex flex-col items-center justify-center rounded-lg py-1.5 gap-0.5 transition-all',
-                            !inRange ? 'text-primary-200 cursor-default' : '',
-                            inRange && !isSel ? 'text-primary-700 hover:bg-primary-50 cursor-pointer' : '',
-                            isSel ? 'bg-accent-500 text-white' : '',
-                          ].join(' ')}>
-                          <span className="text-xs font-medium leading-none">{d}</span>
-                          {inRange && (
-                            <span className={['w-1.5 h-1.5 rounded-full',
-                              isSel ? 'bg-white/60' : '',
-                              !isSel && allPresent ? 'bg-emerald-500' : '',
-                              !isSel && hasAny && !allPresent ? 'bg-amber-400' : '',
-                              !isSel && !hasAny ? 'bg-primary-200' : '',
-                            ].join(' ')} />
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  <div className="flex items-center gap-3 mt-2 justify-end">
-                    {[{ color: 'bg-emerald-500', label: 'All present' }, { color: 'bg-amber-400', label: 'Partial' }, { color: 'bg-primary-200', label: 'Not marked' }].map(({ color, label }) => (
-                      <span key={label} className="flex items-center gap-1 text-[10px] text-primary-400">
-                        <span className={`w-2 h-2 rounded-full ${color}`} />{label}
-                      </span>
-                    ))}
-                  </div>
+          {/* Header */}
+          <div className="flex-shrink-0 px-6 pt-5 pb-3 border-b border-slate-100">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3 min-w-0">
+                <span className="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center flex-shrink-0"><HiOutlineClipboardList className="w-5 h-5" /></span>
+                <div className="min-w-0">
+                  <h2 className="text-[15px] font-semibold text-slate-900 flex items-center gap-2">
+                    Training attendance record
+                    {readOnly && <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">View only</span>}
+                  </h2>
+                  <p className="text-[13px] text-slate-500 truncate">
+                    {[company, trainingLabel, `${startDate || ''}${endDate && endDate !== startDate ? ` – ${endDate}` : ''}`, `${valid.length} trainee${valid.length !== 1 ? 's' : ''}`, `${days.length} day${days.length !== 1 ? 's' : ''}`].filter(Boolean).join(' · ')}
+                  </p>
                 </div>
+              </div>
+              <button type="button" onClick={onClose} aria-label="Close" className="w-9 h-9 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 inline-flex items-center justify-center"><HiOutlineX className="w-5 h-5" /></button>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+              <div className="inline-flex p-0.5 rounded-lg bg-slate-100">
+                {tabBtn('register', 'Daily register')}
+                {tabBtn('hours', 'Hours & remarks')}
+                {tabBtn('details', 'Record details')}
+              </div>
+              <p className="text-[11px] text-slate-500">
+                {sum.average != null && <>Average attendance <span className="font-semibold text-slate-800">{sum.average}%</span> · </>}
+                <span className="font-semibold text-slate-800">{sum.met}</span> of {sum.enrolled} meet {sum.minPct}%
+              </p>
+            </div>
+          </div>
 
-                {selectedDate && (
-                  <div className="border border-primary-100 rounded-xl overflow-hidden">
-                    <div className="bg-primary-50 px-4 py-2.5 flex items-center justify-between">
-                      <span className="text-xs font-semibold text-primary-600 uppercase tracking-wider">
-                        {new Date(selectedDate + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-                      </span>
-                      {!readOnly && valid.length > 1 && (
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => markAll(selectedDate, true)}
-                            className="px-3 py-1 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all active:scale-95 cursor-pointer"
-                          >
-                            All Present
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => markAll(selectedDate, false)}
-                            className="px-3 py-1 text-xs font-medium rounded-lg bg-white hover:bg-primary-100 text-primary-600 border border-primary-200 shadow-sm transition-all active:scale-95 cursor-pointer"
-                          >
-                            Clear
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                    {valid.length === 0 ? (
-                      <p className="text-sm text-primary-400 text-center py-6">No participants.</p>
-                    ) : (
-                      <div className="divide-y divide-primary-50 max-h-52 overflow-y-auto">
+          {/* Body */}
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            {loading ? (
+              <div className="py-20 flex justify-center"><div className="w-6 h-6 border-2 border-slate-200 border-t-slate-700 rounded-full animate-spin" /></div>
+            ) : !startDate ? (
+              <p className="text-sm text-slate-500 text-center py-16">Set the training start date to build the attendance record.</p>
+            ) : valid.length === 0 ? (
+              <p className="text-sm text-slate-500 text-center py-16">No trainees in this batch.</p>
+            ) : tab === 'register' ? (
+              <div className="grid grid-cols-1 md:grid-cols-[13rem_minmax(0,1fr)] min-h-full">
+                {/* Day list */}
+                <nav className="border-b md:border-b-0 md:border-r border-slate-100 bg-slate-50/60 p-3 flex md:flex-col gap-1 overflow-x-auto md:overflow-y-auto">
+                  {days.map((d, i) => {
+                    const c = dayCounts(d);
+                    const off = c.A + c.L + c.E;
+                    return (
+                      <button key={d} type="button" onClick={() => setSelectedDate(d)}
+                        className={`flex-shrink-0 text-left rounded-lg px-3 py-2 transition-colors cursor-pointer ${selectedDate === d ? 'bg-white shadow-sm ring-1 ring-slate-200' : 'hover:bg-white/70'}`}>
+                        <span className="block text-[11px] font-semibold text-slate-400">Day {i + 1}</span>
+                        <span className="block text-sm font-semibold text-slate-800 whitespace-nowrap">{fmtDay(d)}</span>
+                        <span className={`block text-[11px] ${off ? 'text-amber-700' : 'text-emerald-700'}`}>{off ? `${c.P} present · ${off} other` : 'All present'}</span>
+                      </button>
+                    );
+                  })}
+                </nav>
+
+                {/* Selected day */}
+                <div className="p-5">
+                  {selectedDate && (
+                    <>
+                      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                        <p className="text-sm font-semibold text-slate-900">
+                          {new Date(`${selectedDate}T12:00:00`).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                        </p>
+                        {!readOnly && (
+                          <div className="flex items-center gap-2">
+                            <button type="button" onClick={() => setDay(selectedDate, 'P')} className="h-8 px-3 rounded-lg text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700">All present this day</button>
+                            <button type="button" onClick={resetAll} className="h-8 px-3 rounded-lg text-xs font-semibold border border-slate-200 text-slate-600 hover:bg-slate-50 inline-flex items-center gap-1.5"><HiOutlineRefresh className="w-3.5 h-3.5" />Reset all days</button>
+                          </div>
+                        )}
+                      </div>
+                      <ul className="rounded-xl border border-slate-200 divide-y divide-slate-100">
                         {valid.map((p, idx) => {
-                          const checked = !!(selectedArr[idx]);
+                          const code = (matrix[selectedDate] || [])[idx] || 'P';
                           return (
-                            <label key={idx}
-                              className={`flex items-center gap-3 px-4 py-2.5 select-none transition-colors ${readOnly ? 'cursor-default' : 'hover:bg-emerald-50/40 cursor-pointer'}`}
-                              onClick={readOnly ? undefined : () => toggle(selectedDate, idx)}>
-                              <div className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${checked ? 'bg-emerald-500 border-emerald-500' : 'border-primary-300'}`}>
-                                {checked && (
-                                  <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                                  </svg>
-                                )}
+                            <li key={idx} className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5">
+                              <span className="text-sm text-slate-800 min-w-0 truncate"><span className="font-semibold">{(p.last_name || '').toUpperCase()}</span>{p.first_name ? `, ${p.first_name}` : ''}</span>
+                              <div className="inline-flex rounded-lg border border-slate-200 overflow-hidden" role="radiogroup" aria-label={`Status for ${p.first_name} ${p.last_name}`}>
+                                {STATUS_ORDER.map((c) => (
+                                  <button key={c} type="button" role="radio" aria-checked={code === c} disabled={readOnly} title={STATUS[c].label}
+                                    onClick={() => setCode(selectedDate, idx, c)}
+                                    className={`h-8 px-2.5 text-xs font-bold border-l first:border-l-0 border-slate-200 transition-colors disabled:cursor-default ${code === c ? STATUS_STYLE[c].on : `bg-white ${STATUS_STYLE[c].off}`}`}>
+                                    {c}<span className="hidden sm:inline font-medium"> {STATUS[c].label.split(' ')[0]}</span>
+                                  </button>
+                                ))}
                               </div>
-                              {!readOnly && <input type="checkbox" checked={checked} onChange={() => toggle(selectedDate, idx)} className="sr-only" />}
-                              <span className={`text-sm flex-1 ${checked ? 'text-emerald-700 font-medium' : 'text-primary-700'}`}>
-                                {p.first_name} {p.last_name}
-                              </span>
-                              <span className={`text-xs font-medium ${checked ? 'text-emerald-600' : 'text-primary-300'}`}>
-                                {checked ? 'Present' : '—'}
-                              </span>
-                            </label>
+                            </li>
                           );
                         })}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </>
+                      </ul>
+                      <p className="mt-3 text-[11px] text-slate-500">P = Present · L = Late arrival / early departure (add a remark) · E = Excused absence · A = Absent. Everyone starts as Present.</p>
+                    </>
+                  )}
+                </div>
+              </div>
+            ) : tab === 'hours' ? (
+              <div className="p-5">
+                <div className="rounded-xl border border-slate-200 overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-50 text-[11px] font-semibold text-slate-500">
+                      <tr>
+                        <th className="text-left px-3 py-2.5 w-8">#</th>
+                        <th className="text-left px-3 py-2.5">Trainee</th>
+                        <th className="text-left px-3 py-2.5">Days</th>
+                        <th className="text-left px-3 py-2.5 w-32">Hours attended</th>
+                        <th className="text-left px-3 py-2.5 w-24">Attendance</th>
+                        <th className="text-left px-3 py-2.5">Remarks</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {valid.map((p, i) => {
+                        const r = sum.rows[i];
+                        return (
+                          <tr key={i}>
+                            <td className="px-3 py-2 text-slate-400 tabular-nums">{i + 1}</td>
+                            <td className="px-3 py-2 whitespace-nowrap"><span className="font-semibold">{(p.last_name || '').toUpperCase()}</span>{p.first_name ? `, ${p.first_name}` : ''}</td>
+                            <td className="px-3 py-2 whitespace-nowrap text-xs tabular-nums">
+                              {STATUS_ORDER.filter((c) => r.counts[c]).map((c) => <span key={c} className={`mr-2 font-bold ${CODE_TEXT[c]}`}>{c} {r.counts[c]}</span>)}
+                            </td>
+                            <td className="px-3 py-2">
+                              <input type="number" min="0" step="0.5" disabled={readOnly}
+                                value={extras[i]?.hours ?? ''}
+                                placeholder={r.autoHours != null ? `${r.autoHours} (auto)` : sum.scheduled ? '' : 'Set scheduled hours'}
+                                onChange={(e) => setExtra(i, { hours: e.target.value === '' ? null : Number(e.target.value) })}
+                                className={`${inputCls} h-8 w-28 tabular-nums`} aria-label={`Hours attended by ${p.first_name} ${p.last_name}`} />
+                            </td>
+                            <td className="px-3 py-2">
+                              {r.pct == null ? <span className="text-slate-400">—</span> : (
+                                <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-bold tabular-nums ring-1 ring-inset ${r.met ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/15' : 'bg-rose-50 text-rose-700 ring-rose-600/15'}`}>{r.pct}%</span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2 min-w-[14rem]">
+                              <input type="text" maxLength={300} disabled={readOnly} value={extras[i]?.remarks || ''}
+                                onChange={(e) => setExtra(i, { remarks: e.target.value })}
+                                placeholder={r.counts.L ? 'e.g. Day 2 late arrival 1.5 h' : r.counts.E ? 'e.g. Day 2 excused (medical)' : ''}
+                                className={`${inputCls} h-8`} aria-label={`Remarks for ${p.first_name} ${p.last_name}`} />
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="mt-3 text-[11px] text-slate-500 leading-relaxed">
+                  {sum.scheduled
+                    ? <>Leave hours blank to use the days present × {Math.round(sum.perDay * 10) / 10} h per day (P and L count as a day, E and A as none). </>
+                    : <>Set <span className="font-semibold">Scheduled hours</span> in Record details to calculate hours; until then attendance % is days present ÷ course days. </>}
+                  Attendance % = hours attended ÷ scheduled hours. Minimum for completion: {sum.minPct}%.
+                </p>
+              </div>
+            ) : (
+              <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-3xl">
+                <Field label="Course title"><input className={inputCls} disabled={readOnly} value={details.course_title} onChange={(e) => setDetail('course_title', e.target.value)} placeholder="e.g. Aircraft Dispatcher – Recurrent Training" /></Field>
+                <Field label="Client / operator"><input className={inputCls} disabled={readOnly} value={details.client} onChange={(e) => setDetail('client', e.target.value)} /></Field>
+                <Field label="Delivery mode">
+                  <input className={inputCls} disabled={readOnly} list="attendance-delivery-modes" value={details.delivery_mode} onChange={(e) => setDetail('delivery_mode', e.target.value)} />
+                  <datalist id="attendance-delivery-modes">{DELIVERY_MODES.map((m) => <option key={m} value={m} />)}</datalist>
+                </Field>
+                <Field label="Venue"><input className={inputCls} disabled={readOnly} value={details.venue} onChange={(e) => setDetail('venue', e.target.value)} placeholder="e.g. IFOA Training Centre" /></Field>
+                <Field label="Scheduled hours" hint={days.length ? `Across ${days.length} day${days.length !== 1 ? 's' : ''}. Used for hours and attendance %.` : ''}>
+                  <input type="number" min="0" step="0.5" className={inputCls} disabled={readOnly} value={details.scheduled_hours ?? ''} onChange={(e) => setDetail('scheduled_hours', e.target.value === '' ? null : Number(e.target.value))} placeholder="e.g. 24" />
+                </Field>
+                <Field label="Minimum attendance (%)" hint="Needed to complete the course.">
+                  <input type="number" min="0" max="100" className={inputCls} disabled={readOnly} value={details.min_attendance ?? ''} onChange={(e) => setDetail('min_attendance', e.target.value === '' ? null : Number(e.target.value))} />
+                </Field>
+                <Field label="Instructor name"><input className={inputCls} disabled={readOnly} value={details.instructor_name} onChange={(e) => setDetail('instructor_name', e.target.value)} placeholder="e.g. A. Instructor" /></Field>
+                <Field label="Instructor role / qualification"><input className={inputCls} disabled={readOnly} value={details.instructor_title} onChange={(e) => setDetail('instructor_title', e.target.value)} placeholder="e.g. Lead Instructor · FAA Aircraft Dispatcher" /></Field>
+                <Field label="Certification date"><input type="date" className={inputCls} disabled={readOnly} value={details.certified_on || ''} onChange={(e) => setDetail('certified_on', e.target.value)} /></Field>
+                <Field label="Form reference" hint="Printed bottom left with the record number."><input className={inputCls} disabled={readOnly} value={details.form_ref} onChange={(e) => setDetail('form_ref', e.target.value)} /></Field>
+                <div className="sm:col-span-2">
+                  <Field label="Header tagline" hint="Printed under the title, e.g. your approvals."><input className={inputCls} disabled={readOnly} value={details.tagline} onChange={(e) => setDetail('tagline', e.target.value)} /></Field>
+                </div>
+              </div>
             )}
           </div>
-        )}
 
-        {/* Footer */}
-        <div className="px-5 py-4 border-t border-primary-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white">
-          <span className="text-xs text-primary-400 text-center sm:text-left">
-            {totalMarked} mark{totalMarked !== 1 ? 's' : ''} recorded
-            {attendanceId && <span className="ml-1.5 text-emerald-600 font-medium">· Saved</span>}
-          </span>
-          <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2 w-full sm:w-auto">
-            <button type="button" onClick={generatePDF} className="flex-1 sm:flex-initial btn-outline text-sm py-1.5 px-3">Export PDF</button>
-            {!readOnly && (
-              <button type="button" onClick={handleSave} disabled={saving}
-                className="flex-1 sm:flex-initial btn-primary text-sm py-1.5 px-3 flex items-center justify-center gap-1.5">
-                {saving
-                  ? <><div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />Saving…</>
-                  : <><HiOutlineCheckCircle className="w-3.5 h-3.5" />Save</>}
-              </button>
-            )}
-            <button type="button" onClick={onClose} className="flex-1 sm:flex-initial btn-outline text-sm py-1.5 px-3">Close</button>
+          {/* Footer */}
+          <div className="flex-shrink-0 px-6 py-3.5 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <span className="text-xs text-slate-500">
+              {notPresentTotal ? `${notPresentTotal} day mark${notPresentTotal !== 1 ? 's' : ''} other than Present` : 'Everyone present on every day'}
+              {attendanceId && <span className="ml-1.5 text-emerald-600 font-medium">· Saved</span>}
+            </span>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <button type="button" onClick={() => exportPdf('preview')} disabled={!startDate || !valid.length} className="h-9 px-3 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 inline-flex items-center gap-1.5 disabled:opacity-50"><HiOutlineEye className="w-4 h-4" />Preview PDF</button>
+              <button type="button" onClick={() => exportPdf('download')} disabled={!startDate || !valid.length} className="h-9 px-3 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 inline-flex items-center gap-1.5 disabled:opacity-50"><HiOutlineDocumentDownload className="w-4 h-4" />Download PDF</button>
+              {!readOnly && (
+                <button type="button" onClick={handleSave} disabled={saving} className="h-9 px-4 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 inline-flex items-center gap-1.5 disabled:opacity-60">
+                  {saving ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />Saving…</> : <><HiOutlineCheckCircle className="w-4 h-4" />Save</>}
+                </button>
+              )}
+              <button type="button" onClick={onClose} className="h-9 px-3 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100">Close</button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  </>
+    </>
   );
 }

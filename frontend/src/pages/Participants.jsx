@@ -30,7 +30,7 @@ import {
 import toast from 'react-hot-toast';
 import { getParticipants, deleteParticipant, downloadIssuedCertificate, downloadDhlCertificate, listAttendanceSheets, getAttendanceSheet, updateParticipantEmail, API_BASE } from '../api';
 import AttendanceChecklistModal from '../components/AttendanceChecklistModal';
-import { buildAttendanceMap, generateAttendancePdf } from '../utils/generateAttendancePdf';
+import { generateAttendancePdf } from '../utils/generateAttendancePdf';
 import { useConfirm } from '@/hooks/use-confirm';
 import InternalCertificatesDialog, { useInternalCertCounts } from '../components/InternalCertificatesDialog';
 import ValidityBadge from '../components/ValidityBadge';
@@ -232,18 +232,7 @@ function SubmissionGroup({ groupKey, records, open, onToggle, focusId, attendanc
     try {
       setPreviewingSheet(sheet._id);
       const res  = await getAttendanceSheet(sheet._id);
-      const full = res.data;
-      const parts = full.participants || sheet.participants || [];
-      const attendanceMap = buildAttendanceMap(full.records || [], parts.length);
-      generateAttendancePdf({
-        participants:  parts,
-        startDate:     full.start_date,
-        endDate:       full.end_date,
-        company:       full.company,
-        trainingType:  full.training_type,
-        attendance:    attendanceMap,
-        mode:          'preview',
-      });
+      generateAttendancePdf({ sheet: { ...res.data, airline_name: sheet.airline_name }, mode: 'preview' });
     } catch {
       toast.error('Failed to generate PDF preview');
     } finally {

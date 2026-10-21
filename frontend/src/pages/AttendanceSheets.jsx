@@ -10,11 +10,14 @@ import {
   HiOutlineSearch,
   HiOutlineFilter,
   HiOutlineDocumentText,
+  HiOutlineTrash,
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
-import { listAttendanceSheets, getAttendanceSheet, getContractAirlines } from '../api';
+import { listAttendanceSheets, getAttendanceSheet, getContractAirlines, deleteAttendanceSheet } from '../api';
+import { useAuth } from '../context/AuthContext';
+import { useConfirm } from '@/hooks/use-confirm';
 import AttendanceChecklistModal from '../components/AttendanceChecklistModal';
-import { buildAttendanceMap, generateAttendancePdf } from '../utils/generateAttendancePdf';
+import { generateAttendancePdf } from '../utils/generateAttendancePdf';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { airlineInitials } from '../components/AirlineLogo';
 import LogoAvatar from '../components/LogoAvatar';
@@ -43,7 +46,7 @@ function fmtDateTime(str) {
   });
 }
 
-function SheetCard({ sheet, onEdit, onPreview, previewing, forceOpen }) {
+function SheetCard({ sheet, onEdit, onPreview, onDelete, deleting, previewing, forceOpen }) {
   const [open, setOpen] = useState(false);
   const isOpen = Boolean(open || forceOpen);
   const typeInfo = TYPE_MAP[sheet.training_type] || {};
@@ -109,6 +112,12 @@ function SheetCard({ sheet, onEdit, onPreview, previewing, forceOpen }) {
             className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900 text-white hover:bg-slate-800 transition-colors shadow-2xs">
             <HiOutlinePencilAlt className="w-3.5 h-3.5" /> Edit
           </button>
+          {onDelete && (
+            <button type="button" onClick={() => onDelete(sheet)} disabled={deleting === sheet._id} aria-label="Delete attendance record"
+              className="p-2 sm:p-1.5 rounded-lg border border-slate-200 bg-white text-slate-400 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 transition-colors disabled:opacity-50">
+              <HiOutlineTrash className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -167,7 +176,7 @@ function SheetCard({ sheet, onEdit, onPreview, previewing, forceOpen }) {
 }
 
 // ── Airline group section ──────────────────────────────────────────────────────
-function AirlineGroup({ airlineName, logoUrl, sheets, onEdit, onPreview, previewing, forceOpen }) {
+function AirlineGroup({ airlineName, logoUrl, sheets, onEdit, onPreview, onDelete, deleting, previewing, forceOpen }) {
   const [collapsed, setCollapsed] = useState(true);
   const isOpen = Boolean(!collapsed || forceOpen);
 
@@ -209,6 +218,8 @@ function AirlineGroup({ airlineName, logoUrl, sheets, onEdit, onPreview, preview
                   sheet={sheet}
                   onEdit={onEdit}
                   onPreview={onPreview}
+                  onDelete={onDelete}
+                  deleting={deleting}
                   previewing={previewing}
                   forceOpen={forceOpen}
                 />
@@ -229,6 +240,30 @@ export default function AttendanceSheets() {
   const [previewing, setPreviewing]   = useState(null);
   const [search, setSearch]           = useState('');
   const [filterType, setFilterType]   = useState('');
+  const [deleting, setDeleting]       = useState(null);
+  const { isAdmin, can } = useAuth();
+  const canDelete = isAdmin && can('attendance.manage');
+  const { confirm, ConfirmDialog } = useConfirm();
+
+  const handleDelete = async (sheet) => {
+    const parts = (sheet.participants || []).length;
+    const when = fmtDate(sheet.start_date) + (sheet.end_date && sheet.end_date !== sheet.start_date ? ` – ${fmtDate(sheet.end_date)}` : '');
+    const ok = await confirm(
+      `Delete the ${sheet.training_type} attendance record for ${sheet.airline_name || sheet.company} (${when}, ${parts} participant${parts === 1 ? '' : 's'})?\n\nOnly this attendance sheet is removed. Participants, certificates and exam results stay. This cannot be undone.`,
+      { title: 'Delete attendance record', confirmLabel: 'Delete' },
+    );
+    if (!ok) return;
+    setDeleting(sheet._id);
+    try {
+      await deleteAttendanceSheet(sheet._id);
+      setSheets((list) => list.filter((x) => x._id !== sheet._id));
+      toast.success('Attendance record deleted.');
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Could not delete the attendance record.');
+    } finally {
+      setDeleting(null);
+    }
+  };
 
   const fetchSheets = async () => {
     try {
@@ -262,18 +297,7 @@ export default function AttendanceSheets() {
     try {
       setPreviewing(sheet._id);
       const res = await getAttendanceSheet(sheet._id);
-      const full = res.data;
-      const parts = full.participants || sheet.participants || [];
-      const attendanceMap = buildAttendanceMap(full.records || [], parts.length);
-      generateAttendancePdf({
-        participants:  parts,
-        startDate:     full.start_date,
-        endDate:       full.end_date,
-        company:       full.company,
-        trainingType:  full.training_type,
-        attendance:    attendanceMap,
-        mode:          'preview',
-      });
+      generateAttendancePdf({ sheet: { ...res.data, airline_name: sheet.airline_name }, mode: 'preview' });
     } catch {
       toast.error('Failed to generate PDF preview');
     } finally {
@@ -395,12 +419,15 @@ export default function AttendanceSheets() {
                 forceOpen={Boolean(search.trim() || filterType)}
                 onEdit={setActiveSheet}
                 onPreview={handlePreview}
+                onDelete={canDelete ? handleDelete : null}
+                deleting={deleting}
                 previewing={previewing}
               />
             ))}
           </div>
         )}
       </div>
+      {ConfirmDialog}
     </div>
   );
 }

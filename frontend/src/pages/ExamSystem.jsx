@@ -8,7 +8,7 @@ import {
   HiOutlineUserAdd, HiOutlineClipboardCheck,
   HiOutlineSearch, HiOutlineX, HiOutlineUserGroup, HiChevronRight,
   HiOutlineClock, HiOutlineDocumentText, HiOutlineMail, HiOutlineCheckCircle,
-  HiOutlinePaperAirplane, HiOutlineCollection, HiOutlineRefresh, HiOutlineChatAlt2, HiOutlineLightningBolt,
+  HiOutlinePaperAirplane, HiOutlineCollection, HiOutlineRefresh, HiOutlineChatAlt2, HiOutlineLightningBolt, HiOutlineCalendar, HiOutlineSortDescending,
 } from 'react-icons/hi';
 import { FaPlaneDeparture } from 'react-icons/fa';
 import LogoAvatar from '../components/LogoAvatar';
@@ -817,6 +817,11 @@ export default function ExamSystem() {
   const [examSearch, setExamSearch] = useHistoryState('examSearch', '');
   const [statusFilter, setStatusFilter] = useHistoryState('statusFilter', 'all');
   const [ownerFilter, setOwnerFilter] = useHistoryState('ownerFilter', 'all'); // airline-exams tab: filter by airline/department
+  const [forFilter, setForFilter] = useHistoryState('forFilter', 'all');       // IFOA tab: the airline the exam is for
+  const [createdFilter, setCreatedFilter] = useHistoryState('createdFilter', 'any'); // any | 7 | 30 | 90 | this_year | last_year | custom
+  const [createdFrom, setCreatedFrom] = useHistoryState('createdFrom', '');
+  const [createdTo, setCreatedTo] = useHistoryState('createdTo', '');
+  const [sortBy, setSortBy] = useHistoryState('examSort', 'newest');
   const { confirm, ConfirmDialog } = useConfirm();
 
   const setActiveTab = (tab) => {
@@ -920,20 +925,57 @@ export default function ExamSystem() {
     `${e.owner_airline_name || 'Airline'}${e.owner_department_name ? ` · ${e.owner_department_name}` : ''}`;
   const ownerOptions = [...new Set(airlineExams.map(ownerLabel))].sort();
 
+  // "For airline" choices on the IFOA tab.
+  const forOptions = [...new Set(ifoaExams.map((e) => (e.for_airline_name || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+
+  // Created-date window [from, to) in ms, or null for any time.
+  const createdRange = () => {
+    const now = new Date();
+    const day = 86400000;
+    if (['7', '30', '90'].includes(createdFilter)) return [now.getTime() - Number(createdFilter) * day, Infinity];
+    if (createdFilter === 'this_year') return [new Date(now.getFullYear(), 0, 1).getTime(), Infinity];
+    if (createdFilter === 'last_year') return [new Date(now.getFullYear() - 1, 0, 1).getTime(), new Date(now.getFullYear(), 0, 1).getTime()];
+    if (createdFilter === 'custom' && (createdFrom || createdTo)) {
+      return [createdFrom ? new Date(`${createdFrom}T00:00:00`).getTime() : -Infinity, createdTo ? new Date(`${createdTo}T00:00:00`).getTime() + day : Infinity];
+    }
+    return null;
+  };
+
+  const SORTS = {
+    newest:   (a, b) => new Date(b.created_at) - new Date(a.created_at),
+    oldest:   (a, b) => new Date(a.created_at) - new Date(b.created_at),
+    updated:  (a, b) => new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at),
+    title:    (a, b) => (a.title || '').localeCompare(b.title || '', undefined, { sensitivity: 'base', numeric: true }),
+    title_desc: (a, b) => (b.title || '').localeCompare(a.title || '', undefined, { sensitivity: 'base', numeric: true }),
+    assigned: (a, b) => (b.assignments?.length || 0) - (a.assignments?.length || 0),
+    questions: (a, b) => (b.question_count || 0) - (a.question_count || 0),
+  };
+
   const applyExamFilters = (list) => {
     const q = examSearch.trim().toLowerCase();
+    const range = createdRange();
     return list.filter((e) => {
       if (statusFilter !== 'all' && statusFilter !== 'deleted' && e.status !== statusFilter) return false;
       if (activeTab === 'airline-exams' && ownerFilter !== 'all' && ownerLabel(e) !== ownerFilter) return false;
+      if (activeTab === 'exams' && forFilter !== 'all' && (e.for_airline_name || '').trim() !== forFilter) return false;
+      if (range) {
+        const t = new Date(e.created_at).getTime();
+        if (!(t >= range[0] && t < range[1])) return false;
+      }
       if (!q) return true;
       return (e.title || '').toLowerCase().includes(q)
         || (e.description || '').toLowerCase().includes(q)
         || (e.owner_airline_name || '').toLowerCase().includes(q)
         || (e.owner_department_name || '').toLowerCase().includes(q)
         || (e.for_airline_name || '').toLowerCase().includes(q);
-    });
+    }).sort(SORTS[sortBy] || SORTS.newest);
   };
-  const anyExamFilterActive = examSearch.trim() || statusFilter !== 'all' || (activeTab === 'airline-exams' && ownerFilter !== 'all');
+  const anyExamFilterActive = examSearch.trim() || statusFilter !== 'all' || createdFilter !== 'any' || sortBy !== 'newest'
+    || (activeTab === 'airline-exams' && ownerFilter !== 'all') || (activeTab === 'exams' && forFilter !== 'all');
+  const resetExamFilters = () => {
+    setExamSearch(''); setStatusFilter('all'); setOwnerFilter('all'); setForFilter('all');
+    setCreatedFilter('any'); setCreatedFrom(''); setCreatedTo(''); setSortBy('newest');
+  };
 
   const renderCard = (exam) => {
     const airlineOwned = !!exam.owner_airline;
@@ -976,6 +1018,7 @@ export default function ExamSystem() {
                       ? <span title="Random draw: each candidate gets a different selection">{exam.drawn_count} of {exam.question_count} Questions</span>
                       : <>{exam.question_count ?? exam.questions?.length ?? 0} Questions</>}
                     {' · '}{exam.duration_minutes} Mins
+                    {exam.created_at && <span title={`Created ${new Date(exam.created_at).toLocaleString('en-GB')}`}>{' · '}{new Date(exam.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>}
                   </span>
                   {isAdmin && exam.for_airline_name && (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-100 truncate max-w-full"
@@ -1218,8 +1261,8 @@ export default function ExamSystem() {
         {activeTab !== 'question-bank' && !loading && (
           // Sticky: search + filters stay at the top while the exam cards scroll
           // underneath (same as the question bank search).
-          <div className="sticky top-[var(--sticky-top,0px)] z-10 -mt-2 py-2 bg-slate-50 flex flex-col sm:flex-row sm:items-center gap-2.5">
-            <div className="relative flex-1 min-w-0">
+          <div className="sticky top-[var(--sticky-top,0px)] z-10 -mt-2 py-2 bg-slate-50 flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2.5">
+            <div className="relative flex-1 min-w-[14rem]">
               <HiOutlineSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
               <input
                 type="text"
@@ -1248,6 +1291,59 @@ export default function ExamSystem() {
               </SelectContent>
             </Select>
 
+            {activeTab === 'exams' && isAdmin && forOptions.length > 1 && (
+              <Select value={forFilter} onValueChange={setForFilter}>
+                <SelectTrigger aria-label="For airline" className="w-[150px] sm:w-44 h-9 text-xs font-semibold bg-white rounded-xl flex-shrink-0 border-slate-200 shadow-2xs">
+                  <SelectValue placeholder="For any airline" />
+                </SelectTrigger>
+                <SelectContent className="max-h-72">
+                  <SelectItem value="all">For any airline</SelectItem>
+                  {forOptions.map((o) => <SelectItem key={o} value={o}>For {o}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            )}
+
+            <Select value={createdFilter} onValueChange={setCreatedFilter}>
+              <SelectTrigger aria-label="Created" className="w-[150px] sm:w-40 h-9 text-xs font-semibold bg-white rounded-xl flex-shrink-0 border-slate-200 shadow-2xs">
+                <HiOutlineCalendar className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="any">Created any time</SelectItem>
+                <SelectItem value="7">Last 7 days</SelectItem>
+                <SelectItem value="30">Last 30 days</SelectItem>
+                <SelectItem value="90">Last 3 months</SelectItem>
+                <SelectItem value="this_year">This year</SelectItem>
+                <SelectItem value="last_year">Last year</SelectItem>
+                <SelectItem value="custom">Custom dates…</SelectItem>
+              </SelectContent>
+            </Select>
+            {createdFilter === 'custom' && (
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                <input type="date" value={createdFrom} max={createdTo || undefined} onChange={(e) => setCreatedFrom(e.target.value)} aria-label="Created from"
+                  className="h-9 px-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-700 shadow-2xs focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
+                <span className="text-xs text-slate-400">to</span>
+                <input type="date" value={createdTo} min={createdFrom || undefined} onChange={(e) => setCreatedTo(e.target.value)} aria-label="Created to"
+                  className="h-9 px-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-700 shadow-2xs focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
+              </div>
+            )}
+
+            <Select value={sortBy} onValueChange={setSortBy}>
+              <SelectTrigger aria-label="Sort exams" className="w-[160px] sm:w-44 h-9 text-xs font-semibold bg-white rounded-xl flex-shrink-0 border-slate-200 shadow-2xs">
+                <HiOutlineSortDescending className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="newest">Newest first</SelectItem>
+                <SelectItem value="oldest">Oldest first</SelectItem>
+                <SelectItem value="updated">Recently updated</SelectItem>
+                <SelectItem value="title">Title A–Z</SelectItem>
+                <SelectItem value="title_desc">Title Z–A</SelectItem>
+                <SelectItem value="assigned">Most assigned</SelectItem>
+                <SelectItem value="questions">Most questions</SelectItem>
+              </SelectContent>
+            </Select>
+
             {activeTab === 'airline-exams' && ownerOptions.length > 1 && (
               <Select value={ownerFilter} onValueChange={setOwnerFilter}>
                 <SelectTrigger className="w-[150px] sm:w-44 h-9 text-xs font-semibold bg-white rounded-xl flex-shrink-0 border-slate-200 shadow-2xs">
@@ -1261,7 +1357,7 @@ export default function ExamSystem() {
             )}
             {anyExamFilterActive && (
               <button type="button"
-                onClick={() => { setExamSearch(''); setStatusFilter('all'); setOwnerFilter('all'); }}
+                onClick={resetExamFilters}
                 className="text-[11px] font-semibold text-slate-500 hover:text-rose-600 transition-colors whitespace-nowrap">
                 Reset
               </button>

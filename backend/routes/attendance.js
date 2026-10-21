@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { authMiddleware } = require('../middleware/auth');
+const { authMiddleware, adminOnly } = require('../middleware/auth');
 const { loadScope, requirePermission } = require('../middleware/permissions');
 const attendanceController = require('../controllers/attendanceController');
 
@@ -23,5 +23,8 @@ router.post('/', canManage, attendanceController.createSheet);
 
 // ─── PUT /api/attendance/:id — update existing sheet ─────────────────────────
 router.put('/:id', canManage, attendanceController.updateSheet);
+
+// ─── DELETE /api/attendance/:id — IFOA admin removes a sheet ─────────────────
+router.delete('/:id', adminOnly, canManage, attendanceController.deleteSheet);
 
 module.exports = router;

@@ -284,7 +284,7 @@ function ResultSummary({ token, attemptId }) {
   if (loading) {
     return (
       <PageShell>
-        <div className="min-h-full flex items-center justify-center">
+        <div className="min-h-[100dvh] flex items-center justify-center">
           <div className="w-7 h-7 border-2 border-slate-300 border-t-slate-900 rounded-full animate-spin" />
         </div>
       </PageShell>
@@ -404,8 +404,10 @@ function ResultSummary({ token, attemptId }) {
   if (!showReview) {
     return (
       <PageShell>
-        <div className="min-h-full flex items-center justify-center p-4 sm:p-6">
-          <div className="w-full max-w-md">{summary}</div>
+        {/* Full screen height (min-h-full can't resolve inside the scroll box),
+            so the card sits in the middle of the window both ways. */}
+        <div className="w-full min-h-[100dvh] flex items-center justify-center p-4 sm:p-6">
+          <div className="w-full max-w-md mx-auto">{summary}</div>
         </div>
       </PageShell>
     );

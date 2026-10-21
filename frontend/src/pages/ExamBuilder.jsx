@@ -27,6 +27,7 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { useConfirm } from '@/hooks/use-confirm';
 import { TimePicker } from '@/components/ui/time-picker';
 import ExamHelpButton from '../components/ExamHelpGuide';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 
 // Client-generated placeholder ids (see `uid()` in QuestionEditor.jsx) aren't
 // valid Mongo ObjectIds — strip them so Mongoose assigns real ones on save.
@@ -935,72 +936,119 @@ export default function ExamBuilder() {
 
   return (
     <div className="w-full h-[calc(100vh-4rem)] flex flex-col overflow-hidden bg-gray-50">
-      {/* ── Flush Full-Width Top Action Header ── */}
-      <div className="flex-shrink-0 w-full bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-4 sm:px-6 lg:px-8 py-2.5 shadow-2xs z-30">
-        <div className="w-full max-w-7xl mx-auto flex items-center justify-between gap-3">
-          {/* Left: Back button */}
-          <div className="flex items-center flex-shrink-0">
-            <Button variant="outline" size="sm" onClick={goBack} className="rounded-xl border-slate-200 text-xs font-semibold">
-              <HiOutlineArrowLeft className="w-4 h-4" /> <span className="hidden sm:inline">Back</span><span className="sm:hidden">Back</span>
+      {/* ── Top bar: back & title · sections & list controls · actions ──
+           One row on wide screens; below xl the sections + list controls wrap
+           onto their own line under the title and actions. */}
+      <div className="flex-shrink-0 w-full bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-4 sm:px-6 lg:px-8 shadow-2xs z-30">
+        <div className="w-full max-w-7xl mx-auto flex flex-wrap xl:flex-nowrap items-center gap-x-3 gap-y-2 py-2.5">
+          {/* Back + exam name */}
+          <div className="flex items-center gap-3 min-w-0 max-w-[18rem] flex-shrink-0">
+            <Button variant="outline" size="sm" onClick={goBack} className="rounded-xl border-slate-200 text-xs font-semibold flex-shrink-0">
+              <HiOutlineArrowLeft className="w-4 h-4" /> <span className="hidden sm:inline">Back</span>
             </Button>
+            <span className="hidden sm:block w-px h-6 bg-slate-200 flex-shrink-0" />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-slate-900 truncate" title={exam.title}>{exam.title?.trim() || (id ? 'Untitled exam' : 'New exam')}</p>
+              <p className="text-[11px] text-slate-500 truncate">{exam.questions.length} question{exam.questions.length !== 1 ? 's' : ''}{orderedSectionNames.length ? ` · ${orderedSectionNames.length} section${orderedSectionNames.length !== 1 ? 's' : ''}` : ''}</p>
+            </div>
           </div>
 
-          {/* Right: Question Count & Save Button */}
-          <div className="flex items-center gap-3 flex-shrink-0">
-            <span className="text-xs font-semibold text-slate-500 hidden md:inline">
-              {exam.questions.length} Question{exam.questions.length !== 1 ? 's' : ''}
-            </span>
-            <ExamHelpButton guide="builder" />
-            {isAdmin && (
-            <Button variant="outline" size="sm" onClick={() => setShowBankPicker(true)} className="rounded-xl border-slate-200 text-xs font-bold">
-              <HiOutlineCollection className="w-4 h-4" /> <span className="hidden sm:inline">Import from Bank</span>
-            </Button>
-            )}
-            <Button variant="outline" size="sm" onClick={() => setShowJsonImporter(true)} className="rounded-xl border-slate-200 text-xs font-bold" title="Import questions from a JSON file">
-              <HiOutlineCode className="w-4 h-4" /> <span className="hidden sm:inline">Import JSON</span>
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => setShowExamImporter(true)} className="rounded-xl border-slate-200 text-xs font-bold">
-              <HiOutlineDocumentDuplicate className="w-4 h-4" /> <span className="hidden sm:inline">Import from Exam</span>
-            </Button>
-            <Button variant="outline" size="sm" onClick={startPreview} className="rounded-xl border-slate-200 text-xs font-bold">
-              <HiOutlineEye className="w-4 h-4" /> Preview
-            </Button>
-            <Button variant="primary" onClick={save} disabled={saving} className="rounded-xl shadow-2xs text-xs font-bold px-3.5 py-1.5 bg-[#0000ff] hover:bg-blue-700">
-              <HiOutlineSave className="w-4 h-4" /> {saving ? 'Saving…' : 'Save Exam'}
-            </Button>
-          </div>
-        </div>
-        {/* Section filter: own row, full width, scrolls sideways (no scrollbar) */}
-          {(orderedSectionNames.length > 0 || ungroupedItems.length > 0) && (
-            <div className="w-full max-w-7xl mx-auto mt-2 flex items-center gap-1.5 overflow-x-auto py-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {/* Sections + list controls (fills the middle; own line below xl) */}
+          {exam.questions.length > 0 && (
+            <div className="order-3 xl:order-none basis-full xl:basis-auto flex-1 min-w-0 flex items-center gap-3 xl:pl-3 xl:border-l xl:border-slate-200">
+              <div className="flex-1 min-w-0 flex items-center gap-1.5 overflow-x-auto py-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {orderedSectionNames.map((name) => (
                 <button
                   key={name}
                   type="button"
                   ref={(el) => { if (el && (activeSectionFilter === name || (activeSectionFilter === null && name === orderedSectionNames[0]))) el.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }}
                   onClick={() => setActiveSectionFilter(name)}
-                  className={`flex-shrink-0 px-3.5 py-1 rounded-full text-xs font-bold border transition-colors ${(activeSectionFilter === name || (activeSectionFilter === null && name === orderedSectionNames[0]))
-                    ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
+                  className={`flex-shrink-0 px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${(activeSectionFilter === name || (activeSectionFilter === null && name === orderedSectionNames[0]))
+                    ? 'bg-slate-900 text-white border-slate-900'
                     : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
                     }`}
                 >
-                  {name} ({groupFor(name).length})
+                  {name} <span className="opacity-60 tabular-nums">{groupFor(name).length}</span>
                 </button>
               ))}
-              {ungroupedItems.length > 0 && (
+              {ungroupedItems.length > 0 && orderedSectionNames.length > 0 && (
                 <button
                   type="button"
                   onClick={() => setActiveSectionFilter('')}
-                  className={`flex-shrink-0 px-3.5 py-1 rounded-full text-xs font-bold border transition-colors ${activeSectionFilter === ''
-                    ? 'bg-slate-800 text-white border-slate-800'
+                  className={`flex-shrink-0 px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${activeSectionFilter === ''
+                    ? 'bg-slate-900 text-white border-slate-900'
                     : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
                     }`}
                 >
-                  Ungrouped ({ungroupedItems.length})
+                  Ungrouped <span className="opacity-60 tabular-nums">{ungroupedItems.length}</span>
                 </button>
               )}
+              {!orderedSectionNames.length && (
+                <span className="text-xs font-semibold text-slate-500">All questions</span>
+              )}
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+              <button
+                type="button"
+                onClick={collapsedQKeys.size === exam.questions.length ? expandAllQuestions : collapseAllQuestions}
+                className="h-8 flex items-center gap-1.5 cursor-pointer text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 px-2.5 rounded-lg transition-colors select-none"
+              >
+                {collapsedQKeys.size === exam.questions.length ? (
+                  <><HiOutlineChevronDown className="w-3.5 h-3.5 text-slate-500" /><span className="hidden sm:inline">Expand all</span></>
+                ) : (
+                  <><HiOutlineChevronUp className="w-3.5 h-3.5 text-slate-500" /><span className="hidden sm:inline">Collapse all</span></>
+                )}
+              </button>
+              <label className="h-8 flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 px-2.5 rounded-lg transition-colors select-none">
+                <input
+                  type="checkbox"
+                  checked={selectedQIds.size > 0 && selectedQIds.size === exam.questions.length}
+                  onChange={selectAllQuestions}
+                  className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer"
+                />
+                <span className="tabular-nums">
+                  {selectedQIds.size === exam.questions.length
+                    ? 'Deselect all'
+                    : selectedQIds.size > 0
+                    ? `${selectedQIds.size} of ${exam.questions.length} selected`
+                    : 'Select all'}
+                </span>
+              </label>
+              </div>
             </div>
           )}
+
+          {/* Actions */}
+          <div className="ml-auto flex items-center gap-2 flex-shrink-0">
+            <ExamHelpButton guide="builder" className="h-8 w-8" />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="rounded-xl border-slate-200 text-xs font-bold">
+                  <HiOutlineDocumentDuplicate className="w-4 h-4" /> <span className="hidden sm:inline">Import</span> <HiOutlineChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                {isAdmin && (
+                  <DropdownMenuItem onClick={() => setShowBankPicker(true)}>
+                    <HiOutlineCollection className="w-4 h-4 text-slate-500" /> From question bank
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem onClick={() => setShowExamImporter(true)}>
+                  <HiOutlineDocumentDuplicate className="w-4 h-4 text-slate-500" /> From another exam
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setShowJsonImporter(true)}>
+                  <HiOutlineCode className="w-4 h-4 text-slate-500" /> From a JSON file
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button variant="outline" size="sm" onClick={startPreview} className="rounded-xl border-slate-200 text-xs font-bold">
+              <HiOutlineEye className="w-4 h-4" /> <span className="hidden sm:inline">Preview</span>
+            </Button>
+            <Button variant="primary" onClick={save} disabled={saving} className="rounded-xl shadow-2xs text-xs font-bold px-3.5 py-1.5 bg-[#0000ff] hover:bg-blue-700">
+              <HiOutlineSave className="w-4 h-4" /> {saving ? 'Saving…' : 'Save Exam'}
+            </Button>
+          </div>
+        </div>
       </div>
 
       {/* ── 2-Column Split Workspace Container ── */}
@@ -1567,48 +1615,6 @@ export default function ExamBuilder() {
 
           {/* QUESTIONS LIST (Left column on desktop, 8 cols width - independent scrolling) */}
           <div className="order-2 lg:order-1 lg:col-span-8 h-full overflow-y-auto pr-3 space-y-4 scrollbar-thin">
-            <div className="flex flex-wrap items-center justify-between gap-2 px-1 pb-1">
-              <h2 className="text-sm font-extrabold text-slate-900 uppercase tracking-wider">
-                Exam Questions ({exam.questions.length})
-              </h2>
-              {exam.questions.length > 0 && (
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={collapsedQKeys.size === exam.questions.length ? expandAllQuestions : collapseAllQuestions}
-                    className="flex items-center gap-1.5 cursor-pointer text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200/80 px-3 py-1.5 rounded-xl shadow-2xs transition-all select-none"
-                  >
-                    {collapsedQKeys.size === exam.questions.length ? (
-                      <>
-                        <HiOutlineChevronDown className="w-3.5 h-3.5 text-slate-500" />
-                        <span>Expand All</span>
-                      </>
-                    ) : (
-                      <>
-                        <HiOutlineChevronUp className="w-3.5 h-3.5 text-slate-500" />
-                        <span>Collapse All</span>
-                      </>
-                    )}
-                  </button>
-                  <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200/80 px-3 py-1.5 rounded-xl shadow-2xs transition-all select-none">
-                    <input
-                      type="checkbox"
-                      checked={selectedQIds.size > 0 && selectedQIds.size === exam.questions.length}
-                      onChange={selectAllQuestions}
-                      className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer"
-                    />
-                    <span>
-                      {selectedQIds.size === exam.questions.length
-                        ? 'Deselect All'
-                        : selectedQIds.size > 0
-                        ? `Selected (${selectedQIds.size}/${exam.questions.length})`
-                        : 'Select All'}
-                    </span>
-                  </label>
-                </div>
-              )}
-            </div>
-
             {exam.questions.length === 0 && orderedSectionNames.length === 0 && (
               <Card className="p-10 text-center text-sm font-medium text-slate-400 border-dashed rounded-2xl">
                 No sections or questions yet. Add a section from Exam Settings, or add a question directly below.

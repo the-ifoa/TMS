@@ -4,9 +4,9 @@ import toast from 'react-hot-toast';
 import {
   HiOutlinePlusCircle, HiOutlinePencil, HiOutlineTrash, HiOutlinePlay, HiOutlineClock,
   HiOutlineLightningBolt, HiOutlineCollection, HiOutlineX, HiOutlineQuestionMarkCircle, HiOutlineUserGroup,
-  HiOutlineDeviceMobile, HiOutlineDesktopComputer, HiOutlineChartBar, HiChevronRight,
+  HiOutlineDeviceMobile, HiOutlineDesktopComputer, HiOutlineChartBar, HiChevronRight, HiOutlineAcademicCap,
 } from 'react-icons/hi';
-import { listLiveGames, deleteLiveGame, startLiveSession, listLiveSessions, deleteLiveSession } from '../../api';
+import { listLiveGames, deleteLiveGame, startLiveSession, listLiveSessions, deleteLiveSession, examFromLiveGame } from '../../api';
 import { useAuth } from '../../context/AuthContext';
 import { useConfirm } from '@/hooks/use-confirm';
 import ExamHelpButton from '../../components/ExamHelpGuide';
@@ -166,6 +166,25 @@ export default function LiveQuizzes() {
     try { await deleteLiveGame(g.id); toast.success('Game deleted.'); load(); } catch (err) { toast.error(err.response?.data?.error || 'Delete failed.'); }
   };
 
+  // Quiz → exam: a draft IFOA exam with this game's scored questions.
+  const [converting, setConverting] = useState(null);
+  const toExam = async (g) => {
+    const ok = await confirm(
+      `Create a draft exam from "${g.title}"?\n\nQuiz questions become multiple choice, true/false stays true/false and "pick all that apply" becomes multiple response. Polls are left out (they have no right answer). Double-points questions are worth 2 marks.\n\nThe exam opens in the builder as a draft: choose its airline, duration and pass mark, then publish. The quiz itself is not changed.`,
+      { title: 'Turn quiz into an exam', confirmLabel: 'Create exam' },
+    );
+    if (!ok) return;
+    setConverting(g.id);
+    try {
+      const { data } = await examFromLiveGame(g.id);
+      toast.success(`Draft exam created with ${data.added} question${data.added === 1 ? '' : 's'}${data.skipped ? ` (${data.skipped} poll${data.skipped === 1 ? '' : 's'} left out)` : ''}.`);
+      navigate(`/admin/exams/${data.id}/edit`);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Could not create the exam.');
+      setConverting(null);
+    }
+  };
+
   const totalPlays = (games || []).reduce((t, g) => t + g.plays, 0);
   const lastPlayed = (games || []).map((g) => g.last_played).filter(Boolean).sort().pop();
   const totalQuestions = (games || []).reduce((t, g) => t + g.question_count, 0);
@@ -246,6 +265,14 @@ export default function LiveQuizzes() {
                     <span className={`font-bold text-[10px] px-2.5 py-0.5 rounded-full border ${g.question_count ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
                       {g.question_count ? 'Ready' : 'Draft'}
                     </span>
+                    {canBuild && g.question_count > 0 && (
+                      <SimpleTooltip label="Turn into an exam">
+                        <Button variant="ghost" size="icon" onClick={() => toExam(g)} disabled={converting === g.id} aria-label="Turn into an exam"
+                          className="h-7 w-7 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors">
+                          <HiOutlineAcademicCap className="w-3.5 h-3.5" />
+                        </Button>
+                      </SimpleTooltip>
+                    )}
                     {canBuild && (
                       <SimpleTooltip label="Delete game">
                         <Button variant="ghost" size="icon" onClick={() => remove(g)}

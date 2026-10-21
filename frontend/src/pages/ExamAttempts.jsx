@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useHistoryState, useBack } from '@/hooks/use-history-state';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   HiOutlineArrowLeft,
@@ -13,9 +13,10 @@ import {
   HiOutlineDownload,
   HiOutlineUpload,
 } from 'react-icons/hi';
-import { ChartSpline, CalendarDays, Clock, ShieldAlert, ChevronDown, ChevronUp, PenLine, Trash2, MonitorX, FileText, Mail, Upload, Hourglass, CircleX, ListChecks, Trophy, RotateCcw, Minimize2, ArrowLeftRight, CodeXml, CircleCheck, Gauge, ChartBarDecreasing, ClipboardCheck, CircleHelp, ChartPie } from 'lucide-react';
+import { Radio, ChartSpline, CalendarDays, Clock, ShieldAlert, ChevronDown, ChevronUp, PenLine, Trash2, MonitorX, FileText, Mail, Upload, Hourglass, CircleX, ListChecks, Trophy, RotateCcw, Minimize2, ArrowLeftRight, CodeXml, CircleCheck, Gauge, ChartBarDecreasing, ClipboardCheck, CircleHelp, ChartPie } from 'lucide-react';
 import { listExamAttempts, getExamSummary, getExamAttemptResult, gradeExamAttempt, getExamAnalytics, exportExamAttempts, deleteExamAttempt, bulkDeleteExamAttempts, uploadAttemptCertificate, getAttemptCertificate, deleteAttemptCertificate, sendAttemptCertificate, reassignExamInvites } from '../api';
 import { motion, AnimatePresence } from 'framer-motion';
+import LiveExamMonitor from '../components/LiveExamMonitor';
 import { useConfirm } from '@/hooks/use-confirm';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -1049,6 +1050,13 @@ export default function ExamAttempts() {
   const [statusFilter, setStatusFilter] = useHistoryState('statusFilter', 'all');
   const [analytics, setAnalytics] = useState(null);
   const [showAnalytics, setShowAnalytics] = useState(false);
+  // Live monitor (?live=1 opens it straight away).
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [showLive, setShowLive] = useState(searchParams.get('live') === '1');
+  const closeLive = () => {
+    setShowLive(false);
+    if (searchParams.get('live')) { const next = new URLSearchParams(searchParams); next.delete('live'); setSearchParams(next, { replace: true }); }
+  };
   const [expandedViolations, setExpandedViolations] = useState(() => new Set());
   // Candidate cards start collapsed; this holds the ones the user opened.
   const [openGroups, setOpenGroups] = useState(() => new Set());
@@ -1352,6 +1360,8 @@ export default function ExamAttempts() {
     });
   }
 
+  const inProgressCount = attempts.filter((a) => a.status === 'in_progress').length;
+
   return (
     <div className="w-full min-h-full pb-20 flex flex-col">
       {/* Sticky header: title & actions · search & filters · list toolbar · column titles */}
@@ -1381,6 +1391,20 @@ export default function ExamAttempts() {
             </div>
 
             <div className="flex items-center gap-2 flex-shrink-0">
+              {!exam?.deleted_at && (
+                <button
+                  type="button"
+                  title="Live monitor: who is taking this exam right now"
+                  onClick={() => setShowLive(true)}
+                  className="h-9 w-9 sm:w-auto sm:px-3 inline-flex items-center justify-center gap-1.5 rounded-xl text-xs font-semibold border bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300 transition cursor-pointer"
+                >
+                  <Radio className={`w-4 h-4 ${inProgressCount > 0 ? 'text-emerald-600' : 'text-slate-500'}`} strokeWidth={1.75} />
+                  <span className="hidden sm:inline">Live</span>
+                  {inProgressCount > 0 && (
+                    <span className="min-w-[1.25rem] h-5 px-1.5 rounded-full bg-emerald-600 text-white text-[10px] font-bold tabular-nums inline-flex items-center justify-center">{inProgressCount}</span>
+                  )}
+                </button>
+              )}
               {analytics && (
                 <button
                   type="button"
@@ -2017,7 +2041,10 @@ export default function ExamAttempts() {
           </div>
         )}
 
-        {ConfirmDialog}
+        {showLive && (
+        <LiveExamMonitor examId={id} canAct={can('exams.assign') || can('exams.author')} onClose={closeLive} onChanged={load} />
+      )}
+      {ConfirmDialog}
 
         {/* Bulk certificate upload: choose many files, match each to a passed candidate */}
         {bulkUploadOpen && (

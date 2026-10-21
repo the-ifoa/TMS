@@ -8,7 +8,7 @@ const TrainingFeedback = require('../../models/TrainingFeedback');
 const r2 = require('../../services/r2');
 const { examImageUpload, deleteImagesIfUnused, questionImageIds } = require('../../services/upload');
 const { sanitizeQuestionForTaking, answerKeyProblems } = require('../../services/examGrading');
-const { submitAttemptOnce } = require('../../services/examAttemptFlow');
+const { submitAttemptOnce, drawnQuestionCount } = require('../../services/examAttemptFlow');
 const { remarkExam, changedKeyQuestionIds, changedContentQuestionIds, refreshInProgressContent } = require('../../services/examRemark');
 const { isAdmin, authoringAirline, ownsExam, canAssignExam, assignableOwnerIds, canManageExam, rejectDeleted } = require('./access');
 
@@ -56,14 +56,20 @@ exports.deleteQuestionImage = async (req, res) => {
 // The list page only needs a question count, not every question (with its
 // answers and image URLs) — so skip the array and count it in the database.
 const LIST_EXCLUDE = '-questions';
+// Question count per exam, plus — for exams with a random draw — how many each
+// candidate actually gets (drawn_count; equal to the count otherwise).
 async function withQuestionCounts(exams) {
   if (!exams.length) return {};
   const rows = await Exam.aggregate([
     { $match: { _id: { $in: exams.map((e) => e._id) } } },
-    { $project: { n: { $size: { $ifNull: ['$questions', []] } } } },
+    { $project: { sections: { $map: { input: { $ifNull: ['$questions', []] }, as: 'q', in: { $ifNull: ['$$q.section', ''] } } }, section_settings: 1 } },
   ]);
-  return Object.fromEntries(rows.map((r) => [String(r._id), r.n]));
+  return Object.fromEntries(rows.map((r) => [String(r._id), {
+    n: r.sections.length,
+    drawn: drawnQuestionCount({ questions: r.sections.map((section) => ({ section })), section_settings: r.section_settings }),
+  }]));
 }
+const countFields = (counts, e) => ({ question_count: counts[String(e._id)]?.n || 0, drawn_count: counts[String(e._id)]?.drawn || 0 });
 
 // Drop assignments whose participant has since been deleted, so the card's
 // "N Assigned" count matches the list GET /exams/:id/assignments shows.
@@ -124,7 +130,7 @@ exports.listExams = async (req, res) => {
         const byId = Object.fromEntries(owners.map((a) => [String(a._id), a]));
         return res.json(await dropDeletedAssignments(exams.map((e) => {
           const json = e.toJSON();
-          json.question_count = counts[String(e._id)] || 0;
+          Object.assign(json, countFields(counts, e));
           if (json.owner_airline) json.owner_airline_name = byId[String(json.owner_airline)]?.airlineName || 'Airline';
           if (json.for_airline) json.for_airline_name = byId[String(json.for_airline)]?.airlineName || '';
           if (json.owner_department) {
@@ -134,7 +140,7 @@ exports.listExams = async (req, res) => {
           return json;
         })));
       }
-      return res.json(await dropDeletedAssignments(exams.map((e) => ({ ...e.toJSON(), question_count: counts[String(e._id)] || 0 }))));
+      return res.json(await dropDeletedAssignments(exams.map((e) => ({ ...e.toJSON(), ...countFields(counts, e) }))));
     } else if (req.scope && req.scope.isDepartment) {
       // A plain department manages ONLY the exams it authored itself. It must not
       // see the parent airline's own exams or sibling departments' exams (both
@@ -168,7 +174,7 @@ exports.listExams = async (req, res) => {
     res.json(await dropDeletedAssignments(exams.map((e) => {
       const json = e.toJSON();
       json.assignments = (json.assignments || []).filter((a) => ownIds.has(String(a.airline_id)));
-      json.question_count = counts[String(e._id)] || 0;
+      Object.assign(json, countFields(counts, e));
       json.can_edit = !!ownsExam(req, e); // full questions (with answers) available — e.g. to copy from
       return json;
     })));

@@ -4,7 +4,7 @@ const Participant = require('../../models/Participant');
 const { sanitizeQuestionForTaking, computeAttemptScore } = require('../../services/examGrading');
 const {
   schedulingError, lockedFeedback, SAVE_PROJECTION, attemptDeadlinePassed, saveAnswers,
-  submitAttemptOnce, recordViolation, checkAnswerAtomic, dedupeAnswers, shuffle,
+  submitAttemptOnce, recordViolation, checkAnswerAtomic, dedupeAnswers, buildSnapshot, submittedRefusal,
 } = require('../../services/examAttemptFlow');
 
 // Loads an attempt (optionally projected + lean) and checks the caller may write to it.
@@ -21,13 +21,13 @@ async function loadWritableAttempt(req, res, projection = null) {
 
 // Shared by the single-answer and batch autosave endpoints (atomic writes —
 // parallel saves can't collide; see services/examAttemptFlow.js).
-async function saveForAttempt(req, res, answers, timers) {
+async function saveForAttempt(req, res, answers, timers, position = null) {
   const attempt = await loadWritableAttempt(req, res, SAVE_PROJECTION);
   if (!attempt) return null;
-  if (attempt.status !== 'in_progress') { res.status(400).json({ error: 'This attempt has already been submitted.', submitted: true }); return null; }
+  if (attempt.status !== 'in_progress') { res.status(400).json(submittedRefusal(attempt)); return null; }
   const exam = await Exam.findById(attempt.exam_id).select('duration_minutes').lean();
   if (attemptDeadlinePassed(attempt, exam)) { res.status(400).json({ error: 'Time is up for this exam.', time_up: true }); return null; }
-  return saveAnswers(attempt, answers, timers);
+  return saveAnswers(attempt, answers, timers, position);
 }
 const { accessibleParticipantFilter } = require('../internalCertificatesController');
 const { isAdmin, ownsExam, attemptScopeFilter, canReadAttempt } = require('./access');
@@ -211,9 +211,9 @@ exports.saveAttemptAnswer = async (req, res) => {
 // Body: { answers: [{ question_id, response }], timers: { key: seconds } }.
 exports.saveAttemptAnswers = async (req, res) => {
   try {
-    const { answers = [], timers = null } = req.body || {};
+    const { answers = [], timers = null, position = null } = req.body || {};
     if (!Array.isArray(answers) || answers.length > 500) return res.status(400).json({ error: 'Invalid answers.' });
-    const result = await saveForAttempt(req, res, answers, timers);
+    const result = await saveForAttempt(req, res, answers, timers, Number.isInteger(position) ? position : null);
     if (!result) return;
     res.json({ saved: true, ...result });
   } catch (err) {
@@ -395,8 +395,7 @@ exports.startAttempt = async (req, res) => {
     const participant = await Participant.findById(participant_id);
     if (!participant) return res.status(404).json({ error: 'Participant not found.' });
 
-    let questions = exam.questions.map((q) => q.toObject());
-    if (exam.shuffle_questions) questions = shuffle(questions);
+    const questions = buildSnapshot(exam); // random draw + shuffle, per the exam's settings
 
     let attempt;
     try {

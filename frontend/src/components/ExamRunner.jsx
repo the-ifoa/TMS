@@ -54,12 +54,46 @@ const VIOLATION_LABEL = {
   devtools_suspected: 'Suspicious activity detected.',
 };
 
+// ── Unsaved-answer journal ──────────────────────────────────────────────────
+// Every answer is written to localStorage the moment it changes and removed
+// once the server has stored it. If the tab crashes, the device dies or the
+// page is reloaded while offline, the next load finds the answers the server
+// never got and sends them again. Each entry keeps its edit time, and the
+// server ignores anything older than what it already has, so replaying is safe.
+const journalKey = (attemptId) => `exam-unsaved:${attemptId}`;
+function readJournal(key) {
+  if (!key) return {};
+  try { return JSON.parse(localStorage.getItem(key)) || {}; } catch { return {}; }
+}
+function writeJournal(key, entries) {
+  if (!key) return;
+  try {
+    if (Object.keys(entries).length) localStorage.setItem(key, JSON.stringify(entries));
+    else localStorage.removeItem(key);
+  } catch { /* storage full or unavailable — the in-memory queue still retries */ }
+}
+
 export default function ExamRunner({ attempt, exam, onSaveAnswers, onCheckAnswer, onSubmit, onReportViolation, onFinished, onBack, previewMode = false }) {
   const questions = attempt.questions_snapshot;
+
+  // Journal entries newer than what the server has for that question.
+  const jKey = previewMode ? null : journalKey(attempt.id || attempt._id);
+  const [restored] = useState(() => {
+    const serverAt = Object.fromEntries((attempt.answers || []).map((a) => [String(a.question_id), Number(a.edited_at) || 0]));
+    const ids = new Set(questions.map((qq) => String(qq._id)));
+    const fresh = {};
+    Object.entries(readJournal(jKey)).forEach(([qId, e]) => {
+      if (ids.has(qId) && e && Number(e.edited_at) > (serverAt[qId] || 0)) fresh[qId] = { response: e.response, edited_at: Number(e.edited_at) };
+    });
+    writeJournal(jKey, fresh);
+    return fresh;
+  });
+  const journalRef = useRef(restored);
 
   const [answers, setAnswers] = useState(() => {
     const init = {};
     (attempt.answers || []).forEach((a) => { init[a.question_id] = a.response; });
+    Object.entries(restored).forEach(([qId, e]) => { init[qId] = e.response; });
     return init;
   });
   // Where the candidate is (question + review marks) survives a refresh or a
@@ -92,9 +126,12 @@ export default function ExamRunner({ attempt, exam, onSaveAnswers, onCheckAnswer
   const [secondsLeft, setSecondsLeft] = useState(() => {
     if (!hasTimeLimit) return null;
     const skew = attempt.server_now ? new Date(attempt.server_now).getTime() - Date.now() : 0;
-    const deadline = new Date(attempt.started_at).getTime() + exam.duration_minutes * 60000;
+    // extra_seconds: time an administrator added from the live monitor.
+    const deadline = new Date(attempt.started_at).getTime() + exam.duration_minutes * 60000 + (attempt.extra_seconds || 0) * 1000;
     return Math.max(0, Math.round((deadline - (Date.now() + skew)) / 1000));
   });
+  // Extra time already reflected in the timer; more can arrive with any autosave reply.
+  const extraSecondsRef = useRef(attempt.extra_seconds || 0);
   const [submitting, setSubmitting] = useState(false);
   const [violationCount, setViolationCount] = useState(attempt.violation_count || 0);
   const [warning, setWarning] = useState(null);
@@ -112,7 +149,7 @@ export default function ExamRunner({ attempt, exam, onSaveAnswers, onCheckAnswer
   // ignores a slow request that arrives after a newer one, and a failed save is
   // only retried if no newer answer has been queued or sent since.
   const editAtRef = useRef(new Map());
-  const lastEditAtRef = useRef(Math.max(0, ...(attempt.answers || []).map((a) => Number(a.edited_at) || 0)));
+  const lastEditAtRef = useRef(Math.max(0, ...(attempt.answers || []).map((a) => Number(a.edited_at) || 0), ...Object.values(restored).map((e) => e.edited_at)));
   const flushPromiseRef = useRef(null);
   // Timer readings changed since the last flush (sent with the next autosave).
   const timersDirtyRef = useRef(false);
@@ -208,21 +245,38 @@ export default function ExamRunner({ attempt, exam, onSaveAnswers, onCheckAnswer
   // keepalive: the page is being hidden/closed — send now (even if a flush is in
   // flight) with a request the browser finishes after unload; Safari otherwise
   // cancels it and the last few seconds of answers are lost.
-  const flushAnswers = useCallback(({ keepalive = false } = {}) => {
+  // heartbeat: send even with nothing to save — tells the live monitor the
+  // candidate is still here and which question they're on, and brings back any
+  // time an administrator added.
+  const flushAnswers = useCallback(({ keepalive = false, heartbeat = false } = {}) => {
     if (flushPromiseRef.current && !keepalive) return flushPromiseRef.current;
     const timers = timersDirtyRef.current ? timerSnapshot() : null;
-    if (pendingRef.current.size === 0 && !timers) return flushPromiseRef.current || Promise.resolve(true);
+    if (pendingRef.current.size === 0 && !timers && !heartbeat) return flushPromiseRef.current || Promise.resolve(true);
     const batch = [...pendingRef.current.entries()].map(([qId, response]) => [qId, response, editAtRef.current.get(qId)]);
     pendingRef.current.clear();
     timersDirtyRef.current = false;
     if (batch.length) setSaveState('saving');
     const payload = { answers: batch.map(([question_id, response, edited_at]) => ({ question_id, response, edited_at })) };
     if (timers) payload.timers = timers;
+    if (!previewMode) payload.position = indexRef.current;
     const p = Promise.resolve()
       .then(() => onSaveAnswersRef.current?.(payload, { keepalive }))
-      .then(() => true, (err) => {
+      .then((res) => {
+        const extra = Number(res?.data?.extra_seconds);
+        if (Number.isFinite(extra) && extra > extraSecondsRef.current) {
+          const added = extra - extraSecondsRef.current;
+          extraSecondsRef.current = extra;
+          setSecondsLeft((sec) => (sec == null ? sec : sec + added));
+          toast.success(`You have been given ${Math.round(added / 60)} more minute${Math.round(added / 60) === 1 ? '' : 's'}.`, { duration: 6000 });
+        }
+        batch.forEach(([qId, , version]) => { if (journalRef.current[qId]?.edited_at === version) delete journalRef.current[qId]; });
+        if (batch.length) writeJournal(jKey, journalRef.current);
+        return true;
+      }, (err) => {
         const status = err?.response?.status;
         if (status && status < 500) {
+          journalRef.current = {};
+          writeJournal(jKey, {});
           onSaveRefusedRef.current?.(err.response.data || {}, status);
           return true; // retrying can't help
         }
@@ -242,7 +296,7 @@ export default function ExamRunner({ attempt, exam, onSaveAnswers, onCheckAnswer
       .finally(() => { if (flushPromiseRef.current === p) flushPromiseRef.current = null; });
     flushPromiseRef.current = p;
     return p;
-  }, [timerSnapshot]);
+  }, [timerSnapshot, jKey, previewMode]);
 
   // Flush until NOTHING is pending — including answers changed while an earlier
   // autosave was still in flight (a single flush would only wait for that one
@@ -257,8 +311,19 @@ export default function ExamRunner({ attempt, exam, onSaveAnswers, onCheckAnswer
     return pendingRef.current.size === 0;
   }, [flushAnswers]);
 
+  // Answers restored from the journal go straight back into the send queue.
   useEffect(() => {
-    const id = setInterval(() => { if (!finishedRef.current) flushAnswers(); }, AUTOSAVE_SECONDS * 1000);
+    const ids = Object.keys(restored);
+    if (!ids.length) return;
+    ids.forEach((qId) => { pendingRef.current.set(qId, restored[qId].response); editAtRef.current.set(qId, restored[qId].edited_at); });
+    toast.success(`Restored ${ids.length} answer${ids.length === 1 ? '' : 's'} that had not been saved yet.`);
+    flushAnswers();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const id = setInterval(() => { if (!finishedRef.current) flushAnswers({ heartbeat: true }); }, AUTOSAVE_SECONDS * 1000);
+    const onOnline = () => { if (!finishedRef.current) flushAnswers(); }; // connection back — send what's waiting
+    window.addEventListener('online', onOnline);
     const onHide = () => { if (document.visibilityState === 'hidden') flushAnswers({ keepalive: true }); };
     const onPageHide = () => flushAnswers({ keepalive: true });
     document.addEventListener('visibilitychange', onHide);
@@ -268,6 +333,7 @@ export default function ExamRunner({ attempt, exam, onSaveAnswers, onCheckAnswer
       flushAnswers(); // leaving the runner (e.g. Back) — push anything still buffered
       document.removeEventListener('visibilitychange', onHide);
       window.removeEventListener('pagehide', onPageHide);
+      window.removeEventListener('online', onOnline);
     };
   }, [flushAnswers]);
 
@@ -291,6 +357,8 @@ export default function ExamRunner({ attempt, exam, onSaveAnswers, onCheckAnswer
       // after a dropped response (or the timer firing too) lands on the result.
       await onSubmit();
       if (posKey) try { localStorage.removeItem(posKey); } catch { /* ignore */ }
+      journalRef.current = {};
+      writeJournal(jKey, {});
       onFinished();
     } catch (err) {
       const data = err.response?.data || {};
@@ -307,7 +375,8 @@ export default function ExamRunner({ attempt, exam, onSaveAnswers, onCheckAnswer
     if (data.submitted) {
       // Submitted elsewhere (another tab, auto-submit, an admin) — show the result.
       finishedRef.current = true;
-      toast('Your exam has already been submitted.', { icon: 'ℹ️' });
+      if (data.by_admin) toast(data.error || 'Your exam was submitted by the exam administrator.', { icon: 'ℹ️', duration: 8000 });
+      else toast('Your exam has already been submitted.', { icon: 'ℹ️' });
       onFinished();
       return;
     }
@@ -572,6 +641,8 @@ export default function ExamRunner({ attempt, exam, onSaveAnswers, onCheckAnswer
     try {
       const res = await onCheckAnswer(qId, answers[qId]);
       pendingRef.current.delete(qId); // the check stored the answer — nothing left to autosave
+      delete journalRef.current[qId];
+      writeJournal(jKey, journalRef.current);
       setFeedback((prev) => ({ ...prev, [qId]: res.feedback }));
       if (res.progress) setProgress(res.progress);
     } catch (err) {
@@ -590,6 +661,8 @@ export default function ExamRunner({ attempt, exam, onSaveAnswers, onCheckAnswer
     lastEditAtRef.current = at;
     editAtRef.current.set(q._id, at);
     pendingRef.current.set(q._id, response);
+    journalRef.current[q._id] = { response, edited_at: at };
+    writeJournal(jKey, journalRef.current);
   };
   const toggleMarked = (qId) => setMarked((prev) => { const n = new Set(prev); n.has(qId) ? n.delete(qId) : n.add(qId); return n; });
   const answeredCount = questions.filter((qq) => isAnswered(answers[qq._id])).length;

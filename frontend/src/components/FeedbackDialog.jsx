@@ -31,7 +31,7 @@ function statusBadge(fb) {
 
 // Mean of one participant's own ratings.
 function ownAverage(r) {
-  const values = r.ratings.map((x) => x.value).filter((v) => Number.isFinite(v));
+  const values = (r.ratings || []).map((x) => x.value).filter((v) => Number.isFinite(v));
   return values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
 }
 
@@ -128,8 +128,8 @@ export function ResponseDetail({ r, form, onBack, onDelete, busy, canManage, bac
               <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-500">{sectionTitle(section.title)}</h3>
             </header>
             <ul className="divide-y divide-slate-100">
-              {section.statements.map((st) => {
-                const v = r.ratings.find((x) => x.key === st.key)?.value;
+              {(section.statements || []).map((st) => {
+                const v = (r.ratings || []).find((x) => x.key === st.key)?.value;
                 return (
                   <li key={st.key} className="sm:grid sm:grid-cols-[minmax(0,1fr)_2.25rem_7rem] sm:items-center sm:gap-4 px-4 py-2.5">
                     <p className="text-[13px] text-slate-700 leading-snug">{st.text}</p>

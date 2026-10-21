@@ -128,6 +128,19 @@ Certificates are generated following ICAO Doc 10106, Doc 9868, and EASA Part ORO
 
 6. Open `http://localhost:3000` in your browser
 
+### Tests
+
+```bash
+cd backend
+npm test
+```
+
+Runs exam marking, re-marking and Quiz Arena scoring tests. The Quiz Arena database tests run too when a **throwaway local** MongoDB is given (the run wipes it):
+
+```bash
+TEST_MONGODB_URL=mongodb://127.0.0.1:27017/tms_test npm test
+```
+
 ## API Endpoints
 
 | Method | Endpoint | Description |

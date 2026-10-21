@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -14,8 +14,8 @@ import {
   HiOutlineLockClosed,
   HiOutlineCheckCircle,
 } from 'react-icons/hi';
-import { Gamepad2 } from 'lucide-react';
-import { resolveLivePin, getLivePublic, joinLiveGame, getLivePlayerState, answerLive, reactLive } from '../../api';
+import { Gamepad2, Crown } from 'lucide-react';
+import { resolveLivePin, getLivePublic, joinLiveGame, getLivePlayerState, answerLive, reactLive, chooseLiveTeam } from '../../api';
 import {
   Backdrop,
   AVATARS,
@@ -31,6 +31,9 @@ import {
   IconTrophy,
   IconFlame,
   IconBolt,
+  TeamChip,
+  TeamStandings,
+  teamStyle,
   useServerOffset,
   useTicker,
   usePoll,
@@ -129,11 +132,39 @@ function PinEntry() {
   );
 }
 
+// ── Team picker (team mode, when players choose) ─────────────────────────────
+function TeamPicker({ teams, value, onPick, disabled }) {
+  return (
+    <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Choose your team">
+      {teams.map((t) => {
+        const on = value === t.key;
+        return (
+          <button
+            key={t.key}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            disabled={disabled}
+            onClick={() => onPick(t.key)}
+            className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-left transition-all cursor-pointer disabled:opacity-50 ${on ? 'bg-white text-slate-900 border-white' : 'bg-white/[0.06] border-white/15 text-white hover:bg-white/[0.12]'}`}
+          >
+            <span className={`w-3 h-3 rounded-full flex-shrink-0 ${teamStyle(t.key).dot}`} />
+            <span className="flex-1 min-w-0 truncate text-sm font-bold">{t.name}</span>
+            {t.members != null && <span className={`text-[11px] font-semibold tabular-nums ${on ? 'text-slate-500' : 'text-white/50'}`}>{t.members}</span>}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Join Form (Pick Avatar & Nickname) ────────────────────────────────────────
 function JoinForm({ code, info, onJoined }) {
   const [nickname, setNickname] = useState('');
   const [avatar, setAvatar] = useState(() => AVATARS[Math.floor(Math.random() * AVATARS.length)]);
+  const [team, setTeam] = useState('');
   const [busy, setBusy] = useState(false);
+  const pickTeam = info.teams?.length > 0 && info.team_pick === 'player';
 
   const join = async (e) => {
     e.preventDefault();
@@ -141,9 +172,13 @@ function JoinForm({ code, info, onJoined }) {
       toast.error('Pick a nickname with at least 2 characters.');
       return;
     }
+    if (pickTeam && !team) {
+      toast.error('Choose your team.');
+      return;
+    }
     setBusy(true);
     try {
-      const { data } = await joinLiveGame(code, { nickname: nickname.trim(), avatar });
+      const { data } = await joinLiveGame(code, { nickname: nickname.trim(), avatar, team });
       saveToken(code, data.token);
       onJoined(data.token);
     } catch (err) {
@@ -204,9 +239,19 @@ function JoinForm({ code, info, onJoined }) {
             />
           </div>
 
+          {pickTeam && (
+            <div>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-white/60 mb-1.5">Your Team</label>
+              <TeamPicker teams={info.teams} value={team} onPick={setTeam} disabled={busy} />
+            </div>
+          )}
+          {info.teams?.length > 0 && !pickTeam && (
+            <p className="text-[11px] text-white/60 text-center">This is a team game. You&apos;ll be placed in a team when you join.</p>
+          )}
+
           <button
             type="submit"
-            disabled={busy || !nickname.trim()}
+            disabled={busy || !nickname.trim() || (pickTeam && !team)}
             className="w-full py-3.5 rounded-2xl text-base font-black text-slate-900 bg-white hover:bg-slate-100 shadow-xl active:scale-95 disabled:opacity-40 transition-all cursor-pointer mt-2"
           >
             {busy ? 'Joining…' : 'Join game'}
@@ -256,6 +301,8 @@ function ReactionBar({ code, token }) {
   );
 }
 
+const myTeam = (v) => (v.teams || []).find((t) => t.key === v.me.team) || null;
+
 // ── Top Player Header ────────────────────────────────────────────────────────
 function Header({ v }) {
   const inGame = v.current_index >= 0 && v.status !== 'lobby' && v.status !== 'finished';
@@ -264,6 +311,7 @@ function Header({ v }) {
       <div className="justify-self-start inline-flex items-center gap-2 pl-1 pr-3 py-1 rounded-full bg-white/[0.08] border border-white/10 text-white font-bold text-xs min-w-0 max-w-full">
         <Avatar id={v.me.avatar} size={24} />
         <span className="truncate">{v.me.nickname}</span>
+        {v.me.team && <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${teamStyle(v.me.team).dot}`} title={myTeam(v)?.name} />}
       </div>
 
       <span className="text-[11px] font-semibold text-white/60 tabular-nums whitespace-nowrap">
@@ -284,11 +332,16 @@ function AnswerPad({ v, now, onAnswer, busy }) {
   const [picked, setPicked] = useState([]);
   useEffect(() => setPicked([]), [v.current_index]);
   const multi = q.type === 'multi';
+  // Shuffled games: this phone's own order (letters would not match the big screen).
+  const order = q.order || q.options.map((_, i) => i);
+  const letters = !q.order;
+  // Captain mode: teammates see the question to discuss it, only the captain taps.
+  const watchOnly = v.team_answer === 'captain' && v.me.team && !v.me.captain;
   const ends = new Date(v.question_ends_at).getTime();
   const left = Math.max(0, ends - now);
 
   const tap = (i) => {
-    if (busy) return;
+    if (busy || watchOnly) return;
     if (!multi) {
       onAnswer([i]);
       return;
@@ -316,6 +369,7 @@ function AnswerPad({ v, now, onAnswer, busy }) {
           <span className="text-center text-xs font-bold text-white/70">
             {TYPE_LABEL[q.type]}
             {q.points === 'double' ? ' · 2× Points' : ''}
+            {v.me.captain && v.team_answer === 'captain' ? ' · You answer for your team' : ''}
           </span>
         </div>
       </div>
@@ -326,7 +380,8 @@ function AnswerPad({ v, now, onAnswer, busy }) {
           q.options.length > 4 ? 'grid-cols-2 grid-rows-3' : 'grid-cols-2 grid-rows-2'
         }`}
       >
-        {q.options.map((o, i) => {
+        {order.map((i, pos) => {
+          const o = q.options[i];
           const letter = String.fromCharCode(65 + i);
           const on = picked.includes(i);
           return (
@@ -334,24 +389,26 @@ function AnswerPad({ v, now, onAnswer, busy }) {
               key={i}
               type="button"
               onClick={() => tap(i)}
-              disabled={busy}
+              disabled={busy || watchOnly}
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: on ? 0.96 : 1, opacity: 1 }}
-              transition={{ delay: i * 0.04 }}
-              whileTap={{ scale: 0.94 }}
+              transition={{ delay: pos * 0.04 }}
+              whileTap={watchOnly ? undefined : { scale: 0.94 }}
               className={`relative min-h-0 rounded-2xl shadow-lg flex flex-col items-center justify-center gap-1.5 sm:gap-2 p-3 sm:p-4 text-white transition-all cursor-pointer border ${
                 on
                   ? 'bg-blue-600 border-white ring-4 ring-blue-500/50 shadow-blue-500/30'
                   : 'bg-white/[0.08] hover:bg-white/[0.14] border-white/15'
               }`}
             >
-              <span
-                className={`${q.options.length > 4 ? 'w-6 h-6 text-xs' : 'w-8 h-8 text-sm'} rounded-lg font-black flex items-center justify-center flex-shrink-0 transition-all ${
-                  on ? 'bg-white text-blue-600' : 'bg-white/15 text-white'
-                }`}
-              >
-                {letter}
-              </span>
+              {letters && (
+                <span
+                  className={`${q.options.length > 4 ? 'w-6 h-6 text-xs' : 'w-8 h-8 text-sm'} rounded-lg font-black flex items-center justify-center flex-shrink-0 transition-all ${
+                    on ? 'bg-white text-blue-600' : 'bg-white/15 text-white'
+                  }`}
+                >
+                  {letter}
+                </span>
+              )}
               <span className={`font-bold text-center leading-tight ${o.text.length > 28 ? 'text-xs sm:text-sm' : 'text-sm sm:text-base'}`}>
                 {o.text}
               </span>
@@ -365,7 +422,13 @@ function AnswerPad({ v, now, onAnswer, busy }) {
         })}
       </div>
 
-      {multi && (
+      {watchOnly && (
+        <p className="flex-shrink-0 flex items-center justify-center gap-2 py-3 rounded-2xl bg-amber-500/15 border border-amber-400/30 text-amber-200 text-sm font-bold text-center">
+          <Crown className="w-4 h-4 flex-shrink-0" /> Talk it over. {v.captain_name || 'Your captain'} answers for the team.
+        </p>
+      )}
+
+      {multi && !watchOnly && (
         <button
           type="button"
           disabled={busy || !picked.length}
@@ -461,9 +524,11 @@ function RevealCard({ v }) {
                   key={idx}
                   className="flex items-center gap-2.5 p-2 rounded-xl bg-emerald-500/15 border border-emerald-400/30 text-white text-xs sm:text-sm font-bold"
                 >
-                  <span className="w-6 h-6 rounded-md bg-emerald-500 text-white text-xs font-black flex items-center justify-center flex-shrink-0">
-                    {String.fromCharCode(65 + idx)}
-                  </span>
+                  {!v.question.order && (
+                    <span className="w-6 h-6 rounded-md bg-emerald-500 text-white text-xs font-black flex items-center justify-center flex-shrink-0">
+                      {String.fromCharCode(65 + idx)}
+                    </span>
+                  )}
                   <span className="flex-1 truncate">{v.question.options[idx]?.text}</span>
                   <HiOutlineCheck className="w-4 h-4 text-emerald-400 stroke-[3] flex-shrink-0" />
                 </div>
@@ -515,7 +580,17 @@ function FinalCard({ v }) {
       <div>
         <p className="text-4xl font-black text-white">{v.me.rank === 1 ? 'You won!' : `${ordinal(v.me.rank)} place`}</p>
         <p className="text-xl font-black text-white/80 tabular-nums mt-0.5">{v.me.score.toLocaleString()} points</p>
+        {myTeam(v) && v.me.team_rank && (
+          <p className="mt-2 text-sm font-bold text-white/90">
+            {v.me.team_rank === 1 ? 'Your team won! ' : `Your team finished ${ordinal(v.me.team_rank)}. `}<TeamChip team={myTeam(v)} />
+          </p>
+        )}
       </div>
+      {v.team_standings && (
+        <div className="w-full max-w-sm text-left">
+          <TeamStandings standings={v.team_standings} highlight={v.me.team} compact />
+        </div>
+      )}
 
       <div className="mt-2 grid grid-cols-3 gap-2 w-full max-w-sm">
         {[
@@ -552,16 +627,23 @@ function FinalCard({ v }) {
 }
 
 // ── Playing State Coordinator ────────────────────────────────────────────────
+// How often a phone checks for updates: every second while a question is open
+// or about to open, less often while nothing time-critical is happening.
+const POLL_MS = { question: 1000, reveal: 2000, leaderboard: 2000, lobby: 2000, finished: 10000 };
+
 function Playing({ code, token, onLost, onGone }) {
   const [v, setV] = useState(null);
   const [busy, setBusy] = useState(false);
+  const versionRef = useRef('');
   const offset = useServerOffset(v?.server_now);
   useTicker(v?.status === 'question', 100);
   const now = Date.now() + offset;
 
   const refresh = useCallback(async () => {
     try {
-      const { data } = await getLivePlayerState(code, token);
+      const { data } = await getLivePlayerState(code, token, versionRef.current);
+      if (data.unchanged) return;
+      versionRef.current = data.version || '';
       setV(data);
     } catch (err) {
       if (err.response?.status === 401) onLost();
@@ -569,7 +651,22 @@ function Playing({ code, token, onLost, onGone }) {
       else if (err.response?.status === 404) onGone();
     }
   }, [code, token, onLost, onGone]);
-  usePoll(refresh, 1000, [code, token]);
+  const pollMs = POLL_MS[v?.status] || 1000;
+  usePoll(refresh, pollMs, [code, token, pollMs]);
+
+  const [teamBusy, setTeamBusy] = useState(false);
+  const switchTeam = async (team) => {
+    if (team === v.me.team) return;
+    setTeamBusy(true);
+    try {
+      await chooseLiveTeam(code, token, team);
+      await refresh();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Could not change team.');
+    } finally {
+      setTeamBusy(false);
+    }
+  };
 
   const answer = async (choices) => {
     setBusy(true);
@@ -629,6 +726,31 @@ function Playing({ code, token, onLost, onGone }) {
               <p className="text-white/70 font-medium text-xs max-w-xs leading-relaxed">
                 See your nickname on the projector screen? Waiting for the host to start the game…
               </p>
+              {v.teams?.length > 0 && (
+                <div className="w-full max-w-xs mt-2 space-y-2">
+                  {v.me.team ? (
+                    <>
+                      <p className="text-sm font-bold text-white/90">Your team: <TeamChip team={myTeam(v)} className="text-sm" /></p>
+                      {v.team_answer === 'captain' && (
+                        <p className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-200">
+                          <Crown className="w-3.5 h-3.5" />
+                          {v.me.captain ? 'You are the captain: you answer for the team.' : `${v.captain_name || 'Your captain'} answers for the team. Help them decide!`}
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <p className="text-sm font-bold text-white/90">{v.team_pick === 'player' ? 'Choose your team' : 'The host is setting up teams…'}</p>
+                  )}
+                  {v.team_pick === 'player' && (
+                    <TeamPicker
+                      teams={v.team_standings || v.teams}
+                      value={v.me.team}
+                      disabled={teamBusy}
+                      onPick={switchTeam}
+                    />
+                  )}
+                </div>
+              )}
               <div className="mt-4">
                 <ReactionBar code={code} token={token} />
               </div>
@@ -659,8 +781,8 @@ function Playing({ code, token, onLost, onGone }) {
               <div className="w-16 h-16 rounded-2xl bg-blue-500/20 border border-blue-400/40 text-blue-300 flex items-center justify-center shadow-lg mb-2">
                 <HiOutlineLockClosed className="w-8 h-8" />
               </div>
-              <h2 className="text-3xl font-black text-white">Answer locked in!</h2>
-              <p className="text-xs text-white/70 font-medium">Waiting for other players to submit…</p>
+              <h2 className="text-3xl font-black text-white">{v.team_answer === 'captain' && !v.me.captain ? 'Your team has answered!' : 'Answer locked in!'}</h2>
+              <p className="text-xs text-white/70 font-medium">{v.team_answer === 'captain' ? 'Waiting for the other teams…' : 'Waiting for other players to submit…'}</p>
             </Center>
           )}
 
@@ -679,6 +801,15 @@ function Playing({ code, token, onLost, onGone }) {
                 <span>{ordinal(v.me.rank)}</span>
               </motion.p>
               <p className="text-lg font-bold text-white/80 tabular-nums">{v.me.score.toLocaleString()} points</p>
+
+              {v.team_standings && (
+                <div className="mt-3 w-full max-w-sm text-left">
+                  <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-white/60">
+                    {myTeam(v) ? `${myTeam(v).name} is ${ordinal(v.me.team_rank)}` : 'Teams'}
+                  </p>
+                  <TeamStandings standings={v.team_standings} highlight={v.me.team} compact />
+                </div>
+              )}
 
               <ul className="mt-4 w-full max-w-sm space-y-2">
                 {(v.leaderboard || []).map((p) => (

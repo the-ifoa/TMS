@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const mongoose = require('mongoose');
 const LiveGame = require('../models/LiveGame');
 const LiveSession = require('../models/LiveSession');
@@ -23,6 +24,27 @@ const cleanImage = (q) => {
   return { image_url: url, image_public_id: url && typeof q.image_public_id === 'string' ? q.image_public_id.slice(0, 200) : '' };
 };
 const imageIds = (questions) => (questions || []).map((q) => q.image_public_id).filter(Boolean);
+// An exam question's picture: the legacy single image, else the first gallery image.
+function examImage(q) {
+  if (q.image_url) return q;
+  const img = (q.images || []).find((i) => i && i.url);
+  return img ? { image_url: img.url, image_public_id: img.public_id } : {};
+}
+
+// Exam question types a live game can play, and back.
+const EXAM_TO_LIVE = { mcq: 'quiz', select_list: 'quiz', true_false: 'true_false', multi_response: 'multi' };
+const LIVE_TO_EXAM = { quiz: 'mcq', true_false: 'true_false', multi: 'multi_response' };
+
+// Exam questions that fit a live game (choice / true-false, 2–6 answers).
+function liveQuestionsFromExam(exam) {
+  return (exam.questions || [])
+    .filter((q) => EXAM_TO_LIVE[q.type] && (q.options || []).length >= 2 && (q.options || []).length <= 6 && String(q.prompt || '').trim())
+    .map((q) => ({
+      type: EXAM_TO_LIVE[q.type], prompt: String(q.prompt).slice(0, 300), time_limit: 20, points: 'standard',
+      ...cleanImage(examImage(q)),
+      options: q.options.map((o) => ({ text: String(o.text || '').slice(0, 120), is_correct: !!o.is_correct })),
+    }));
+}
 
 function cleanGame(body) {
   const title = String(body.title || '').trim().slice(0, 120);
@@ -58,6 +80,7 @@ function cleanGame(body) {
       title,
       description: String(body.description || '').trim().slice(0, 500),
       cover: String(body.cover || 'plane').slice(0, 16),
+      shuffle_options: !!body.shuffle_options,
       questions,
     },
   };
@@ -135,16 +158,60 @@ exports.examQuestions = async (req, res) => {
     if (!validId(req.params.examId)) return res.status(404).json({ error: 'Exam not found.' });
     const exam = await Exam.findById(req.params.examId).select('title questions owner_airline').lean();
     if (!exam || exam.owner_airline) return res.status(404).json({ error: 'Exam not found.' });
-    const map = { mcq: 'quiz', select_list: 'quiz', true_false: 'true_false', multi_response: 'multi' };
-    const questions = (exam.questions || [])
-      .filter((q) => map[q.type] && (q.options || []).length >= 2 && (q.options || []).length <= 6 && String(q.prompt || '').trim())
-      .map((q) => ({
-        type: map[q.type], prompt: String(q.prompt).slice(0, 300), time_limit: 20, points: 'standard',
-        ...cleanImage(q),
-        options: q.options.map((o) => ({ text: String(o.text || '').slice(0, 120), is_correct: !!o.is_correct })),
-      }));
+    const questions = liveQuestionsFromExam(exam);
     res.json({ title: exam.title, questions, skipped: (exam.questions || []).length - questions.length });
   } catch (err) { fail(res, err, 'GET /live/exam-questions'); }
+};
+
+// POST /live/from-exam/:examId — a new live game holding an IFOA exam's
+// choice / true-false questions (20 s each). Opened in the editor afterwards.
+exports.gameFromExam = async (req, res) => {
+  try {
+    if (!validId(req.params.examId)) return res.status(404).json({ error: 'Exam not found.' });
+    const exam = await Exam.findById(req.params.examId).select('title description questions owner_airline deleted_at shuffle_options').lean();
+    if (!exam || exam.owner_airline || exam.deleted_at) return res.status(404).json({ error: 'Exam not found.' });
+    const questions = liveQuestionsFromExam(exam).slice(0, 100);
+    if (!questions.length) return res.status(400).json({ error: 'This exam has no multiple-choice, true/false or multiple-response questions to play live.' });
+    const doc = await LiveGame.create({
+      title: String(exam.title || 'Quiz').slice(0, 120), description: String(exam.description || '').slice(0, 500),
+      shuffle_options: !!exam.shuffle_options, questions, created_by: req.admin.id,
+    });
+    res.status(201).json({ id: String(doc._id), added: questions.length, skipped: (exam.questions || []).length - questions.length });
+  } catch (err) { fail(res, err, 'POST /live/from-exam/:examId'); }
+};
+
+// POST /live/games/:id/to-exam — a draft IFOA exam built from a live game.
+// Quiz → multiple choice, true/false → true/false, pick-all → multiple
+// response; polls have no right answer and are left out. Double points become
+// 2 marks. The exam still needs its airline, timing and pass mark in the builder.
+exports.examFromGame = async (req, res) => {
+  try {
+    if (!validId(req.params.id)) return res.status(404).json({ error: 'Game not found.' });
+    const game = await LiveGame.findOne({ _id: req.params.id, deleted_at: null }).lean();
+    if (!game) return res.status(404).json({ error: 'Game not found.' });
+    const usable = (game.questions || []).filter((q) => LIVE_TO_EXAM[q.type]);
+    if (!usable.length) return res.status(400).json({ error: 'This game has only polls. Polls have no right answer, so they cannot become exam questions.' });
+    const questions = usable.map((q, i) => ({
+      type: LIVE_TO_EXAM[q.type],
+      prompt: q.prompt,
+      points: q.points === 'double' ? 2 : 1,
+      order: i,
+      images: q.image_url ? [{ url: q.image_url, public_id: q.image_public_id || '' }] : [],
+      options: (q.options || []).map((o) => ({ text: o.text, is_correct: !!o.is_correct })),
+    }));
+    const exam = await Exam.create({
+      title: game.title,
+      description: game.description || '',
+      // Roughly a minute per question, at least 10 minutes.
+      duration_minutes: Math.max(10, questions.length),
+      shuffle_options: !!game.shuffle_options,
+      questions,
+      created_by: req.admin.id,
+      owner_airline: null,
+      status: 'draft',
+    });
+    res.status(201).json({ id: String(exam._id), added: questions.length, skipped: (game.questions || []).length - questions.length });
+  } catch (err) { fail(res, err, 'POST /live/games/:id/to-exam'); }
 };
 
 // ── Hosting ───────────────────────────────────────────────────────────────────
@@ -155,7 +222,7 @@ exports.startSession = async (req, res) => {
     if (!game) return res.status(404).json({ error: 'Game not found.' });
     if (!game.questions.length) return res.status(400).json({ error: 'Add at least one question before hosting.' });
     const session = await LiveSession.create({
-      game_id: game._id, title: game.title, cover: game.cover, questions: game.questions,
+      game_id: game._id, title: game.title, cover: game.cover, questions: game.questions, shuffle_options: !!game.shuffle_options,
       pin: await live.uniquePin(), code: live.randomCode(), host_id: req.admin.id,
     });
     res.status(201).json({ id: String(session._id), pin: session.pin, code: session.code });
@@ -274,11 +341,14 @@ exports.publicInfo = async (req, res) => {
   try {
     const session = await loadPublicSession(req, res);
     if (!session) return;
-    const players = await LivePlayer.find({ session_id: session._id, kicked: false }).select('nickname avatar').sort({ joined_at: 1 }).limit(60).lean();
+    const players = await LivePlayer.find({ session_id: session._id, kicked: false }).select('nickname avatar team').sort({ joined_at: 1 }).limit(500).lean();
+    const teams = (session.teams || []).map((t) => ({ key: t.key, name: t.name, members: players.filter((p) => p.team === t.key).length }));
     res.json({
       title: session.title, cover: session.cover, status: session.status, locked: session.locked,
+      teams, team_pick: session.team_pick || 'player',
       expired: Date.now() - new Date(session.created_at).getTime() > live.SESSION_TTL_MS,
-      players: players.map((p) => ({ nickname: p.nickname, avatar: p.avatar })),
+      players: players.slice(0, 60).map((p) => ({ nickname: p.nickname, avatar: p.avatar })),
+      players_count: players.length,
     });
   } catch (err) { fail(res, err, 'GET /public-live/:code'); }
 };
@@ -300,10 +370,11 @@ exports.join = async (req, res) => {
     const avatar = AVATARS.has(String(req.body?.avatar)) ? String(req.body.avatar) : 'plane';
     if (await LivePlayer.countDocuments({ session_id: session._id }) >= 500) return res.status(403).json({ error: 'This game is full.' });
     try {
+      const team = await live.teamForJoin(session, String(req.body?.team || ''));
       const player = await LivePlayer.create({
-        session_id: session._id, nickname, nickname_key: nickname.toLowerCase(), avatar, token: live.newToken(),
+        session_id: session._id, nickname, nickname_key: nickname.toLowerCase(), avatar, team, token: live.newToken(),
       });
-      res.status(201).json({ token: player.token, player: { id: String(player._id), nickname, avatar } });
+      res.status(201).json({ token: player.token, player: { id: String(player._id), nickname, avatar, team } });
     } catch (err) {
       if (err.code === 11000) return res.status(409).json({ error: 'That nickname is taken in this game. Try another one.' });
       throw err;
@@ -317,7 +388,14 @@ exports.playerState = async (req, res) => {
     if (!session) return;
     const player = await loadPlayer(req, res, session);
     if (!player) return;
-    res.json(await live.playerView(session, player));
+    // `version` stamps what the phone shows. When it sends back the stamp it
+    // already has (?v=) and nothing changed, reply with a tiny "unchanged"
+    // instead of the whole view. server_now is left out so the clock alone
+    // never counts as a change.
+    const { server_now: serverNow, ...view } = await live.playerView(session, player);
+    const version = crypto.createHash('sha1').update(JSON.stringify(view)).digest('base64url').slice(0, 16);
+    if (req.query.v && req.query.v === version) return res.json({ unchanged: true, version, server_now: serverNow });
+    res.json({ ...view, server_now: serverNow, version });
   } catch (err) { fail(res, err, 'GET /public-live/:code/state'); }
 };
 
@@ -331,6 +409,23 @@ exports.answer = async (req, res) => {
     await live.submitAnswer(session, player, Number(req.body?.index), req.body?.choices);
     res.json({ ok: true });
   } catch (err) { fail(res, err, 'POST /public-live/:code/answer'); }
+};
+
+// POST /public-live/:code/team { team } — a player switches team in the lobby
+// (only when the host lets players choose).
+exports.chooseTeam = async (req, res) => {
+  try {
+    const session = await loadPublicSession(req, res);
+    if (!session) return;
+    const player = await loadPlayer(req, res, session);
+    if (!player) return;
+    const keys = (session.teams || []).map((t) => t.key);
+    if (session.status !== 'lobby') return res.status(409).json({ error: 'The game has started. Teams are fixed now.' });
+    if (session.team_pick !== 'player') return res.status(403).json({ error: 'The host is choosing the teams.' });
+    if (!keys.includes(String(req.body?.team))) return res.status(400).json({ error: 'Unknown team.' });
+    await LivePlayer.updateOne({ _id: player._id }, { $set: { team: String(req.body.team) } });
+    res.json({ ok: true });
+  } catch (err) { fail(res, err, 'POST /public-live/:code/team'); }
 };
 
 const STICKERS = new Set(['clap', 'fire', 'laugh', 'wow', 'heart', 'party', 'rocket', 'thumbs']); // icon keys (frontend liveUi REACTION_ICONS)

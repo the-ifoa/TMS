@@ -8,13 +8,13 @@ import {
   HiOutlineUserAdd, HiOutlineClipboardCheck,
   HiOutlineSearch, HiOutlineX, HiOutlineUserGroup, HiChevronRight,
   HiOutlineClock, HiOutlineDocumentText, HiOutlineMail, HiOutlineCheckCircle,
-  HiOutlinePaperAirplane, HiOutlineCollection, HiOutlineRefresh, HiOutlineChatAlt2,
+  HiOutlinePaperAirplane, HiOutlineCollection, HiOutlineRefresh, HiOutlineChatAlt2, HiOutlineLightningBolt,
 } from 'react-icons/hi';
 import { FaPlaneDeparture } from 'react-icons/fa';
 import LogoAvatar from '../components/LogoAvatar';
 import FeedbackDialog from '../components/FeedbackDialog';
 import ExamHelpButton from '../components/ExamHelpGuide';
-import { listExams, deleteExam, publishExam, getExamAirlines, updateExam, sendExamInvites, reassignExamInvites, getExamInvites, removeExamCandidate, getExamAssignments, addQuickParticipant, keepQuickParticipant } from '../api';
+import { liveGameFromExam, listExams, deleteExam, publishExam, getExamAirlines, updateExam, sendExamInvites, reassignExamInvites, getExamInvites, removeExamCandidate, getExamAssignments, addQuickParticipant, keepQuickParticipant } from '../api';
 import { useAuth } from '../context/AuthContext';
 import QuestionBankList from './QuestionBank';
 import { DateTimeInputCard } from './ExamBuilder';
@@ -256,6 +256,15 @@ function SendInviteModal({ exam, onClose, onSent }) {
     }
   };
 
+  // Header summary of this exam's invites.
+  const invites = Object.values(inviteByPid);
+  const inviteStats = {
+    assigned: invites.length,
+    inProgress: invites.filter((i) => i.status === 'in_progress').length,
+    completed: invites.filter((i) => i.status === 'completed').length,
+    needsReassign: invites.filter((i) => i.needs_reassign).length,
+  };
+
   const filteredGroups = groups
     .map((g) => {
       const matchAir = g.airline.airlineName.toLowerCase().includes(search.toLowerCase());
@@ -276,40 +285,46 @@ function SendInviteModal({ exam, onClose, onSent }) {
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent hideClose className="max-w-2xl w-[92vw] h-[85vh] max-h-[750px] flex flex-col p-0 overflow-hidden rounded-2xl border border-slate-200/80 shadow-2xl bg-white">
         <DialogHeader className="flex-shrink-0 px-6 pt-5 pb-4 border-b border-slate-100 bg-white space-y-0 text-left">
+          {/* Title row */}
           <div className="flex items-start gap-3">
-            <span className="p-2 rounded-xl bg-blue-50 text-blue-600 flex-shrink-0"><HiOutlineMail className="w-5 h-5" /></span>
+            <span className="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center flex-shrink-0"><HiOutlineUserAdd className="w-5 h-5" /></span>
             <div className="min-w-0 flex-1">
-              <DialogTitle className="text-base sm:text-lg font-bold text-slate-900 leading-snug line-clamp-2">
-                Assign &ldquo;{exam.title}&rdquo; to participants
-              </DialogTitle>
-              <p className="mt-1 text-xs leading-relaxed text-slate-500">Each assigned participant gets a personal, passwordless exam link by email. Participants without an email can't be assigned. Use <span className="font-semibold text-slate-700">Reassign</span> on someone who already finished (passed or failed) to let them take the exam again with a fresh link.</p>
+              <div className="flex items-center gap-2">
+                <DialogTitle className="text-[15px] font-semibold text-slate-900 tracking-tight">Assign exam</DialogTitle>
+                <ExamHelpButton guide="system" topic="assign" className="h-7 w-7 rounded-lg" />
+              </div>
+              <p className="text-[13px] text-slate-500 truncate" title={exam.title}>{exam.title}</p>
+              {inviteStats.assigned > 0 && (
+                <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500">
+                  <span><span className="font-semibold text-slate-800 tabular-nums">{inviteStats.assigned}</span> assigned</span>
+                  {inviteStats.inProgress > 0 && <span><span className="font-semibold text-slate-800 tabular-nums">{inviteStats.inProgress}</span> in progress</span>}
+                  <span><span className="font-semibold text-slate-800 tabular-nums">{inviteStats.completed}</span> completed</span>
+                  {inviteStats.needsReassign > 0 && <span className="text-amber-700"><span className="font-semibold tabular-nums">{inviteStats.needsReassign}</span> need a reassign</span>}
+                </p>
+              )}
             </div>
             <button type="button" onClick={onClose} aria-label="Close"
-              className="-mr-2 -mt-1 p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors flex-shrink-0">
+              className="-mr-2 -mt-1 w-9 h-9 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors flex-shrink-0 inline-flex items-center justify-center">
               <HiOutlineX className="w-5 h-5" />
             </button>
           </div>
 
-          <div className="mt-4 flex flex-col sm:flex-row sm:items-center gap-2.5">
-            <button type="button" onClick={() => setAddOpen((o) => !o)}
-              className={`h-9 px-3 inline-flex items-center justify-center gap-1.5 rounded-xl text-xs font-bold border transition-colors flex-shrink-0 ${addOpen ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'}`}>
-              <HiOutlineUserAdd className="w-4 h-4" /> Add participants
-            </button>
+          {/* Toolbar: search · link expiry · add */}
+          <div className="mt-4 flex flex-col sm:flex-row sm:items-center gap-2">
             <div className="relative flex-1 min-w-0">
               <HiOutlineSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
               <input
-                type="text" placeholder="Search participant, email or airline…"
+                type="text" placeholder="Search by name, email or airline"
                 value={search} onChange={(e) => setSearch(e.target.value)}
-                className="w-full h-9 pl-9 pr-3 bg-slate-50 border border-slate-200/90 rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
+                className="w-full h-9 pl-9 pr-3 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400"
               />
             </div>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 whitespace-nowrap">Link valid for</span>
-              <Select
-                value={validityMode}
-                onValueChange={(val) => setValidityMode(val)}
-              >
-                <SelectTrigger className="h-9 w-auto min-w-[130px] px-2.5 text-xs font-semibold text-slate-800 bg-slate-50 border border-slate-200/90 rounded-xl outline-none focus:ring-2 focus:ring-slate-900/10 cursor-pointer">
+            <div className="flex items-center gap-2">
+              <Select value={validityMode} onValueChange={(val) => setValidityMode(val)}>
+                <SelectTrigger aria-label="How long the exam link works" title="How long the emailed exam link works"
+                  className="h-9 flex-1 sm:flex-none sm:w-auto min-w-[150px] px-2.5 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-slate-900/10 cursor-pointer gap-1.5">
+                  <HiOutlineClock className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                  <span className="text-slate-400">Link:</span>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -322,20 +337,25 @@ function SendInviteModal({ exam, onClose, onSent }) {
                   <SelectItem value="custom" className="text-xs font-medium">Until a date…</SelectItem>
                 </SelectContent>
               </Select>
+              <button type="button" onClick={() => setAddOpen((o) => !o)} aria-expanded={addOpen}
+                className={`h-9 px-3 inline-flex items-center justify-center gap-1.5 rounded-lg text-xs font-semibold border transition-colors flex-shrink-0 cursor-pointer ${addOpen ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'}`}>
+                <HiOutlinePlusCircle className="w-4 h-4" /> Add people
+              </button>
             </div>
           </div>
-          {validityMode === 'custom' && (
-            <div className="mt-2.5 flex flex-wrap items-center gap-2 sm:justify-end">
-              <input
-                type="datetime-local"
-                value={customExpiry}
-                onChange={(e) => setCustomExpiry(e.target.value)}
-                className="h-9 px-2.5 text-xs font-semibold text-slate-800 bg-slate-50 border border-slate-200/90 rounded-xl outline-none focus:ring-2 focus:ring-slate-900/10"
-              />
-            </div>
-          )}
           {validityMode !== 'none' && (
-            <p className="mt-2 text-[11px] text-slate-400 sm:text-right">After this the exam link stops working.</p>
+            <div className="mt-2.5 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+              {validityMode === 'custom' && (
+                <input
+                  type="datetime-local"
+                  value={customExpiry}
+                  onChange={(e) => setCustomExpiry(e.target.value)}
+                  aria-label="Link works until"
+                  className="h-8 px-2.5 text-xs text-slate-800 bg-white border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-slate-900/10"
+                />
+              )}
+              <span>The emailed link stops working after this.</span>
+            </div>
           )}
         </DialogHeader>
 
@@ -572,13 +592,18 @@ function SendInviteModal({ exam, onClose, onSent }) {
         </div>
 
         <DialogFooter className="flex-shrink-0 px-6 py-3.5 border-t border-slate-100 bg-white flex items-center justify-between">
-          <div className="text-xs font-semibold text-slate-500">
-            {selected.size > 0 ? <span className="text-slate-900 font-bold">{selected.size} selected</span> : 'No participants selected'}
+          <div className="text-xs text-slate-500 flex items-center gap-2">
+            {selected.size > 0 ? (
+              <>
+                <span className="font-semibold text-slate-900">{selected.size} selected</span>
+                <button type="button" onClick={() => setSelected(new Set())} className="font-semibold text-slate-500 hover:text-slate-800 underline-offset-2 hover:underline cursor-pointer">Clear</button>
+              </>
+            ) : 'Select people to send them the exam link'}
           </div>
           <div className="flex items-center gap-2">
             <Button variant="ghost" onClick={onClose} className="rounded-xl text-xs font-bold">Close</Button>
             <Button variant="primary" onClick={send} disabled={sending || selected.size === 0}
-              className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold px-4 py-2 shadow-2xs flex items-center gap-1.5">
+              className="bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-semibold px-4 py-2 shadow-2xs flex items-center gap-1.5">
               <HiOutlinePaperAirplane className="w-4 h-4 rotate-45" />
               {sending ? 'Assigning…' : `Assign (${selected.size})`}
             </Button>
@@ -860,6 +885,25 @@ export default function ExamSystem() {
     }
   };
 
+  // Exam → live quiz: a new Quiz Arena game with this exam's choice questions.
+  const [makingQuiz, setMakingQuiz] = useState(null);
+  const makeQuiz = async (exam) => {
+    const ok = await confirm(
+      `Create a Quiz Arena game from "${exam.title}"?\n\nIts multiple-choice, true/false and multiple-response questions (2 to 6 answers) are copied in with 20 seconds each. Other question types are left out. The exam itself is not changed.`,
+      { title: 'Make a live quiz', confirmLabel: 'Create quiz' },
+    );
+    if (!ok) return;
+    setMakingQuiz(exam.id);
+    try {
+      const { data } = await liveGameFromExam(exam.id);
+      toast.success(`Quiz created with ${data.added} question${data.added === 1 ? '' : 's'}${data.skipped ? ` (${data.skipped} left out)` : ''}.`);
+      navigate(`/admin/live/${data.id}/edit`);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Could not create the quiz.');
+      setMakingQuiz(null);
+    }
+  };
+
   // Admin view splits exams into airline-created vs IFOA-created; airline view
   // only ever has its own exams so it renders as one list.
   // "Deleted" filter shows only deleted exams; every other view hides them.
@@ -927,7 +971,12 @@ export default function ExamSystem() {
                   {exam.title}
                 </h2>
                 <div className="text-[11px] font-medium text-slate-400 mt-1 flex items-center gap-1.5 flex-wrap">
-                  <span>{exam.question_count ?? exam.questions?.length ?? 0} Questions · {exam.duration_minutes} Mins</span>
+                  <span>
+                    {exam.drawn_count && exam.drawn_count < exam.question_count
+                      ? <span title="Random draw: each candidate gets a different selection">{exam.drawn_count} of {exam.question_count} Questions</span>
+                      : <>{exam.question_count ?? exam.questions?.length ?? 0} Questions</>}
+                    {' · '}{exam.duration_minutes} Mins
+                  </span>
                   {isAdmin && exam.for_airline_name && (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-100 truncate max-w-full"
                       title={`This exam is for ${exam.for_airline_name}`}>
@@ -959,6 +1008,20 @@ export default function ExamSystem() {
                 >
                   {exam.status}
                 </Badge>
+              )}
+              {isAdmin && canAuthor && !airlineOwned && (
+                <SimpleTooltip label="Make a live quiz">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Make a live quiz"
+                    disabled={makingQuiz === exam.id}
+                    className="h-7 w-7 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors"
+                    onClick={() => makeQuiz(exam)}
+                  >
+                    <HiOutlineLightningBolt className="w-3.5 h-3.5" />
+                  </Button>
+                </SimpleTooltip>
               )}
               {(canAuthor || (deleted && canManage && can('exams.author'))) && (
                 <SimpleTooltip label={deleted ? 'Permanently delete exam data' : 'Delete exam'}>

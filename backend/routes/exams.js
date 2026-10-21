@@ -52,6 +52,10 @@ router.get('/attempts/export', examsController.exportAttempts);
 router.post('/attempts/bulk-delete', requirePermission('exams.author'), examsController.bulkDeleteAttempts);
 router.delete('/attempts/:attemptId', requirePermission('exams.author'), examsController.deleteAttempt);
 
+// ─── Live monitor: add time / submit one candidate's attempt ──────────────────
+router.post('/attempts/:attemptId/extend', requirePermission('exams.assign', 'exams.author'), examsController.extendAttempt);
+router.post('/attempts/:attemptId/force-submit', requirePermission('exams.assign', 'exams.author'), examsController.forceSubmitAttempt);
+
 router.get('/attempts/:attemptId', examsController.getAttempt);
 
 // ─── GET /exams/attempts/:attemptId/result — full result incl. correct answers ──
@@ -126,6 +130,10 @@ router.delete('/:id/candidates/:participantId', requirePermission('exams.assign'
 
 // ─── GET /exams/:id/analytics — admin: per-question miss rate + pass-rate over time ──
 router.get('/:id/analytics', examsController.getAnalytics);
+
+// ─── GET /exams/:id/live — who is taking the exam right now (live monitor) ─────
+router.get('/:id/live', requirePermission('exams.assign', 'exams.grade', 'exams.author'), examsController.liveMonitor);
+router.post('/:id/live/extend', requirePermission('exams.assign', 'exams.author'), examsController.extendAll);
 
 // ─── POST /exams/:id/attempts — start an attempt (airline, on behalf of a participant) ──
 router.post('/:id/attempts', examsController.startAttempt);

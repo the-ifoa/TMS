@@ -6,4 +6,5 @@ module.exports = {
   ...require('./exams/attempts'),
   ...require('./exams/authoring'),
   ...require('./exams/invites'),
+  ...require('./exams/monitor'),
 };

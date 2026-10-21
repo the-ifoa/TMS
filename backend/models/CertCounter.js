@@ -41,7 +41,7 @@ async function ensureCounter(code) {
   return CertCounter.findOneAndUpdate(
     { training_type: code },
     { $setOnInsert: { training_type: code, high_water: 0, floor: 0 } },
-    { upsert: true, returnDocument: 'after', new: true }
+    { upsert: true, returnDocument: 'after' }
   );
 }
 
@@ -120,7 +120,7 @@ async function reserveCertSequence(training_type) {
       const updateResult = await CertCounter.findOneAndUpdate(
         { training_type: code, high_water: { $lt: chosen } },
         { $set: { high_water: chosen } },
-        { upsert: true, returnDocument: 'after', new: true }
+        { upsert: true, returnDocument: 'after' }
       );
 
       if (!updateResult) {
@@ -200,7 +200,7 @@ async function reserveDhlCertSequence() {
       const updateResult = await CertCounter.findOneAndUpdate(
         { training_type: DHL_ST001_CODE, high_water: { $lt: chosen } },
         { $set: { high_water: chosen } },
-        { upsert: true, returnDocument: 'after', new: true }
+        { upsert: true, returnDocument: 'after' }
       );
 
       if (!updateResult) {
@@ -258,7 +258,7 @@ async function syncHighWater() {
     await CertCounter.findOneAndUpdate(
       { training_type: code, $or: [{ high_water: { $lt: maxSeq } }, { high_water: { $exists: false } }] },
       { $set: { high_water: maxSeq }, $setOnInsert: { training_type: code, floor: 0 } },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: 'after' }
     );
     console.log(`[cert] syncHighWater: ${code} high_water synced to ${maxSeq}`);
   }

@@ -13,11 +13,10 @@ import {
   HiOutlineClipboardCheck, HiOutlineChatAlt2, HiOutlinePlusCircle, HiOutlineUserAdd,
   HiOutlineHashtag, HiOutlinePencilAlt, HiOutlinePlay, HiOutlineFlag, HiOutlineCursorClick,
   HiOutlineXCircle, HiOutlineArrowsExpand, HiOutlineSwitchHorizontal, HiOutlineCog,
-  HiOutlineUsers, HiOutlineKey, HiOutlineBookOpen, HiOutlineCode,
+  HiOutlineUsers, HiOutlineKey, HiOutlineBookOpen, HiOutlineCode, HiOutlineShare, HiOutlineStar,
 } from 'react-icons/hi';
 import { FaPlaneDeparture } from 'react-icons/fa';
 import { useAuth } from '../context/AuthContext';
-import { SimpleTooltip } from '@/components/ui/tooltip';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 
 // ─── "How exams work" guide ───────────────────────────────────────────────────
@@ -333,6 +332,13 @@ const SYSTEM_TOPICS = [
           { n: 5, term: 'Bin icon', desc: 'Deletes the exam. It disappears from the list and its links stop working, but **its results are kept** for reports and dashboards. Choose **Deleted** in the status filter to find it and open its Results.' },
         ],
       },
+      {
+        list: [
+          { term: 'Delete permanently', icon: HiOutlineTrash, chip: 'rose', desc: 'The delete window has an option, **unticked by default**: *Also permanently delete all results, candidates and feedback*. Tick it to erase every attempt, score, certificate, invite and feedback response, and the temporary candidates added only for this exam. Permanent participant records are never removed. This cannot be undone.' },
+          { term: 'Later', desc: 'Not sure yet? Delete normally and keep the data. When it is no longer needed, choose **Deleted** in the status filter and click the bin icon on that exam to erase its data for good.' },
+          { term: 'Lightning icon', icon: HiOutlineLightningBolt, desc: '**Make a live quiz**: creates a Quiz Arena game from this exam\'s multiple-choice, true/false and multiple-response questions, 20 seconds each, and opens it in the quiz editor. The exam is not changed. IFOA exams only.', admin: true },
+        ],
+      },
       { h: 'Card buttons' },
       {
         list: [
@@ -389,11 +395,11 @@ const SYSTEM_TOPICS = [
           'Click **Assign** on a published exam.',
           'Expand an airline or department group, or search by name, email or airline.',
           'Tick the participants, or click **Select N** on a group to select everyone in it who has an email address. People without an email are greyed out.',
-          'Choose **Link valid for**: no expiry, 1 to 30 days, or **Until a date…**.',
+          'Pick the link expiry (the **Link:** box with the clock): no expiry, 1 to 30 days, or **Until a date…**.',
           'Click **Assign (N)**. The links are emailed straight away.',
         ],
       },
-      { example: { title: 'Link expiry', lines: ['You assign on **Monday at 10:00** with "Link valid for: **7 days**". The link works until the next Monday at 10:00. After that it shows "This exam link has expired" and the row gets a red **Expired** badge.'] } },
+      { example: { title: 'Link expiry', lines: ['You assign on **Monday at 10:00** with "Link: **7 days**". The link works until the next Monday at 10:00. After that it shows "This exam link has expired" and the row gets a red **Expired** badge.'] } },
       { h: 'Reading a participant row' },
       { mock: 'participantRow' },
       {
@@ -410,7 +416,7 @@ const SYSTEM_TOPICS = [
       { h: 'Adding people who aren\'t in the list' },
       {
         steps: [
-          'Click **Add participants**. Type a name and email on each row, or click **Paste a list**.',
+          'Click **Add people**. Type a name and email on each row, or click **Paste a list**.',
           'Choose the airline or department.',
           'Choose **Keep permanently** (saved for future exams and certificates) or **Only for this exam**.',
           'Click **Add & select**. They are ticked automatically, so then click **Assign**.',
@@ -460,7 +466,7 @@ const SYSTEM_TOPICS = [
       { h: 'When a candidate can\'t start' },
       {
         list: [
-          { term: 'Link expired', icon: HiOutlineClock, chip: 'rose', desc: 'The "Link valid for" time has passed. Reassign them to send a fresh link.' },
+          { term: 'Link expired', icon: HiOutlineClock, chip: 'rose', desc: 'The link expiry time has passed. Reassign them to send a fresh link.' },
           { term: 'Old link', icon: HiOutlineLink, chip: 'rose', desc: 'After a reassign, only the newest link works.' },
           { term: 'Outside the window', icon: HiOutlineCalendar, chip: 'amber', desc: 'The exam hasn\'t opened yet or has already closed. See the scheduling window in the exam settings.' },
           { term: 'Already passed', icon: HiOutlineCheckCircle, chip: 'green', desc: 'A candidate who has passed can\'t take it again until you **Reassign** them.' },
@@ -495,8 +501,25 @@ const SYSTEM_TOPICS = [
           { term: 'Export', icon: HiOutlineDownload, chip: 'outline', desc: 'Download as Excel, CSV, a PDF report or XML.' },
           { term: 'Reassign', icon: HiOutlineRefresh, chip: 'blue', desc: 'On a candidate row. Lets them take the exam again, even if they passed.' },
           { term: 'Violations', icon: HiOutlineShieldCheck, chip: 'rose', desc: 'Shows when a candidate left fullscreen, switched tabs or closed the window.' },
+          { term: 'Live', icon: HiOutlineEye, chip: 'outline', desc: 'Opens the **live monitor**: who is taking the exam right now. A green pulsing dot and a number mean people are taking it now.' },
         ],
       },
+      { h: 'Live monitor' },
+      { p: 'Watch an exam while it runs, for example during a classroom or remote session. It updates every 5 seconds.' },
+      {
+        list: [
+          { term: 'Progress', desc: 'Questions answered out of the candidate\'s total, and the question they are on now.' },
+          { term: 'Tabs & search', desc: '**In progress** shows who is taking it now, **Finished** who submitted in the last 2 hours. Search filters both by name.' },
+          { term: 'Connection', desc: 'When the candidate\'s exam page last checked in (it does every few seconds). **Active**: within 30 seconds. **Quiet**: within 2 minutes. **Disconnected**: longer, e.g. the window is closed or the device is offline. The attempt stays open and is submitted automatically when its time runs out.' },
+          { term: 'Time left', desc: 'Counts down live and turns red in the last 2 minutes. Shows any time you added.' },
+          { term: 'Integrity', desc: '**Clean**, or how many violations so far (out of the limit with lockdown) and the last one. Also shows how often the window was reopened.' },
+          { term: '⋯ menu', desc: 'On each candidate: **Add time** (+5, +10, +15, +30 or any number of minutes) or **Submit now**.' },
+          { term: 'Add time for all', icon: HiOutlinePlusCircle, chip: 'outline', desc: 'Top right: extra minutes for everyone taking it now, e.g. after a network problem. Each candidate\'s timer updates within about 10 seconds and they see a message.' },
+          { term: 'Submit now', chip: 'rose', desc: 'Submits the attempt with the answers saved so far, and marks it. The candidate\'s screen closes within about 10 seconds with "submitted by the exam administrator". The result shows **Submitted by staff**. Cannot be undone.' },
+          { term: 'Finished', desc: 'Who finished in the last 2 hours: when, how long they took, their result, and whether they were auto-submitted (too many violations, window closed, or by staff).' },
+        ],
+      },
+      { tip: 'Adding time and submitting need the assign or author permission. Others can watch only.' },
       { h: 'Grading essays and short answers' },
       {
         steps: [
@@ -538,6 +561,15 @@ const SYSTEM_TOPICS = [
           'Download every response as a **PDF** report.',
         ],
       },
+      { h: 'Deleting responses' },
+      {
+        list: [
+          { term: 'One response', icon: HiOutlineTrash, desc: 'In **Responses → Participants**, click the bin icon on the row, or open the response and click **Delete response**.' },
+          { term: 'Several at once', icon: HiOutlineCheckCircle, desc: 'Tick the rows (or **Select all**) and click **Delete (n)**.' },
+          { term: 'From the dashboard', icon: HiOutlineChartBar, desc: 'On the Feedback dashboard, click any comment to open that response. It opens in its exam\'s Feedback window, or, for imported feedback and deleted exams, in a window with its own **Delete response** button.' },
+        ],
+      },
+      { warn: 'A deleted response is removed from every chart and total and its link stops working. You can send the form to that person again.' },
       { example: { title: 'After a classroom course', lines: ['Once the exam is done, send the form to all 12 participants. Eight reply within two days. Resend it to the other four, then download the PDF for the course file.'] } },
     ],
   },
@@ -738,6 +770,7 @@ const BUILDER_TOPICS = [
           { term: 'Pass %', icon: HiOutlineCheckCircle, desc: 'The percentage needed to pass.' },
           { term: 'Max attempts', icon: HiOutlineRefresh, desc: 'How many times each candidate may take the exam. You can give someone an extra attempt later with **Reassign**.' },
           { term: 'Shuffle', icon: HiOutlineSwitchHorizontal, desc: 'Shows the questions in a different random order for each candidate.' },
+          { term: 'Random question draw', icon: HiOutlineCollection, desc: 'Each candidate gets a different random selection of questions, so colleagues from the same airline can\'t share answers. Tick it, then set how many to draw from each section (and from questions without a section), e.g. **10 of 25** Air Law and **5 of 12** Met. The card then shows e.g. **15 of 37 Questions**. Works together with Shuffle. Make sure the questions in a section are worth the same and are equally hard, so every candidate gets a fair paper.' },
         ],
       },
       { example: { title: 'Pass mark', lines: ['20 questions worth 1 point each, with Pass % set to `75`. A candidate needs **15 out of 20** to pass. 14 out of 20 (70%) is a fail.'] } },
@@ -934,7 +967,7 @@ const LIVE_TOPICS = [
     title: 'How it works',
     icon: HiOutlineBookOpen,
     blocks: [
-      { lead: 'Quiz Arena is a live quiz played together, like Kahoot. You show the questions on a big screen, and everyone answers on their phone against the clock.' },
+      { lead: 'Quiz Arena is a live quiz played together, like Kahoot. You show the questions on a big screen, and everyone answers on their phone against the clock. Play solo, or split the room into **teams**.' },
       {
         flow: [
           { icon: HiOutlinePlusCircle, label: 'Build', note: 'Questions & timers' },
@@ -950,6 +983,7 @@ const LIVE_TOPICS = [
           'Click **New game**, add your questions, set a timer for each and save.',
           'Click **Host** on the game\'s card. A full-screen lobby opens with a **6-digit PIN**, an invite link and a **QR code**. Put it on the projector.',
           'Players open the link, scan the code, or go to **/play** and type the PIN. They pick a nickname and an avatar. No account is needed.',
+          'Optional: under **Teams**, pick 2 to 6 teams for a team game. Players choose their team, or the game spreads them out evenly.',
           'When everyone is in, click **Start game**. Each question shows on the big screen and on every phone at the same moment.',
           'After each question you see the right answer and how the room voted, then the **Leaderboard**.',
           'After the last question the **podium** shows the top three, with full standings for everyone.',
@@ -998,6 +1032,7 @@ const LIVE_TOPICS = [
         list: [
           { term: 'Edit', icon: HiOutlinePencil, chip: 'outline', desc: 'Change the questions, timers and icon. A game that is already running is not affected.' },
           { term: 'Results', icon: HiOutlineChartBar, chip: 'outline', desc: 'Opens **Past games**: every time this game was hosted, with the winner.' },
+          { term: 'Cap icon', icon: HiOutlineAcademicCap, desc: '**Turn into an exam**: creates a draft exam from this game\'s questions and opens it in the exam builder. See **Quiz ↔ exam**.' },
           { term: 'Bin icon', icon: HiOutlineTrash, desc: 'Deletes the game. It cannot be hosted again.' },
         ],
       },
@@ -1034,7 +1069,8 @@ const LIVE_TOPICS = [
           { term: 'Points', desc: '**Standard** (up to 1000), **Double** (up to 2000) for a key question, or **None** for practice.' },
           { term: 'Arrange', icon: HiOutlineSelector, desc: 'Move a question up or down, duplicate it, or delete it.' },
           { term: 'Game tab', icon: HiOutlineCog, desc: 'Title, description and the cover icon shown on the card, the host screen and the players\' phones.' },
-          { term: 'Import', icon: HiOutlineDocumentDuplicate, chip: 'outline', desc: '**From an exam** copies the multiple-choice, true/false and multiple-response questions of an IFOA exam. **From question bank** lets you pick questions from a bank, filtered by topic, difficulty or search. Other question types are greyed out with the reason. Each imported question gets 20 seconds.' },
+          { term: 'Shuffle answers on each phone', icon: HiOutlineSwitchHorizontal, desc: 'In the Game tab under **Gameplay**. Every player sees the answers in a different order, so neighbours can\'t copy by position. The big screen keeps your order, and the answer letters are hidden on phones (they would not match the screen). True/false is never shuffled. A player keeps the same order if they reload.' },
+          { term: 'Import', icon: HiOutlineDocumentDuplicate, chip: 'outline', desc: '**From an exam** adds the multiple-choice, true/false and multiple-response questions of an IFOA exam to this game (the **Make a live quiz** icon on an exam card does the same as a brand-new game). **From question bank** lets you pick questions from a bank, filtered by topic, difficulty or search. Other question types are greyed out with the reason. Each imported question gets 20 seconds.' },
         ],
       },
       { tip: 'The number of issues in the top bar shows how many questions still need fixing. When it says **Ready to save**, everything is filled in.' },
@@ -1051,8 +1087,11 @@ const LIVE_TOPICS = [
         list: [
           { term: 'PIN & QR code', icon: HiOutlineHashtag, desc: 'Players type the PIN at **/play** or scan the code. Names appear as they join.' },
           { term: 'Copy invite link', icon: HiOutlineLink, chip: 'outline', desc: 'Copies the direct join link, to paste into a chat or a Teams meeting.' },
+          { term: 'Share QR', icon: HiOutlineShare, chip: 'outline', desc: 'Makes an image with the game\'s title, QR code, PIN and join address, and opens your device\'s share menu (WhatsApp, Teams, email…). Where sharing isn\'t available, the image downloads instead.' },
+          { term: 'Download QR', icon: HiOutlineDownload, chip: 'outline', desc: 'Saves the same image as a PNG, to print or attach.' },
           { term: 'Remove a player', icon: HiOutlineXCircle, desc: 'Click a player\'s name to remove them, for example for a rude nickname.' },
           { term: 'Lock', icon: HiOutlineLockClosed, desc: 'Stops new players joining. Click again to unlock.' },
+          { term: 'Teams', icon: HiOutlineUserGroup, desc: '**Solo** or **2 to 6** teams, chosen before you start. See **Team mode**.' },
           { term: 'Full screen', icon: HiOutlineArrowsExpand, desc: 'Hides the browser bars for the projector.' },
           { term: 'Start game', icon: HiOutlinePlay, chip: 'dark', desc: 'Begins the first question. At least one player must have joined.' },
         ],
@@ -1092,6 +1131,8 @@ const LIVE_TOPICS = [
         steps: [
           'Open the invite link, scan the QR code, or go to **/play** and type the 6-digit PIN.',
           'Choose an avatar and type a nickname of 2 to 24 characters. Each nickname can be used only once per game.',
+          'In a team game where players choose, tap a **team** too. It can be changed in the lobby until the game starts.',
+          'In a **Captain answers** game, only the team captain can tap. Everyone else sees the question and helps decide.',
           'Wait in the lobby. Players can send reactions that float up on the big screen.',
           'When a question opens, tap an answer. For **Pick all that apply**, tap every right answer, then **Submit Answer**.',
           'After each question the phone shows whether they were right, the points won, and their current place.',
@@ -1101,11 +1142,95 @@ const LIVE_TOPICS = [
       {
         list: [
           { term: 'One answer per question', desc: 'The first tap counts. It can\'t be changed, even after reloading the page.' },
+          { term: 'Shuffled answers', desc: 'If the game shuffles answers, each phone has its own order and no letters. Players read the answer text, not the position on the screen.' },
           { term: 'Joining late', desc: 'A player can join mid-game (unless the lobby is locked) and starts from the current question.' },
           { term: 'Reload or lost signal', desc: 'The phone remembers the player. Reloading, or losing signal for a moment, puts them straight back in.' },
           { term: 'Removed', desc: 'A player removed by the host sees a message and can\'t answer any more.' },
         ],
       },
+    ],
+  },
+  {
+    id: 'teams',
+    title: 'Team mode',
+    icon: HiOutlineUserGroup,
+    blocks: [
+      { lead: 'Split the room into groups that play against each other. Everyone still answers on their own phone; their points count for their team.' },
+      {
+        steps: [
+          'Click **Host**. In the lobby, under **Teams**, pick **2**, **3**, **4**, **5** or **6** (**Solo** turns teams off).',
+          'Choose how players get a team: **Players choose** (they pick on their phone when joining, and can switch while in the lobby) or **Auto-balance** (the game deals everyone out evenly in joining order).',
+          'Choose who answers: **Everyone answers** (each player answers on their own phone) or **Captain answers** (see below).',
+          'Click a team\'s name to rename it, for example **Dispatch A** and **Dispatch B**. Press Enter to save.',
+          'Players appear in their team\'s column. Click the **arrows** next to a name to move that player to the next team, or the name itself to remove them.',
+          'Click **Start game**. Anyone who hasn\'t picked a team is put in the smallest one. Teams are fixed from now on.',
+        ],
+      },
+      { h: 'Captain answers' },
+      { p: 'Like a crew making a decision: the team talks it over, and one person commits the answer. Closest to real crew resource management.' },
+      {
+        list: [
+          { term: 'Captain', icon: HiOutlineStar, desc: 'The first player to join each team, unless you pick someone else: click the **crown** next to a player in the lobby. Gold crown = captain. If the captain leaves or is removed, the next player who joined takes over.' },
+          { term: 'Phones', desc: 'Everyone sees the question and answers so they can discuss, but only the captain can tap. Teammates see who is answering for them.' },
+          { term: 'Scoring', desc: 'The captain\'s answer, and its speed, counts for **every** player in the team. The question ends early once every team has answered.' },
+          { term: 'Big screen', desc: 'Shows **Teams answered** instead of players, and a **Captains answer** label.' },
+        ],
+      },
+      { h: 'How teams score' },
+      {
+        list: [
+          { term: 'Team score', desc: 'The **average** points of the team\'s players, so a team of 3 can beat a team of 6. Ties go to the higher total.' },
+          { term: 'Leaderboard', icon: HiOutlineChartBar, desc: 'After each question the big screen shows the team standings, with the average each team just earned, then the top 3 players.' },
+          { term: 'Phones', desc: 'Each player sees their team colour, where their team stands and their own place.' },
+          { term: 'Podium', desc: 'The winning team is announced, with the full team standings, the top three players, and a **Team** column in the final standings.' },
+        ],
+      },
+      {
+        example: {
+          title: 'Two classroom groups',
+          lines: [
+            'You pick **2** teams with **Players choose** and rename them **Morning** and **Afternoon**.',
+            'Morning has 6 players scoring 4,800 in total (**800** average); Afternoon has 4 players scoring 3,600 (**900** average).',
+            '**Afternoon wins**: fewer players, but a better average.',
+          ],
+        },
+      },
+      { tip: 'Late joiners are placed in a team too: their choice if players choose, otherwise the smallest team.' },
+    ],
+  },
+  {
+    id: 'convert',
+    title: 'Quiz ↔ exam',
+    icon: HiOutlineSwitchHorizontal,
+    blocks: [
+      { lead: 'Reuse the same questions both ways: play an exam\'s questions as a live quiz, or turn a quiz into a proper exam.' },
+      { h: 'Exam → live quiz' },
+      {
+        steps: [
+          'In the Exam System, click the **lightning** icon on an IFOA exam card (**Make a live quiz**).',
+          'A new game is created with the exam\'s multiple-choice, true/false and multiple-response questions (2 to 6 answers), 20 seconds each, and opens in the quiz editor.',
+          'Adjust timers or points and **Save**. Other question types (written answers, matching, etc.) are left out.',
+        ],
+      },
+      { p: 'To add an exam\'s questions to a game you already have, use **Import → From an exam** in the quiz editor.' },
+      { h: 'Live quiz → exam' },
+      {
+        steps: [
+          'On a game card here, click the **cap** icon (**Turn into an exam**).',
+          'A **draft** exam is created and opens in the exam builder.',
+          'Choose the exam\'s **For airline**, check the duration (about a minute per question) and pass mark, then save and **Publish**.',
+        ],
+      },
+      {
+        list: [
+          { term: 'Quiz', chip: 'blue', desc: 'Becomes **multiple choice**.' },
+          { term: 'True or false', chip: 'blue', desc: 'Stays **true / false**.' },
+          { term: 'Pick all that apply', chip: 'violet', desc: 'Becomes **multiple response**.' },
+          { term: 'Poll', chip: 'slate', desc: '**Left out**: it has no right answer.' },
+          { term: 'Points', desc: 'Standard = 1 mark, Double = 2 marks. Pictures and the **shuffle answers** setting are kept (both ways).' },
+        ],
+      },
+      { tip: 'Converting never changes the original. The quiz and the exam are separate copies from then on.' },
     ],
   },
   {
@@ -1120,6 +1245,7 @@ const LIVE_TOPICS = [
           { term: 'Double points', desc: 'Everything on that question counts **×2**.' },
           { term: 'Streak bonus', desc: '**+100** for each right answer in a row after the first, up to **+500**. A wrong or missed answer resets the streak. Polls don\'t affect it.' },
           { term: 'Ties', desc: 'With equal scores, the player who answered faster overall ranks higher.' },
+          { term: 'Teams', icon: HiOutlineUserGroup, desc: 'In team mode a team\'s score is the **average** of its players\' points. See **Team mode**.' },
         ],
       },
       {
@@ -1143,7 +1269,8 @@ const LIVE_TOPICS = [
       {
         list: [
           { term: 'Podium', desc: 'The top three, with how many they got right, average time and best streak.' },
-          { term: 'Final standings', desc: 'Every player\'s rank, score, correct answers, accuracy, average time and streak.' },
+          { term: 'Final standings', desc: 'Every player\'s rank, score, correct answers, accuracy, average time and streak, plus their team in a team game.' },
+          { term: 'Team standings', icon: HiOutlineUserGroup, desc: 'In a team game, the winning team and every team\'s average score.' },
           { term: 'Play again', icon: HiOutlineRefresh, chip: 'dark', desc: 'Hosts the same game again with a new PIN.' },
         ],
       },
@@ -1170,7 +1297,11 @@ const LIVE_TOPICS = [
           { term: 'The timer is still running', desc: 'Someone hasn\'t answered yet. Wait, or click **Show answer early**.' },
           { term: 'I closed the host tab', desc: 'Open **Results** on the game\'s card and click the **Live** game to resume it.' },
           { term: 'I edited the game mid-play', desc: 'The running game keeps the questions it started with. Your changes apply the next time you host it.' },
-          { term: 'Is it the same as an exam?', desc: 'No. Quiz Arena scores are for fun and engagement. They don\'t create exam results or certificates.' },
+          { term: 'Is it the same as an exam?', desc: 'No. Quiz Arena scores are for fun and engagement. They don\'t create exam results or certificates. To assess people formally, use the **cap** icon to turn the quiz into an exam.' },
+          { term: 'A teammate can\'t answer', desc: 'In a **Captain answers** game only the captain can. Make someone else captain with the crown in the lobby, or switch to **Everyone answers** before you start.' },
+          { term: 'Teams are uneven', desc: 'That\'s fine: teams are ranked on average points per player. Use **Auto-balance** or the arrows in the lobby to even them out.' },
+          { term: 'A player can\'t change team', desc: 'Teams are fixed once the game starts, and only **Players choose** lets players switch. You can still move them with the arrows in the lobby.' },
+          { term: 'Some exam questions are missing in my quiz', desc: 'Only multiple-choice, true/false and multiple-response questions with 2 to 6 answers can be played live.' },
         ],
       },
     ],
@@ -1299,13 +1430,14 @@ const topicText = (t) => [
   ]),
 ].filter(Boolean).join(' ').toLowerCase();
 
-export default function ExamHelpButton({ guide = 'system', className = '' }) {
+// topic: the topic id to open on (defaults to the guide's first topic).
+export default function ExamHelpButton({ guide = 'system', topic = null, className = '' }) {
   const { isAdmin } = useAuth();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const { title, topics: allTopics } = GUIDES[guide];
   const topics = useMemo(() => forViewer(allTopics, isAdmin), [allTopics, isAdmin]);
-  const [activeId, setActiveId] = useState(topics[0]?.id);
+  const [activeId, setActiveId] = useState(topics.some((t) => t.id === topic) ? topic : topics[0]?.id);
 
   const q = query.trim().toLowerCase();
   const visible = q ? topics.filter((t) => topicText(t).includes(q)) : topics;
@@ -1317,16 +1449,14 @@ export default function ExamHelpButton({ guide = 'system', className = '' }) {
 
   return (
     <>
-      <SimpleTooltip label="How this works">
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          aria-label="How this works"
-          className={`h-8 w-8 inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 shadow-2xs transition-colors flex-shrink-0 ${className}`}
-        >
-          <HiOutlineInformationCircle className="w-[18px] h-[18px]" />
-        </button>
-      </SimpleTooltip>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label="How this works"
+        className={`h-8 w-8 inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 shadow-2xs transition-colors flex-shrink-0 ${className}`}
+      >
+        <HiOutlineInformationCircle className="w-[18px] h-[18px]" />
+      </button>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent hideClose className="max-w-5xl w-[94vw] h-[88vh] max-h-[800px] flex flex-col p-0 gap-0 overflow-hidden rounded-2xl border border-slate-200/80 shadow-2xl bg-white">

@@ -4,14 +4,14 @@ const ExamInvite = require('../models/ExamInvite');
 const { sanitizeQuestionForTaking } = require('../services/examGrading');
 const {
   schedulingError, closeOpenAttempts, lockedFeedback, attemptCycleFilter, SAVE_PROJECTION,
-  attemptDeadlinePassed, saveAnswers, submitAttemptOnce, recordViolation, checkAnswerAtomic, shuffle,
+  attemptDeadlinePassed, saveAnswers, submitAttemptOnce, recordViolation, checkAnswerAtomic, buildSnapshot, drawnQuestionCount, submittedRefusal,
 } = require('../services/examAttemptFlow');
 
 // Exam fields each kind of request needs. Autosaves arrive every few seconds
 // from every candidate, so they must not pull the full question list (or the
 // assignment list, which grows with every candidate) out of the database.
 const EXAM_FIELDS = {
-  landing: 'title description duration_minutes max_attempts questions._id lockdown_enabled allow_tab_switch limit_window_closes max_window_closes pass_percentage opens_at closes_at instant_feedback status',
+  landing: 'title description duration_minutes max_attempts questions._id questions.section section_settings lockdown_enabled allow_tab_switch limit_window_closes max_window_closes pass_percentage opens_at closes_at instant_feedback status',
   start: '-assignments -airline_visibility',
   light: 'status duration_minutes instant_feedback max_violations allow_tab_switch show_review',
 };
@@ -152,7 +152,7 @@ exports.getLandingInfo = async (req, res) => {
         description: exam.description,
         duration_minutes: exam.duration_minutes,
         max_attempts: exam.max_attempts,
-        question_count: exam.questions.length,
+        question_count: drawnQuestionCount(exam), // with a random draw: how many each candidate gets
         lockdown_enabled: exam.lockdown_enabled,
         allow_tab_switch: !!exam.allow_tab_switch,
         limit_window_closes: !!exam.limit_window_closes,
@@ -204,7 +204,7 @@ exports.startAttempt = async (req, res) => {
         : await ExamAttempt.findOneAndUpdate(
           { _id: summary.active._id, status: 'in_progress' },
           { $push: { window_closes: { at: new Date() } }, $inc: { window_close_count: 1 } },
-          { new: true }
+          { returnDocument: 'after' }
         );
     }
     if (attempt && exam.limit_window_closes && attempt.window_close_count > (exam.max_window_closes ?? 0)) {
@@ -227,8 +227,7 @@ exports.startAttempt = async (req, res) => {
       if (priorTotal >= attemptCapFor(exam, invite)) {
         return res.status(400).json({ error: 'You have used all your attempts for this exam.' });
       }
-      let questions = exam.questions.map((q) => q.toObject());
-      if (exam.shuffle_questions) questions = shuffle(questions);
+      const questions = buildSnapshot(exam); // random draw + shuffle, per the exam's settings
 
       try {
         attempt = await ExamAttempt.create({
@@ -287,12 +286,12 @@ exports.startAttempt = async (req, res) => {
 };
 
 // Shared by the single-answer and batch autosave endpoints.
-async function saveForAttempt(req, res, answers, timers) {
+async function saveForAttempt(req, res, answers, timers, position = null) {
   const attempt = await loadOwnAttempt(req, res, SAVE_PROJECTION);
   if (!attempt) return null;
-  if (attempt.status !== 'in_progress') { res.status(400).json({ error: 'This attempt is already submitted.', submitted: true }); return null; }
+  if (attempt.status !== 'in_progress') { res.status(400).json(submittedRefusal(attempt)); return null; }
   if (attemptDeadlinePassed(attempt, req.exam)) { res.status(400).json({ error: 'Time is up for this exam.', time_up: true }); return null; }
-  return saveAnswers(attempt, answers, timers);
+  return saveAnswers(attempt, answers, timers, position);
 }
 
 // ─── PUT /public-exam/:token/attempts/:attemptId/answer — autosave one answer ──
@@ -316,9 +315,9 @@ exports.saveAnswer = async (req, res) => {
 // One request (and one database write) per autosave tick instead of one per answer.
 exports.saveAnswers = async (req, res) => {
   try {
-    const { answers = [], timers = null } = req.body || {};
+    const { answers = [], timers = null, position = null } = req.body || {};
     if (!Array.isArray(answers) || answers.length > 500) return res.status(400).json({ error: 'Invalid answers.' });
-    const result = await saveForAttempt(req, res, answers, timers);
+    const result = await saveForAttempt(req, res, answers, timers, Number.isInteger(position) ? position : null);
     if (!result) return;
     res.json({ ok: true, ...result });
   } catch (err) {

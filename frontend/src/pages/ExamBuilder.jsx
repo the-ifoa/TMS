@@ -875,6 +875,18 @@ export default function ExamBuilder() {
   const questionSectionNames = [...new Set(exam.questions.map((q) => q.section).filter(Boolean))];
   const orderedSectionNames = [...(exam.sections || []), ...questionSectionNames.filter((n) => !(exam.sections || []).includes(n))];
   const groupFor = (name) => exam.questions.map((q, idx) => ({ q, idx })).filter(({ q }) => (q.section || '') === name);
+  // Random draw buckets: every section that has questions, plus ungrouped ('').
+  const drawBuckets = [
+    ...orderedSectionNames.filter((n) => groupFor(n).length),
+    ...(exam.questions.some((q) => !(q.section || '')) ? [''] : []),
+  ].map((name) => {
+    const size = groupFor(name).length;
+    const draw = getSectionSetting(name).draw_count ?? null;
+    return { name, size, draw: draw == null ? null : Math.min(draw, size) }; // above the size = all of them
+  });
+  const drawOn = drawBuckets.some((b) => b.draw != null);
+  const drawnTotal = drawBuckets.reduce((t, b) => t + Math.min(b.size, b.draw ?? b.size), 0);
+  const setDrawOn = (on) => drawBuckets.forEach((b) => setSectionSetting(b.name, { draw_count: on ? b.size : null }));
   const ungroupedItems = groupFor('');
 
   const save = async () => {
@@ -1237,6 +1249,46 @@ export default function ExamBuilder() {
                   </div>
                 </div>
               </div>
+
+              {/* Random question draw */}
+              {exam.questions.length > 1 && (
+                <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3.5 space-y-3">
+                  <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                    <Checkbox checked={drawOn} onCheckedChange={(checked) => setDrawOn(!!checked)} className="mt-0.5" />
+                    <div className="space-y-0.5 min-w-0">
+                      <span className="font-bold text-slate-900 text-xs block">Random question draw</span>
+                      <span className="text-[11px] text-slate-500 leading-snug block font-medium">
+                        Each candidate gets a different random selection, so colleagues can&apos;t share answers.
+                      </span>
+                    </div>
+                  </label>
+                  {drawOn && (
+                    <div className="pt-2 border-t border-slate-200/60 space-y-2">
+                      {drawBuckets.map((b) => (
+                        <div key={b.name || '__ungrouped'} className="flex items-center gap-2">
+                          <span className="flex-1 min-w-0 truncate text-[11px] font-semibold text-slate-700">{b.name || (drawBuckets.length > 1 ? 'Ungrouped questions' : 'Questions')}</span>
+                          <Input
+                            type="number"
+                            min="1"
+                            max={b.size}
+                            aria-label={`Questions per candidate from ${b.name || 'ungrouped questions'}`}
+                            value={b.draw ?? b.size}
+                            onChange={(e) => setSectionSetting(b.name, { draw_count: e.target.value === '' ? b.size : Math.max(1, Math.min(b.size, Math.round(Number(e.target.value)) || 1)) })}
+                            className="w-16 h-8 text-xs bg-white rounded-lg text-center"
+                          />
+                          <span className="text-[11px] text-slate-500 whitespace-nowrap">of {b.size}</span>
+                        </div>
+                      ))}
+                      <p className="text-[11px] font-semibold text-slate-700">
+                        Each candidate answers {drawnTotal} of {exam.questions.length} questions.
+                      </p>
+                      <span className="block text-[10px] text-slate-400 font-semibold">
+                        Make sure every question is worth the same, or that each section is balanced, so all candidates get a fair paper.
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Lockdown Settings Panel */}
               <div className="pt-2 border-t border-slate-100">

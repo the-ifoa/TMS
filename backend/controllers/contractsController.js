@@ -173,7 +173,7 @@ exports.sendContract = async (req, res) => {
           message:     message || '',
           sentAt:      new Date(),
         },
-        { upsert: true, new: true }
+        { upsert: true, returnDocument: 'after' }
       );
     }
 

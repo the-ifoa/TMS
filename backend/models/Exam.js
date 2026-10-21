@@ -217,6 +217,9 @@ const examSchema = new mongoose.Schema(
         name:         { type: String, default: '' },
         time_minutes: { type: Number, default: null },
         weight:       { type: Number, default: null },
+        // Random draw: each candidate gets this many questions picked at random
+        // from the section (null = all of them). '' is the ungrouped bucket.
+        draw_count:   { type: Number, default: null },
       },
     ],
 

@@ -756,7 +756,7 @@ exports.updateNdgScore = async (req, res) => {
     const doc = await Participant.findByIdAndUpdate(
       req.params.id,
       { ndg_score: score },
-      { new: true }
+      { returnDocument: 'after' }
     );
     if (!doc) return res.status(404).json({ error: 'Participant not found' });
     res.json(doc);
@@ -785,7 +785,7 @@ exports.updateFdrHours = async (req, res) => {
     const doc = await Participant.findByIdAndUpdate(
       req.params.id,
       { fdr_hours: hours },
-      { new: true }
+      { returnDocument: 'after' }
     );
     if (!doc) return res.status(404).json({ error: 'Participant not found' });
     res.json(doc);
@@ -808,7 +808,7 @@ exports.updateCertSequence = async (req, res) => {
     const doc = await Participant.findByIdAndUpdate(
       req.params.id,
       { cert_sequence: Number(cert_sequence) },
-      { new: true }
+      { returnDocument: 'after' }
     );
     if (!doc) return res.status(404).json({ error: 'Participant not found' });
     res.json(doc);
@@ -960,7 +960,7 @@ exports.updateValidity = async (req, res) => {
     const { cert_validity } = req.body;
     const allowed = ['12', '24', '36', 'Unlimited'];
     if (!allowed.includes(cert_validity)) return res.status(400).json({ error: 'Invalid validity value' });
-    const doc = await Participant.findByIdAndUpdate(req.params.id, { cert_validity }, { new: true });
+    const doc = await Participant.findByIdAndUpdate(req.params.id, { cert_validity }, { returnDocument: 'after' });
     if (!doc) return res.status(404).json({ error: 'Participant not found' });
     res.json(doc);
   } catch (err) {

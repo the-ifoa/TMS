@@ -22,6 +22,7 @@ const livePlayerSchema = new mongoose.Schema(
     nickname:   { type: String, required: true, maxlength: 24 },
     nickname_key: { type: String, required: true }, // lower-cased, for uniqueness
     avatar:     { type: String, default: 'plane', maxlength: 16 }, // icon key (frontend liveUi AVATAR_ICONS)
+    team:       { type: String, default: '' }, // team key in team mode (LiveSession.teams), else ''
     token:      { type: String, required: true },
 
     score:         { type: Number, default: 0 },

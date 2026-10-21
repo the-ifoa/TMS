@@ -11,6 +11,7 @@ router.get('/:code', live.publicInfo);
 router.post('/:code/join', live.join);
 router.get('/:code/state', live.playerState);
 router.post('/:code/answer', live.answer);
+router.post('/:code/team', live.chooseTeam);
 router.post('/:code/react', live.react);
 
 module.exports = router;

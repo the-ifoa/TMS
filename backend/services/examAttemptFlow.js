@@ -16,6 +16,55 @@ function shuffle(list) {
   return out;
 }
 
+// When an attempt's time runs out (ms), or null for an untimed exam. Time an
+// admin added from the live monitor (extra_seconds) counts on top.
+function attemptDeadlineMs(attempt, durationMinutes) {
+  if (!(durationMinutes > 0)) return null;
+  return new Date(attempt.started_at).getTime() + durationMinutes * 60000 + (attempt.extra_seconds || 0) * 1000;
+}
+
+// ── Random question draw ──────────────────────────────────────────────────────
+// A section (or the ungrouped '' bucket) with a draw_count gives each candidate
+// that many of its questions, picked at random; the others give all of theirs.
+// A count at or above the section's size (e.g. after questions were deleted)
+// simply means all of them.
+// Picked questions keep the exam's order unless questions are shuffled anyway.
+const bucketOf = (q) => q.section || '';
+function drawCounts(exam) {
+  const out = {};
+  (exam.section_settings || []).forEach((s) => {
+    if (s && s.draw_count != null && s.draw_count > 0) out[s.name || ''] = Math.floor(s.draw_count);
+  });
+  return out;
+}
+
+// How many questions each candidate gets.
+function drawnQuestionCount(exam) {
+  const draw = drawCounts(exam);
+  const sizes = {};
+  (exam.questions || []).forEach((q) => { sizes[bucketOf(q)] = (sizes[bucketOf(q)] || 0) + 1; });
+  return Object.entries(sizes).reduce((t, [name, size]) => t + Math.min(size, draw[name] ?? size), 0);
+}
+
+// The questions copied into a new attempt: drawn, then shuffled if enabled.
+function buildSnapshot(exam) {
+  const all = (exam.questions || []).map((q) => (q.toObject ? q.toObject() : { ...q }));
+  const draw = drawCounts(exam);
+  let picked = all;
+  if (Object.keys(draw).length) {
+    const keep = new Set();
+    const groups = {};
+    all.forEach((q) => { (groups[bucketOf(q)] ||= []).push(q); });
+    Object.entries(groups).forEach(([name, list]) => {
+      const n = draw[name];
+      const chosen = n != null && n < list.length ? shuffle(list).slice(0, n) : list;
+      chosen.forEach((q) => keep.add(q));
+    });
+    picked = all.filter((q) => keep.has(q));
+  }
+  return exam.shuffle_questions ? shuffle(picked) : picked;
+}
+
 // Returns an error message if the exam isn't open for new attempts right now,
 // or null if it's fine to start one. Only gates NEW attempts — an attempt
 // already in progress is unaffected by closes_at passing mid-way.
@@ -102,13 +151,13 @@ async function finalizeAttempt(attempt) {
 async function closeOpenAttempts(exam, participantId, { onlyExpired = false } = {}) {
   const ExamAttempt = require('../models/ExamAttempt');
   const open = await ExamAttempt.find({ exam_id: exam._id, participant_id: participantId, status: 'in_progress' })
-    .select('_id started_at').lean();
+    .select('_id started_at extra_seconds').lean();
   const now = Date.now();
   let closed = 0;
   for (const attempt of open) {
     if (onlyExpired) {
-      if (!(exam.duration_minutes > 0)) continue;
-      const deadline = new Date(attempt.started_at).getTime() + exam.duration_minutes * 60000;
+      const deadline = attemptDeadlineMs(attempt, exam.duration_minutes);
+      if (deadline == null) continue;
       if (now < deadline + LATE_SAVE_GRACE_MS) continue; // grace for a final autosave/submit
     }
     const res = await submitAttemptOnce(attempt._id);
@@ -124,7 +173,7 @@ async function closeOpenAttempts(exam, participantId, { onlyExpired = false } = 
 async function closeExpiredAttempts() {
   const ExamAttempt = require('../models/ExamAttempt');
   const ExamInvite = require('../models/ExamInvite');
-  const open = await ExamAttempt.find({ status: 'in_progress' }).select('_id exam_id started_at').lean();
+  const open = await ExamAttempt.find({ status: 'in_progress' }).select('_id exam_id started_at extra_seconds').lean();
   if (!open.length) return 0;
   const exams = await Exam.find({ _id: { $in: [...new Set(open.map((a) => String(a.exam_id)))] } })
     .select('duration_minutes').lean();
@@ -132,9 +181,9 @@ async function closeExpiredAttempts() {
   const now = Date.now();
   let closed = 0;
   for (const a of open) {
-    const mins = minutes.get(String(a.exam_id));
-    if (!(mins > 0)) continue; // untimed exam: nothing expires
-    if (now < new Date(a.started_at).getTime() + mins * 60000 + LATE_SAVE_GRACE_MS) continue;
+    const deadline = attemptDeadlineMs(a, minutes.get(String(a.exam_id)));
+    if (deadline == null) continue; // untimed exam: nothing expires
+    if (now < deadline + LATE_SAVE_GRACE_MS) continue;
     const res = await submitAttemptOnce(a._id);
     if (!res || res.alreadySubmitted) continue;
     await ExamInvite.updateMany(
@@ -199,12 +248,18 @@ function attemptCycleFilter(examId, participantId, invite) {
 }
 
 // What saveAnswers needs from the attempt — never the full question payloads.
-const SAVE_PROJECTION = 'status exam_id participant_id airline_id started_at questions_snapshot._id questions_snapshot.type answers.question_id answers.locked';
+const SAVE_PROJECTION = 'status auto_submit_reason exam_id participant_id airline_id started_at extra_seconds questions_snapshot._id questions_snapshot.type answers.question_id answers.locked';
+
+// The refusal an autosave gets once the attempt is no longer open.
+function submittedRefusal(attempt) {
+  return attempt.auto_submit_reason === 'admin'
+    ? { error: 'Your exam was submitted by the exam administrator.', submitted: true, by_admin: true }
+    : { error: 'This attempt has already been submitted.', submitted: true };
+}
 
 function attemptDeadlinePassed(attempt, exam) {
-  if (!exam || !(exam.duration_minutes > 0)) return false;
-  const deadline = new Date(attempt.started_at).getTime() + exam.duration_minutes * 60000;
-  return Date.now() > deadline + LATE_SAVE_GRACE_MS;
+  const deadline = exam ? attemptDeadlineMs(attempt, exam.duration_minutes) : null;
+  return deadline != null && Date.now() > deadline + LATE_SAVE_GRACE_MS;
 }
 
 // Timer keys are client-built (`q_<id>` / `s_<hex>`); accept only that shape so
@@ -219,7 +274,9 @@ const MAX_RESPONSE_CHARS = 200000;
 // wins) plus optional timer readings ({ key: seconds }) with ONE bulkWrite.
 // `attempt` is a lean doc loaded with SAVE_PROJECTION and known to be in progress.
 // Returns { saved, skipped: [{ question_id, reason }] }.
-async function saveAnswers(attempt, answers = [], timers = null) {
+// `position` (the question index on screen) is stored with a last-seen time
+// for the live monitor; every autosave tick sends it, even with no answers.
+async function saveAnswers(attempt, answers = [], timers = null, position = null) {
   const ExamAttempt = require('../models/ExamAttempt');
   const mongoose = require('mongoose');
   const typeById = new Map((attempt.questions_snapshot || []).map((q) => [String(q._id), q.type]));
@@ -266,8 +323,13 @@ async function saveAnswers(attempt, answers = [], timers = null) {
     if (Object.keys(max).length) ops.push({ updateOne: { filter: open, update: { $max: max } } });
   }
 
-  if (ops.length) await ExamAttempt.bulkWrite(ops, { ordered: true });
-  return { saved, skipped };
+  const seen = { last_seen_at: new Date() };
+  if (Number.isInteger(position) && position >= 0 && position < typeById.size) seen.current_index = position;
+  ops.push({ updateOne: { filter: open, update: { $set: seen } } });
+
+  await ExamAttempt.bulkWrite(ops, { ordered: true });
+  // Time added from the live monitor reaches the candidate's timer this way.
+  return { saved, skipped, extra_seconds: attempt.extra_seconds || 0 };
 }
 
 // Finalizes (grades + submits) an attempt exactly once, whoever gets there
@@ -307,7 +369,7 @@ async function recordViolation(attemptId, type, maxViolations) {
   const updated = await ExamAttempt.findOneAndUpdate(
     { _id: attemptId, status: 'in_progress' },
     { $push: { violations: { type, at: new Date() } }, $inc: { violation_count: 1 } },
-    { new: true, projection: { violation_count: 1 } }
+    { returnDocument: 'after', projection: { violation_count: 1 } }
   );
   if (!updated) {
     const cur = await ExamAttempt.findById(attemptId).select('violation_count').lean();
@@ -350,6 +412,7 @@ async function checkAnswerAtomic(attemptId, questionId, response) {
 
 module.exports = {
   finalizeAttempt, dedupeAnswers, schedulingError, closeOpenAttempts, closeExpiredAttempts, checkAnswer, lockedFeedback,
-  attemptCycleFilter, SAVE_PROJECTION, attemptDeadlinePassed, saveAnswers,
+  attemptCycleFilter, SAVE_PROJECTION, attemptDeadlinePassed, attemptDeadlineMs, saveAnswers,
   submitAttemptOnce, recordViolation, checkAnswerAtomic, shuffle,
+  buildSnapshot, drawnQuestionCount, LATE_SAVE_GRACE_MS, submittedRefusal,
 };

@@ -334,6 +334,11 @@ export const deleteAttemptCertificate = (attemptId) => api.delete(`/exams/attemp
 export const sendAttemptCertificate   = (attemptId) => api.post(`/exams/attempts/${attemptId}/certificate/send`);
 export const deleteExamAttempt    = (attemptId)    => api.delete(`/exams/attempts/${attemptId}`);
 export const bulkDeleteExamAttempts = (ids)        => api.post('/exams/attempts/bulk-delete', { ids });
+// Live monitor: who is taking an exam now; add time; submit for a candidate.
+export const getExamLive          = (examId)              => api.get(`/exams/${examId}/live`, { cache: false });
+export const extendExamAttempt    = (attemptId, minutes)  => api.post(`/exams/attempts/${attemptId}/extend`, { minutes });
+export const extendExamAll        = (examId, minutes)     => api.post(`/exams/${examId}/live/extend`, { minutes });
+export const forceSubmitAttempt   = (attemptId)           => api.post(`/exams/attempts/${attemptId}/force-submit`);
 
 // ── Password Reset ────────────────────────────────────────────────────────────
 export const forgotPassword = (email)                     => api.post('/auth/airline/forgot-password', { email });
@@ -380,6 +385,8 @@ export const deleteLiveGame       = (id)               => api.delete(`/live/game
 export const listLiveSessions     = (id)               => api.get(`/live/games/${id}/sessions`);
 export const startLiveSession     = (id)               => api.post(`/live/games/${id}/sessions`);
 export const getLiveExamQuestions = (examId)           => api.get(`/live/exam-questions/${examId}`);
+export const liveGameFromExam     = (examId)           => api.post(`/live/from-exam/${examId}`);   // exam → new live game
+export const examFromLiveGame     = (id)               => api.post(`/live/games/${id}/to-exam`);    // live game → draft exam
 export const getLiveHostState     = (sessionId)        => api.get(`/live/sessions/${sessionId}`);
 export const deleteLiveSession    = (sessionId)        => api.delete(`/live/sessions/${sessionId}`);
 export const liveHostAction       = (sessionId, action, extra = {}) => api.post(`/live/sessions/${sessionId}/action`, { action, ...extra });
@@ -388,8 +395,10 @@ const playerHdr = (token) => ({ headers: { 'X-Player-Token': token } });
 export const resolveLivePin       = (pin)              => api.get(`/public-live/pin/${pin}`);
 export const getLivePublic        = (code)             => api.get(`/public-live/${code}`);
 export const joinLiveGame         = (code, data)       => api.post(`/public-live/${code}/join`, data);
-export const getLivePlayerState   = (code, token)      => api.get(`/public-live/${code}/state`, playerHdr(token));
+// `version` (from the last reply) lets the server answer { unchanged: true } when nothing moved on.
+export const getLivePlayerState   = (code, token, version) => api.get(`/public-live/${code}/state`, { ...playerHdr(token), params: version ? { v: version } : undefined });
 export const answerLive           = (code, token, data) => api.post(`/public-live/${code}/answer`, data, playerHdr(token));
 export const reactLive            = (code, token, sticker) => api.post(`/public-live/${code}/react`, { sticker }, playerHdr(token));
+export const chooseLiveTeam       = (code, token, team) => api.post(`/public-live/${code}/team`, { team }, playerHdr(token));
 
 export default api;

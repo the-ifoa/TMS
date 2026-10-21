@@ -71,7 +71,16 @@ const examAttemptSchema = new mongoose.Schema(
     auto_submitted:  { type: Boolean, default: false },
     // Why it was force-submitted: too many lockdown violations, or the exam
     // window was closed and reopened more often than the exam allows.
-    auto_submit_reason: { type: String, enum: ['violations', 'window_closed', 'exam_deleted', null], default: null },
+    auto_submit_reason: { type: String, enum: ['violations', 'window_closed', 'exam_deleted', 'admin', null], default: null },
+    submitted_by: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin', default: null }, // set when an admin force-submits
+
+    // Live monitor. extra_seconds: time an admin added on top of the exam's
+    // duration (the deadline is started_at + duration + extra). last_seen_at /
+    // current_index: refreshed by every autosave tick (a heartbeat), so the
+    // monitor can show who is active and which question they are on.
+    extra_seconds: { type: Number, default: 0, min: 0 },
+    last_seen_at:  { type: Date, default: null },
+    current_index: { type: Number, default: null },
     // Each time the candidate came back to an attempt already in progress
     // (closed the window / refreshed, then resumed). Counted on the server.
     window_closes: [{ _id: false, at: { type: Date, default: Date.now } }],

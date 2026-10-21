@@ -138,6 +138,53 @@ export const IconFlame = line(Flame);
 export const IconBolt = line(Zap);
 export const IconCrown = line(Crown);
 
+// ── Teams ─────────────────────────────────────────────────────────────────────
+// Fixed team keys from the server (services/liveQuiz.js TEAM_KEYS), each with
+// a dot, a tinted chip and a solid fill. Full class strings so Tailwind keeps them.
+export const TEAM_STYLE = {
+  red:    { dot: 'bg-rose-500',    chip: 'bg-rose-500/15 border-rose-400/40 text-rose-200',          solid: 'bg-rose-500',    bar: 'bg-rose-400' },
+  blue:   { dot: 'bg-blue-500',    chip: 'bg-blue-500/15 border-blue-400/40 text-blue-200',          solid: 'bg-blue-500',    bar: 'bg-blue-400' },
+  green:  { dot: 'bg-emerald-500', chip: 'bg-emerald-500/15 border-emerald-400/40 text-emerald-200', solid: 'bg-emerald-500', bar: 'bg-emerald-400' },
+  amber:  { dot: 'bg-amber-400',   chip: 'bg-amber-500/15 border-amber-400/40 text-amber-200',       solid: 'bg-amber-500',   bar: 'bg-amber-400' },
+  violet: { dot: 'bg-violet-500',  chip: 'bg-violet-500/15 border-violet-400/40 text-violet-200',    solid: 'bg-violet-500',  bar: 'bg-violet-400' },
+  pink:   { dot: 'bg-pink-500',    chip: 'bg-pink-500/15 border-pink-400/40 text-pink-200',          solid: 'bg-pink-500',    bar: 'bg-pink-400' },
+};
+export const teamStyle = (key) => TEAM_STYLE[key] || { dot: 'bg-white/40', chip: 'bg-white/10 border-white/15 text-white/80', solid: 'bg-white/30', bar: 'bg-white/40' };
+
+// Small coloured pill with the team's name.
+export function TeamChip({ team, className = '' }) {
+  if (!team) return null;
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[11px] font-bold whitespace-nowrap ${teamStyle(team.key).chip} ${className}`}>
+      <span className={`w-2 h-2 rounded-full ${teamStyle(team.key).dot}`} />{team.name}
+    </span>
+  );
+}
+
+// Team standings as bars: average points per member, ranked.
+export function TeamStandings({ standings, highlight, compact = false }) {
+  if (!standings?.length) return null;
+  const max = Math.max(1, ...standings.map((t) => t.score));
+  return (
+    <ul className={compact ? 'space-y-1.5' : 'space-y-2.5'}>
+      {standings.map((t) => (
+        <li key={t.key} className={`relative overflow-hidden rounded-2xl border ${t.key === highlight ? 'border-white/60 ring-2 ring-white/30' : 'border-white/10'} bg-white/[0.06]`}>
+          <motion.div aria-hidden className={`absolute inset-y-0 left-0 opacity-25 ${teamStyle(t.key).bar}`}
+            initial={{ width: 0 }} animate={{ width: `${(t.score / max) * 100}%` }} transition={{ duration: 0.8, ease: 'easeOut' }} />
+          <div className={`relative flex items-center gap-3 ${compact ? 'px-3 py-2' : 'px-4 py-3'}`}>
+            <span className="w-6 text-sm font-black text-white/80 tabular-nums">{t.rank}</span>
+            <span className={`w-3 h-3 rounded-full flex-shrink-0 ${teamStyle(t.key).dot}`} />
+            <span className={`flex-1 min-w-0 truncate font-black text-white ${compact ? 'text-sm' : 'text-base sm:text-xl'}`}>{t.name}</span>
+            <span className="text-[11px] font-semibold text-white/60 whitespace-nowrap">{t.members} {t.members === 1 ? 'player' : 'players'}</span>
+            {t.last_points > 0 && <span className="hidden sm:inline px-2 py-0.5 rounded-lg bg-emerald-500 text-white text-[11px] font-black tabular-nums">+{t.last_points}</span>}
+            <span className={`text-right font-black tabular-nums text-white ${compact ? 'text-sm' : 'text-lg sm:text-2xl'}`}>{t.score.toLocaleString()}<span className="ml-1 text-[10px] font-bold text-white/50">avg</span></span>
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export const TYPE_LABEL = { quiz: 'Quiz', true_false: 'True or false', multi: 'Pick all that apply', poll: 'Poll' };
 
 // Dark studio backdrop for the host screen and the player's phone. Exactly one

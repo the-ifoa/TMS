@@ -36,6 +36,9 @@ const liveGameSchema = new mongoose.Schema(
     title:       { type: String, required: true, trim: true, maxlength: 120 },
     description: { type: String, default: '', maxlength: 500 },
     cover:       { type: String, default: 'plane', maxlength: 16 }, // icon key shown on cards and the lobby
+    // Each phone shows the answers in its own order (true/false excepted), so
+    // neighbours can't copy by position. The big screen keeps the written order.
+    shuffle_options: { type: Boolean, default: false },
     questions:   { type: [liveQuestionSchema], default: [] },
     created_by:  { type: mongoose.Schema.Types.ObjectId, ref: 'Admin', default: null },
     deleted_at:  { type: Date, default: null },

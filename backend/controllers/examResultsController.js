@@ -560,7 +560,7 @@ exports.issueSheet = async (req, res) => {
     const doc = await ExamResult.findByIdAndUpdate(
       req.params.id,
       { sheet_issued: true, sheet_date: req.body.sheet_date || new Date().toISOString().split('T')[0] },
-      { new: true }
+      { returnDocument: 'after' }
     );
     if (!doc) return res.status(404).json({ error: 'Exam result not found.' });
     res.json(doc);

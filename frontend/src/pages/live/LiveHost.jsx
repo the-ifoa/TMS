@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
-import { QRCodeSVG } from 'qrcode.react';
+import { QRCodeSVG, QRCodeCanvas } from 'qrcode.react';
 import {
   HiOutlineArrowLeft,
   HiOutlineArrowRight,
@@ -19,7 +19,12 @@ import {
   HiOutlineChartBar,
   HiOutlineCheckCircle,
   HiOutlineClock,
+  HiOutlineUserGroup,
+  HiOutlineSwitchHorizontal,
+  HiOutlineShare,
+  HiOutlineDownload,
 } from 'react-icons/hi';
+import { Crown } from 'lucide-react';
 import { getLiveHostState, liveHostAction, startLiveSession } from '../../api';
 import { useConfirm } from '@/hooks/use-confirm';
 import {
@@ -34,6 +39,9 @@ import {
   CoverBadge,
   IconTrophy,
   IconFlame,
+  TeamChip,
+  TeamStandings,
+  teamStyle,
   useServerOffset,
   useTicker,
   usePoll,
@@ -104,6 +112,220 @@ function TopBar({ s, onAction, onExit }) {
   );
 }
 
+// ── Shareable QR card ────────────────────────────────────────────────────────
+// A PNG with the game title, QR code, PIN and link, drawn from a hidden
+// high-resolution QR canvas — to post in a chat, email or Teams meeting.
+function qrCardBlob(qrCanvas, { title, pin, link }) {
+  const W = 900;
+  const H = 1180;
+  const c = document.createElement('canvas');
+  c.width = W;
+  c.height = H;
+  const g = c.getContext('2d');
+  g.fillStyle = '#0f172a';
+  g.fillRect(0, 0, W, H);
+  g.fillStyle = '#ffffff';
+  g.beginPath();
+  if (g.roundRect) g.roundRect(60, 60, W - 120, H - 120, 40);
+  else g.rect(60, 60, W - 120, H - 120);
+  g.fill();
+  g.textAlign = 'center';
+  g.fillStyle = '#64748b';
+  g.font = '600 30px system-ui, sans-serif';
+  g.fillText('QUIZ ARENA', W / 2, 140);
+  g.fillStyle = '#0f172a';
+  g.font = '800 46px system-ui, sans-serif';
+  const t = title.length > 32 ? `${title.slice(0, 31)}…` : title;
+  g.fillText(t, W / 2, 205);
+  g.drawImage(qrCanvas, (W - 560) / 2, 250, 560, 560);
+  g.fillStyle = '#64748b';
+  g.font = '600 28px system-ui, sans-serif';
+  g.fillText('Scan to join, or enter the PIN at', W / 2, 875);
+  g.fillStyle = '#2563eb';
+  g.font = '700 32px system-ui, sans-serif';
+  g.fillText(link.replace(/^https?:\/\//, '').replace(/\/[^/]+$/, ''), W / 2, 920);
+  g.fillStyle = '#0f172a';
+  g.font = '900 96px system-ui, sans-serif';
+  g.fillText(pin.replace(/(\d{3})(\d{3})/, '$1 $2'), W / 2, 1040);
+  return new Promise((resolve) => c.toBlob(resolve, 'image/png'));
+}
+
+function ShareQrButtons({ s, link }) {
+  const qrRef = useRef(null);
+  const [busy, setBusy] = useState(false);
+  const fileName = `quiz-${s.pin}.png`;
+
+  const makeFile = async () => {
+    const blob = await qrCardBlob(qrRef.current, { title: s.title || 'Live quiz', pin: s.pin, link });
+    return new File([blob], fileName, { type: 'image/png' });
+  };
+  const download = (file) => {
+    const url = URL.createObjectURL(file);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
+  const share = async () => {
+    setBusy(true);
+    try {
+      const file = await makeFile();
+      const data = { files: [file], title: s.title, text: `Join "${s.title}" — PIN ${s.pin}: ${link}` };
+      if (navigator.canShare?.(data)) {
+        await navigator.share(data);
+      } else {
+        download(file);
+        toast.success('Sharing isn\'t available in this browser, so the QR image was downloaded instead.');
+      }
+    } catch (err) {
+      if (err?.name !== 'AbortError') toast.error('Could not share the QR code.');
+    } finally {
+      setBusy(false);
+    }
+  };
+  const save = async () => {
+    try { download(await makeFile()); } catch { toast.error('Could not create the QR image.'); }
+  };
+
+  const btn = 'inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/[0.1] hover:bg-white/[0.18] text-xs font-bold text-white transition-all shadow-xs cursor-pointer border border-white/10 disabled:opacity-50';
+  return (
+    <>
+      <QRCodeCanvas ref={qrRef} value={link} size={560} level="M" marginSize={0} style={{ display: 'none' }} aria-hidden />
+      <button type="button" onClick={share} disabled={busy} className={btn}>
+        <HiOutlineShare className="w-4 h-4 text-blue-300" /> {busy ? 'Preparing…' : 'Share QR'}
+      </button>
+      <button type="button" onClick={save} className={btn}>
+        <HiOutlineDownload className="w-4 h-4 text-blue-300" /> Download QR
+      </button>
+    </>
+  );
+}
+
+// ── Team setup (lobby) ───────────────────────────────────────────────────────
+// Solo or 2–6 teams; players choose their team, or the game deals them out
+// evenly. Names can be changed here until the game starts.
+function TeamSetup({ s, onAction, busy }) {
+  const count = s.teams.length;
+  const set = (next) => onAction('teams', { count, pick: s.team_pick, ...next });
+  const seg = (on) => `px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer whitespace-nowrap ${on ? 'bg-white text-slate-900' : 'text-white/70 hover:text-white hover:bg-white/10'}`;
+
+  return (
+    <div className="flex-shrink-0 w-full flex flex-col items-center gap-2.5">
+      <div className="flex flex-wrap items-center justify-center gap-2">
+        <span className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-white/60"><HiOutlineUserGroup className="w-4 h-4" /> Teams</span>
+        <div className="inline-flex p-1 rounded-xl bg-white/[0.06] border border-white/10" role="group" aria-label="Number of teams">
+          {[0, 2, 3, 4, 5, 6].map((n) => (
+            <button key={n} type="button" disabled={busy} onClick={() => n !== count && set({ count: n })} className={seg(n === count)} aria-pressed={n === count}>
+              {n === 0 ? 'Solo' : n}
+            </button>
+          ))}
+        </div>
+        {count > 0 && (
+          <div className="inline-flex p-1 rounded-xl bg-white/[0.06] border border-white/10" role="group" aria-label="Who answers">
+            {[['each', 'Everyone answers'], ['captain', 'Captain answers']].map(([k, label]) => (
+              <button key={k} type="button" disabled={busy} onClick={() => k !== s.team_answer && set({ team_answer: k })} className={seg(s.team_answer === k)} aria-pressed={s.team_answer === k}>
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+        {count > 0 && (
+          <div className="inline-flex p-1 rounded-xl bg-white/[0.06] border border-white/10" role="group" aria-label="How players get a team">
+            {[['player', 'Players choose'], ['auto', 'Auto-balance']].map(([k, label]) => (
+              <button key={k} type="button" disabled={busy} onClick={() => k !== s.team_pick && set({ pick: k })} className={seg(s.team_pick === k)} aria-pressed={s.team_pick === k}>
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      {count > 0 && (
+        <p className="text-[11px] text-white/50 text-center">
+          {s.team_pick === 'player' ? 'Players pick a team on their phone. Anyone without one is placed in the smallest team at the start.' : 'Players are spread evenly across the teams.'}{' '}
+          {s.team_answer === 'captain'
+            ? 'Each team talks it over and only its captain answers. Click the crown next to a player to make them captain.'
+            : 'The team score is the average of its players\' points.'}
+        </p>
+      )}
+    </div>
+  );
+}
+
+// Lobby player chip: click to remove; in team mode an arrow moves them on.
+function PlayerChip({ p, s, onAction }) {
+  const keys = s.teams.map((t) => t.key);
+  const nextTeam = keys.length ? keys[(keys.indexOf(p.team) + 1) % keys.length] : null;
+  return (
+    <motion.span
+      layout
+      initial={{ scale: 0, opacity: 0 }}
+      animate={{ scale: 1, opacity: 1 }}
+      exit={{ scale: 0, opacity: 0 }}
+      transition={{ type: 'spring', stiffness: 350, damping: 20 }}
+      className="inline-flex items-center rounded-full bg-white/[0.08] border border-white/10 backdrop-blur-md text-sm font-bold text-white"
+    >
+      <button
+        type="button"
+        title="Click to remove player"
+        onClick={() => onAction('kick', { player_id: p.id }, `Remove ${p.nickname} from the game?`)}
+        className="group inline-flex items-center gap-2.5 pl-2 pr-4 py-1.5 rounded-full hover:bg-rose-500/80 transition-all cursor-pointer"
+      >
+        <span className="group-hover:hidden"><Avatar id={p.avatar} size={32} /></span>
+        <span className="hidden group-hover:inline-flex w-8 h-8 rounded-full bg-white/20 items-center justify-center"><HiOutlineX className="w-4 h-4 text-white" /></span>
+        <span>{p.nickname}</span>
+      </button>
+      {s.team_answer === 'captain' && p.team && (
+        <button
+          type="button"
+          title={p.captain ? 'Team captain' : 'Make team captain'}
+          aria-label={p.captain ? `${p.nickname} is captain` : `Make ${p.nickname} captain`}
+          aria-pressed={p.captain}
+          onClick={() => !p.captain && onAction('captain', { player_id: p.id })}
+          className={`p-1.5 rounded-full cursor-pointer ${p.captain ? 'text-amber-300' : 'text-white/30 hover:text-amber-200 hover:bg-white/15'}`}
+        >
+          <Crown className="w-3.5 h-3.5" strokeWidth={2.25} fill={p.captain ? 'currentColor' : 'none'} />
+        </button>
+      )}
+      {nextTeam && keys.length > 1 && (
+        <button
+          type="button"
+          title={`Move to ${s.teams.find((t) => t.key === nextTeam)?.name}`}
+          aria-label={`Move ${p.nickname} to ${s.teams.find((t) => t.key === nextTeam)?.name}`}
+          onClick={() => onAction('move', { player_id: p.id, team: nextTeam })}
+          className="mr-1.5 p-1.5 rounded-full text-white/60 hover:text-white hover:bg-white/15 cursor-pointer"
+        >
+          <HiOutlineSwitchHorizontal className="w-3.5 h-3.5" />
+        </button>
+      )}
+    </motion.span>
+  );
+}
+
+// Team name, editable in the lobby (saved on Enter / leaving the field).
+function TeamName({ t, s, onAction, busy }) {
+  const [name, setName] = useState(t.name);
+  useEffect(() => setName(t.name), [t.name]);
+  const save = () => {
+    const clean = name.trim();
+    if (!clean || clean === t.name) { setName(t.name); return; }
+    onAction('teams', { count: s.teams.length, pick: s.team_pick, names: { [t.key]: clean } });
+  };
+  return (
+    <input
+      value={name}
+      disabled={busy}
+      maxLength={20}
+      aria-label="Team name"
+      onChange={(e) => setName(e.target.value)}
+      onBlur={save}
+      onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { setName(t.name); e.currentTarget.blur(); } }}
+      className="flex-1 min-w-0 bg-transparent text-base font-black text-white outline-none rounded-lg px-1.5 py-0.5 hover:bg-white/[0.06] focus:bg-white/10 focus:ring-1 focus:ring-white/30"
+    />
+  );
+}
+
 function Lobby({ s, onAction, busy }) {
   const link = `${joinBase()}/${s.code}`;
   const copy = async () => {
@@ -146,6 +368,7 @@ function Lobby({ s, onAction, busy }) {
             >
               <HiOutlineClipboardCopy className="w-4 h-4 text-blue-300" /> Copy invite link
             </button>
+            <ShareQrButtons s={s} link={link} />
           </div>
         </div>
 
@@ -175,8 +398,32 @@ function Lobby({ s, onAction, busy }) {
         </p>
       )}
 
-      {/* Players list */}
-      <div className="flex-1 min-h-0 w-full flex flex-wrap content-start justify-center gap-2.5 overflow-y-auto p-1">
+      <TeamSetup s={s} onAction={onAction} busy={busy} />
+
+      {/* Players list — one column per team in team mode */}
+      {s.teams.length > 0 && (
+        <div className={`flex-1 min-h-0 w-full overflow-y-auto p-1 grid gap-3 grid-cols-1 sm:grid-cols-2 ${s.teams.length >= 3 ? 'lg:grid-cols-3' : ''}`}>
+          {s.teams.map((t) => {
+            const members = s.players.filter((p) => p.team === t.key);
+            return (
+              <div key={t.key} className="rounded-2xl bg-white/[0.04] border border-white/10 p-3 flex flex-col gap-2.5 min-h-[6rem]">
+                <div className="flex items-center gap-2">
+                  <span className={`w-3 h-3 rounded-full flex-shrink-0 ${teamStyle(t.key).dot}`} />
+                  <TeamName t={t} onAction={onAction} s={s} busy={busy} />
+                  <span className="text-xs font-bold text-white/60 tabular-nums">{members.length}</span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <AnimatePresence>
+                    {members.map((p) => <PlayerChip key={p.id} p={p} s={s} onAction={onAction} />)}
+                  </AnimatePresence>
+                  {!members.length && <p className="text-xs text-white/40">No players yet</p>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <div className={`flex-1 min-h-0 w-full flex flex-wrap content-start justify-center gap-2.5 overflow-y-auto p-1 ${s.teams.length ? 'hidden' : ''}`}>
         {!s.players.length && (
           <motion.p
             className="text-white/60 font-bold text-base mt-2"
@@ -187,28 +434,7 @@ function Lobby({ s, onAction, busy }) {
           </motion.p>
         )}
         <AnimatePresence>
-          {s.players.map((p) => (
-            <motion.button
-              key={p.id}
-              type="button"
-              layout
-              title="Click to remove player"
-              initial={{ scale: 0, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0, opacity: 0 }}
-              transition={{ type: 'spring', stiffness: 350, damping: 20 }}
-              onClick={() => onAction('kick', { player_id: p.id }, `Remove ${p.nickname} from the game?`)}
-              className="group inline-flex items-center gap-2.5 pl-2 pr-4 py-1.5 rounded-full bg-white/[0.08] hover:bg-rose-500/80 border border-white/10 backdrop-blur-md text-sm font-bold text-white transition-all cursor-pointer"
-            >
-              <span className="group-hover:hidden">
-                <Avatar id={p.avatar} size={32} />
-              </span>
-              <span className="hidden group-hover:inline-flex w-8 h-8 rounded-full bg-white/20 items-center justify-center">
-                <HiOutlineX className="w-4 h-4 text-white" />
-              </span>
-              <span>{p.nickname}</span>
-            </motion.button>
-          ))}
+          {!s.teams.length && s.players.map((p) => <PlayerChip key={p.id} p={p} s={s} onAction={onAction} />)}
         </AnimatePresence>
       </div>
     </div>
@@ -277,6 +503,11 @@ function QuestionStage({ s, now, onAction, busy }) {
   const reveal = s.status === 'reveal';
   const last = s.current_index + 1 >= s.total;
   const pill = 'px-3 py-1.5 rounded-lg bg-white/[0.07] border border-white/10 text-xs font-semibold text-white/90 whitespace-nowrap';
+  // Captain mode counts teams, not players.
+  const captains = s.team_answer === 'captain' && s.teams.length > 0;
+  const playingTeams = new Set(s.players.map((p) => p.team).filter(Boolean));
+  const answeredCount = captains ? new Set(s.players.filter((p) => p.answered).map((p) => p.team)).size : s.answered;
+  const answeredOf = captains ? playingTeams.size : s.players.length;
 
   return (
     <div className="flex-1 min-h-0 flex flex-col w-full max-w-6xl mx-auto px-4 sm:px-8 py-3 sm:py-5 gap-3 sm:gap-4">
@@ -286,14 +517,16 @@ function QuestionStage({ s, now, onAction, busy }) {
           <span className={pill}>Question {s.current_index + 1} / {s.total}</span>
           <span className={`${pill} hidden sm:inline`}>{TYPE_LABEL[q.type]}</span>
           {q.points === 'double' && <span className="px-3 py-1.5 rounded-lg bg-amber-500/15 border border-amber-400/40 text-amber-300 text-xs font-bold whitespace-nowrap">2× points</span>}
+          {captains && <span className={`${pill} hidden md:inline-flex items-center gap-1.5`}><Crown className="w-3.5 h-3.5 text-amber-300" /> Captains answer</span>}
+          {s.shuffle_options && q.type !== 'true_false' && <span className={`${pill} hidden md:inline`}>Answers are shuffled on each phone</span>}
         </div>
         {!(isQuestion && ready) && (
           <div className="flex items-center gap-3 sm:gap-5 flex-shrink-0">
             <div className="text-right leading-none">
               <p className="text-2xl sm:text-3xl font-black tabular-nums text-white">
-                {s.answered}<span className="text-sm sm:text-base font-semibold text-white/50"> / {s.players.length}</span>
+                {answeredCount}<span className="text-sm sm:text-base font-semibold text-white/50"> / {answeredOf}</span>
               </p>
-              <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-white/50">Answered</p>
+              <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-white/50">{captains ? 'Teams answered' : 'Answered'}</p>
             </div>
             {isQuestion ? (
               <CountdownRing msLeft={ends - now} totalMs={q.time_limit * 1000} size={60} />
@@ -394,8 +627,9 @@ function QuestionStage({ s, now, onAction, busy }) {
 
 // ── Leaderboard (Executive Presentation Design) ──────────────────────────────
 function Leaderboard({ s, onAction, busy }) {
-  const top = s.players.slice(0, 5);
+  const top = s.players.slice(0, s.team_standings ? 3 : 5);
   const last = s.current_index + 1 >= s.total;
+  const teamOf = (key) => s.teams.find((t) => t.key === key);
 
   // Keyboard shortcut: Space or Enter advances to next question
   useEffect(() => {
@@ -446,6 +680,14 @@ function Leaderboard({ s, onAction, busy }) {
           </div>
         </div>
 
+        {s.team_standings && (
+          <div>
+            <p className="mb-2 text-xs font-bold uppercase tracking-wider text-white/60">Teams</p>
+            <TeamStandings standings={s.team_standings} />
+            <p className="mt-4 text-xs font-bold uppercase tracking-wider text-white/60">Top players</p>
+          </div>
+        )}
+
         {/* Player Standings List */}
         <div className="space-y-[clamp(0.4rem,1.2vh,0.75rem)]">
           {top.map((p, i) => {
@@ -492,7 +734,8 @@ function Leaderboard({ s, onAction, busy }) {
                 {/* Nickname */}
                 <div className="flex-1 min-w-0">
                   <p className="text-base sm:text-xl font-black text-white truncate tracking-tight">{p.nickname}</p>
-                  {isFirst && <p className="hidden sm:block text-[11px] font-bold text-amber-400/90 uppercase tracking-wider">Tournament Leader</p>}
+                  {p.team && <TeamChip team={teamOf(p.team)} className="mt-0.5" />}
+                  {isFirst && !p.team && <p className="hidden sm:block text-[11px] font-bold text-amber-400/90 uppercase tracking-wider">Tournament Leader</p>}
                   {p.last_points > 0 && <p className="sm:hidden text-[11px] font-bold text-emerald-400 tabular-nums">+{p.last_points} this round</p>}
                 </div>
 
@@ -550,6 +793,8 @@ function Podium({ s, onReplay }) {
   const order = [r[1], r[0], r[2]].filter(Boolean);
   const height = { 1: 'h-[max(16vh,7rem)]', 2: 'h-[max(12vh,5.5rem)]', 3: 'h-[max(9vh,4.5rem)]' };
   const tone = { 1: 'from-amber-300 to-amber-500', 2: 'from-slate-200 to-slate-400', 3: 'from-orange-300 to-orange-500' };
+  const winningTeam = s.team_standings?.find((t) => t.members > 0);
+  const teamName = (key) => s.teams.find((t) => t.key === key)?.name || '';
 
   return (
     <div className="flex-1 min-h-0 flex flex-col items-center px-4 pt-3 sm:pt-5 pb-4 gap-3 sm:gap-4 max-w-5xl mx-auto w-full">
@@ -561,8 +806,15 @@ function Podium({ s, onReplay }) {
         className="flex-shrink-0 inline-flex items-center gap-3 sm:gap-4 text-[clamp(1.5rem,3vw+1.5vh,3.5rem)] font-black text-center text-white leading-tight"
       >
         <IconTrophy className="w-[1em] h-[1em] text-amber-400 flex-shrink-0" />
-        <span>{r[0] ? `${r[0].nickname} wins!` : 'Game finished'}</span>
+        <span>{winningTeam ? `${winningTeam.name} wins!` : r[0] ? `${r[0].nickname} wins!` : 'Game finished'}</span>
       </motion.h2>
+
+      {s.team_standings && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="flex-shrink-0 w-full max-w-3xl">
+          <TeamStandings standings={s.team_standings} compact />
+          {r[0] && <p className="mt-2 text-center text-xs font-semibold text-white/60">Top player: {r[0].nickname}</p>}
+        </motion.div>
+      )}
 
       <div className="flex-shrink-0 flex items-end justify-center gap-3 sm:gap-5 w-full max-w-3xl">
         {order.map((p) => {
@@ -637,7 +889,7 @@ function Podium({ s, onReplay }) {
             <table className="w-full text-sm">
               <thead className="sticky top-0 bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500">
                 <tr>
-                  {['Rank', 'Player', 'Score', 'Correct', 'Accuracy', 'Avg time', 'Streak'].map((h) => (
+                  {['Rank', 'Player', ...(s.teams.length ? ['Team'] : []), 'Score', 'Correct', 'Accuracy', 'Avg time', 'Streak'].map((h) => (
                     <th key={h} className={`px-2 sm:px-4 py-2.5 font-semibold ${h === 'Rank' ? 'w-10 sm:w-16 text-center' : h === 'Player' ? 'text-left' : 'text-right'} ${['Accuracy', 'Avg time', 'Streak'].includes(h) ? 'hidden sm:table-cell' : ''}`}>
                       {h}
                     </th>
@@ -658,6 +910,13 @@ function Podium({ s, onReplay }) {
                         <span className="truncate">{p.nickname}</span>
                       </span>
                     </td>
+                    {s.teams.length > 0 && (
+                      <td className="px-2 sm:px-4 py-2.5 text-right">
+                        <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 whitespace-nowrap">
+                          <span className={`w-2 h-2 rounded-full ${teamStyle(p.team).dot}`} />{teamName(p.team)}
+                        </span>
+                      </td>
+                    )}
                     <td className="px-2 sm:px-4 py-2.5 text-right font-bold text-slate-900 tabular-nums">{p.score.toLocaleString()}</td>
                     <td className="px-2 sm:px-4 py-2.5 text-right tabular-nums">{p.correct}/{p.out_of}</td>
                     <td className="hidden sm:table-cell px-4 py-2.5 text-right tabular-nums">{p.accuracy != null ? `${p.accuracy}%` : '—'}</td>

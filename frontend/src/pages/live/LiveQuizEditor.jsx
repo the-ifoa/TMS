@@ -1319,6 +1319,23 @@ function SettingsPanel({
               </div>
             </Section>
 
+            <Section title="Gameplay">
+              <label className="mt-2 flex items-start gap-3 p-3 rounded-xl border border-slate-200 hover:bg-slate-50 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={!!game.shuffle_options}
+                  onChange={(e) => setGame((g) => ({ ...g, shuffle_options: e.target.checked }))}
+                  className="mt-0.5 w-4 h-4 accent-slate-900 flex-shrink-0"
+                />
+                <span>
+                  <span className="block text-xs font-bold text-slate-800">Shuffle answers on each phone</span>
+                  <span className="block text-[11px] text-slate-500 mt-0.5 leading-snug">
+                    Every player sees the answers in a different order, so neighbours can&apos;t copy by position. The big screen keeps your order; true/false is never shuffled.
+                  </span>
+                </span>
+              </label>
+            </Section>
+
             <Section title="Quiz Cover Icon" subtitle="Shown on the game card, the host screen and players' phones">
               <div className="grid grid-cols-6 gap-2 mt-2">
                 {COVERS.map((c) => {
@@ -1382,7 +1399,7 @@ export default function LiveQuizEditor() {
   const navigate = useNavigate();
   const [game, setGame] = useState(() => {
     const first = blank();
-    return { title: '', description: '', cover: 'plane', questions: [first] };
+    return { title: '', description: '', cover: 'plane', shuffle_options: false, questions: [first] };
   });
   const [selected, setSelected] = useState(null);
   const [loading, setLoading] = useState(!!id);

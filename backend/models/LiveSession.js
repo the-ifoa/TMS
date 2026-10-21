@@ -26,6 +26,17 @@ const liveSessionSchema = new mongoose.Schema(
     question_starts_at: { type: Date, default: null },
     question_ends_at:   { type: Date, default: null },
     locked:             { type: Boolean, default: false }, // no new players
+    // Team mode (set by the host in the lobby): empty = everyone plays alone.
+    // `team_pick` — 'player': each player chooses a team when joining;
+    // 'auto': the server spreads players evenly. A team's score is the average
+    // of its members' points, so groups of different sizes stay comparable.
+    // `captain` — player id the host picked; else the team's first player.
+    teams: [{ _id: false, key: String, name: String, captain: { type: String, default: '' } }],
+    team_pick: { type: String, enum: ['player', 'auto'], default: 'player' },
+    // 'each': everyone answers for themselves. 'captain': the team talks it
+    // over and only its captain answers — that answer counts for every member.
+    team_answer: { type: String, enum: ['each', 'captain'], default: 'each' },
+    shuffle_options: { type: Boolean, default: false }, // copied from the game
 
     // Latest sticker reactions, newest last (capped) — floated on the host screen.
     reactions: [{ _id: false, nickname: String, sticker: String, at: Date }],

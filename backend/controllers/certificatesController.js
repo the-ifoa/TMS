@@ -495,7 +495,7 @@ exports.resetCounters = async (req, res) => {
         await CertCounter.findOneAndUpdate(
           { training_type: type },
           { $set: { high_water: 0, floor: effectiveNext } },
-          { upsert: true, returnDocument: 'after', new: true }
+          { upsert: true, returnDocument: 'after' }
         );
         results.push({
           type,
@@ -516,7 +516,7 @@ exports.resetCounters = async (req, res) => {
         await CertCounter.findOneAndUpdate(
           { training_type: type },
           { $set: { high_water: existingMax, floor: effectiveStart } },
-          { upsert: true, returnDocument: 'after', new: true }
+          { upsert: true, returnDocument: 'after' }
         );
         const warning = effectiveStart > startFrom
           ? ` (adjusted to ${effectiveStart} to avoid collision with existing #${existingMax})` : '';

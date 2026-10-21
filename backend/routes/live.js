@@ -18,6 +18,8 @@ router.delete('/games/:id', canBuild, live.deleteGame);
 router.get('/games/:id/sessions', canHost, live.listSessions);
 router.post('/games/:id/sessions', canHost, live.startSession);
 router.get('/exam-questions/:examId', canBuild, live.examQuestions);
+router.post('/from-exam/:examId', canBuild, live.gameFromExam);
+router.post('/games/:id/to-exam', canBuild, live.examFromGame);
 
 router.get('/sessions/:sessionId', canHost, live.hostState);
 router.post('/sessions/:sessionId/action', canHost, live.hostActionHandler);

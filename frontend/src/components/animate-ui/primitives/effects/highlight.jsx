@@ -350,7 +350,7 @@ function HighlightItem(
   const dataAttributes = {
     'data-active': isActive ? 'true' : 'false',
     'aria-selected': isActive,
-    'data-disabled': isDisabled,
+    'data-disabled': isDisabled || undefined,
     'data-value': childValue,
     'data-highlight': true,
   };

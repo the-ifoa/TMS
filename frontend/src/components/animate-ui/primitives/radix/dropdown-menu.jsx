@@ -75,7 +75,7 @@ function DropdownMenuSubTrigger({
 
   return (
     <DropdownMenuPrimitive.SubTrigger ref={highlightedRef} disabled={disabled} textValue={textValue} asChild>
-      <motion.div data-slot="dropdown-menu-sub-trigger" data-disabled={disabled} {...props} />
+      <motion.div data-slot="dropdown-menu-sub-trigger" data-disabled={disabled || undefined} {...props} />
     </DropdownMenuPrimitive.SubTrigger>
   );
 }
@@ -242,7 +242,7 @@ function DropdownMenuItem({
       onSelect={onSelect}
       textValue={textValue}
       asChild>
-      <motion.div data-slot="dropdown-menu-item" data-disabled={disabled} {...props} />
+      <motion.div data-slot="dropdown-menu-item" data-disabled={disabled || undefined} {...props} />
     </DropdownMenuPrimitive.Item>
   );
 }
@@ -275,7 +275,7 @@ function DropdownMenuCheckboxItem({
       asChild>
       <motion.div
         data-slot="dropdown-menu-checkbox-item"
-        data-disabled={disabled}
+        data-disabled={disabled || undefined}
         {...props} />
     </DropdownMenuPrimitive.CheckboxItem>
   );
@@ -305,7 +305,7 @@ function DropdownMenuRadioItem({
       onSelect={onSelect}
       textValue={textValue}
       asChild>
-      <motion.div data-slot="dropdown-menu-radio-item" data-disabled={disabled} {...props} />
+      <motion.div data-slot="dropdown-menu-radio-item" data-disabled={disabled || undefined} {...props} />
     </DropdownMenuPrimitive.RadioItem>
   );
 }

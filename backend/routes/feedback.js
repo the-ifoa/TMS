@@ -22,5 +22,9 @@ router.post('/exams/:examId/email-report', requirePermission('exams.assign', 'ex
 
 // ─── DELETE /feedback/exams/:examId/responses/:feedbackId[?resend=1] ──────────
 router.delete('/exams/:examId/responses/:feedbackId', requirePermission('exams.assign'), feedbackController.deleteExamFeedback);
+router.post('/exams/:examId/responses/bulk-delete', requirePermission('exams.assign'), feedbackController.bulkDeleteExamFeedback);
+
+// ─── DELETE /feedback/responses/:feedbackId — any response, from the dashboard ──
+router.delete('/responses/:feedbackId', requirePermission('exams.assign'), feedbackController.deleteFeedback);
 
 module.exports = router;

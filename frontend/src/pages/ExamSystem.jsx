@@ -776,6 +776,7 @@ export default function ExamSystem() {
   const [sendTarget, setSendTarget] = useState(null);
   const [assignedTarget, setAssignedTarget] = useState(null);
   const [feedbackTarget, setFeedbackTarget] = useState(null);
+  const [feedbackResponseId, setFeedbackResponseId] = useState(null);
   // Height of the sticky page header — the search / filter bars stick just
   // below it (via --sticky-top), here and in the embedded question bank list.
   const headerRef = useRef(null);
@@ -808,6 +809,22 @@ export default function ExamSystem() {
     .finally(() => setLoading(false));
   useEffect(() => { load(); }, []);
 
+  // ?feedback=<examId>&response=<feedbackId> (from the feedback dashboard)
+  // opens that exam's feedback dialog on that response, then tidies the URL.
+  const feedbackParam = searchParams.get('feedback');
+  useEffect(() => {
+    if (!feedbackParam || loading) return;
+    const exam = exams.find((e) => String(e.id) === feedbackParam && !e.deleted_at);
+    if (exam) {
+      setFeedbackResponseId(searchParams.get('response'));
+      setFeedbackTarget(exam);
+    } else toast.error('That exam is no longer available.');
+    const next = new URLSearchParams(searchParams);
+    next.delete('feedback');
+    next.delete('response');
+    setSearchParams(next, { replace: true });
+  }, [feedbackParam, loading]);
+
   const handlePublish = async (exam) => {
     try {
       await publishExam(exam.id);
@@ -819,14 +836,24 @@ export default function ExamSystem() {
   };
 
   const handleDelete = async (exam) => {
-    const ok = await confirm(
-      `Delete "${exam.title}"? It is removed from this list and can no longer be edited, assigned or taken, and any open exam links stop working. Its results are kept for reports and dashboards. Choose "Deleted" in the status filter to see it again.`,
-      { title: 'Delete exam', confirmLabel: 'Delete' },
+    const alreadyDeleted = !!exam.deleted_at;
+    const purgeBox = {
+      label: 'Also permanently delete all results, candidates and feedback',
+      hint: 'Erases every attempt, score, certificate, invite, feedback response and the temporary candidates added only for this exam. This cannot be undone.',
+      confirmLabel: 'Delete permanently',
+      required: alreadyDeleted,
+    };
+    const res = await confirm(
+      alreadyDeleted
+        ? `"${exam.title}" is already deleted and its results are being kept. Tick the box below to erase everything linked to it for good.`
+        : `Delete "${exam.title}"? It is removed from this list and can no longer be edited, assigned or taken, and any open exam links stop working. Its results are kept for reports and dashboards. Choose "Deleted" in the status filter to see it again.`,
+      { title: alreadyDeleted ? 'Permanently delete exam data' : 'Delete exam', confirmLabel: 'Delete', checkbox: purgeBox },
     );
-    if (!ok) return;
+    if (!res) return;
+    const purge = !!res.checked;
     try {
-      await deleteExam(exam.id);
-      toast.success('Exam deleted. Its results are kept.');
+      await deleteExam(exam.id, { purge });
+      toast.success(purge ? 'Exam and all its data deleted.' : 'Exam deleted. Its results are kept.');
       load();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to delete exam.');
@@ -933,8 +960,8 @@ export default function ExamSystem() {
                   {exam.status}
                 </Badge>
               )}
-              {canAuthor && (
-                <SimpleTooltip label="Delete exam">
+              {(canAuthor || (deleted && canManage && can('exams.author'))) && (
+                <SimpleTooltip label={deleted ? 'Permanently delete exam data' : 'Delete exam'}>
                   <Button
                     variant="ghost"
                     size="icon"
@@ -1032,7 +1059,7 @@ export default function ExamSystem() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setFeedbackTarget(exam)}
+              onClick={() => { setFeedbackResponseId(null); setFeedbackTarget(exam); }}
               className="w-full rounded-xl border-emerald-200/80 bg-emerald-50/50 text-emerald-700 hover:bg-emerald-100/70 text-xs font-bold shadow-2xs h-8 flex items-center justify-center gap-1"
             >
               <HiOutlineChatAlt2 className="w-3.5 h-3.5 text-emerald-600" /> Feedback
@@ -1220,7 +1247,7 @@ export default function ExamSystem() {
         })()}
 
       {feedbackTarget && (
-        <FeedbackDialog exam={feedbackTarget} onClose={() => setFeedbackTarget(null)} />
+        <FeedbackDialog exam={feedbackTarget} initialResponseId={feedbackResponseId} onClose={() => setFeedbackTarget(null)} />
       )}
       {assignedTarget && (
         <AssignedListModal exam={assignedTarget.exam} canReassign={assignedTarget.canReassign} onClose={() => setAssignedTarget(null)} onChanged={load} />

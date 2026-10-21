@@ -195,6 +195,42 @@ exports.deleteExamFeedback = async (req, res) => {
   }
 };
 
+// POST /feedback/exams/:examId/responses/bulk-delete { ids } — remove several
+// responses at once (no resend). Ids from another exam are ignored.
+exports.bulkDeleteExamFeedback = async (req, res) => {
+  try {
+    const exam = await loadIfoaExam(req, res);
+    if (!exam) return;
+    const mongoose = require('mongoose');
+    const ids = (Array.isArray(req.body.ids) ? req.body.ids : []).filter((id) => mongoose.isValidObjectId(id));
+    if (!ids.length) return res.status(400).json({ error: 'ids is required.' });
+    const { deletedCount } = await TrainingFeedback.deleteMany({ _id: { $in: ids }, exam_id: exam._id });
+    res.json({ deleted: deletedCount });
+  } catch (err) {
+    console.error('POST /feedback/exams/:examId/responses/bulk-delete error:', err.message);
+    res.status(500).json({ error: 'Failed to delete the feedback.' });
+  }
+};
+
+// DELETE /feedback/responses/:feedbackId — remove one response from the
+// dashboard, including imported (iSpring) ones and those of deleted exams.
+exports.deleteFeedback = async (req, res) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.feedbackId)) return res.status(404).json({ error: 'Feedback not found.' });
+    const fb = await TrainingFeedback.findById(req.params.feedbackId).select('exam_id');
+    if (!fb) return res.status(404).json({ error: 'Feedback not found.' });
+    if (fb.exam_id) {
+      const exam = await Exam.findById(fb.exam_id).select('owner_airline owner_department');
+      if (exam && !isIfoaExam(exam)) return res.status(403).json({ error: 'Feedback forms are only available for IFOA exams.' });
+    }
+    await TrainingFeedback.deleteOne({ _id: fb._id });
+    res.json({ deleted: true });
+  } catch (err) {
+    console.error('DELETE /feedback/responses/:feedbackId error:', err.message);
+    res.status(500).json({ error: 'Failed to delete the feedback.' });
+  }
+};
+
 // ─── Public, passwordless form (/feedback/:token) ─────────────────────────────
 
 // GET /public-feedback/:token — the form, pre-filled details, and status.
@@ -278,7 +314,7 @@ exports.getFeedbackDashboard = async (req, res) => {
   try {
     const { airline, exam_id, from, to } = req.query;
     const all = await TrainingFeedback.find({})
-      .select('exam_id exam_title_snapshot participant_name airline_name company status sent_at submitted_at ratings comments instructor_name training_title')
+      .select('exam_id exam_title_snapshot participant_name participant_email airline_name company status sent_at submitted_at ratings comments instructor_name training_title')
       .sort({ submitted_at: -1 })
       .lean();
 
@@ -287,6 +323,9 @@ exports.getFeedbackDashboard = async (req, res) => {
       airlines: [...new Set(all.map(airlineOf))].sort((a, b) => a.localeCompare(b)),
       exams: Object.values(Object.fromEntries(all.map((f) => [examKeyOf(f), { id: examKeyOf(f), title: examTitleOf(f) }])))
         .sort((a, b) => a.title.localeCompare(b.title)),
+      // Years with any feedback activity, newest first — for the year filter.
+      years: [...new Set(all.flatMap((f) => [f.submitted_at, f.sent_at]).filter(Boolean).map((d) => new Date(d).getFullYear()))]
+        .filter((y) => Number.isFinite(y)).sort((a, b) => b - a),
     };
 
     const fromD = from ? new Date(from) : null;
@@ -339,8 +378,15 @@ exports.getFeedbackDashboard = async (req, res) => {
     const byAvg = (x, y) => (y.average ?? -1) - (x.average ?? -1) || y.responses - x.responses;
     const ownAvg = (f) => { const v = (f.ratings || []).map((r) => r.value); return v.length ? round2(v.reduce((s, x) => s + x, 0) / v.length) : null; };
 
+    const commented = submitted.filter((f) => (f.comments || '').trim()).slice(0, 30);
+    const linked = [...new Set(commented.filter((f) => f.exam_id).map((f) => String(f.exam_id)))];
+    const liveExamIds = new Set((await Exam.find({ _id: { $in: linked }, deleted_at: null }).select('_id').lean()).map((e) => String(e._id)));
+
     res.json({
-      form: { scale: FEEDBACK_FORM.scale, sections: sections.map(({ key, title }) => ({ key, title })) },
+      form: {
+        scale: FEEDBACK_FORM.scale,
+        sections: sections.map(({ key, title }, i) => ({ key, title, statements: FEEDBACK_FORM.sections[i].statements.map(({ key: k, text }) => ({ key: k, text })) })),
+      },
       options,
       totals: {
         sent: sentDocs.length,
@@ -359,9 +405,14 @@ exports.getFeedbackDashboard = async (req, res) => {
       exams: Object.values(exams).map(shape).sort(byAvg),
       trend: Object.values(months).sort((x, y) => x.month.localeCompare(y.month)).slice(-12)
         .map((m) => ({ month: m.month, responses: m.responses, average: avgOf(m.all) })),
-      comments: submitted.filter((f) => (f.comments || '').trim()).slice(0, 30).map((f) => ({
+      comments: commented.map((f) => ({
         id: String(f._id), participant_name: f.participant_name, airline: airlineOf(f), exam_title: f.exam_title_snapshot,
         instructor_name: f.instructor_name || '', submitted_at: f.submitted_at, average: ownAvg(f), comments: f.comments,
+        // Clicking a comment opens it: in its exam's feedback dialog when that
+        // exam still exists, else (imports, deleted exams) from these answers.
+        exam_id: f.exam_id && liveExamIds.has(String(f.exam_id)) ? String(f.exam_id) : null,
+        participant_email: f.participant_email || '', company: f.company || f.airline_name || '',
+        training_title: f.training_title || f.exam_title_snapshot || '', ratings: f.ratings || [],
       })),
     });
   } catch (err) {

@@ -226,7 +226,7 @@ export const getExamSummary   = (id)       => api.get(`/exams/${id}`, { params: 
 export const createExam       = (data)     => api.post('/exams', data);
 export const updateExam       = (id, data) => api.put(`/exams/${id}`, data);
 export const previewExamRemark = (id, data) => api.post(`/exams/${id}/remark-preview`, data);
-export const deleteExam       = (id)       => api.delete(`/exams/${id}`);
+export const deleteExam       = (id, { purge = false } = {}) => api.delete(`/exams/${id}${purge ? '?purge=1' : ''}`);
 export const publishExam      = (id)       => api.post(`/exams/${id}/publish`);
 export const assignExam       = (id, participantIds) => api.post(`/exams/${id}/assign`, { participant_ids: participantIds });
 export const uploadExamImage  = (file) => {
@@ -312,6 +312,8 @@ export const getPublicExamResult  = (token, attemptId)              => api.get(`
 export const getExamFeedback      = (examId)                 => api.get(`/feedback/exams/${examId}`);
 export const sendExamFeedback     = (examId, participantIds) => api.post(`/feedback/exams/${examId}/send`, { participant_ids: participantIds });
 export const deleteExamFeedback   = (examId, feedbackId, { resend = false } = {}) => api.delete(`/feedback/exams/${examId}/responses/${feedbackId}${resend ? '?resend=1' : ''}`);
+export const bulkDeleteExamFeedback = (examId, ids)       => api.post(`/feedback/exams/${examId}/responses/bulk-delete`, { ids });
+export const deleteFeedbackResponse = (feedbackId)       => api.delete(`/feedback/responses/${feedbackId}`);
 export const getFeedbackDashboard = (params = {})             => api.get('/feedback/dashboard', { params });
 export const emailFeedbackReport  = (examId, body)           => api.post(`/feedback/exams/${examId}/email-report`, body);
 // Public, passwordless form opened from the emailed link.

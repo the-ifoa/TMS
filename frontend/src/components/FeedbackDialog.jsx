@@ -4,7 +4,7 @@ import {
   HiOutlinePaperAirplane, HiOutlineSearch, HiOutlineChevronRight, HiOutlineChatAlt2,
   HiOutlineArrowLeft, HiOutlineTrash, HiOutlineRefresh,
 } from 'react-icons/hi';
-import { getExamFeedback, sendExamFeedback, deleteExamFeedback, getExamAirlines } from '../api';
+import { getExamFeedback, sendExamFeedback, deleteExamFeedback, bulkDeleteExamFeedback, getExamAirlines } from '../api';
 import { useConfirm } from '@/hooks/use-confirm';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -35,12 +35,17 @@ function ownAverage(r) {
   return values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
 }
 
-// One row in the "Participants" list — click to open their answers.
-function ResponseRow({ r, form, onOpen }) {
+// One row in the "Participants" list — click to open their answers. With
+// canManage, a checkbox (for bulk delete) and a quick delete button.
+function ResponseRow({ r, form, onOpen, canManage, checked, onToggle, onDelete, busy }) {
   return (
-    <li>
+    <li className="flex items-center gap-1 rounded-xl hover:bg-slate-50 transition-colors">
+      {canManage && (
+        <Checkbox checked={checked} onCheckedChange={onToggle} aria-label={`Select ${r.participant_name}`}
+          className="w-4 h-4 ml-3 flex-shrink-0" />
+      )}
       <button type="button" onClick={onOpen}
-        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left hover:bg-slate-50 transition-colors">
+        className="min-w-0 flex-1 flex items-center gap-3 px-3 py-2.5 text-left">
         <span className="w-8 h-8 rounded-full bg-slate-100 text-slate-600 text-xs font-bold flex items-center justify-center flex-shrink-0">
           {(r.participant_name || '?').trim().charAt(0).toUpperCase()}
         </span>
@@ -53,12 +58,18 @@ function ResponseRow({ r, form, onOpen }) {
         <ScoreBadge avg={ownAverage(r)} scale={form.scale} />
         <HiOutlineChevronRight className="w-4 h-4 text-slate-300 flex-shrink-0" />
       </button>
+      {canManage && (
+        <button type="button" disabled={busy} onClick={onDelete} title="Delete response" aria-label={`Delete ${r.participant_name}'s response`}
+          className="mr-2 p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 disabled:opacity-50 flex-shrink-0">
+          <HiOutlineTrash className="w-4 h-4" />
+        </button>
+      )}
     </li>
   );
 }
 
 // One participant's full answers, with delete / delete-and-resend.
-function ResponseDetail({ r, form, onBack, onDelete, busy, canManage }) {
+export function ResponseDetail({ r, form, onBack, onDelete, busy, canManage, backLabel = 'All participants', allowResend = true }) {
   const facts = [
     ['Email', r.participant_email],
     ['Company', r.company || r.airline_name],
@@ -69,15 +80,19 @@ function ResponseDetail({ r, form, onBack, onDelete, busy, canManage }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
-        <button type="button" onClick={onBack} className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-800">
-          <HiOutlineArrowLeft className="w-4 h-4" /> All participants
-        </button>
+        {onBack ? (
+          <button type="button" onClick={onBack} className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-800">
+            <HiOutlineArrowLeft className="w-4 h-4" /> {backLabel}
+          </button>
+        ) : <span />}
         {canManage && (
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" disabled={busy} onClick={() => onDelete({ resend: true })}
-              className="rounded-lg text-xs font-bold h-8 px-2.5 flex items-center gap-1.5">
-              <HiOutlineRefresh className="w-3.5 h-3.5" /> Delete &amp; resend form
-            </Button>
+            {allowResend && (
+              <Button variant="outline" size="sm" disabled={busy} onClick={() => onDelete({ resend: true })}
+                className="rounded-lg text-xs font-bold h-8 px-2.5 flex items-center gap-1.5">
+                <HiOutlineRefresh className="w-3.5 h-3.5" /> Delete &amp; resend form
+              </Button>
+            )}
             <Button variant="outline" size="sm" disabled={busy} onClick={() => onDelete({ resend: false })}
               className="rounded-lg text-xs font-bold h-8 px-2.5 flex items-center gap-1.5 text-rose-600 border-rose-200 hover:bg-rose-50 hover:text-rose-700">
               <HiOutlineTrash className="w-3.5 h-3.5" /> Delete response
@@ -143,17 +158,19 @@ function ResponseDetail({ r, form, onBack, onDelete, busy, canManage }) {
 // Airline / department display name in the grouped participant list.
 const groupName = (a) => (a.is_department ? (a.department_name || a.name || a.airlineName) : a.airlineName) || '';
 
-export default function FeedbackDialog({ exam, onClose }) {
+// initialResponseId (e.g. from a dashboard comment) opens straight on that response.
+export default function FeedbackDialog({ exam, onClose, initialResponseId = null }) {
   const { can } = useAuth();
   const canSend = can('exams.assign');
   const [data, setData] = useState(null);
-  const [tab, setTab] = useState(canSend ? 'send' : 'responses');
+  const [tab, setTab] = useState(canSend && !initialResponseId ? 'send' : 'responses');
   const [selected, setSelected] = useState(new Set());
   const [search, setSearch] = useState('');
   const [sending, setSending] = useState(false);
-  const [view, setView] = useState('summary'); // responses tab: summary | people
-  const [openId, setOpenId] = useState(null);  // response shown in detail
+  const [view, setView] = useState(initialResponseId ? 'people' : 'summary'); // responses tab: summary | people
+  const [openId, setOpenId] = useState(initialResponseId);  // response shown in detail
   const [busy, setBusy] = useState(false);
+  const [picked, setPicked] = useState(() => new Set()); // responses ticked for bulk delete
   const { confirm, ConfirmDialog } = useConfirm();
   // Send tab: every participant, grouped by airline (same list as Assign).
   const [groups, setGroups] = useState(null);
@@ -266,6 +283,26 @@ export default function FeedbackDialog({ exam, onClose }) {
       load();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to delete the response');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const togglePicked = (id) => setPicked((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const removeMany = async (ids) => {
+    const ok = await confirm(
+      `Delete ${ids.length} feedback response${ids.length === 1 ? '' : 's'}?\n\nTheir answers are removed from the results and their links stop working. You can send them the form again later. This cannot be undone.`,
+      { title: 'Delete responses', confirmLabel: 'Delete' }
+    );
+    if (!ok) return;
+    setBusy(true);
+    try {
+      const res = await bulkDeleteExamFeedback(exam.id, ids);
+      toast.success(`${res.data.deleted} response${res.data.deleted === 1 ? '' : 's'} deleted.`);
+      setPicked(new Set());
+      load();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to delete the responses');
     } finally {
       setBusy(false);
     }
@@ -423,9 +460,33 @@ export default function FeedbackDialog({ exam, onClose }) {
                     <ResponseDetail r={opened} form={data.form} busy={busy} canManage={canSend}
                       onBack={() => setOpenId(null)} onDelete={(opts) => removeResponse(opened, opts)} />
                   ) : view === 'people' ? (
-                    <ul className="space-y-0.5 -mx-3">
-                      {data.responses.map((r) => <ResponseRow key={r.id} r={r} form={data.form} onOpen={() => setOpenId(r.id)} />)}
-                    </ul>
+                    <>
+                      {canSend && (() => {
+                        const ids = data.responses.map((r) => r.id);
+                        const chosen = ids.filter((id) => picked.has(id));
+                        const all = chosen.length === ids.length;
+                        return (
+                          <div className="flex items-center justify-between gap-3">
+                            <label className="flex items-center gap-2 text-xs font-semibold text-slate-600 cursor-pointer">
+                              <Checkbox checked={all ? true : chosen.length ? 'indeterminate' : false}
+                                onCheckedChange={() => setPicked(all ? new Set() : new Set(ids))} className="w-4 h-4" />
+                              {chosen.length ? `${chosen.length} selected` : 'Select all'}
+                            </label>
+                            <Button variant="outline" size="sm" disabled={busy || !chosen.length} onClick={() => removeMany(chosen)}
+                              className="gap-1.5 text-rose-600 border-rose-200 hover:bg-rose-50 hover:text-rose-700">
+                              <HiOutlineTrash className="w-3.5 h-3.5" /> Delete{chosen.length ? ` (${chosen.length})` : ''}
+                            </Button>
+                          </div>
+                        );
+                      })()}
+                      <ul className="space-y-0.5 -mx-3">
+                        {data.responses.map((r) => (
+                          <ResponseRow key={r.id} r={r} form={data.form} onOpen={() => setOpenId(r.id)}
+                            canManage={canSend} busy={busy} checked={picked.has(r.id)} onToggle={() => togglePicked(r.id)}
+                            onDelete={() => removeResponse(r, { resend: false })} />
+                        ))}
+                      </ul>
+                    </>
                   ) : (
                   <>
                   {/* Headline numbers — one slim strip */}

@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
 import {
   HiOutlineX, HiOutlineInboxIn, HiOutlinePaperAirplane, HiOutlineOfficeBuilding, HiOutlineStar,
 } from 'react-icons/hi';
-import { getFeedbackDashboard } from '../api';
+import { getFeedbackDashboard, deleteFeedbackResponse } from '../api';
+import { useAuth } from '../context/AuthContext';
+import { useConfirm } from '@/hooks/use-confirm';
 import { useHistoryState } from '@/hooks/use-history-state';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { MONTHS, initials, fmtDate } from '../components/dashboard/helpers';
@@ -12,6 +15,8 @@ import {
   SCALE_FILL, BandChip, RatingRow, RATING_ROW, fmtAvg, bandOf, scaleLabel, sectionTitle,
 } from '../components/feedback/RatingUi';
 import { Heatmap } from '../components/feedback/FeedbackCharts';
+import { ResponseDetail } from '../components/FeedbackDialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 // ─── Training feedback dashboard (IFOA admin) ─────────────────────────────────
 // Same layout and chart kit as the admin dashboard: a dark hero band with the
@@ -34,6 +39,40 @@ export default function FeedbackDashboard() {
   const [from, setFrom] = useHistoryState('fbFrom', '');
   const [to, setTo] = useHistoryState('fbTo', '');
   const [questionOrder, setQuestionOrder] = useState('lowest'); // lowest | form
+  const [shownComment, setShownComment] = useState(null); // response with no live exam, shown here
+  const [reloadKey, setReloadKey] = useState(0);
+  const [deleting, setDeleting] = useState(false);
+  const navigate = useNavigate();
+  const { can } = useAuth();
+  const canDelete = can('exams.assign');
+  const { confirm, ConfirmDialog } = useConfirm();
+
+  const deleteShown = async () => {
+    const c = shownComment;
+    const ok = await confirm(
+      `Delete ${c.participant_name || 'this participant'}'s feedback response?\n\nTheir answers are removed from every chart and total. This cannot be undone.`,
+      { title: 'Delete response', confirmLabel: 'Delete' }
+    );
+    if (!ok) return;
+    setDeleting(true);
+    try {
+      await deleteFeedbackResponse(c.id);
+      toast.success('Response deleted.');
+      setShownComment(null);
+      setReloadKey((k) => k + 1);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to delete the response');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  // A comment opens its response: in the exam's feedback dialog when the exam
+  // still exists, otherwise (imported / deleted exam) in a dialog on this page.
+  const openComment = (c) => {
+    if (c.exam_id) navigate(`/admin/exams?feedback=${c.exam_id}&response=${c.id}`);
+    else setShownComment(c);
+  };
 
   useEffect(() => {
     setLoading(true);
@@ -46,12 +85,20 @@ export default function FeedbackDashboard() {
       .then((res) => setData(res.data))
       .catch((err) => toast.error(err.response?.data?.error || 'Failed to load feedback.'))
       .finally(() => setLoading(false));
-  }, [airline, examId, from, to]);
+  }, [airline, examId, from, to, reloadKey]);
 
   const scale = data?.form.scale || [];
   const sections = data?.form.sections || [];
   const totals = data?.totals;
   const filtersOn = airline || examId || from || to;
+  // The year filter is a shortcut for a 1 Jan – 31 Dec date range.
+  const yearMatch = /^(\d{4})-01-01$/.exec(from || '');
+  const year = !from && !to ? 'all' : yearMatch && to === `${yearMatch[1]}-12-31` ? yearMatch[1] : 'custom';
+  const setYear = (y) => {
+    if (y === 'all') { setFrom(''); setTo(''); } else if (y !== 'custom') { setFrom(`${y}-01-01`); setTo(`${y}-12-31`); }
+  };
+  const yearOptions = [...new Set([...(data?.options.years || []).map(String), ...(year !== 'all' && year !== 'custom' ? [year] : [])])]
+    .sort((a, b) => b.localeCompare(a));
   const resetFilters = () => { setAirline(''); setExamId(''); setFrom(''); setTo(''); };
   const has = (totals?.submitted || 0) > 0;
 
@@ -103,6 +150,14 @@ export default function FeedbackDashboard() {
               <SelectContent className="max-h-72">
                 <SelectItem value="all">All exams</SelectItem>
                 {(data?.options.exams || []).map((e) => <SelectItem key={e.id} value={e.id}>{e.title}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={year} onValueChange={setYear}>
+              <SelectTrigger className={`w-32 ${DARK_CONTROL}`} aria-label="Year"><SelectValue /></SelectTrigger>
+              <SelectContent className="max-h-72">
+                <SelectItem value="all">All years</SelectItem>
+                {yearOptions.map((y) => <SelectItem key={y} value={y}>{y}</SelectItem>)}
+                {year === 'custom' && <SelectItem value="custom">Custom dates</SelectItem>}
               </SelectContent>
             </Select>
             <label className={`inline-flex items-center gap-1.5 px-2.5 border ${DARK_CONTROL}`}>
@@ -260,7 +315,10 @@ export default function FeedbackDashboard() {
               {data.comments.length ? (
                 <ul className="flex-1 flex flex-col gap-1 -mx-2">
                   {data.comments.slice(0, 6).map((c) => (
-                    <li key={c.id} className="flex items-start gap-3 px-2 py-2 rounded-xl hover:bg-slate-50 transition-colors">
+                    <li key={c.id} role="button" tabIndex={0} onClick={() => openComment(c)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openComment(c); } }}
+                      title="Open this response"
+                      className="flex items-start gap-3 px-2 py-2 rounded-xl hover:bg-slate-50 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40">
                       <span className="w-9 h-9 rounded-full bg-slate-100 text-slate-600 text-xs font-bold flex items-center justify-center flex-shrink-0">{initials(c.participant_name)}</span>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-start justify-between gap-2">
@@ -268,7 +326,7 @@ export default function FeedbackDashboard() {
                           {c.average != null && <BandChip avg={c.average} scale={scale} className="flex-shrink-0" />}
                         </div>
                         <p className="text-xs text-slate-500 truncate">{[c.airline, fmtDate(c.submitted_at)].filter(Boolean).join(' · ')}</p>
-                        <p className="mt-1 text-[13px] text-slate-700 leading-snug line-clamp-3" title={c.comments}>{c.comments}</p>
+                        <p className="mt-1 text-[13px] text-slate-700 leading-snug line-clamp-3">{c.comments}</p>
                       </div>
                     </li>
                   ))}
@@ -277,6 +335,23 @@ export default function FeedbackDashboard() {
             </ChartCard>
           </div>
         </div>
+      )}
+
+      {ConfirmDialog}
+      {shownComment && data && (
+        <Dialog open onOpenChange={(open) => !open && setShownComment(null)}>
+          <DialogContent className="max-w-3xl w-[94vw] max-h-[85vh] flex flex-col p-0 overflow-hidden rounded-2xl border border-slate-200/80 shadow-2xl bg-white">
+            <DialogHeader className="flex-shrink-0 px-6 pt-5 pb-3 border-b border-slate-100 space-y-0 text-left">
+              <DialogTitle className="text-base font-bold text-slate-900 leading-snug pr-6">Training feedback</DialogTitle>
+              {shownComment.exam_title && <p className="text-xs text-slate-500 mt-0.5 truncate">{shownComment.exam_title}</p>}
+            </DialogHeader>
+            <div className="flex-1 overflow-y-auto px-6 py-4">
+              <ResponseDetail form={data.form} canManage={canDelete} allowResend={false} busy={deleting}
+                onDelete={deleteShown}
+                r={{ ...shownComment, participant_name: shownComment.participant_name || 'Participant' }} />
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );

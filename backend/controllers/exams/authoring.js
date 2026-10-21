@@ -4,7 +4,9 @@ const ExamInvite = require('../../models/ExamInvite');
 const ExamAttempt = require('../../models/ExamAttempt');
 const Airline = require('../../models/Airline');
 const Participant = require('../../models/Participant');
-const { examImageUpload, deleteImagesIfUnused } = require('../../services/upload');
+const TrainingFeedback = require('../../models/TrainingFeedback');
+const r2 = require('../../services/r2');
+const { examImageUpload, deleteImagesIfUnused, questionImageIds } = require('../../services/upload');
 const { sanitizeQuestionForTaking, answerKeyProblems } = require('../../services/examGrading');
 const { submitAttemptOnce } = require('../../services/examAttemptFlow');
 const { remarkExam, changedKeyQuestionIds, changedContentQuestionIds, refreshInProgressContent } = require('../../services/examRemark');
@@ -441,17 +443,27 @@ exports.getAnalytics = async (req, res) => {
   }
 };
 
-// ─── DELETE /exams/:id (admin) — cascades Cloudinary image cleanup ───────────
+// ─── DELETE /exams/:id (admin) — soft delete; ?purge=1 erases everything ──────
 exports.deleteExam = async (req, res) => {
   try {
+    const purge = ['1', 'true'].includes(String(req.query.purge || ''));
     const exam = await Exam.findById(req.params.id);
-    if (!exam || exam.deleted_at) return res.status(404).json({ error: 'Exam not found.' });
+    // An already-deleted exam can still be purged later (from the "Deleted" filter).
+    if (!exam || (exam.deleted_at && !purge)) return res.status(404).json({ error: 'Exam not found.' });
     if (!canManageExam(req, exam)) return res.status(403).json({ error: 'Access denied.' });
 
-    // Soft delete: results, invites, certificates and question images all stay
-    // so reports and dashboards keep working. Links stop working (expired now)
-    // and anyone mid-exam is submitted with the answers they have so far.
+    // Anyone mid-exam is submitted with the answers they have so far.
     const now = new Date();
+    const open = await ExamAttempt.find({ exam_id: exam._id, status: 'in_progress' }).select('_id').lean();
+    for (const a of open) await submitAttemptOnce(a._id, { auto_submitted: true, auto_submit_reason: 'exam_deleted' });
+
+    if (purge) {
+      await purgeExamData(exam);
+      return res.json({ message: 'Exam and all its results, candidates and feedback deleted.' });
+    }
+
+    // Soft delete: results, invites, certificates and question images all stay
+    // so reports and dashboards keep working. Links stop working (expired now).
     exam.deleted_at = now;
     exam.deleted_by = req.admin.id || null;
     await exam.save({ validateBeforeSave: false });
@@ -459,13 +471,49 @@ exports.deleteExam = async (req, res) => {
       { exam_id: exam._id, $or: [{ expires_at: null }, { expires_at: { $gt: now } }] },
       { $set: { expires_at: now } }
     );
-    const open = await ExamAttempt.find({ exam_id: exam._id, status: 'in_progress' }).select('_id').lean();
-    for (const a of open) await submitAttemptOnce(a._id, { auto_submitted: true, auto_submit_reason: 'exam_deleted' });
     res.json({ message: 'Exam deleted. Its results are kept.' });
   } catch (err) {
     console.error('DELETE /exams/:id error:', err.message);
     res.status(500).json({ error: err.message });
   }
 };
+
+// Hard delete: the exam, its attempts (+ uploaded certificates), invites,
+// training feedback, the temporary candidates added only for it, and question
+// images nothing else uses. Permanent people (participant records) are kept.
+async function purgeExamData(exam) {
+  const attempts = await ExamAttempt.find({ exam_id: exam._id }).select('certificate questions_snapshot').lean();
+  await Promise.all(attempts
+    .filter((a) => a.certificate && a.certificate.r2_key)
+    .map((a) => r2.deleteObject(a.certificate.r2_key).catch(() => {})));
+  const imageIds = [
+    ...(exam.questions || []).flatMap(questionImageIds),
+    ...attempts.flatMap((a) => (a.questions_snapshot || []).flatMap(questionImageIds)),
+  ];
+
+  await ExamAttempt.deleteMany({ exam_id: exam._id });
+  await ExamInvite.deleteMany({ exam_id: exam._id });
+  await TrainingFeedback.deleteMany({ exam_id: exam._id });
+
+  // Temporary candidates created for this exam — unless they've since been
+  // reused by another exam, which still needs the record.
+  const temps = await Participant.find({ temporary: true, temporary_exam_id: exam._id }).select('_id').lean();
+  if (temps.length) {
+    const tempIds = temps.map((p) => p._id);
+    const stillUsed = new Set([
+      ...(await ExamInvite.distinct('participant_id', { participant_id: { $in: tempIds } })),
+      ...(await ExamAttempt.distinct('participant_id', { participant_id: { $in: tempIds } })),
+      ...(await TrainingFeedback.distinct('participant_id', { participant_id: { $in: tempIds } })),
+    ].map(String));
+    const orphanIds = tempIds.filter((id) => !stillUsed.has(String(id)));
+    if (orphanIds.length) {
+      await Participant.deleteMany({ _id: { $in: orphanIds } });
+      await Exam.updateMany({ 'assignments.participant_id': { $in: orphanIds } }, { $pull: { assignments: { participant_id: { $in: orphanIds } } } });
+    }
+  }
+
+  await Exam.deleteOne({ _id: exam._id });
+  await deleteImagesIfUnused(imageIds).catch(() => {});
+}
 
 Object.assign(exports, { LIST_EXCLUDE, withQuestionCounts });

@@ -22,7 +22,6 @@ const DAY_CREDIT = { P: 1, L: 1, E: 0, A: 0 };
 
 export const DEFAULT_FORM_REF = 'IFOA-FRM-ATT-01 · Rev. 1.0';
 export const DEFAULT_TAGLINE = 'International Flight Operations Academy';
-export const DELIVERY_MODES = ['Classroom', 'Virtual (live online)', 'Blended', 'On the job'];
 
 // Every calendar day from start to end (YYYY-MM-DD), capped at a year.
 export function courseDays(startDate, endDate) {
@@ -68,6 +67,7 @@ export function defaultDetails({ company, trainingLabel, endDate } = {}) {
     min_attendance: 80,
     instructor_name: '',
     instructor_title: '',
+    instructor_signature: '',
     certified_on: endDate || '',
     tagline: DEFAULT_TAGLINE,
     form_ref: DEFAULT_FORM_REF,

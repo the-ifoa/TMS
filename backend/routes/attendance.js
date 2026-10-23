@@ -8,6 +8,9 @@ router.use(authMiddleware, loadScope);
 
 const canView   = requirePermission('attendance.view');
 const canManage = requirePermission('attendance.manage');
+// Airlines may only ask for a sheet (names + dates) by ticking "Track
+// Attendance" on an enrollment. Filling it in is IFOA admin work.
+const canRequest = (req, res, next) => (req.scope && req.scope.kind === 'airline' ? next() : canManage(req, res, next));
 
 // ─── GET /api/attendance — list sheets ───────────────────────────────────────
 router.get('/', canView, attendanceController.listSheets);
@@ -16,13 +19,13 @@ router.get('/', canView, attendanceController.listSheets);
 router.get('/:id', canView, attendanceController.getSheet);
 
 // ─── POST /api/attendance/bulk — ensure one sheet per training batch ─────────
-router.post('/bulk', canManage, attendanceController.bulkEnsureSheets);
+router.post('/bulk', canRequest, attendanceController.bulkEnsureSheets);
 
-// ─── POST /api/attendance — create new sheet ──────────────────────────────────
-router.post('/', canManage, attendanceController.createSheet);
+// ─── POST /api/attendance — admin creates a sheet ─────────────────────────────
+router.post('/', adminOnly, canManage, attendanceController.createSheet);
 
-// ─── PUT /api/attendance/:id — update existing sheet ─────────────────────────
-router.put('/:id', canManage, attendanceController.updateSheet);
+// ─── PUT /api/attendance/:id — admin fills in / edits a sheet ─────────────────
+router.put('/:id', adminOnly, canManage, attendanceController.updateSheet);
 
 // ─── DELETE /api/attendance/:id — IFOA admin removes a sheet ─────────────────
 router.delete('/:id', adminOnly, canManage, attendanceController.deleteSheet);

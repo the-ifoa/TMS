@@ -11,12 +11,10 @@ import {
   HiOutlineUser,
   HiOutlineCheckCircle,
   HiOutlineExclamationCircle,
-  HiOutlineClipboardList,
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
-import { createParticipant, getAirlinesList, sendSubmissionConfirmation } from '../api';
+import { createParticipant, getAirlinesList, sendSubmissionConfirmation, bulkEnsureAttendanceSheets } from '../api';
 import { useAuth } from '../context/AuthContext';
-import AttendanceChecklistModal from '../components/AttendanceChecklistModal';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 
 const TRAINING_TYPES = [
@@ -61,13 +59,59 @@ const emptyRow = (defaultNdgSubtype = 'I', defaultDepartment = '') => ({
   ndg_subtype: defaultNdgSubtype, // I or R for NDG training overrides
 });
 
-// AttendanceChecklistModal — imported from ../components/AttendanceChecklistModal
+// ─── Track Attendance tick ────────────────────────────────────────────────────
+// Ticking it only asks for an attendance sheet: on submit one is set up for the
+// batch (names + dates). IFOA admins fill in the register and record details
+// from the Attendance page.
+function TrackAttendanceToggle({ checked, onChange, isAdmin }) {
+  return (
+    <div className="space-y-1">
+      <label className="flex items-center gap-2 cursor-pointer select-none w-fit">
+        <button
+          type="button"
+          role="checkbox"
+          aria-checked={checked}
+          onClick={() => onChange(!checked)}
+          className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${
+            checked ? 'bg-accent-600 border-accent-600' : 'border-primary-300 hover:border-primary-500'
+          }`}
+        >
+          {checked && (
+            <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+            </svg>
+          )}
+        </button>
+        <span className="text-sm font-medium text-primary-700">Track Attendance</span>
+        <span className="text-xs text-primary-400">(optional)</span>
+      </label>
+      {checked && (
+        <p className="text-xs text-primary-400 pl-7">
+          {isAdmin
+            ? 'An attendance sheet is set up for this batch. Fill it in from the Attendance page.'
+            : 'IFOA will keep the attendance record for this batch.'}
+        </p>
+      )}
+    </div>
+  );
+}
+
+// Set up the attendance sheet(s) for the saved participants. Never blocks the
+// enrollment itself.
+async function requestAttendance(ids, isAdmin) {
+  if (!ids.length) return;
+  try {
+    await bulkEnsureAttendanceSheets(ids);
+    if (isAdmin) toast.success('Attendance sheet ready on the Attendance page');
+  } catch (err) {
+    toast.error(err.response?.data?.error || 'Enrollment saved, but the attendance sheet could not be set up');
+  }
+}
 
 // ─── Single-mode form ─────────────────────────────────────────────────────────
 function SingleForm({ isAdmin, isDepartment, departmentLabel, airlineName, airlineOptions, createExamResult, setCreateExamResult, onSuccess }) {
   const [saving, setSaving] = useState(false);
-  const [showChecklist, setShowChecklist] = useState(false);
-  const [attendanceSheetId, setAttendanceSheetId] = useState(null);
+  const [trackAttendance, setTrackAttendance] = useState(false);
   const [form, setForm] = useState({
     first_name: '',
     last_name: '',
@@ -106,6 +150,7 @@ function SingleForm({ isAdmin, isDepartment, departmentLabel, airlineName, airli
     try {
       setSaving(true);
       const saved = await createParticipant({ ...form, create_exam_result: createExamResult });
+      if (trackAttendance) await requestAttendance([saved.data.id || saved.data._id].filter(Boolean), isAdmin);
       // Send one confirmation email (airline only — fire-and-forget)
       if (!isAdmin) {
         sendSubmissionConfirmation({
@@ -348,38 +393,17 @@ function SingleForm({ isAdmin, isDepartment, departmentLabel, airlineName, airli
             <span className="text-sm font-medium text-primary-700">Create exam result</span>
             <span className="text-xs text-primary-400">(adds to admin Exam Results under this airline)</span>
           </label>
+          <div className="mt-3">
+            <TrackAttendanceToggle checked={trackAttendance} onChange={setTrackAttendance} isAdmin={isAdmin} />
+          </div>
         </div>
 
       <div className="flex items-center justify-end gap-3 pt-4 border-t border-primary-200">
-        <button
-          type="button"
-          onClick={() => {
-            if (!form.training_date) { toast.error('Set a start date first'); return; }
-            setShowChecklist(true);
-          }}
-          className="btn-outline flex items-center gap-1.5"
-        >
-          <HiOutlineClipboardList className="w-4 h-4" />
-          Attendance Checklist
-        </button>
         <button type="button" onClick={onSuccess} className="btn-outline">Cancel</button>
         <button type="submit" disabled={saving} className="btn-primary">
           {saving ? 'Saving…' : isAdmin ? 'Add Participant' : 'Submit Enrollment'}
         </button>
       </div>
-
-      {showChecklist && (
-        <AttendanceChecklistModal
-          participants={[{ first_name: form.first_name, last_name: form.last_name }]}
-          startDate={form.training_date}
-          endDate={form.end_date}
-          company={form.company}
-          trainingType={form.training_type}
-          attendanceId={attendanceSheetId}
-          onIdSaved={(id) => setAttendanceSheetId(id)}
-          onClose={() => setShowChecklist(false)}
-        />
-      )}
     </form>
   );
 }
@@ -504,8 +528,6 @@ function BulkForm({ isAdmin, isDepartment, departmentLabel, airlineName, airline
   const [saving, setSaving]              = useState(false);
   const [results, setResults] = useState({});
   const [done, setDone]       = useState(false);
-  const [showChecklist, setShowChecklist]     = useState(false);
-  const [attendanceSheetId, setAttendanceSheetId] = useState(null);
   const [trackAttendance, setTrackAttendance] = useState(false);
 
   // ── Shared session fields (apply to ALL participants) ──
@@ -596,9 +618,11 @@ function BulkForm({ isAdmin, isDepartment, departmentLabel, airlineName, airline
     // and would not be readable immediately after the loop)
     const savedParticipants = [];
 
+    const savedIds = [];
+
     for (const row of pending) {
       try {
-        await createParticipant({
+        const res = await createParticipant({
           first_name:         row.first_name.trim(),
           last_name:          row.last_name.trim(),
           email:              (row.email || '').trim(),
@@ -614,6 +638,8 @@ function BulkForm({ isAdmin, isDepartment, departmentLabel, airlineName, airline
           create_exam_result: createExamResult,
         });
         setResults(prev => ({ ...prev, [row.id]: { status: 'success' } }));
+        const newId = res.data?.id || res.data?._id;
+        if (newId) savedIds.push(newId);
         // Record in local array so we can use it synchronously below
         savedParticipants.push({
           first_name: row.first_name.trim(),
@@ -627,6 +653,8 @@ function BulkForm({ isAdmin, isDepartment, departmentLabel, airlineName, airline
         failCount++;
       }
     }
+
+    if (trackAttendance) await requestAttendance(savedIds, isAdmin);
 
     setSaving(false);
 
@@ -860,37 +888,8 @@ function BulkForm({ isAdmin, isDepartment, departmentLabel, airlineName, airline
         </div>
 
         {/* Attendance tracking — optional */}
-        <div className="pt-2 border-t border-primary-100 space-y-2">
-          <label className="flex items-center gap-2 cursor-pointer select-none w-fit">
-            <button
-              type="button"
-              onClick={() => setTrackAttendance(v => !v)}
-              className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${
-                trackAttendance ? 'bg-accent-600 border-accent-600' : 'border-primary-300 hover:border-primary-500'
-              }`}
-            >
-              {trackAttendance && (
-                <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                </svg>
-              )}
-            </button>
-            <span className="text-sm font-medium text-primary-700">Track Attendance</span>
-            <span className="text-xs text-primary-400">(optional)</span>
-          </label>
-          {trackAttendance && (
-            <button
-              type="button"
-              onClick={() => {
-                if (!shared.training_date) { toast.error('Set a start date first'); return; }
-                setShowChecklist(true);
-              }}
-              className="btn-outline flex items-center gap-1.5"
-            >
-              <HiOutlineClipboardList className="w-4 h-4" />
-              Attendance Checklist
-            </button>
-          )}
+        <div className="pt-2 border-t border-primary-100">
+          <TrackAttendanceToggle checked={trackAttendance} onChange={setTrackAttendance} isAdmin={isAdmin} />
         </div>
       </div>
 
@@ -987,19 +986,6 @@ function BulkForm({ isAdmin, isDepartment, departmentLabel, airlineName, airline
           )}
         </div>
       </div>
-
-      {showChecklist && (
-        <AttendanceChecklistModal
-          participants={rows.map(r => ({ first_name: r.first_name, last_name: r.last_name }))}
-          startDate={shared.training_date}
-          endDate={shared.end_date}
-          company={company === '__other__' ? customCompany.trim() : company}
-          trainingType={shared.training_type}
-          attendanceId={attendanceSheetId}
-          onIdSaved={(id) => setAttendanceSheetId(id)}
-          onClose={() => setShowChecklist(false)}
-        />
-      )}
     </form>
   );
 }

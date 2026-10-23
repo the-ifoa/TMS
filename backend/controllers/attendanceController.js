@@ -19,6 +19,12 @@ const cleanParticipants = (list) => (Array.isArray(list) ? list : []).slice(0, 1
 const cleanStatuses = (list) => (Array.isArray(list) ? list : []).slice(0, 400)
   .filter((s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s?.date || '')))
   .map((s) => ({ date: s.date, codes: (Array.isArray(s.codes) ? s.codes : []).slice(0, 1000).map((c) => (CODES.has(c) ? c : 'P')) }));
+// Signature image as a data URL; anything else (or too big) is dropped.
+const SIGNATURE_MAX = 700 * 1024;
+const cleanSignature = (v) => {
+  const s = String(v || '');
+  return s.length <= SIGNATURE_MAX && /^data:image\/(png|jpeg);base64,[A-Za-z0-9+/]+=*$/.test(s) ? s : '';
+};
 const cleanDetails = (d = {}) => ({
   course_title:     str(d.course_title, 160),
   client:           str(d.client, 160),
@@ -28,6 +34,7 @@ const cleanDetails = (d = {}) => ({
   min_attendance:   num(d.min_attendance, 0, 100) ?? 80,
   instructor_name:  str(d.instructor_name, 120),
   instructor_title: str(d.instructor_title, 160),
+  instructor_signature: cleanSignature(d.instructor_signature),
   certified_on:     /^\d{4}-\d{2}-\d{2}$/.test(String(d.certified_on || '')) ? d.certified_on : '',
   tagline:          str(d.tagline, 200),
   form_ref:         str(d.form_ref, 80),
@@ -42,7 +49,7 @@ exports.listSheets = async (req, res) => {
     if (req.query.training_type) filter.training_type = req.query.training_type;
 
     const sheets = await AttendanceSheet.find(filter)
-      .select('_id company training_type start_date end_date participants submitted_by created_at')
+      .select('_id company training_type start_date end_date participants submitted_by requested_by_airline created_at records.date statuses.date')
       .sort({ created_at: -1 })
       .lean();
 
@@ -55,9 +62,12 @@ exports.listSheets = async (req, res) => {
       const airlines = await Airline.find({ _id: { $in: ownerIds } }).select('airlineName').lean();
       airlines.forEach(a => { nameById[String(a._id)] = a.airlineName; });
     }
-    const out = sheets.map(s => ({
+    // `pending` = nothing marked yet (an admin save always writes statuses), so
+    // the admin list can flag sheets still waiting to be filled in.
+    const out = sheets.map(({ records, statuses, ...s }) => ({
       ...s,
       airline_name: (s.submitted_by && nameById[String(s.submitted_by)]) || s.company,
+      pending: !(statuses && statuses.length) && !(records && records.length),
     }));
     res.json(out);
   } catch (err) {
@@ -82,7 +92,7 @@ exports.getSheet = async (req, res) => {
   }
 };
 
-// ─── POST /api/attendance — create new sheet ──────────────────────────────────
+// ─── POST /api/attendance — admin creates a sheet ────────────────────────────
 exports.createSheet = async (req, res) => {
   try {
     const { company, training_type, start_date, end_date, participants, records, statuses, details } = req.body;
@@ -97,11 +107,8 @@ exports.createSheet = async (req, res) => {
       records: records || [],
       statuses: cleanStatuses(statuses),
       ...(details ? { details: cleanDetails(details) } : {}),
-      // Airlines always own their own sheets. Admins may attribute the sheet to
-      // an airline account by passing submitted_by (used by the bulk builder).
-      submitted_by: req.admin.role === 'airline'
-        ? req.admin.id
-        : (req.body.submitted_by || null),
+      // Admin-only route: the sheet may be attributed to an airline account.
+      submitted_by: req.body.submitted_by || null,
     });
 
     res.status(201).json(sheet);
@@ -115,6 +122,8 @@ exports.createSheet = async (req, res) => {
 // company + training_type + start/end date (+ owning airline) and creates an
 // attendance sheet for each batch that doesn't have one yet. Returns every
 // matching sheet so the caller can open the first for marking.
+// Airlines call this when they tick "Track Attendance" on an enrollment: it
+// only sets up names + dates; the admin fills in the rest.
 exports.bulkEnsureSheets = async (req, res) => {
   try {
     const ids = Array.isArray(req.body.participantIds) ? req.body.participantIds : [];
@@ -160,7 +169,7 @@ exports.bulkEnsureSheets = async (req, res) => {
       });
       let created = false;
       if (!sheet) {
-        sheet = await AttendanceSheet.create({ ...g, records: [] });
+        sheet = await AttendanceSheet.create({ ...g, records: [], requested_by_airline: req.admin.role === 'airline' });
         created = true;
       } else {
         // merge any newly-selected participants onto the existing sheet.
@@ -182,15 +191,11 @@ exports.bulkEnsureSheets = async (req, res) => {
   }
 };
 
-// ─── PUT /api/attendance/:id — update existing sheet ─────────────────────────
+// ─── PUT /api/attendance/:id — admin fills in / edits a sheet ────────────────
 exports.updateSheet = async (req, res) => {
   try {
     const sheet = await AttendanceSheet.findById(req.params.id);
     if (!sheet) return res.status(404).json({ error: 'Not found' });
-
-    if (req.admin.role === 'airline' && String(sheet.submitted_by) !== String(req.admin.id)) {
-      return res.status(403).json({ error: 'Forbidden' });
-    }
 
     const { company, training_type, start_date, end_date, participants, records, statuses, details } = req.body;
     if (company) sheet.company = company;

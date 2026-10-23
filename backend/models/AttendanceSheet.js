@@ -34,11 +34,17 @@ const attendanceSheetSchema = new mongoose.Schema(
       min_attendance:   { type: Number, default: 80 },
       instructor_name:  { type: String, default: '' },
       instructor_title: { type: String, default: '' },
+      // Uploaded signature (PNG/JPEG data URL). Blank = use the instructor's
+      // built-in signature, if any.
+      instructor_signature: { type: String, default: '' },
       certified_on:     { type: String, default: '' },  // YYYY-MM-DD
       tagline:          { type: String, default: '' },
       form_ref:         { type: String, default: '' },
     },
     submitted_by: { type: mongoose.Schema.Types.ObjectId, ref: 'Airline', default: null },
+    // true when the airline asked for this sheet by ticking "Track Attendance"
+    // on an enrollment (the admin then fills it in).
+    requested_by_airline: { type: Boolean, default: false },
   },
   {
     timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' },

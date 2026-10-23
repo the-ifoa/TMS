@@ -1,12 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
-import { HiOutlineClipboardList, HiOutlineCheckCircle, HiOutlineX, HiOutlineDocumentDownload, HiOutlineEye, HiOutlineRefresh } from 'react-icons/hi';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { HiOutlineClipboardList, HiOutlineCheckCircle, HiOutlineX, HiOutlineDocumentDownload, HiOutlineEye, HiOutlineRefresh, HiOutlineUpload } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import { getAttendanceSheet, saveAttendanceSheet, updateAttendanceSheet } from '../api';
 import { generateAttendancePdf } from '../utils/generateAttendancePdf';
 import {
-  STATUS, STATUS_ORDER, DELIVERY_MODES, courseDays, statusMatrix, summarise, defaultDetails, mergeDetails, toStorage, nameKey,
+  STATUS, STATUS_ORDER, courseDays, statusMatrix, summarise, defaultDetails, mergeDetails, toStorage, nameKey,
 } from '../utils/attendanceRecord';
 import { TRAINING_LABELS } from '../pages/airlines/helpers';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
+import { INSTRUCTORS, findInstructor, signatureFor, signatureFileToDataUrl } from '../utils/instructors';
 
 // ─── Attendance editor ────────────────────────────────────────────────────────
 // Three tabs for one training batch:
@@ -113,6 +115,25 @@ export default function AttendanceChecklistModal({
   };
   const setExtra = (i, patch) => setExtras((prev) => prev.map((e, j) => (j === i ? { ...e, ...patch } : e)));
   const setDetail = (k, v) => setDetails((prev) => ({ ...prev, [k]: v }));
+
+  // Instructor: pick from the IFOA list or type a name ("Other"). Changing the
+  // instructor drops any uploaded signature, which belonged to the old one.
+  const [typingName, setTypingName] = useState(false);
+  const sigInput = useRef(null);
+  const listed = findInstructor(details.instructor_name);
+  const instructorChoice = listed ? listed.name : (typingName || details.instructor_name ? '__other__' : '');
+  const chooseInstructor = (value) => {
+    setTypingName(value === '__other__');
+    setDetails((prev) => ({ ...prev, instructor_name: value === '__other__' ? '' : value, instructor_signature: '' }));
+  };
+  const uploadSignature = async (file) => {
+    try {
+      setDetail('instructor_signature', await signatureFileToDataUrl(file));
+    } catch (err) {
+      toast.error(err.message);
+    }
+  };
+  const signature = signatureFor(details);
 
   const sheetForPdf = () => ({
     ...(sheetMeta || {}), company, airline_name: company, training_type: trainingType, start_date: startDate, end_date: endDate,
@@ -234,8 +255,9 @@ export default function AttendanceChecklistModal({
                           {new Date(`${selectedDate}T12:00:00`).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
                         </p>
                         {!readOnly && (
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
                             <button type="button" onClick={() => setDay(selectedDate, 'P')} className="h-8 px-3 rounded-lg text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700">All present this day</button>
+                            <button type="button" onClick={() => setDay(selectedDate, 'A')} className="h-8 px-3 rounded-lg text-xs font-semibold bg-rose-600 text-white hover:bg-rose-700">All absent this day</button>
                             <button type="button" onClick={resetAll} className="h-8 px-3 rounded-lg text-xs font-semibold border border-slate-200 text-slate-600 hover:bg-slate-50 inline-flex items-center gap-1.5"><HiOutlineRefresh className="w-3.5 h-3.5" />Reset all days</button>
                           </div>
                         )}
@@ -323,10 +345,7 @@ export default function AttendanceChecklistModal({
               <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-3xl">
                 <Field label="Course title"><input className={inputCls} disabled={readOnly} value={details.course_title} onChange={(e) => setDetail('course_title', e.target.value)} placeholder="e.g. Aircraft Dispatcher – Recurrent Training" /></Field>
                 <Field label="Client / operator"><input className={inputCls} disabled={readOnly} value={details.client} onChange={(e) => setDetail('client', e.target.value)} /></Field>
-                <Field label="Delivery mode">
-                  <input className={inputCls} disabled={readOnly} list="attendance-delivery-modes" value={details.delivery_mode} onChange={(e) => setDetail('delivery_mode', e.target.value)} />
-                  <datalist id="attendance-delivery-modes">{DELIVERY_MODES.map((m) => <option key={m} value={m} />)}</datalist>
-                </Field>
+                <Field label="Delivery mode"><input className={inputCls} disabled={readOnly} value={details.delivery_mode} onChange={(e) => setDetail('delivery_mode', e.target.value)} placeholder="e.g. Classroom, Online, Blended" /></Field>
                 <Field label="Venue"><input className={inputCls} disabled={readOnly} value={details.venue} onChange={(e) => setDetail('venue', e.target.value)} placeholder="e.g. IFOA Training Centre" /></Field>
                 <Field label="Scheduled hours" hint={days.length ? `Across ${days.length} day${days.length !== 1 ? 's' : ''}. Used for hours and attendance %.` : ''}>
                   <input type="number" min="0" step="0.5" className={inputCls} disabled={readOnly} value={details.scheduled_hours ?? ''} onChange={(e) => setDetail('scheduled_hours', e.target.value === '' ? null : Number(e.target.value))} placeholder="e.g. 24" />
@@ -334,8 +353,57 @@ export default function AttendanceChecklistModal({
                 <Field label="Minimum attendance (%)" hint="Needed to complete the course.">
                   <input type="number" min="0" max="100" className={inputCls} disabled={readOnly} value={details.min_attendance ?? ''} onChange={(e) => setDetail('min_attendance', e.target.value === '' ? null : Number(e.target.value))} />
                 </Field>
-                <Field label="Instructor name"><input className={inputCls} disabled={readOnly} value={details.instructor_name} onChange={(e) => setDetail('instructor_name', e.target.value)} placeholder="e.g. A. Instructor" /></Field>
+                {/* div, not a <label>: a label would re-open the dropdown on click */}
+                <div>
+                  <span className="block text-xs font-semibold text-slate-700 mb-1">Instructor name</span>
+                  <Select value={instructorChoice || undefined} onValueChange={chooseInstructor} disabled={readOnly}>
+                    <SelectTrigger className="h-9 rounded-lg bg-white" aria-label="Instructor name">
+                      <SelectValue placeholder="Select instructor" />
+                    </SelectTrigger>
+                    <SelectContent className="z-[60]">
+                      {INSTRUCTORS.map((i) => <SelectItem key={i.name} value={i.name}>{i.name}</SelectItem>)}
+                      <SelectItem value="__other__">Other (type name)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {instructorChoice === '__other__' && (
+                    <input className={`${inputCls} mt-2`} disabled={readOnly} value={details.instructor_name} onChange={(e) => setDetail('instructor_name', e.target.value)} placeholder="Instructor's full name" aria-label="Instructor's full name" autoFocus={!readOnly && !details.instructor_name} />
+                  )}
+                </div>
                 <Field label="Instructor role / qualification"><input className={inputCls} disabled={readOnly} value={details.instructor_title} onChange={(e) => setDetail('instructor_title', e.target.value)} placeholder="e.g. Lead Instructor · FAA Aircraft Dispatcher" /></Field>
+                <div className="sm:col-span-2">
+                  <span className="block text-xs font-semibold text-slate-700 mb-1">Instructor signature</span>
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                    <div className="h-20 w-full sm:w-72 rounded-lg border border-dashed border-slate-300 bg-white flex items-center justify-center px-3">
+                      {signature
+                        ? <img src={signature} alt={`Signature of ${details.instructor_name || 'the instructor'}`} className="max-h-16 max-w-full object-contain" />
+                        : <span className="text-[11px] text-slate-400">No signature. The record prints a blank line to sign by hand.</span>}
+                    </div>
+                    {!readOnly && (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <input ref={sigInput} type="file" accept="image/png,image/jpeg,image/webp" className="hidden"
+                          onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) uploadSignature(f); }} />
+                        <button type="button" onClick={() => sigInput.current?.click()}
+                          className="h-9 px-3 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 inline-flex items-center gap-1.5">
+                          <HiOutlineUpload className="w-4 h-4" />
+                          {details.instructor_signature ? 'Replace signature' : listed?.signature ? 'Upload a different one' : 'Upload signature'}
+                        </button>
+                        {details.instructor_signature && (
+                          <button type="button" onClick={() => setDetail('instructor_signature', '')}
+                            className="h-9 px-3 rounded-lg text-xs font-semibold text-slate-500 hover:bg-slate-100">
+                            {listed?.signature ? 'Use built-in signature' : 'Remove'}
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <span className="block text-[11px] text-slate-400 mt-1">
+                    {details.instructor_signature
+                      ? 'Uploaded for this record.'
+                      : listed?.signature
+                        ? `Built-in signature for ${listed.name}.`
+                        : 'PNG or JPG on a plain light background works best.'}
+                  </span>
+                </div>
                 <Field label="Certification date"><input type="date" className={inputCls} disabled={readOnly} value={details.certified_on || ''} onChange={(e) => setDetail('certified_on', e.target.value)} /></Field>
                 <Field label="Form reference" hint="Printed bottom left with the record number."><input className={inputCls} disabled={readOnly} value={details.form_ref} onChange={(e) => setDetail('form_ref', e.target.value)} /></Field>
                 <div className="sm:col-span-2">

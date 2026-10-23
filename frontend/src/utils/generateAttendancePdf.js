@@ -5,6 +5,7 @@ import {
   courseDays, statusMatrix, summarise, defaultDetails, mergeDetails, recordNumber,
 } from './attendanceRecord';
 import { TRAINING_LABELS } from '../pages/airlines/helpers';
+import { signatureFor } from './instructors';
 
 // ─── Training Attendance Record (PDF) ─────────────────────────────────────────
 // A4 landscape: header, course details, one row per trainee with a status per
@@ -292,6 +293,19 @@ export function generateAttendancePdf({ sheet = {}, participants, matrix, detail
   // Signature
   font('normal', 6.8, MUTED); doc.text('INSTRUCTOR SIGNATURE', x + 3, y + 5, { charSpace: 0.2 });
   doc.setDrawColor(...MUTED); doc.setLineWidth(0.3); doc.line(x + 3, y + certH - 7, x + widths[2] - 4, y + certH - 7);
+  const sig = signatureFor(rawDetails);
+  if (sig) {
+    // Fit inside the box, sitting on the signature line.
+    try {
+      const props = doc.getImageProperties(sig);
+      const boxW = widths[2] - 7;
+      const boxH = certH - 15.5;
+      const ratio = props.width / props.height;
+      const w = Math.min(boxW, boxH * ratio);
+      const h = w / ratio;
+      doc.addImage(sig, 'PNG', x + 3 + (boxW - w) / 2, y + certH - 7.6 - h, w, h, undefined, 'FAST');
+    } catch { /* signature optional: leave the line blank */ }
+  }
   x += widths[2];
   // Date
   font('normal', 6.8, MUTED); doc.text('DATE', x + 3, y + 5, { charSpace: 0.2 });

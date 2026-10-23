@@ -204,7 +204,7 @@ function EmailInlineEditor({ rec }) {
   );
 }
 
-function SubmissionGroup({ groupKey, records, open, onToggle, focusId, attendanceSheets = [], onViewSheet, onAddSheet, bulkEmail = false, emailDrafts = {}, onEmailDraft, showInternalCerts = false, internalCertCounts = {}, internalCertExpiries = {}, onViewInternalCerts, canUploadInternalCerts = false, onUploadInternalCert, certView = 'ifoa' }) {
+function SubmissionGroup({ groupKey, records, open, onToggle, focusId, attendanceSheets = [], onViewSheet, bulkEmail = false, emailDrafts = {}, onEmailDraft, showInternalCerts = false, internalCertCounts = {}, internalCertExpiries = {}, onViewInternalCerts, canUploadInternalCerts = false, onUploadInternalCert, certView = 'ifoa' }) {
   const [downloading, setDownloading] = useState(null);
   const [preview, setPreview]       = useState(null);
   const [downloadingDhl, setDownloadingDhl] = useState(null);
@@ -364,24 +364,11 @@ function SubmissionGroup({ groupKey, records, open, onToggle, focusId, attendanc
             )}
 
             {/* Attendance sheets for this group */}
-            {(attendanceSheets.length > 0 || onAddSheet) && (
+            {attendanceSheets.length > 0 && (
               <div className="px-4 sm:px-5 py-3 bg-emerald-50/30 border-b border-emerald-100/70">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">Attendance</span>
-                  {onAddSheet && (
-                    <button
-                      type="button"
-                      onClick={() => onAddSheet(records)}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] sm:text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-2xs"
-                    >
-                      <HiOutlinePlusCircle className="w-3.5 h-3.5" />
-                      Add Attendance
-                    </button>
-                  )}
                 </div>
-                {attendanceSheets.length === 0 ? (
-                  <p className="text-[11px] text-emerald-700/70 font-medium">No attendance checklist yet for this batch.</p>
-                ) : (
                 <div className="flex flex-wrap gap-2">
                   {attendanceSheets.map(sheet => (
                     <div key={sheet._id} className="flex items-center justify-between sm:justify-start gap-2 bg-white border border-emerald-150 rounded-xl px-3 py-1.5 shadow-2xs w-full sm:w-auto">
@@ -392,6 +379,11 @@ function SubmissionGroup({ groupKey, records, open, onToggle, focusId, attendanc
                           <span className="text-emerald-500 font-normal ml-1 hidden sm:inline">· {sheet.participants?.length ?? 0} participants</span>
                         </span>
                       </div>
+                      {sheet.pending ? (
+                        <span className="flex-shrink-0 px-2 py-0.5 rounded-lg text-[11px] font-semibold bg-amber-50 border border-amber-200 text-amber-700">
+                          Awaiting IFOA
+                        </span>
+                      ) : (
                       <div className="flex items-center gap-1.5 flex-shrink-0">
                         <button
                           type="button"
@@ -413,10 +405,10 @@ function SubmissionGroup({ groupKey, records, open, onToggle, focusId, attendanc
                           View
                         </button>
                       </div>
+                      )}
                     </div>
                   ))}
                 </div>
-                )}
               </div>
             )}
 
@@ -964,28 +956,6 @@ export default function Participants() {
 
   const [detailRecord, setDetailRecord] = useState(null);
 
-  // Airline: open a fresh attendance checklist for a whole training batch.
-  // Dates come from the batch itself; the modal creates the sheet on save
-  // (backend attributes it to this airline account).
-  const handleAddSheetForGroup = (recs) => {
-    const first = recs[0] || {};
-    setActiveSheet({
-      _id: undefined,
-      participants: recs.map(r => {
-        const nameParts = (r.participant_name || '').trim().split(/\s+/);
-        return {
-          first_name: r.first_name || nameParts[0] || '',
-          last_name:  r.last_name  || nameParts.slice(1).join(' ') || '',
-        };
-      }),
-      start_date: (first.training_date || '').slice(0, 10),
-      end_date:   (first.end_date || '').slice(0, 10) || null,
-      company:    first.company || first.airline_name || '',
-      training_type: first.training_type || '',
-      readOnly: false,
-    });
-  };
-
   // ─────────────────────────────────────────────────────────────────────────────
   // AIRLINE VIEW — grouped collapsible layout
   // ─────────────────────────────────────────────────────────────────────────────
@@ -1002,8 +972,8 @@ export default function Participants() {
             company={activeSheet.airline_name || activeSheet.company}
             trainingType={activeSheet.training_type}
             attendanceId={activeSheet._id}
-            readOnly={activeSheet.readOnly}
-            onClose={() => { setActiveSheet(null); fetchRecords({ silent: true }); }}
+            readOnly
+            onClose={() => setActiveSheet(null)}
           />
         )}
         {/* Page Header (Full width header banner) */}
@@ -1239,8 +1209,7 @@ export default function Participants() {
                   onToggle={() => setOpenGroups(prev => ({ ...prev, [key]: !prev[key] }))}
                   focusId={focusId}
                   attendanceSheets={groupSheets}
-                  onViewSheet={sheet => setActiveSheet({ ...sheet, readOnly: false })}
-                  onAddSheet={handleAddSheetForGroup}
+                  onViewSheet={sheet => setActiveSheet({ ...sheet, readOnly: true })}
                   bulkEmail={bulkEmail}
                   emailDrafts={emailDrafts}
                   onEmailDraft={setEmailDraft}

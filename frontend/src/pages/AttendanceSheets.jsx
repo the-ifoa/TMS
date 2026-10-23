@@ -11,12 +11,14 @@ import {
   HiOutlineFilter,
   HiOutlineDocumentText,
   HiOutlineTrash,
+  HiOutlinePlus,
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import { listAttendanceSheets, getAttendanceSheet, getContractAirlines, deleteAttendanceSheet } from '../api';
 import { useAuth } from '../context/AuthContext';
 import { useConfirm } from '@/hooks/use-confirm';
 import AttendanceChecklistModal from '../components/AttendanceChecklistModal';
+import NewAttendanceSheetDialog from '../components/NewAttendanceSheetDialog';
 import { generateAttendancePdf } from '../utils/generateAttendancePdf';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { airlineInitials } from '../components/AirlineLogo';
@@ -46,7 +48,7 @@ function fmtDateTime(str) {
   });
 }
 
-function SheetCard({ sheet, onEdit, onPreview, onDelete, deleting, previewing, forceOpen }) {
+function SheetCard({ sheet, onEdit, onPreview, onDelete, deleting, previewing, forceOpen, canEdit }) {
   const [open, setOpen] = useState(false);
   const isOpen = Boolean(open || forceOpen);
   const typeInfo = TYPE_MAP[sheet.training_type] || {};
@@ -74,6 +76,16 @@ function SheetCard({ sheet, onEdit, onPreview, onDelete, deleting, previewing, f
           <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${typeInfo.color || 'bg-slate-100 text-slate-700 border-slate-200'}`}>
             {sheet.training_type}: {typeInfo.label || sheet.training_type}
           </span>
+          {sheet.pending && (
+            <span className="ml-1.5 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+              Needs filling in
+            </span>
+          )}
+          {sheet.requested_by_airline && (
+            <span className="ml-1.5 hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-50 text-slate-500 border border-slate-200">
+              Requested by airline
+            </span>
+          )}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1">
             <span className="flex items-center gap-1 text-[11px] text-slate-500 font-medium">
               <HiOutlineCalendar className="w-3 h-3 flex-shrink-0 text-slate-400" />
@@ -98,20 +110,24 @@ function SheetCard({ sheet, onEdit, onPreview, onDelete, deleting, previewing, f
             className="sm:hidden p-2 rounded-lg bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100 transition-colors disabled:opacity-50">
             {isLoading ? <div className="w-4 h-4 border-2 border-slate-300 border-t-slate-800 rounded-full animate-spin" /> : <HiOutlineDocumentText className="w-4 h-4" />}
           </button>
-          <button type="button" onClick={() => onEdit(sheet)} title="Edit"
+          {canEdit && (
+          <button type="button" onClick={() => onEdit(sheet)} title={sheet.pending ? 'Fill in' : 'Edit'}
             className="sm:hidden p-2 rounded-lg bg-slate-900 border border-slate-900 text-white hover:bg-slate-800 transition-colors">
             <HiOutlinePencilAlt className="w-4 h-4" />
           </button>
+          )}
           {/* Desktop: labeled */}
           <button type="button" onClick={() => onPreview(sheet)} disabled={isLoading}
             className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50 shadow-2xs">
             {isLoading ? <div className="w-3 h-3 border-2 border-slate-300 border-t-slate-800 rounded-full animate-spin" /> : <HiOutlineDocumentText className="w-3.5 h-3.5 text-slate-500" />}
             Preview PDF
           </button>
+          {canEdit && (
           <button type="button" onClick={() => onEdit(sheet)}
             className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900 text-white hover:bg-slate-800 transition-colors shadow-2xs">
-            <HiOutlinePencilAlt className="w-3.5 h-3.5" /> Edit
+            <HiOutlinePencilAlt className="w-3.5 h-3.5" /> {sheet.pending ? 'Fill in' : 'Edit'}
           </button>
+          )}
           {onDelete && (
             <button type="button" onClick={() => onDelete(sheet)} disabled={deleting === sheet._id} aria-label="Delete attendance record"
               className="p-2 sm:p-1.5 rounded-lg border border-slate-200 bg-white text-slate-400 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 transition-colors disabled:opacity-50">
@@ -176,9 +192,10 @@ function SheetCard({ sheet, onEdit, onPreview, onDelete, deleting, previewing, f
 }
 
 // ── Airline group section ──────────────────────────────────────────────────────
-function AirlineGroup({ airlineName, logoUrl, sheets, onEdit, onPreview, onDelete, deleting, previewing, forceOpen }) {
+function AirlineGroup({ airlineName, logoUrl, sheets, onEdit, onPreview, onDelete, deleting, previewing, forceOpen, canEdit }) {
   const [collapsed, setCollapsed] = useState(true);
   const isOpen = Boolean(!collapsed || forceOpen);
+  const pendingCount = sheets.filter(s => s.pending).length;
 
   return (
     <div className="rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden bg-white">
@@ -195,6 +212,12 @@ function AirlineGroup({ airlineName, logoUrl, sheets, onEdit, onPreview, onDelet
             {sheets.length} attendance record{sheets.length !== 1 ? 's' : ''}
           </p>
         </div>
+
+        {pendingCount > 0 && (
+          <span className="flex-shrink-0 px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+            {pendingCount} to fill in
+          </span>
+        )}
 
         <span className={`flex-shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}>
           <HiOutlineChevronDown className="w-4 h-4 text-slate-400" />
@@ -222,6 +245,7 @@ function AirlineGroup({ airlineName, logoUrl, sheets, onEdit, onPreview, onDelet
                   deleting={deleting}
                   previewing={previewing}
                   forceOpen={forceOpen}
+                  canEdit={canEdit}
                 />
               ))}
             </div>
@@ -241,8 +265,10 @@ export default function AttendanceSheets() {
   const [search, setSearch]           = useState('');
   const [filterType, setFilterType]   = useState('');
   const [deleting, setDeleting]       = useState(null);
+  const [showNew, setShowNew]         = useState(false);
   const { isAdmin, can } = useAuth();
-  const canDelete = isAdmin && can('attendance.manage');
+  const canManage = isAdmin && can('attendance.manage');
+  const canDelete = canManage;
   const { confirm, ConfirmDialog } = useConfirm();
 
   const handleDelete = async (sheet) => {
@@ -335,8 +361,17 @@ export default function AttendanceSheets() {
           company={activeSheet.airline_name || activeSheet.company}
           trainingType={activeSheet.training_type}
           attendanceId={activeSheet._id}
-          readOnly={false}
+          readOnly={!canManage}
           onClose={() => { setActiveSheet(null); fetchSheets(); }}
+        />
+      )}
+
+      {canManage && (
+        <NewAttendanceSheetDialog
+          open={showNew}
+          onOpenChange={setShowNew}
+          existingSheets={sheets}
+          onCreated={(sheet) => { setShowNew(false); setActiveSheet(sheet); fetchSheets(); }}
         />
       )}
 
@@ -350,14 +385,22 @@ export default function AttendanceSheets() {
             </span>
           </div>
           <p className="text-xs font-medium text-slate-500 hidden sm:block mt-0.5">
-            View and edit attendance sheets submitted by contract airlines
+            Create and fill in attendance records for airline training batches
           </p>
         </div>
         <div className="flex items-center gap-1.5 flex-shrink-0">
-          <span className="px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-200 text-[11px] sm:text-xs font-bold text-slate-700 shadow-2xs">
+          {canManage && (
+            <button type="button" onClick={() => setShowNew(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900 text-white hover:bg-slate-800 transition-colors shadow-2xs">
+              <HiOutlinePlus className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">New Attendance Sheet</span>
+              <span className="sm:hidden">New</span>
+            </button>
+          )}
+          <span className="hidden sm:inline-block px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-200 text-[11px] sm:text-xs font-bold text-slate-700 shadow-2xs">
             {sortedGroups.length} airline{sortedGroups.length !== 1 ? 's' : ''}
           </span>
-          <span className="px-2.5 py-1 rounded-lg bg-slate-900 text-white text-[11px] sm:text-xs font-bold shadow-2xs">
+          <span className="hidden sm:inline-block px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-200 text-slate-700 text-[11px] sm:text-xs font-bold shadow-2xs">
             {filtered.length} record{filtered.length !== 1 ? 's' : ''}
           </span>
         </div>
@@ -406,7 +449,9 @@ export default function AttendanceSheets() {
           </div>
         ) : filtered.length === 0 ? (
           <div className="bg-white rounded-2xl border border-slate-200/80 p-12 text-center text-sm font-medium text-slate-500 shadow-2xs">
-            {sheets.length === 0 ? 'No attendance records submitted yet.' : 'No records match your search.'}
+            {sheets.length === 0
+              ? (canManage ? 'No attendance records yet. Use New Attendance Sheet to start one.' : 'No attendance records yet.')
+              : 'No records match your search.'}
           </div>
         ) : (
           <div className="space-y-5">
@@ -422,6 +467,7 @@ export default function AttendanceSheets() {
                 onDelete={canDelete ? handleDelete : null}
                 deleting={deleting}
                 previewing={previewing}
+                canEdit={canManage}
               />
             ))}
           </div>
